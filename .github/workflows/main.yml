@@ -1,0 +1,216 @@
+# System Pro - YAML Build Logic
+# ورژن: 2.0
+# یہ فائل مختلف ان پٹس سے APK بنانے کے لیے ایک لچکدار پائپ لائن کی وضاحت کرتی ہے۔
+
+name: "سسٹم پرو بلڈر"
+description: "HTML/CSS/JS/XML/Kotlin سے خودکار APK جنریشن"
+
+# ان پٹ کی تعریف
+inputs:
+  html:
+    source: "htmlCode"
+    optional: true
+    default: "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>My App</title></head><body><h1>Hello World</h1></body></html>"
+  css:
+    source: "cssCode"
+    optional: true
+    default: "body { font-family: sans-serif; text-align: center; }"
+  js:
+    source: "jsCode"
+    optional: true
+    default: "console.log('App started');"
+  xml:
+    source: "xmlCode"
+    optional: true
+    default: "activity_main.xml"  # اگر xml نہ دیا جائے تو ڈیفالٹ لے آؤٹ استعمال ہو گا
+  kotlin:
+    source: "ktCode"
+    optional: true
+    default: "MainActivity.kt"     # اگر kotlin نہ دیا جائے تو ڈیفالٹ ایکٹیویٹی استعمال ہو گی
+  icon:
+    source: "appIcon"
+    optional: true
+    default: "ic_launcher.png"     # ڈیفالٹ آئیکون
+  settings:
+    github_token:
+      source: "ghToken"
+      optional: true
+    repo_name:
+      source: "repoName"
+      optional: true
+    user_name:
+      source: "userName"
+      optional: true
+      default: "User"
+
+# بلڈ کے مراحل
+steps:
+  - name: "ان پٹ کی تصدیق اور ڈیفالٹس کا استعمال"
+    actions:
+      - if: "!inputs.html.exists"
+        then: "inputs.html.value = inputs.html.default"
+      - if: "!inputs.css.exists"
+        then: "inputs.css.value = inputs.css.default"
+      - if: "!inputs.js.exists"
+        then: "inputs.js.value = inputs.js.default"
+      - if: "!inputs.xml.exists"
+        then: "inputs.xml.value = generateDefaultXml()"  # فرضی فنکشن
+      - if: "!inputs.kotlin.exists"
+        then: "inputs.kotlin.value = generateDefaultKotlin()"
+      - if: "!inputs.icon.exists"
+        then: "inputs.icon.value = inputs.icon.default"
+    on_error: "continue"  # اگر تصدیق میں خرابی ہو تو اگلے مرحلے پر چلے جائیں
+
+  - name: "اینڈرائیڈ پروجیکٹ کا ڈھانچہ تیار کریں"
+    run: |
+      mkdir -p app/src/main/java/com/systempro/app
+      mkdir -p app/src/main/res/layout
+      mkdir -p app/src/main/res/drawable
+      mkdir -p app/src/main/res/values
+      mkdir -p app/src/main/assets
+    on_error: "fail"  # اگر ڈائریکٹری نہ بن سکے تو بلڈ روک دیں
+
+  - name: "ویب فائلز (HTML/CSS/JS) کو assets میں کاپی کریں"
+    run:
+      - cp inputs.html.value app/src/main/assets/index.html
+      - cp inputs.css.value app/src/main/assets/style.css
+      - cp inputs.js.value app/src/main/assets/script.js
+    on_error: "continue"  # اگر کوئی فائل نہ بھی ہو تو آگے بڑھیں
+
+  - name: "XML لے آؤٹ فائل تیار کریں"
+    run: |
+      if inputs.xml.value is file:
+        cp inputs.xml.value app/src/main/res/layout/activity_main.xml
+      else:
+        # ڈیفالٹ XML لے آؤٹ بنائیں
+        echo '<?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:orientation="vertical">
+          <WebView android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+        </LinearLayout>' > app/src/main/res/layout/activity_main.xml
+    on_error: "continue"
+
+  - name: "Kotlin ایکٹیویٹی فائل تیار کریں"
+    run: |
+      if inputs.kotlin.value is file:
+        cp inputs.kotlin.value app/src/main/java/com/systempro/app/MainActivity.kt
+      else:
+        # ڈیفالٹ Kotlin ایکٹیویٹی جو WebView لوڈ کرے
+        echo 'package com.systempro.app
+        import android.os.Bundle
+        import android.webkit.WebView
+        import androidx.appcompat.app.AppCompatActivity
+        class MainActivity : AppCompatActivity() {
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContentView(R.layout.activity_main)
+            val webView = findViewById<WebView>(R.id.webview)
+            webView.settings.javaScriptEnabled = true
+            webView.loadUrl("file:///android_asset/index.html")
+          }
+        }' > app/src/main/java/com/systempro/app/MainActivity.kt
+    on_error: "continue"
+
+  - name: "AndroidManifest.xml تیار کریں"
+    run: |
+      echo '<?xml version="1.0" encoding="utf-8"?>
+      <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+        package="com.systempro.app">
+        <application
+          android:allowBackup="true"
+          android:icon="@drawable/ic_launcher"
+          android:label="System Pro App"
+          android:theme="@style/Theme.AppCompat.Light">
+          <activity android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+              <action android:name="android.intent.action.MAIN" />
+              <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+          </activity>
+        </application>
+      </manifest>' > app/src/main/AndroidManifest.xml
+    on_error: "fail"
+
+  - name: "آئیکون کو res/drawable میں کاپی کریں"
+    run: |
+      if inputs.icon.value is file:
+        cp inputs.icon.value app/src/main/res/drawable/ic_launcher.png
+      else:
+        # ڈیفالٹ آئیکون ڈاؤن لوڈ کریں یا ایک چھوٹا PNG بنائیں
+        wget -O app/src/main/res/drawable/ic_launcher.png https://example.com/default_icon.png || touch app/src/main/res/drawable/ic_launcher.png
+    on_error: "continue"
+
+  - name: "Gradle فائلیں تیار کریں (build.gradle)"
+    run: |
+      # پروجیکٹ لیول build.gradle
+      echo 'buildscript {
+        ext.kotlin_version = "1.8.0"
+        repositories { google() mavenCentral() }
+        dependencies { classpath "com.android.tools.build:gradle:7.4.0" classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+      }' > build.gradle
+      
+      # ایپ ماڈیول build.gradle
+      echo 'plugins {
+        id "com.android.application"
+        id "kotlin-android"
+      }
+      android {
+        compileSdk 33
+        defaultConfig {
+          applicationId "com.systempro.app"
+          minSdk 21
+          targetSdk 33
+          versionCode 1
+          versionName "1.0"
+        }
+        buildTypes { release { minifyEnabled false } }
+      }
+      dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        implementation "androidx.appcompat:appcompat:1.6.1"
+        implementation "androidx.webkit:webkit:1.6.0"
+      }' > app/build.gradle
+    on_error: "fail"
+
+  - name: "Gradle کے ساتھ APK بنائیں"
+    run: |
+      chmod +x gradlew
+      ./gradlew assembleRelease --no-daemon
+    on_error: "retry"  # اگر ناکام ہو تو دوبارہ کوشش کریں
+
+  - name: "APK پر دستخط کریں"
+    run: |
+      # اگر کلید موجود ہو تو اس سے دستخط کریں، ورنہ ڈیفالٹ کلید استعمال کریں
+      if [ -f "keystore.jks" ]; then
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore keystore.jks app/build/outputs/apk/release/app-release-unsigned.apk alias_name
+      else
+        # ڈیفالٹ کلید بنائیں اور دستخط کریں
+        keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US"
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore app/build/outputs/apk/release/app-release-unsigned.apk debug -storepass android -keypass android
+      fi
+      # APK کو zipalign کریں
+      zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk SystemProApp.apk
+    on_error: "continue"  # اگر دستخط ناکام ہو تب بھی بنا ہوا APK محفوظ رہے
+
+  - name: "تیار شدہ APK کو آؤٹ پٹ کریں"
+    run: |
+      cp SystemProApp.apk /output/SystemProApp.apk
+      echo "APK کامیابی سے بن گیا: /output/SystemProApp.apk"
+    on_error: "continue"
+
+# بلڈ کے بعد صفائی
+post_build:
+  - name: "عارضی فائلیں حذف کریں"
+    run: "rm -rf app/build intermediates"
+    on_error: "ignore"
+
+# خرابی سے نجات کے طریقے
+error_handling:
+  default_action: "continue"  # عمومی طور پر خرابی کو نظر انداز کریں
+  retry_limit: 3              # دوبارہ کوشش کی حد
+  fallback: "use_default"     # اگر کوئی ان پٹ نہ ہو تو ڈیفالٹ استعمال کریں
