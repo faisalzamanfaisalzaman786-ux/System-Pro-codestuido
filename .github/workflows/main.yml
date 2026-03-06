@@ -1,31 +1,48 @@
-name: Build APK
+name: System Pro - Android Build
 
+# یہ ورک فلو تب چلے گا جب آپ مین برانچ میں کوڈ پش کریں گے
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
+    name: Build APK and Confirm Path
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      # 1. کوڈ کو گٹ ہب رنر پر لانا
+      - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. جاوا (JDK) سیٹ اپ کرنا (اینڈرائڈ کے لیے ضروری ہے)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
           java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
 
-      - name: Grant execute permission for gradlew
+      # 3. گریڈل (Gradle) کو فائل چلانے کی اجازت دینا
+      - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      # 4. اینڈرائیڈ اے پی کے (APK) بنانا
+      - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      # 5. پاتھ کی تصدیق کرنا (جیسا آپ نے ڈیمانڈ کیا تھا)
+      - name: Confirm Project Path
+        run: |
+          echo "Verifying System Pro Structure..."
+          [ -f app/src/main/AndroidManifest.xml ] && echo "Path Verified: Manifest Found."
+          [ -d app/src/main/java ] || [ -d app/src/main/kotlin ] && echo "Path Verified: Source Code Found."
+
+      # 6. تیار شدہ اے پی کے (APK) کو ڈاؤن لوڈ کے لیے اپ لوڈ کرنا
+      - name: Upload APK for Download
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
