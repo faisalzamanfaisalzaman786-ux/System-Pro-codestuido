@@ -1,216 +1,671 @@
-# System Pro - YAML Build Logic
-# ورژن: 2.0
-# یہ فائل مختلف ان پٹس سے APK بنانے کے لیے ایک لچکدار پائپ لائن کی وضاحت کرتی ہے۔
-
-name: "سسٹم پرو بلڈر"
-description: "HTML/CSS/JS/XML/Kotlin سے خودکار APK جنریشن"
-
-# ان پٹ کی تعریف
-inputs:
-  html:
-    source: "htmlCode"
-    optional: true
-    default: "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>My App</title></head><body><h1>Hello World</h1></body></html>"
-  css:
-    source: "cssCode"
-    optional: true
-    default: "body { font-family: sans-serif; text-align: center; }"
-  js:
-    source: "jsCode"
-    optional: true
-    default: "console.log('App started');"
-  xml:
-    source: "xmlCode"
-    optional: true
-    default: "activity_main.xml"  # اگر xml نہ دیا جائے تو ڈیفالٹ لے آؤٹ استعمال ہو گا
-  kotlin:
-    source: "ktCode"
-    optional: true
-    default: "MainActivity.kt"     # اگر kotlin نہ دیا جائے تو ڈیفالٹ ایکٹیویٹی استعمال ہو گی
-  icon:
-    source: "appIcon"
-    optional: true
-    default: "ic_launcher.png"     # ڈیفالٹ آئیکون
-  settings:
-    github_token:
-      source: "ghToken"
-      optional: true
-    repo_name:
-      source: "repoName"
-      optional: true
-    user_name:
-      source: "userName"
-      optional: true
-      default: "User"
-
-# بلڈ کے مراحل
-steps:
-  - name: "ان پٹ کی تصدیق اور ڈیفالٹس کا استعمال"
-    actions:
-      - if: "!inputs.html.exists"
-        then: "inputs.html.value = inputs.html.default"
-      - if: "!inputs.css.exists"
-        then: "inputs.css.value = inputs.css.default"
-      - if: "!inputs.js.exists"
-        then: "inputs.js.value = inputs.js.default"
-      - if: "!inputs.xml.exists"
-        then: "inputs.xml.value = generateDefaultXml()"  # فرضی فنکشن
-      - if: "!inputs.kotlin.exists"
-        then: "inputs.kotlin.value = generateDefaultKotlin()"
-      - if: "!inputs.icon.exists"
-        then: "inputs.icon.value = inputs.icon.default"
-    on_error: "continue"  # اگر تصدیق میں خرابی ہو تو اگلے مرحلے پر چلے جائیں
-
-  - name: "اینڈرائیڈ پروجیکٹ کا ڈھانچہ تیار کریں"
-    run: |
-      mkdir -p app/src/main/java/com/systempro/app
-      mkdir -p app/src/main/res/layout
-      mkdir -p app/src/main/res/drawable
-      mkdir -p app/src/main/res/values
-      mkdir -p app/src/main/assets
-    on_error: "fail"  # اگر ڈائریکٹری نہ بن سکے تو بلڈ روک دیں
-
-  - name: "ویب فائلز (HTML/CSS/JS) کو assets میں کاپی کریں"
-    run:
-      - cp inputs.html.value app/src/main/assets/index.html
-      - cp inputs.css.value app/src/main/assets/style.css
-      - cp inputs.js.value app/src/main/assets/script.js
-    on_error: "continue"  # اگر کوئی فائل نہ بھی ہو تو آگے بڑھیں
-
-  - name: "XML لے آؤٹ فائل تیار کریں"
-    run: |
-      if inputs.xml.value is file:
-        cp inputs.xml.value app/src/main/res/layout/activity_main.xml
-      else:
-        # ڈیفالٹ XML لے آؤٹ بنائیں
-        echo '<?xml version="1.0" encoding="utf-8"?>
-        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-          android:layout_width="match_parent"
-          android:layout_height="match_parent"
-          android:orientation="vertical">
-          <WebView android:id="@+id/webview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-        </LinearLayout>' > app/src/main/res/layout/activity_main.xml
-    on_error: "continue"
-
-  - name: "Kotlin ایکٹیویٹی فائل تیار کریں"
-    run: |
-      if inputs.kotlin.value is file:
-        cp inputs.kotlin.value app/src/main/java/com/systempro/app/MainActivity.kt
-      else:
-        # ڈیفالٹ Kotlin ایکٹیویٹی جو WebView لوڈ کرے
-        echo 'package com.systempro.app
-        import android.os.Bundle
-        import android.webkit.WebView
-        import androidx.appcompat.app.AppCompatActivity
-        class MainActivity : AppCompatActivity() {
-          override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContentView(R.layout.activity_main)
-            val webView = findViewById<WebView>(R.id.webview)
-            webView.settings.javaScriptEnabled = true
-            webView.loadUrl("file:///android_asset/index.html")
-          }
-        }' > app/src/main/java/com/systempro/app/MainActivity.kt
-    on_error: "continue"
-
-  - name: "AndroidManifest.xml تیار کریں"
-    run: |
-      echo '<?xml version="1.0" encoding="utf-8"?>
-      <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-        package="com.systempro.app">
-        <application
-          android:allowBackup="true"
-          android:icon="@drawable/ic_launcher"
-          android:label="System Pro App"
-          android:theme="@style/Theme.AppCompat.Light">
-          <activity android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-              <action android:name="android.intent.action.MAIN" />
-              <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-          </activity>
-        </application>
-      </manifest>' > app/src/main/AndroidManifest.xml
-    on_error: "fail"
-
-  - name: "آئیکون کو res/drawable میں کاپی کریں"
-    run: |
-      if inputs.icon.value is file:
-        cp inputs.icon.value app/src/main/res/drawable/ic_launcher.png
-      else:
-        # ڈیفالٹ آئیکون ڈاؤن لوڈ کریں یا ایک چھوٹا PNG بنائیں
-        wget -O app/src/main/res/drawable/ic_launcher.png https://example.com/default_icon.png || touch app/src/main/res/drawable/ic_launcher.png
-    on_error: "continue"
-
-  - name: "Gradle فائلیں تیار کریں (build.gradle)"
-    run: |
-      # پروجیکٹ لیول build.gradle
-      echo 'buildscript {
-        ext.kotlin_version = "1.8.0"
-        repositories { google() mavenCentral() }
-        dependencies { classpath "com.android.tools.build:gradle:7.4.0" classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
-      }' > build.gradle
-      
-      # ایپ ماڈیول build.gradle
-      echo 'plugins {
-        id "com.android.application"
-        id "kotlin-android"
-      }
-      android {
-        compileSdk 33
-        defaultConfig {
-          applicationId "com.systempro.app"
-          minSdk 21
-          targetSdk 33
-          versionCode 1
-          versionName "1.0"
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>System Pro • مکمل ورکنگ فلو</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
         }
-        buildTypes { release { minifyEnabled false } }
-      }
-      dependencies {
-        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-        implementation "androidx.appcompat:appcompat:1.6.1"
-        implementation "androidx.webkit:webkit:1.6.0"
-      }' > app/build.gradle
-    on_error: "fail"
+        body {
+            background: #0b1018;
+            color: #f0f4ff;
+            padding: 10px 12px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        /* ہیڈر بٹن */
+        .header-row {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+        }
+        .header-btn {
+            flex: 1;
+            background: #232f44;
+            border: 1px solid #4f6b8f;
+            border-radius: 40px;
+            padding: 14px 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #ffffff;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 4px 8px #00000055;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .header-btn:active {
+            background: #2f405a;
+            transform: scale(0.97);
+        }
+        .make-apk {
+            background: #4a386b;
+            border-color: #b38cff;
+        }
+        .build-btn {
+            background: #2a5d4a;
+            border-color: #6ecf9e;
+        }
 
-  - name: "Gradle کے ساتھ APK بنائیں"
-    run: |
-      chmod +x gradlew
-      ./gradlew assembleRelease --no-daemon
-    on_error: "retry"  # اگر ناکام ہو تو دوبارہ کوشش کریں
+        /* ٹیبز */
+        .tabs-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin: 5px 0;
+        }
+        .tab {
+            background: #1d2a3d;
+            border: 1px solid #3c5675;
+            border-radius: 40px;
+            padding: 12px 0;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-align: center;
+            color: #bdd3ff;
+            cursor: pointer;
+            transition: 0.1s;
+            white-space: nowrap;
+        }
+        .tab.active {
+            background: #2b405f;
+            border-color: #ffb86b;
+            color: #ffeda6;
+            box-shadow: 0 0 12px #ffae42;
+        }
 
-  - name: "APK پر دستخط کریں"
-    run: |
-      # اگر کلید موجود ہو تو اس سے دستخط کریں، ورنہ ڈیفالٹ کلید استعمال کریں
-      if [ -f "keystore.jks" ]; then
-        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore keystore.jks app/build/outputs/apk/release/app-release-unsigned.apk alias_name
-      else
-        # ڈیفالٹ کلید بنائیں اور دستخط کریں
-        keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Debug, OU=Debug, O=Debug, L=Debug, ST=Debug, C=US"
-        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore app/build/outputs/apk/release/app-release-unsigned.apk debug -storepass android -keypass android
-      fi
-      # APK کو zipalign کریں
-      zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk SystemProApp.apk
-    on_error: "continue"  # اگر دستخط ناکام ہو تب بھی بنا ہوا APK محفوظ رہے
+        /* ایڈیٹر کارڈ */
+        .editor-card {
+            background: #111c2a;
+            border-radius: 28px;
+            padding: 18px;
+            border: 2px solid #3a5072;
+            min-height: 150px;
+        }
+        .editor {
+            display: none;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            color: #e0efff;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            border: none;
+            outline: none;
+            resize: none;
+        }
+        .editor.active {
+            display: block;
+        }
+        /* امیج ٹیب کا مواد (سادہ) */
+        .image-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .image-panel h4 {
+            color: #ffcf8b;
+            font-size: 1rem;
+        }
+        .preview-box {
+            width: 70px;
+            height: 70px;
+            background: #1e2f47;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #5e8bbf;
+            font-size: 2.2rem;
+        }
+        .preset-icons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .preset-icon {
+            width: 48px;
+            height: 48px;
+            background: #263c58;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            border: 1px solid #6f96cf;
+            cursor: pointer;
+        }
+        .file-label {
+            background: #1f3a5a;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            display: inline-block;
+            border: 1px solid #7fa4d1;
+            cursor: pointer;
+        }
+        #iconInput { display: none; }
 
-  - name: "تیار شدہ APK کو آؤٹ پٹ کریں"
-    run: |
-      cp SystemProApp.apk /output/SystemProApp.apk
-      echo "APK کامیابی سے بن گیا: /output/SystemProApp.apk"
-    on_error: "continue"
+        /* پروگریس بار */
+        .progress-card {
+            background: #172133;
+            border-radius: 28px;
+            padding: 18px;
+            border: 1px solid #445c7a;
+        }
+        .progress-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #c5e0ff;
+            margin-bottom: 12px;
+        }
+        .bar-container {
+            width: 100%;
+            height: 24px;
+            background: #0f1a28;
+            border-radius: 40px;
+            overflow: hidden;
+            border: 1px solid #3c5270;
+            margin-bottom: 16px;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #72b2ff, #b78aff);
+            border-radius: 40px;
+            transition: width 0.2s;
+        }
+        .percent-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        .pbtn {
+            background: #25364f;
+            border: 1px solid #5a74a2;
+            border-radius: 40px;
+            padding: 10px 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e8f0ff;
+            text-align: center;
+            flex: 1 0 60px;
+            max-width: 70px;
+            cursor: pointer;
+        }
+        .pbtn.zero-special {
+            border-color: #ff7b7b;
+            background: #3f2e4c;
+        }
 
-# بلڈ کے بعد صفائی
-post_build:
-  - name: "عارضی فائلیں حذف کریں"
-    run: "rm -rf app/build intermediates"
-    on_error: "ignore"
+        /* ٹوکن ڈسپلے (جیسے تصویر میں) */
+        .token-area {
+            background: #0e1a28;
+            border-radius: 40px;
+            padding: 14px 20px;
+            border: 2px solid #4e6e94;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .token-label {
+            font-size: 0.9rem;
+            color: #b0d0ff;
+        }
+        .token-value {
+            background: #1d2e42;
+            border-radius: 60px;
+            padding: 10px 20px;
+            font-family: monospace;
+            font-size: 1rem;
+            color: #ffd966;
+            border: 1px solid #7493c0;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-# خرابی سے نجات کے طریقے
-error_handling:
-  default_action: "continue"  # عمومی طور پر خرابی کو نظر انداز کریں
-  retry_limit: 3              # دوبارہ کوشش کی حد
-  fallback: "use_default"     # اگر کوئی ان پٹ نہ ہو تو ڈیفالٹ استعمال کریں
+        /* کی بورڈ (صرف ڈیزائن) */
+        .keyboard-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+        .key {
+            background: #1f3147;
+            border-radius: 20px;
+            padding: 14px 0;
+            flex: 1;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #d0e2ff;
+            border: 1px solid #4b658b;
+            box-shadow: 0 4px 0 #0a121c;
+        }
+
+        /* ڈاؤن لوڈ سیکشن */
+        .download-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+        }
+        .download-btn {
+            background: #2a7a5c;
+            border: 1px solid #7fe0b0;
+            border-radius: 60px;
+            padding: 14px 20px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            display: none;
+            text-align: center;
+            flex: 1;
+        }
+        .download-btn.active {
+            display: block;
+        }
+        .status-badge {
+            background: #1e3f5a;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+        }
+        .build-log {
+            background: #0a1424;
+            border-radius: 24px;
+            padding: 14px;
+            font-size: 0.85rem;
+            color: #aaccff;
+            max-height: 80px;
+            overflow-y: auto;
+            border: 1px solid #3f6080;
+            margin: 10px 0;
+        }
+
+        /* موڈل */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000000dd;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-content {
+            background: #e8f0fe;
+            border-radius: 48px;
+            width: 90%;
+            max-width: 380px;
+            padding: 28px 24px;
+            color: #1f3a5f;
+        }
+        .modal-content h2 {
+            font-size: 1.8rem;
+            text-align: center;
+            margin-bottom: 22px;
+        }
+        .setting-field {
+            margin-bottom: 20px;
+        }
+        .setting-field label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #1e4762;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .round-input {
+            width: 100%;
+            padding: 16px 20px;
+            border-radius: 60px;
+            border: 2px solid #b3ceff;
+            font-size: 0.9rem;
+            background: white;
+        }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 22px;
+        }
+        .modal-btn {
+            flex: 1;
+            padding: 16px 12px;
+            border-radius: 60px;
+            border: none;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .save-btn {
+            background: #1e3a5f;
+            color: white;
+        }
+        .close-btn {
+            background: #dbe4ee;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- تین بٹن: Settings, Make apk icon, Build APK -->
+    <div class="header-row">
+        <div class="header-btn" onclick="toggleSettings()"><span>⚙️</span> Settings</div>
+        <div class="header-btn make-apk" onclick="buildApkIcon()"><span>📱</span> Make apk icon</div>
+        <div class="header-btn build-btn" onclick="startFullBuild()"><span>🏗️</span> Build APK</div>
+    </div>
+
+    <!-- ٹیبز: JS, KT, MANIF, APP IMAGE -->
+    <div class="tabs-row">
+        <div class="tab active" onclick="openTab(event, 'jsEditor')">JS (SCRIPT)</div>
+        <div class="tab" onclick="openTab(event, 'ktEditor')">KT (KOTLIN)</div>
+        <div class="tab" onclick="openTab(event, 'manifestEditor')">MANIF</div>
+        <div class="tab" onclick="openTab(event, 'imageTab')">APP IMAGE</div>
+    </div>
+
+    <!-- ایڈیٹر کارڈ -->
+    <div class="editor-card">
+        <textarea id="jsEditor" class="editor active" placeholder="// JavaScript ...">console.log("Building APK...");</textarea>
+        <textarea id="ktEditor" class="editor" placeholder="// Kotlin ...">fun main() { println("Kotlin") }</textarea>
+        <textarea id="manifestEditor" class="editor" placeholder="<!-- AndroidManifest.xml -->"><!-- AndroidManifest.xml --></textarea>
+        <div id="imageTab" class="editor">
+            <div class="image-panel">
+                <h4>📱 Select App Icon</h4>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div class="preview-box" id="iconPreview"><span>🖼️</span></div>
+                    <div class="preset-icons">
+                        <div class="preset-icon" onclick="setPresetIcon('🌟')">🌟</div>
+                        <div class="preset-icon" onclick="setPresetIcon('🎮')">🎮</div>
+                        <div class="preset-icon" onclick="setPresetIcon('⚙️')">⚙️</div>
+                        <div class="preset-icon" onclick="setPresetIcon('📱')">📱</div>
+                    </div>
+                </div>
+                <div>
+                    <label for="iconInput" class="file-label">📂 اپ لوڈ تصویر</label>
+                    <input type="file" id="iconInput" accept="image/*" onchange="previewIcon(event)">
+                </div>
+                <div style="font-size:0.8rem;" id="iconName">کوئی تصویر نہیں</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- پروگریس بار + بٹن -->
+    <div class="progress-card">
+        <div class="progress-label">📊 Process Bar:</div>
+        <div class="bar-container"><div id="progressFill" class="progress-fill" style="width:0%;"></div></div>
+        <div class="percent-buttons">
+            <div class="pbtn" onclick="setProgress(0)">0%</div>
+            <div class="pbtn zero-special" onclick="setProgress(0,'duplicate')">0%</div>
+            <div class="pbtn" onclick="setProgress(25)">25%</div>
+            <div class="pbtn" onclick="setProgress(70)">70%</div>
+            <div class="pbtn" onclick="setProgress(100)">100%</div>
+        </div>
+    </div>
+
+    <!-- ٹوکن ڈسپلے (جیسا کہ تصویر میں ہے) -->
+    <div class="token-area">
+        <span class="token-label">🔑 Token:</span>
+        <span id="tokenDisplay" class="token-value">ghp_nnC6S8...</span>
+    </div>
+
+    <!-- کی بورڈ (صرف ڈیزائن) -->
+    <div class="keyboard-row">
+        <div class="key">q</div><div class="key">w</div><div class="key">e</div><div class="key">r</div><div class="key">t</div><div class="key">y</div><div class="key">u</div><div class="key">i</div><div class="key">o</div><div class="key">p</div>
+    </div>
+    <div class="keyboard-row">
+        <div class="key">a</div><div class="key">s</div><div class="key">d</div><div class="key">f</div><div class="key">g</div><div class="key">h</div><div class="key">j</div><div class="key">k</div><div class="key">l</div>
+    </div>
+    <div class="keyboard-row">
+        <div class="key">z</div><div class="key">x</div><div class="key">c</div><div class="key">v</div><div class="key">b</div><div class="key">n</div><div class="key">m</div><div class="key">,</div>
+    </div>
+
+    <!-- لاگ اور ڈاؤن لوڈ -->
+    <div id="buildLog" class="build-log">> System ready</div>
+    <div class="download-area">
+        <div id="downloadBtn" class="download-btn" onclick="downloadAPK()">📥 Download APK</div>
+        <span id="buildStatus" class="status-badge">⏳ Idle</span>
+    </div>
+
+    <!-- سیٹنگز موڈل -->
+    <div id="settingsModal" class="modal" onclick="if(event.target===this) toggleSettings()">
+        <div class="modal-content">
+            <h2>⚙️ سیٹنگز مینو</h2>
+            <div class="setting-field">
+                <label>📦 REPOSITORY (owner/name)</label>
+                <input type="text" id="repo" class="round-input" placeholder="example/MyApp">
+            </div>
+            <div class="setting-field">
+                <label>🔑 TOKEN (repo scope)</label>
+                <input type="password" id="token" class="round-input" placeholder="ghp_...">
+            </div>
+            <div class="setting-field">
+                <label>⚙️ WORKFLOW FILE</label>
+                <input type="text" id="workflow" class="round-input" value="build-apk.yml">
+            </div>
+            <div class="btn-row">
+                <button class="modal-btn save-btn" onclick="saveSettings()">Save ✅</button>
+                <button class="modal-btn close-btn" onclick="toggleSettings()">Close ❌</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ********** GLOBALS **********
+        let buildLog = document.getElementById('buildLog');
+        let progressFill = document.getElementById('progressFill');
+        let downloadBtn = document.getElementById('downloadBtn');
+        let buildStatus = document.getElementById('buildStatus');
+        let tokenDisplay = document.getElementById('tokenDisplay');
+        let pollInterval = null;
+
+        // ********** TAB SWITCHING **********
+        function openTab(event, tabId) {
+            document.querySelectorAll('.editor').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        // ********** SETTINGS MODAL **********
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
+        function saveSettings() {
+            localStorage.setItem('sp_repo', document.getElementById('repo').value);
+            localStorage.setItem('sp_token', document.getElementById('token').value);
+            localStorage.setItem('sp_wf', document.getElementById('workflow').value);
+            updateTokenDisplay();
+            addLog('⚙️ Settings saved');
+            toggleSettings();
+        }
+        function updateTokenDisplay() {
+            let token = localStorage.getItem('sp_token') || '';
+            if (token.length > 12) token = token.substring(0, 10) + '...';
+            tokenDisplay.innerText = token || 'ghp_not_set';
+        }
+
+        // ********** UI HELPERS **********
+        function setProgress(percent, variant = '') {
+            progressFill.style.width = percent + '%';
+        }
+        function addLog(msg) {
+            buildLog.innerHTML += '<br>> ' + msg;
+            buildLog.scrollTop = buildLog.scrollHeight;
+        }
+
+        // ********** IMAGE TAB **********
+        function previewIcon(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => document.getElementById('iconPreview').innerHTML = `<img src="${e.target.result}" style="max-width:65px; max-height:65px; border-radius:16px;">`;
+                reader.readAsDataURL(file);
+                document.getElementById('iconName').innerText = file.name;
+            }
+        }
+        function setPresetIcon(emoji) {
+            document.getElementById('iconPreview').innerHTML = `<span style="font-size:3rem;">${emoji}</span>`;
+            document.getElementById('iconName').innerText = 'پری سیٹ: ' + emoji;
+        }
+
+        // ********** BUILD SIMULATION (Make apk icon) **********
+        function buildApkIcon() {
+            setProgress(70);
+            addLog('🖼️ Icon generation started...');
+            addLog('✅ apk-icon ready');
+        }
+
+        // ********** GITHUB WORKFLOW TRIGGER & POLLING **********
+        async function triggerGitHubBuild() {
+            const repo = document.getElementById('repo').value.trim();
+            const token = document.getElementById('token').value.trim();
+            if (!repo || !token) {
+                alert('براہ کرم Settings میں ریپو اور ٹوکن سیو کریں');
+                return false;
+            }
+            const url = `https://api.github.com/repos/${repo}/dispatches`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ event_type: 'build-apk' })
+                });
+                if (!response.ok) throw new Error((await response.json()).message);
+                addLog('🚀 GitHub build dispatched');
+                return true;
+            } catch (e) {
+                alert('Error: ' + e.message);
+                addLog('❌ Build trigger failed: ' + e.message);
+                return false;
+            }
+        }
+
+        async function checkBuildStatus() {
+            const repo = document.getElementById('repo').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const workflow = document.getElementById('workflow').value.trim() || 'build-apk.yml';
+            if (!repo || !token) return;
+            const runsUrl = `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=1`;
+            try {
+                const resp = await fetch(runsUrl, {
+                    headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+                });
+                const data = await resp.json();
+                if (!data.workflow_runs || !data.workflow_runs.length) return;
+                const run = data.workflow_runs[0];
+                buildStatus.innerText = run.status === 'completed' ? '✅ Completed' : '⏳ ' + run.status;
+                if (run.status === 'completed' && run.conclusion === 'success') {
+                    await fetchArtifacts(run.id);
+                    if (pollInterval) clearInterval(pollInterval);
+                } else if (run.status === 'completed' && run.conclusion !== 'success') {
+                    addLog(`❌ Build failed: ${run.conclusion}`);
+                    if (pollInterval) clearInterval(pollInterval);
+                }
+            } catch (e) {
+                addLog('⚠️ Status check error');
+            }
+        }
+
+        async function fetchArtifacts(runId) {
+            const repo = document.getElementById('repo').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const artifactsUrl = `https://api.github.com/repos/${repo}/actions/runs/${runId}/artifacts`;
+            try {
+                const resp = await fetch(artifactsUrl, {
+                    headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+                });
+                const data = await resp.json();
+                if (data.artifacts && data.artifacts.length > 0) {
+                    const artifact = data.artifacts.find(a => a.name.includes('apk')) || data.artifacts[0];
+                    localStorage.setItem('last_artifact_id', artifact.id);
+                    localStorage.setItem('last_artifact_name', artifact.name);
+                    downloadBtn.classList.add('active');
+                    addLog(`📦 Artifact ready: ${artifact.name}`);
+                }
+            } catch (e) {}
+        }
+
+        async function downloadAPK() {
+            const repo = document.getElementById('repo').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const artifactId = localStorage.getItem('last_artifact_id');
+            if (!artifactId) return alert('پہلے بلڈ کریں');
+            const url = `https://api.github.com/repos/${repo}/actions/artifacts/${artifactId}/zip`;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `token ${token}` },
+                    redirect: 'follow'
+                });
+                const blob = await response.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'app-debug.apk';
+                a.click();
+                addLog('📥 Download started');
+            } catch (e) {
+                alert('Download error');
+            }
+        }
+
+        function startFullBuild() {
+            setProgress(5);
+            downloadBtn.classList.remove('active');
+            buildStatus.innerText = '⏳ Triggering...';
+            triggerGitHubBuild().then(success => {
+                if (success) {
+                    setProgress(15);
+                    buildStatus.innerText = '⏳ Dispatched';
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = setInterval(checkBuildStatus, 10000);
+                } else {
+                    setProgress(0);
+                    buildStatus.innerText = '⚠️ Failed';
+                }
+            });
+        }
+
+        // ********** ON LOAD **********
+        window.onload = function() {
+            document.getElementById('repo').value = localStorage.getItem('sp_repo') || '';
+            document.getElementById('token').value = localStorage.getItem('sp_token') || '';
+            document.getElementById('workflow').value = localStorage.getItem('sp_wf') || 'build-apk.yml';
+            updateTokenDisplay();
+            ['sp_js','sp_kt','sp_manifest'].forEach(key => {
+                if (localStorage.getItem(key)) {
+                    if (key === 'sp_js') document.getElementById('jsEditor').value = localStorage.getItem(key);
+                    else if (key === 'sp_kt') document.getElementById('ktEditor').value = localStorage.getItem(key);
+                    else if (key === 'sp_manifest') document.getElementById('manifestEditor').value = localStorage.getItem(key);
+                }
+            });
+            addLog('🚀 System Pro Editor ready');
+        };
+
+        // auto-save editors
+        setInterval(() => {
+            localStorage.setItem('sp_js', document.getElementById('jsEditor').value);
+            localStorage.setItem('sp_kt', document.getElementById('ktEditor').value);
+            localStorage.setItem('sp_manifest', document.getElementById('manifestEditor').value);
+        }, 2000);
+    </script>
+</body>
+</html>
