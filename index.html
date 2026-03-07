@@ -204,25 +204,25 @@
 <div class="editor-card">
     <div class="preview-btn" onclick="openAppPreview()">👁️ ایپ پری ویو</div>
     
-    <textarea id="javaEditor" class="editor active" placeholder="// Java code ...">package com.example.calculator;
+    <textarea id="javaEditor" class="editor active" placeholder="// Java code ...">package com.systempro;
 
-public class Main {
+public class MainActivity {
     public static void main(String[] args) {
-        System.out.println("Calculator App");
+        System.out.println("System Pro Calculator");
     }
 }</textarea>
-    <textarea id="ktEditor" class="editor" placeholder="// Kotlin code ...">package com.example.calculator
+    <textarea id="ktEditor" class="editor" placeholder="// Kotlin code ...">package com.systempro
 
 fun main() {
-    println("Calculator App")
+    println("System Pro Calculator")
 }</textarea>
     <textarea id="manifestEditor" class="editor" placeholder="<!-- AndroidManifest.xml -->">&lt;?xml version="1.0" encoding="utf-8"?&gt;
 &lt;manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.calculator"&gt;
+    package="com.systempro"&gt;
     &lt;application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Calculator"
+        android:label="System Pro"
         android:theme="@style/AppTheme"&gt;
         &lt;activity android:name=".MainActivity"&gt;
             &lt;intent-filter&gt;
@@ -386,7 +386,7 @@ fun main() {
     // کیلکولیٹر موک اپ بنانا
     function buildCalculatorMockup() {
         let iconHtml = currentIconHtml;
-        let appName = "Calculator";
+        let appName = "System Pro";
         const manifest = document.getElementById('manifestEditor').value;
         const nameMatch = manifest.match(/android:label="([^"]+)"/);
         if (nameMatch && nameMatch[1]) {
@@ -589,13 +589,13 @@ fun main() {
         logToErrorBox('Starting push to GitHub...');
         try {
             const ktCode = document.getElementById('ktEditor').value;
-            await uploadFile('app/src/main/java/com/example/calculator/MainActivity.kt', ktCode, 'Update MainActivity.kt');
+            await uploadFile('app/src/main/java/com/systempro/MainActivity.kt', ktCode, 'Update MainActivity.kt');
             logToErrorBox('✅ MainActivity.kt uploaded');
             const manifest = document.getElementById('manifestEditor').value;
             await uploadFile('app/src/main/AndroidManifest.xml', manifest, 'Update AndroidManifest.xml');
             logToErrorBox('✅ AndroidManifest.xml uploaded');
             const javaCode = document.getElementById('javaEditor').value;
-            await uploadFile('app/src/main/java/com/example/calculator/MainActivity.java', javaCode, 'Update MainActivity.java').catch(()=>{});
+            await uploadFile('app/src/main/java/com/systempro/MainActivity.java', javaCode, 'Update MainActivity.java').catch(()=>{});
             if (currentIconType === 'image' && currentIconBase64) {
                 await uploadIcon('app/src/main/res/mipmap/ic_launcher.png', currentIconBase64, 'Update app icon');
                 logToErrorBox('✅ App icon uploaded');
@@ -674,7 +674,8 @@ fun main() {
         setProgress(70);
         logToErrorBox('⚙️ Starting workflow...');
         try {
-            const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/build.yml/dispatches`;
+            // Use main.yml as seen in the screenshot
+            const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/main.yml/dispatches`;
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -742,12 +743,22 @@ fun main() {
         }
     }
 
-    // لوڈ اور آٹو سیو
+    // لوڈ اور آٹو سیو — ڈیفالٹ ویلیوز faisalzar/System-Pro-codestudio
     window.onload = function() {
-        document.getElementById('owner').value = localStorage.getItem('gh_owner') || '';
-        document.getElementById('repo').value = localStorage.getItem('gh_repo') || '';
+        // ڈیفالٹ owner اور repo سیٹ کریں اگر خالی ہوں
+        if (!localStorage.getItem('gh_owner')) {
+            document.getElementById('owner').value = 'faisalzar';
+        } else {
+            document.getElementById('owner').value = localStorage.getItem('gh_owner');
+        }
+        if (!localStorage.getItem('gh_repo')) {
+            document.getElementById('repo').value = 'System-Pro-codestudio';
+        } else {
+            document.getElementById('repo').value = localStorage.getItem('gh_repo');
+        }
         document.getElementById('token').value = localStorage.getItem('gh_token') || '';
         document.getElementById('branch').value = localStorage.getItem('gh_branch') || 'main';
+        
         if (localStorage.getItem('sp_java')) document.getElementById('javaEditor').value = localStorage.getItem('sp_java');
         if (localStorage.getItem('sp_kt')) document.getElementById('ktEditor').value = localStorage.getItem('sp_kt');
         if (localStorage.getItem('sp_manifest')) document.getElementById('manifestEditor').value = localStorage.getItem('sp_manifest');
