@@ -3,11 +3,11 @@ package com.systempro;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.camera2.CameraManager;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.Gravity;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -17,56 +17,48 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        // پرمیشن چیک کریں
-        checkPermissions();
+        // بغیر XML کے ڈیزائن بنانا (Dynamic UI)
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER);
+        layout.setPadding(50, 50, 50, 50);
 
-        // بٹنوں کو کوڈ سے جوڑیں
-        Button btnFlash = findViewById(R.id.btnFlash);
-        Button btnSettings = findViewById(R.id.btnSettings);
-        Button btnFiles = findViewById(R.id.btnFiles);
+        // 1. ٹارچ کا بٹن
+        Button btnFlash = new Button(this);
+        btnFlash.setText("🔦 ٹارچ آن/آف کریں");
+        btnFlash.setOnClickListener(v -> toggleFlash());
+        layout.addView(btnFlash);
 
-        // ٹارچ جلانے کا کوڈ
-        btnFlash.setOnClickListener(v -> toggleFlashlight());
-
-        // سسٹم سیٹنگز کھولنے کا کوڈ
-        btnSettings.setOnClickListener(v -> {
-            startActivity(new Intent(Settings.ACTION_SETTINGS));
+        // 2. وائی فائی سیٹنگز کا بٹن
+        Button btnWifi = new Button(this);
+        btnWifi.setText("📶 وائی فائی سیٹنگز");
+        btnWifi.setOnClickListener(v -> {
+            startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
         });
+        layout.addView(btnWifi);
 
-        // فائل مینیجر کی پرمیشن اور رسائی
-        btnFiles.setOnClickListener(v -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (!android.os.Environment.isExternalStorageManager()) {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(this, "فائل مینیجر تک رسائی موجود ہے", Toast.LENGTH_SHORT).show();
-                }
-            }
+        // 3. کیمرہ کھولنے کا بٹن
+        Button btnCam = new Button(this);
+        btnCam.setText("📷 کیمرہ کھولیں");
+        btnCam.setOnClickListener(v -> {
+            Intent intent = new Intent("android.media.action.IMAGE_CAPTURE");
+            startActivity(intent);
         });
+        layout.addView(btnCam);
+
+        setContentView(layout);
     }
 
-    private void toggleFlashlight() {
-        CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+    private void toggleFlash() {
+        CameraManager camManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
-            String cameraId = cameraManager.getCameraIdList()[0];
+            String cameraId = camManager.getCameraIdList()[0];
             isFlashOn = !isFlashOn;
-            cameraManager.setTorchMode(cameraId, isFlashOn);
-            Toast.makeText(this, isFlashOn ? "ٹارچ آن ہو گئی" : "ٹارچ آف ہو گئی", Toast.LENGTH_SHORT).show();
+            camManager.setTorchMode(cameraId, isFlashOn);
+            Toast.makeText(this, isFlashOn ? "آن" : "آف", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, "ٹارچ کام نہیں کر رہی", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void checkPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.System.canWrite(this)) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                startActivity(intent);
-            }
+            Toast.makeText(this, "خرابی: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 }
