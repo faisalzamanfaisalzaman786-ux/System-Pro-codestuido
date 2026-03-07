@@ -1,10 +1,9 @@
 name: Build APK
 
-# کن کن ایونٹس پر ورک فلو چلے گا
 on:
   push:
-    branches: [ main ]          # جب main برانچ پر push ہو
-  workflow_dispatch:             # Manual trigger (آپ کے بٹن کے لیے)
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
