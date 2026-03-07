@@ -1,4 +1,4 @@
-name: System Pro Build
+name: System Pro Ultimate Build
 
 on:
   workflow_dispatch:
@@ -6,20 +6,47 @@ on:
       package_name:
         description: 'App Package Name'
         required: true
-        default: 'com.systempro.test'
+        default: 'com.systempro.app'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Build with Gradle
-        run: chmod +x gradlew && ./gradlew assembleDebug
+      - name: 3. Check for Gradlew (Safety Check)
+        run: |
+          if [ ! -f "gradlew" ]; then
+            echo "❌ ERROR: gradlew file not found in repository root!"
+            echo "Please ensure you have uploaded the gradle wrapper."
+            exit 1
+          fi
+          chmod +x gradlew
+
+      - name: 4. Build with Gradle (Debug APK)
+        run: ./gradlew assembleDebug
+        continue-on-error: false
+
+      - name: 5. Auto-Diagnose on Failure
+        if: failure()
+        run: |
+          echo "🔍 DIAGNOSING BUILD FAILURE..."
+          echo "Checking Java files for syntax errors..."
+          find . -name "*.java" -exec javac -Xlint {} + || echo "⚠️ Java Syntax Error detected."
+          echo "Checking XML files..."
+          find . -name "*.xml" -exec xmllint --noout {} + || echo "⚠️ XML Formatting Error detected."
+
+      - name: 6. Upload Resulting APK
+        if: success()
+        uses: actions/actions-runner-controller/.github/actions/upload-artifact@v4
+        with:
+          name: System-Pro-Release
+          path: app/build/outputs/apk/debug/*.apk
