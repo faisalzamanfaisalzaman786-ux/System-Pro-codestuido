@@ -22,31 +22,27 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 3. Check for Gradlew (Safety Check)
+      - name: 3. Gradlew Check & Fix
         run: |
           if [ ! -f "gradlew" ]; then
-            echo "❌ ERROR: gradlew file not found in repository root!"
-            echo "Please ensure you have uploaded the gradle wrapper."
-            exit 1
+            echo "⚠️ gradlew missing, trying to generate..."
+            gradle wrapper || (echo "❌ Please run 'gradle wrapper' locally first" && exit 1)
           fi
           chmod +x gradlew
 
-      - name: 4. Build with Gradle (Debug APK)
+      - name: 4. Build APK
         run: ./gradlew assembleDebug
-        continue-on-error: false
 
-      - name: 5. Auto-Diagnose on Failure
+      - name: 5. Diagnosis on Failure
         if: failure()
         run: |
-          echo "🔍 DIAGNOSING BUILD FAILURE..."
-          echo "Checking Java files for syntax errors..."
-          find . -name "*.java" -exec javac -Xlint {} + || echo "⚠️ Java Syntax Error detected."
-          echo "Checking XML files..."
-          find . -name "*.xml" -exec xmllint --noout {} + || echo "⚠️ XML Formatting Error detected."
+          echo "🔍 Error Detected in Code or Configuration"
+          # فائلوں کی بنیادی چیکنگ
+          ls -R app/src/main/
 
-      - name: 6. Upload Resulting APK
+      - name: 6. Upload Final APK
         if: success()
-        uses: actions/actions-runner-controller/.github/actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Release
           path: app/build/outputs/apk/debug/*.apk
