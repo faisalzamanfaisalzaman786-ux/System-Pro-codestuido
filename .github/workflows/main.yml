@@ -1,34 +1,33 @@
-name: System Pro Final Build
+name: Build APK
+
+# کن کن ایونٹس پر ورک فلو چلے گا
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]          # جب main برانچ پر push ہو
+  workflow_dispatch:             # Manual trigger (آپ کے بٹن کے لیے)
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
 
-      # اگر گریڈل غائب ہو تو اسے خود انسٹال کرنے کی کوشش
-      - name: Setup Gradle
-        run: |
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper
-          fi
-          chmod +x gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: Build Debug APK
+      - name: Build debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
