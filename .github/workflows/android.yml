@@ -1,13 +1,20 @@
+name: System Pro Build
+
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:  # یہ حصہ لازمی ہے تاکہ ایپ اسے چلا سکے
-    inputs:
-      package_name:
-        description: 'App Package Name'
-        required: false
-        default: 'com.systempro.app'
-      app_icon_url:
-        description: 'Icon URL'
-        required: false
-        default: ''
+  workflow_dispatch: # ایپلی کیشن سے سگنل لینے کے لیے لازمی ہے
+
+jobs:  # یہی وہ حصہ ہے جو آپ کی فائل میں موجود نہیں یا غلط ہے
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
