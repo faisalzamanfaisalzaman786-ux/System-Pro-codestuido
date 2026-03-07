@@ -1,31 +1,37 @@
 name: Build APK
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch: # مینوئل ٹرگر کے لیے ضروری
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'App Package Name'
+        required: false
+        default: 'com.systempro.app'
+      app_icon_url:
+        description: 'URL for App Icon'
+        required: false
+        default: ''
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4 # لیٹسٹ ورژن
+        uses: actions/checkout@v4
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4 # لیٹسٹ ورژن
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build with Gradle
+      - name: Build Debug APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4 # 'v3' کا ایرر یہاں حل کر دیا گیا ہے
+        uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
