@@ -1,54 +1,41 @@
-name: System Pro Ultimate APK Builder
+name: System Pro Ultimate Builder
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Android Application
     runs-on: ubuntu-latest
-
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: 3. Validate Gradle Wrapper
-        uses: gradle/actions/wrapper-validation@v3
-
-      - name: 4. Build Safe Directory Structure
+      - name: 3. Create Android Project Structure
         run: |
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          echo "ڈائریکٹری اسٹرکچر تیار ہے..."
+          # گریڈل کی ضروری فائلیں خود بنانا
+          gradle wrapper --gradle-version 8.0
+
+      - name: 4. Build Safe Directory
+        run: |
+          echo "include ':app'" > settings.gradle
+          echo "apply plugin: 'com.android.application'" > app/build.gradle
+          echo "android { compileSdk 33; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes 1; versionName '1.0' } }" >> app/build.gradle
 
       - name: 5. Grant Execute Permission
         run: chmod +x gradlew
 
-      - name: 6. Full Compilation (Assemble Debug)
-        run: ./gradlew assembleDebug --stacktrace --info
+      - name: 6. Build APK
+        run: ./gradlew assembleDebug
 
-      - name: 7. Get APK Path and Rename
-        run: |
-          APK_PATH=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
-          cp $APK_PATH SystemPro_Final_Build.apk
-          echo "APK تیار ہے: SystemPro_Final_Build.apk"
-
-      - name: 8. Upload Final Artifact
+      - name: 7. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Debug-Package
-          path: SystemPro_Final_Build.apk
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: 9. Final Success Signal
-        run: echo "فیصل بھائی، مبارک ہو! آپ کا مکمل APK تیار ہے اور ڈاؤن لوڈ کے لیے دستیاب ہے۔"
+          name: SystemPro-Release
+          path: app/build/outputs/apk/debug/*.apk
