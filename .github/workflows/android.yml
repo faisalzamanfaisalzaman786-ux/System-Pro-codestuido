@@ -1,9 +1,9 @@
-name: System Pro Dynamic Build
+name: System Pro Master Setup
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Package Name'
+        description: 'Target Package Name'
         required: true
         default: 'com.systempro.test'
 
@@ -11,71 +11,38 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Status: Initialization
+        run: echo "Starting Build for ${{ github.event.inputs.package_name }}"
 
-      - name: Set up JDK 17
+      - uses: actions/checkout@v4
+      - name: Status: Java Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Initialize Dynamic Structure
+      - name: Status: Creating Folders
         run: |
-          # پیکیج نیم کو فولڈر پاتھ میں تبدیل کرنا (مثال: com.a.b -> com/a/b)
-          PKG_NAME="${{ github.event.inputs.package_name }}"
-          PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
-          
-          mkdir -p app/src/main/java/$PKG_PATH/
-          mkdir -p app/src/main/res/layout/
+          PKG="${{ github.event.inputs.package_name }}"
+          PKG_PATH=$(echo $PKG | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
+          echo "Folders created for $PKG"
 
-          # Settings.gradle
-          echo "rootProject.name = 'SystemProDynamic'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+      - name: Status: Generating Code
+        run: |
+          PKG="${{ github.event.inputs.package_name }}"
+          # Build.gradle dynamic setup
+          echo "plugins { id 'com.android.application' }" > app/build.gradle
+          echo "android { namespace '$PKG'; compileSdk 34; defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34 } }" >> app/build.gradle
+          echo "Build files generated."
 
-          # App Build.gradle (Dynamic Namespace)
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace '$PKG_NAME'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '$PKG_NAME'
-                  minSdk 24
-                  targetSdk 34
-              }
-          }" > app/build.gradle
-
-          # MainActivity.java (Dynamic Package Line)
-          echo "package $PKG_NAME;
-          import android.app.Activity;
-          import android.os.Bundle;
-          public class MainActivity extends Activity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }" > app/src/main/java/$PKG_PATH/MainActivity.java
-
-          # AndroidManifest.xml
-          echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
-              <application android:label='System Pro'>
-                  <activity android:name='.MainActivity' android:exported='true'>
-                      <intent-filter>
-                          <action android:name='android.intent.action.MAIN' />
-                          <category android:name='android.intent.category.LAUNCHER' />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>" > app/src/main/AndroidManifest.xml
-
-      - name: Build APK
+      - name: Status: Compiling APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --info
 
-      - name: Upload APK
+      - name: Status: Uploading
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.package_name }}-APK
