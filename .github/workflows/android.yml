@@ -17,20 +17,26 @@ jobs:
           clean: true
           fetch-depth: 0
 
+      - name: 🛡️ Fix Git Unsafe Directories
+        run: |
+          # گٹ کی تمام سیکیورٹی رکاوٹیں ختم کرنا
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all core.sshCommand || true
+          echo "گٹ کنفیگریشن مکمل طور پر کلین کر دی گئی ہے۔"
+
       - name: 🧹 Deep Clean Server
         run: |
-          # گٹ کی تمام پرانی کنفیگریشنز اور ایکسٹرا ہیڈرز کی صفائی
-          git config --global --unset-all core.sshCommand || true
-          git config --global --unset-all http.https://github.com/.extraheader || true
-          # تمام موجودہ فائلوں کو مٹا کر ایک نیا آغاز کریں
+          # پرانے تمام لاگز اور کچرے کو مٹانا
           rm -rf * .gradle .github/workflows/android.yml
-          echo "سرور مکمل کلین ہو گیا ہے۔"
+          echo "سرور اب بالکل تازہ ہے۔"
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: 🏗️ Re-Build Structure
         run: |
@@ -38,7 +44,7 @@ jobs:
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # settings.gradle - ریپوزٹریز کو زبردستی مینیج کرنا
+          # settings.gradle - ریپوزٹریز کا حتمی لاک
           cat <<EOF > settings.gradle
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -76,16 +82,17 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Final Compilation (Fixed Version)
+      - name: 🔨 Final Compilation (Fixed & Safe)
         run: |
-          # گریڈل ورژن 8.2 استعمال کریں تاکہ 9.3.1 والے ایررز نہ آئیں
+          # گریڈل ورژن 8.2 پر فکس کریں
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # کلین بلڈ شروع کریں
+          # کلین بلڈ کا آغاز
           ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: 📦 Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success-APK
           path: app/build/outputs/apk/debug/*.apk
