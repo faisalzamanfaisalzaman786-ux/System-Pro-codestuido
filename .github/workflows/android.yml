@@ -1,4 +1,4 @@
-name: System Pro Ultimate
+name: System Pro Final
 on:
   workflow_dispatch:
 
@@ -6,30 +6,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Initialize Android Project
+      - name: Build APK
         run: |
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
-          # Generate basic wrapper files to avoid slow apt-get install
-          gradle wrapper
           echo "include ':app'" > settings.gradle
           printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
+          sudo apt-get update && sudo apt-get install -y gradle
+          gradle assembleDebug
 
-      - name: 4. Compile APK
-        # اب ہم Wrapper استعمال کر رہے ہیں جو کہ محفوظ اور تیز ہے
-        run: ./gradlew assembleDebug
-
-      - name: 5. Done
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Calculated
+          name: SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
