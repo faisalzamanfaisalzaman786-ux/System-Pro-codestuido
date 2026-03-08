@@ -1,329 +1,77 @@
-name: Android CI Build
-
+name: System Pro Native Builder
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
-      build_type:
-        description: 'Build Type'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
       package_name:
-        description: 'Package Name'
-        required: false
+        description: 'App Package Name'
+        required: true
         default: 'com.systempro.app'
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
-      - name: Set up JDK 17
+      - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+          cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Grant execute permission for gradlew
+      - name: 🏗️ Setup Project Structure
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-          fi
-
-      - name: Create Android project structure
-        run: |
+          # پرانے کچرے کی صفائی
+          rm -rf app build.gradle settings.gradle
+          
           PKG="${{ github.event.inputs.package_name }}"
-          if [ -z "$PKG" ]; then
-            PKG="com.systempro.app"
-          fi
-          
           PKG_PATH=$(echo $PKG | tr '.' '/')
-          
-          # Create all necessary directories
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/menu
+
+          # سادہ اور درست فائلیں بنانا
+          echo "include ':app'" > settings.gradle
           
-          echo "✅ Project directories created"
-
-      - name: Generate AndroidManifest.xml
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          if [ -z "$PKG" ]; then
-            PKG="com.systempro.app"
-          fi
+          # Project Level build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
           
-          cat > app/src/main/AndroidManifest.xml << EOF
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="$PKG">
+          # App Level build.gradle
+          echo "apply plugin: 'com.android.application'
+          android {
+              namespace '$PKG'
+              compileSdk 34
+              defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }" > app/build.gradle
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    
-    <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="System Pro"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/AppTheme">
-        
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        
-    </application>
-</manifest>
-EOF
-          echo "✅ AndroidManifest.xml generated"
+          # Manifest
+          echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
+              <application android:label='System Pro' android:theme='@style/Theme.AppCompat.Light.NoActionBar'>
+                  <activity android:name='.MainActivity' android:exported='true'>
+                      <intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter>
+                  </activity>
+              </application></manifest>" > app/src/main/AndroidManifest.xml
 
-      - name: Generate MainActivity.java
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          if [ -z "$PKG" ]; then
-            PKG="com.systempro.app"
-          fi
-          
-          PKG_PATH=$(echo $PKG | tr '.' '/')
-          
-          cat > app/src/main/java/$PKG_PATH/MainActivity.java << 'EOF'
-package com.systempro.app;
+          # MainActivity.java
+          echo "package $PKG;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override protected void onCreate(Bundle s) { super.onCreate(s); setContentView(new android.view.View(this)); }
+          }" > app/src/main/java/$PKG_PATH/MainActivity.java
 
-import android.os.Bundle;
-import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
-
-public class MainActivity extends AppCompatActivity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        
-        Toast.makeText(this, "Welcome to System Pro", Toast.LENGTH_SHORT).show();
-    }
-}
-EOF
-          echo "✅ MainActivity.java generated"
-
-      - name: Generate layout files
-        run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout 
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#FFFFFF">
-
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="#2196F3"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="System Pro Application"
-        android:textSize="24sp"
-        android:textColor="#212121"
-        android:gravity="center"
-        android:layout_marginTop="32dp"
-        android:padding="16dp"/>
-
-    <Button
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Click Me"
-        android:layout_gravity="center"
-        android:layout_marginTop="32dp"
-        android:backgroundTint="#FF4081"
-        android:paddingLeft="32dp"
-        android:paddingRight="32dp"/>
-
-</LinearLayout>
-EOF
-          echo "✅ Layout files generated"
-
-      - name: Generate resource files
-        run: |
-          # colors.xml
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="colorPrimary">#2196F3</color>
-    <color name="colorPrimaryDark">#1976D2</color>
-    <color name="colorAccent">#FF4081</color>
-</resources>
-EOF
-
-          # strings.xml
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">System Pro</string>
-</resources>
-EOF
-
-          # styles.xml
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-    </style>
-</resources>
-EOF
-          echo "✅ Resource files generated"
-
-      - name: Create Gradle files
-        run: |
-          # settings.gradle
-          cat > settings.gradle << 'EOF'
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-rootProject.name = "SystemPro"
-include ':app'
-EOF
-
-          # build.gradle (project)
-          cat > build.gradle << 'EOF'
-plugins {
-    id 'com.android.application' version '8.2.2' apply false
-}
-EOF
-
-          # app/build.gradle
-          cat > app/build.gradle << 'EOF'
-plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace 'com.systempro.app'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId 'com.systempro.app'
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-        debug {
-            minifyEnabled false
-            debuggable true
-        }
-    }
-    
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-}
-EOF
-
-          # proguard-rules.pro
-          touch app/proguard-rules.pro
-          echo "✅ Gradle files generated"
-
-      - name: Setup Gradle Wrapper
+      - name: 🔨 Compile APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Build APK
-        run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          if [ -z "$BUILD_TYPE" ]; then
-            BUILD_TYPE="debug"
-          fi
-          
-          if [ "$BUILD_TYPE" == "release" ]; then
-            ./gradlew assembleRelease --stacktrace
-          else
-            ./gradlew assembleDebug --stacktrace
-          fi
-
-      - name: Find and List APK
-        run: |
-          echo "🔍 Searching for APK files..."
-          find app/build/outputs -type f -name "*.apk" -exec ls -lh {} \;
-          echo "✅ Build completed"
-
-      - name: Upload APK
+      - name: 📦 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ github.event.inputs.build_type || 'debug' }}-apk
-          path: app/build/outputs/apk/**/*.apk
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Build Summary
-        run: |
-          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Type | ${{ github.event.inputs.build_type || 'debug' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Package | ${{ github.event.inputs.package_name || 'com.systempro.app' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+          name: ${{ github.event.inputs.package_name }}-APK
+          path: app/build/outputs/apk/debug/*.apk
