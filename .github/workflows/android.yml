@@ -1,4 +1,4 @@
-name: System Pro Native Builder
+name: System Pro Final Builder
 on:
   workflow_dispatch:
     inputs:
@@ -21,23 +21,32 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Setup Project Structure
+      - name: 🏗️ Fix Repositories & Build
         run: |
-          # پرانے کچرے کی صفائی
-          rm -rf app build.gradle settings.gradle
+          # پرانا کچرا صاف کرنا
+          rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
 
-          # سادہ اور درست فائلیں بنانا
-          echo "include ':app'" > settings.gradle
-          
-          # Project Level build.gradle
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }" > build.gradle
-          
-          # App Level build.gradle
+          # 1. settings.gradle (Repository Fix)
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() } 
+          }
+          include ':app'" > settings.gradle
+
+          # 2. build.gradle (Project Level)
+          echo "buildscript { 
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+
+          # 3. app/build.gradle (Native Config)
           echo "apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
@@ -48,7 +57,7 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }" > app/build.gradle
 
-          # Manifest
+          # 4. AndroidManifest.xml
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
               <application android:label='System Pro' android:theme='@style/Theme.AppCompat.Light.NoActionBar'>
                   <activity android:name='.MainActivity' android:exported='true'>
@@ -56,22 +65,22 @@ jobs:
                   </activity>
               </application></manifest>" > app/src/main/AndroidManifest.xml
 
-          # MainActivity.java
+          # 5. MainActivity.java
           echo "package $PKG;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle s) { super.onCreate(s); setContentView(new android.view.View(this)); }
+              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
           }" > app/src/main/java/$PKG_PATH/MainActivity.java
 
-      - name: 🔨 Compile APK
+      - name: 🔨 Final Compilation
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📦 Upload
+      - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-APK
+          name: ${{ github.event.inputs.package_name }}-Success-APK
           path: app/build/outputs/apk/debug/*.apk
