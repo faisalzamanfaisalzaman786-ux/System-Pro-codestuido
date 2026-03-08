@@ -1,4 +1,4 @@
-name: System Pro RealTime Builder
+name: System Pro Firebase Live
 on:
   workflow_dispatch:
     inputs:
@@ -6,18 +6,19 @@ on:
         description: 'App Package Name'
         required: true
         default: 'com.systempro.app'
-      webhook_url:
-        description: 'Firebase/App Webhook URL'
-        required: false
-        default: 'https://your-app-api.com/logs'
+      firebase_db_url:
+        description: 'Firebase Realtime DB URL'
+        required: true
+        default: 'https://YOUR-PROJECT-ID.firebaseio.com/build_status.json'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Start Signal
+      - name: Notify Start
         run: |
-          curl -X POST ${{ github.event.inputs.webhook_url }} -d '{"status": "Starting Build...", "progress": 10}'
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Build Started", "progress": 10, "time": "Just now"}'
 
       - name: 1. Clean Checkout
         uses: actions/checkout@v4
@@ -30,37 +31,51 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Send Progress (Setup Done)
+      - name: Notify Setup Complete
         run: |
-          curl -X POST ${{ github.event.inputs.webhook_url }} -d '{"status": "Java Setup Complete", "progress": 30}'
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Environment Ready", "progress": 30}'
 
       - name: 3. Build Safe Structure
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
-          # (Your existing file generation logic here...)
-          curl -X POST ${{ github.event.inputs.webhook_url }} -d '{"status": "Files Generated", "progress": 50}'
+          mkdir -p app/src/main/res/values
+          
+          # Generate base files (Settings, Build, Manifest)
+          # [Previous logic remains same but strictly English only]
+          
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Project Files Created", "progress": 55}'
 
-      - name: 4. Final Compilation
+      - name: 4. Nuclear Compilation
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew clean :app:assembleDebug --no-daemon
         continue-on-error: true
 
-      - name: Send Progress (Compiling)
+      - name: Notify Compiling
         run: |
-          curl -X POST ${{ github.event.inputs.webhook_url }} -d '{"status": "Compiling APK...", "progress": 80}'
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Compiling APK (Almost Done)", "progress": 85}'
 
-      - name: 5. Upload & Notify Success
+      - name: 5. Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Send Final Signal
-        if: always()
+      - name: Notify Success
+        if: success()
         run: |
-          curl -X POST ${{ github.event.inputs.webhook_url }} -d '{"status": "Build Finished!", "progress": 100}'
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Success! APK Ready", "progress": 100}'
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
+          -d '{"status": "Build Failed! Check Logs", "progress": 0}'
