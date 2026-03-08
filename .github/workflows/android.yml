@@ -21,9 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Create Android Structure
+      - name: 🏗️ Create Perfect Structure
         run: |
-          # مکمل صفائی
+          # پرانی تمام ناکام فائلوں کی صفائی
           rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
@@ -32,13 +32,14 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle (حتمی ریپوزٹری حل)
+          # 1. settings.gradle (ریپوزٹری کا حتمی حل)
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
           }
+          rootProject.name = "SystemProApp"
           include ':app'
           EOF
 
@@ -48,6 +49,7 @@ jobs:
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
           # 3. app/build.gradle
@@ -56,7 +58,13 @@ jobs:
           android {
               namespace '$PKG'
               compileSdk 34
-              defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
+              defaultConfig { 
+                  applicationId '$PKG'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -84,18 +92,21 @@ jobs:
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
+              @Override protected void onCreate(Bundle s) { 
+                  super.onCreate(s); 
+              }
           }
           EOF
 
       - name: 🔨 Final Compilation
         run: |
+          # گریڈل ریپر بنانا اور بلڈ شروع کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-Success
+          name: System-Pro-Success-APK
           path: app/build/outputs/apk/debug/*.apk
