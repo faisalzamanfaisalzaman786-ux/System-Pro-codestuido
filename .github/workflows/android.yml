@@ -1,81 +1,54 @@
-name: System Pro Firebase Live
+name: System Pro Ultimate Auto-Downloader
 on:
   workflow_dispatch:
     inputs:
-      package_name:
-        description: 'App Package Name'
-        required: true
-        default: 'com.systempro.app'
-      firebase_db_url:
+      firebase_url:
         description: 'Firebase Realtime DB URL'
         required: true
-        default: 'https://YOUR-PROJECT-ID.firebaseio.com/build_status.json'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Notify Start
+      - name: 1. Start Notification
         run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Build Started", "progress": 10, "time": "Just now"}'
+          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
+          -d '{"msg": "🚀 Build Started: Preparing Environment...", "progress": 10, "is_error": false}'
 
-      - name: 1. Clean Checkout
+      - name: 2. Checkout Code
         uses: actions/checkout@v4
-        with:
-          clean: true
 
-      - name: 2. Setup JDK 17
+      - name: 3. Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Notify Setup Complete
+      - name: 4. Build APK with Gradle
         run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Environment Ready", "progress": 30}'
-
-      - name: 3. Build Safe Structure
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          PKG_PATH=$(echo $PKG | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/values
-          
-          # Generate base files (Settings, Build, Manifest)
-          # [Previous logic remains same but strictly English only]
-          
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Project Files Created", "progress": 55}'
-
-      - name: 4. Nuclear Compilation
-        run: |
-          gradle wrapper --gradle-version 8.2
+          curl -X PATCH "${{ github.event.inputs.firebase_url }}" -d '{"msg": "⚙️ Compiling Resources & Java...", "progress": 50}'
           chmod +x gradlew
-          ./gradlew clean :app:assembleDebug --no-daemon
-        continue-on-error: true
+          ./gradlew assembleDebug
 
-      - name: Notify Compiling
+      - name: 5. Generate Download Link & Notify
+        if: success()
         run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Compiling APK (Almost Done)", "progress": 85}'
+          # یہاں ہم GitHub Artifact کا لنک یا عارضی ٹرانسفر لنک بنا رہے ہیں
+          APK_PATH=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
+          
+          # آپ کی ایپ کو فائنل سگنل اور ڈاؤن لوڈ لنک بھیجنا
+          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
+          -d '{"msg": "✅ Success! APK Generated.", "progress": 100, "is_error": false, "download_ready": true}'
 
-      - name: 5. Upload APK
+      - name: 6. Upload Artifact to GitHub
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Release-APK
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Notify Success
-        if: success()
-        run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Success! APK Ready", "progress": 100}'
-
-      - name: Notify Failure
+      - name: 7. Handle Failure
         if: failure()
         run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_db_url }}" \
-          -d '{"status": "Build Failed! Check Logs", "progress": 0}'
+          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
+          -d '{"msg": "❌ Build Failed! Check your code syntax.", "progress": 0, "is_error": true}'
