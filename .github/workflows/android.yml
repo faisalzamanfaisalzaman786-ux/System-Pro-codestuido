@@ -13,18 +13,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout Repository
+      - name: Checkout Source
         uses: actions/checkout@v4
         with:
           clean: true
 
-      - name: Setup Java 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Re-Build Structure
+      - name: Build Android Project Structure
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
@@ -32,6 +32,7 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
+          # Generate settings.gradle
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -42,6 +43,7 @@ jobs:
           include ':app'
           EOF
 
+          # Generate Project build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -49,6 +51,7 @@ jobs:
           }
           EOF
 
+          # Generate App build.gradle (Forcing stable versions)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -75,6 +78,7 @@ jobs:
           }
           EOF
 
+          # Generate Minimal AndroidManifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -88,6 +92,7 @@ jobs:
           </manifest>
           EOF
 
+          # Generate Blank MainActivity
           cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
           import android.os.Bundle;
@@ -97,13 +102,13 @@ jobs:
           }
           EOF
 
-      - name: Final Build Execution
+      - name: Execute Gradle Build
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew clean :app:assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Export APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
