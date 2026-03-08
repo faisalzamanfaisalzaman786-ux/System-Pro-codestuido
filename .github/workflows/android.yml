@@ -1,4 +1,4 @@
-name: System Pro Permanent Bypass
+name: System Pro Final Bypass
 on:
   workflow_dispatch:
 
@@ -6,52 +6,55 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      # مرحلہ 2: لائبریریز کو محفوظ رکھنا (بائی پاس) تاکہ وقت بچے
-      - name: 2. Cache Setup
+      # لائبریریز کو بائی پاس کرنا تاکہ وقت بچے
+      - name: 2. Smart Cache Setup
         uses: actions/cache@v3
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-stable
+          key: ${{ runner.os }}-gradle-stable-v2
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: 3. Selective Reset (Only App Data)
-        # یہاں ہم صرف ضروری جگہ صاف کر رہے ہیں، پوری ریپو نہیں
-        run: |
-          rm -rf app/src/main/java/com/systempro/*
-          rm -rf app/src/main/res/layout/*
-          mkdir -p app/src/main/java/com/systempro
-          mkdir -p app/src/main/res/layout
-
-      - name: 4. Setup Java 17
+      - name: 3. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
 
-      - name: 5. Fast Processing (Final Fix)
+      - name: 4. Secure Processing
+        # یہاں ہم پرانی خراب فائلوں کو بائی پاس کر کے نئی فائلیں زبردستی بنا رہے ہیں
         run: |
-          # اگر فائلیں غائب ہوں تو ہی بنائیں (بائی پاس لاجک)
-          if [ ! -f settings.gradle ]; then echo "include ':app'" > settings.gradle; fi
+          rm -rf app/build
+          # اس بات کو یقینی بنانا کہ فولڈرز موجود ہیں
+          mkdir -p app/src/main/java/com/systempro
+          mkdir -p app/src/main/res/layout
           
-          # مکمل بلڈ فائل بنانا تاکہ ایرر ختم ہو
-          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' }; buildTypes { release { minifyEnabled false } } }" > app/build.gradle
+          # Root Settings
+          echo "include ':app'" > settings.gradle
           
-          # مینی فیسٹ فائل کو ٹھیک کرنا
+          # Root Build File (تمام ریپوزٹریز کو بائی پاس کرنا)
+          printf "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.0.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          
+          # App Build File (Correct Config)
+          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' } }" > app/build.gradle
+          
+          # Manifest (بغیر کسی غلطی کے)
           printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
-          
-          # بلڈ رن کرنا
+
+      - name: 5. Execute Build
+        run: |
           sudo apt-get update && sudo apt-get install -y gradle
+          # یہاں ہم صرف اے پی کے بنانے پر توجہ دیں گے
           gradle assembleDebug
 
       - name: 6. Upload Success APK
         uses: actions/upload-artifact@v4
         with:
-          name: Bypass-Build-App
+          name: Success-SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
