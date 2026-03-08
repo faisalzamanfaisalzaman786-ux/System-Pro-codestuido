@@ -1,4 +1,4 @@
-name: System Pro Final Builder
+name: System Pro Ultimate Builder
 on:
   workflow_dispatch:
     inputs:
@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
       - name: ☕ Setup Java 17
@@ -21,9 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Fix Repositories & Build
+      - name: 🏗️ Fix Repositories & Build Structure
         run: |
-          # پرانا کچرا صاف کرنا
+          # مکمل صفائی تاکہ کوئی پرانا کنفلکٹ نہ رہے
           rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
@@ -31,7 +31,7 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
 
-          # 1. settings.gradle (Repository Fix)
+          # 1. settings.gradle (ریپوزٹری کا اصل حل یہاں ہے)
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -43,10 +43,9 @@ jobs:
           echo "buildscript { 
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          }" > build.gradle
 
-          # 3. app/build.gradle (Native Config)
+          # 3. app/build.gradle (Module Level)
           echo "apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
@@ -55,6 +54,7 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
           # 4. AndroidManifest.xml
@@ -75,12 +75,13 @@ jobs:
 
       - name: 🔨 Final Compilation
         run: |
+          # گریڈل ریپر بنانا اور بلڈ شروع کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📦 Upload APK
+      - name: 📦 Upload Success APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-Success-APK
+          name: ${{ github.event.inputs.package_name }}-Final-APK
           path: app/build/outputs/apk/debug/*.apk
