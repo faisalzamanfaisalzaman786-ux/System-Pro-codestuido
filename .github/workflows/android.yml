@@ -23,45 +23,57 @@ jobs:
 
       - name: 🏗️ Fix Repositories & Build Structure
         run: |
-          # مکمل صفائی تاکہ کوئی پرانا کنفلکٹ نہ رہے
+          # مکمل صفائی تاکہ پچھلی غلط فائلیں بلڈ میں رکاوٹ نہ بنیں
           rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle (ریپوزٹری کا اصل حل یہاں ہے)
-          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          # 1. settings.gradle (حتمی حل: ریپوزٹریز کو یہاں زبردستی ڈیفائن کیا گیا ہے)
+          echo "pluginManagement { 
+              repositories { google(); mavenCentral(); gradlePluginPortal() } 
+          }
           dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() } 
           }
           include ':app'" > settings.gradle
 
-          # 2. build.gradle (Project Level)
+          # 2. build.gradle (Project Level - صرف پلگ ان ورژن)
           echo "buildscript { 
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }" > build.gradle
 
-          # 3. app/build.gradle (Module Level)
+          # 3. app/build.gradle (Module Level - سادہ اور کلین کنفیگریشن)
           echo "apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
               compileSdk 34
-              defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
+              defaultConfig { 
+                  applicationId '$PKG'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 4. AndroidManifest.xml
+          # 4. AndroidManifest.xml (تھیم فکس کے ساتھ)
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
-              <application android:label='System Pro' android:theme='@style/Theme.AppCompat.Light.NoActionBar'>
+              <application android:label='System Pro' android:theme='@style/Theme.MaterialComponents.DayNight.NoActionBar'>
                   <activity android:name='.MainActivity' android:exported='true'>
-                      <intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter>
+                      <intent-filter>
+                          <action android:name='android.intent.action.MAIN' />
+                          <category android:name='android.intent.category.LAUNCHER' />
+                      </intent-filter>
                   </activity>
               </application></manifest>" > app/src/main/AndroidManifest.xml
 
@@ -70,17 +82,19 @@ jobs:
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
           }" > app/src/main/java/$PKG_PATH/MainActivity.java
 
       - name: 🔨 Final Compilation
         run: |
-          # گریڈل ریپر بنانا اور بلڈ شروع کرنا
+          # گریڈل ریپر بنا کر بلڈ رن کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📦 Upload Success APK
+      - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.package_name }}-Final-APK
