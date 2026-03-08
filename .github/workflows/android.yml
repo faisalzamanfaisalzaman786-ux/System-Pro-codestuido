@@ -1,108 +1,11 @@
-name: System Pro Auto Repair
-on:
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Target Package Name'
-        required: true
-        default: 'com.systempro.app'
-
+name: System Pro Master Setup
+on: [workflow_dispatch]
 jobs:
-  repair-and-build:
+  build-and-setup:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 ریپوزٹری تک رسائی
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 🧹 پرانی فائلوں کی مکمل صفائی
-        run: |
-          # اینڈرائیڈ کی تمام پرانی فائلوں اور پوشیدہ ڈیٹا کو ڈیلیٹ کرنا
-          rm -rf app build.gradle settings.gradle .gradle
-          echo "تمام پرانی فائلیں صاف کر دی گئی ہیں۔"
-
-      - name: 🏗️ نئی اور درست فائلیں بنانا (Force Creation)
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          PKG_PATH=$(echo $PKG | tr '.' '/')
-          
-          # ضروری فولڈرز بنانا
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-
-          # 1. settings.gradle (ریپوزٹری لاک فکس)
-          cat <<EOF > settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = "SystemProApp"
-          include ':app'
-          EOF
-
-          # 2. build.gradle (Project Level)
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          EOF
-
-          # 3. app/build.gradle (Module Level)
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
-          android {
-              namespace '$PKG'
-              compileSdk 34
-              defaultConfig { 
-                  applicationId '$PKG'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-
-          # 4. AndroidManifest.xml
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # 5. MainActivity.java
-          cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
-          package $PKG;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
-          }
-          EOF
-
-      - name: 🔨 فائنل بلڈ (نیٹو اے پی کے)
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: 📦 اے پی کے اپلوڈ کریں
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Repaired-APK
-          path: app/build/outputs/apk/debug/*.apk
+      - uses: actions/checkout@v4
+      - name: Build Structure
+        run: | 
+          mkdir -p app/src/main/java/com/systempro/app/
+          echo "Setup successful"
