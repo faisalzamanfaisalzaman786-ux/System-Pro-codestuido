@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Target Package Name from App'
+        description: 'Target Package Name'
         required: true
         default: 'com.systempro.test'
 
@@ -21,22 +21,21 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Create Native Android Structure
+      - name: 🏗️ Setup Native Project
         run: |
-          # پیکیج نیم حاصل کرنا اور فولڈر پاتھ بنانا
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
-          # ضروری فولڈرز بنانا
+          # اینڈرائیڈ اسٹرکچر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # Root settings.gradle
+          # ضروری کنفیگریشن فائلز
           echo "rootProject.name = 'SystemProProject'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # App build.gradle (نیٹو کنفیگریشن)
+          # بلڈ گریڈل (Native Config)
           echo "plugins { id 'com.android.application' }
           android {
               namespace '$PKG'
@@ -48,20 +47,10 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              buildTypes { release { minifyEnabled false } }
           }" > app/build.gradle
 
-          # MainActivity.java بنانا
-          echo "package $PKG;
-          import android.app.Activity;
-          import android.os.Bundle;
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-              }
-          }" > app/src/main/java/$PKG_PATH/MainActivity.java
-
-          # AndroidManifest.xml بنانا
+          # مینی فیسٹ فائل
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
               <application android:label='System Pro' android:theme='@android:style/Theme.DeviceDefault'>
                   <activity android:name='.MainActivity' android:exported='true'>
@@ -77,7 +66,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: 📦 Upload Final APK
         uses: actions/upload-artifact@v4
