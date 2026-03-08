@@ -21,9 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Fix Repositories & Build Structure
+      - name: 🏗️ Fix Project & Force Repositories
         run: |
-          # مکمل صفائی تاکہ پچھلی غلط فائلیں بلڈ میں رکاوٹ نہ بنیں
+          # مکمل صفائی تاکہ پرانا ڈیٹا مداخلت نہ کرے
           rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
@@ -32,7 +32,7 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle (حتمی حل: ریپوزٹریز کو یہاں زبردستی ڈیفائن کیا گیا ہے)
+          # 1. settings.gradle (حتمی حل: یہاں ریپوزٹریز کو زبردستی نافذ کیا گیا ہے)
           echo "pluginManagement { 
               repositories { google(); mavenCentral(); gradlePluginPortal() } 
           }
@@ -40,15 +40,16 @@ jobs:
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() } 
           }
+          rootProject.name = 'SystemPro'
           include ':app'" > settings.gradle
 
-          # 2. build.gradle (Project Level - صرف پلگ ان ورژن)
+          # 2. build.gradle (Project Level)
           echo "buildscript { 
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }" > build.gradle
 
-          # 3. app/build.gradle (Module Level - سادہ اور کلین کنفیگریشن)
+          # 3. app/build.gradle (Module Level)
           echo "apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
@@ -66,7 +67,7 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 4. AndroidManifest.xml (تھیم فکس کے ساتھ)
+          # 4. AndroidManifest.xml (تھیم سپورٹ کے ساتھ)
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
               <application android:label='System Pro' android:theme='@style/Theme.MaterialComponents.DayNight.NoActionBar'>
                   <activity android:name='.MainActivity' android:exported='true'>
@@ -89,7 +90,7 @@ jobs:
 
       - name: 🔨 Final Compilation
         run: |
-          # گریڈل ریپر بنا کر بلڈ رن کرنا
+          # گریڈل ریپر بنانا اور فائنل بلڈ رن کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
@@ -97,5 +98,5 @@ jobs:
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-Final-APK
+          name: ${{ github.event.inputs.package_name }}-Success-APK
           path: app/build/outputs/apk/debug/*.apk
