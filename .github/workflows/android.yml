@@ -1,4 +1,4 @@
-name: System Pro Self-Cleaner
+name: System Pro Clean-First
 on:
   workflow_dispatch:
 
@@ -6,44 +6,37 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout
+      # مرحلہ 1: ریپوزٹری سے رابطہ
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Initial Smart Clean
-        # بلڈ شروع کرنے سے پہلے پرانی کسی بھی ایپ کا ڈیٹا صاف کرنا
+      # مرحلہ 2: مکمل صفائی (صفائی پہلے)
+      - name: 2. Deep Cleaning
         run: |
+          echo "پرانا ڈیٹا صاف کیا جا رہا ہے..."
           rm -rf app build settings.gradle build.gradle gradlew* gradle
+          # نیا ڈھانچہ بنانا
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
 
+      # مرحلہ 3: انوائرمنٹ سیٹ اپ
       - name: 3. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Create Fresh Structure
+      # مرحلہ 4: پروسیسنگ (ایپ بنانا)
+      - name: 4. Processing Project
         run: |
           echo "include ':app'" > settings.gradle
           printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
-
-      - name: 5. Build APK
-        run: |
           sudo apt-get update && sudo apt-get install -y gradle
           gradle assembleDebug
 
-      - name: 6. Upload Finished APK
+      # مرحلہ 5: اے پی کے محفوظ کرنا
+      - name: 5. Save APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
+          name: Clean-Build-App
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: 7. Post-Build Auto Clean
-        # اے پی کے بننے کے بعد تمام ڈیٹا مٹا دیں تاکہ اگلی بار کوئی مسئلہ نہ آئے
-        if: always() # چاہے بلڈ پاس ہو یا فیل، یہ صفائی ضرور ہوگی
-        run: |
-          rm -rf app
-          rm -rf build
-          rm -f settings.gradle
-          rm -f build.gradle
-          echo "ریپوزٹری اب اگلی بلڈ کے لیے بالکل صاف ہے!"
