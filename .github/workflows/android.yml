@@ -1,6 +1,6 @@
 name: System Pro Master Setup
 on:
-  workflow_dispatch: # یہ آپ کی ایپ کے بٹن سے ٹریگر ہوگا
+  workflow_dispatch:
 
 jobs:
   build-and-setup:
@@ -17,11 +17,11 @@ jobs:
 
       - name: Create Android Structure and Fill Files
         run: |
-          # 1. فولڈرز بنانا
+          # Creating Folders
           mkdir -p app/src/main/java/com/systempro/app/
           mkdir -p app/src/main/res/layout/
 
-          # 2. Files میں ڈیٹا بھرنا (Data Injection)
+          # Injecting Data into Files
           echo "rootProject.name = 'SystemProApp'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
@@ -46,7 +46,7 @@ jobs:
                   <activity android:name='.MainActivity' android:exported='true'>
                       <intent-filter>
                           <action android:name='android.intent.action.MAIN' />
-                          <category android:name='android.intent.category.LAUNCHER' />
+                          <category android:name='android.intent.category.LAUNCHer' />
                       </intent-filter>
                   </activity>
               </application>
@@ -54,7 +54,6 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          # گریڈل رن کرنا (اگر فائل نہ ہو تو پہلے بنانا)
           if [ ! -f gradlew ]; then
             gradle wrapper
           fi
