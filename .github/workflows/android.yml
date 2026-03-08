@@ -1,54 +1,54 @@
-name: System Pro Ultimate Auto-Downloader
+name: System Pro Ultimate APK Builder
 on:
   workflow_dispatch:
-    inputs:
-      firebase_url:
-        description: 'Firebase Realtime DB URL'
-        required: true
 
 jobs:
   build:
+    name: Build Android Application
     runs-on: ubuntu-latest
+
     steps:
-      - name: 1. Start Notification
-        run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
-          -d '{"msg": "🚀 Build Started: Preparing Environment...", "progress": 10, "is_error": false}'
-
-      - name: 2. Checkout Code
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: 3. Setup Java JDK 17
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: 4. Build APK with Gradle
-        run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_url }}" -d '{"msg": "⚙️ Compiling Resources & Java...", "progress": 50}'
-          chmod +x gradlew
-          ./gradlew assembleDebug
+      - name: 3. Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v3
 
-      - name: 5. Generate Download Link & Notify
-        if: success()
+      - name: 4. Build Safe Directory Structure
         run: |
-          # یہاں ہم GitHub Artifact کا لنک یا عارضی ٹرانسفر لنک بنا رہے ہیں
+          mkdir -p app/src/main/java/com/systempro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
+          echo "ڈائریکٹری اسٹرکچر تیار ہے..."
+
+      - name: 5. Grant Execute Permission
+        run: chmod +x gradlew
+
+      - name: 6. Full Compilation (Assemble Debug)
+        run: ./gradlew assembleDebug --stacktrace --info
+
+      - name: 7. Get APK Path and Rename
+        run: |
           APK_PATH=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
-          
-          # آپ کی ایپ کو فائنل سگنل اور ڈاؤن لوڈ لنک بھیجنا
-          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
-          -d '{"msg": "✅ Success! APK Generated.", "progress": 100, "is_error": false, "download_ready": true}'
+          cp $APK_PATH SystemPro_Final_Build.apk
+          echo "APK تیار ہے: SystemPro_Final_Build.apk"
 
-      - name: 6. Upload Artifact to GitHub
-        if: success()
+      - name: 8. Upload Final Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Release-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemPro-Debug-Package
+          path: SystemPro_Final_Build.apk
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: 7. Handle Failure
-        if: failure()
-        run: |
-          curl -X PATCH "${{ github.event.inputs.firebase_url }}" \
-          -d '{"msg": "❌ Build Failed! Check your code syntax.", "progress": 0, "is_error": true}'
+      - name: 9. Final Success Signal
+        run: echo "فیصل بھائی، مبارک ہو! آپ کا مکمل APK تیار ہے اور ڈاؤن لوڈ کے لیے دستیاب ہے۔"
