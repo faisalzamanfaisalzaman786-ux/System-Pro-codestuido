@@ -1,6 +1,11 @@
-name: System Pro Native Build
+name: System Pro Dynamic Build
 on:
   workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.systempro.test'
 
 jobs:
   build:
@@ -14,57 +19,47 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # بلڈ کو تیز کرنے کے لیے
+          cache: 'gradle'
 
-      - name: Initialize Android Project
+      - name: Initialize Dynamic Structure
         run: |
-          mkdir -p app/src/main/java/com/systempro/app/
+          # پیکیج نیم کو فولڈر پاتھ میں تبدیل کرنا (مثال: com.a.b -> com/a/b)
+          PKG_NAME="${{ github.event.inputs.package_name }}"
+          PKG_PATH=$(echo $PKG_NAME | tr '.' '/')
+          
+          mkdir -p app/src/main/java/$PKG_PATH/
           mkdir -p app/src/main/res/layout/
-          mkdir -p app/src/main/res/values/
 
-          # Settings File
-          echo "rootProject.name = 'SystemProApp'" > settings.gradle
+          # Settings.gradle
+          echo "rootProject.name = 'SystemProDynamic'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # Root Build File
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
-
-          # App Build File
+          # App Build.gradle (Dynamic Namespace)
           echo "plugins { id 'com.android.application' }
           android {
-              namespace 'com.systempro.app'
+              namespace '$PKG_NAME'
               compileSdk 34
               defaultConfig {
-                  applicationId 'com.systempro.app'
+                  applicationId '$PKG_NAME'
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
               }
           }" > app/build.gradle
 
-          # MainActivity Java
-          echo "package com.systempro.app;
+          # MainActivity.java (Dynamic Package Line)
+          echo "package $PKG_NAME;
           import android.app.Activity;
           import android.os.Bundle;
-          import android.widget.TextView;
           public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
+              @Override protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  TextView tv = new TextView(this);
-                  tv.setText('Welcome to System Pro Native!');
-                  setContentView(tv);
+                  setContentView(R.layout.activity_main);
               }
-          }" > app/src/main/java/com/systempro/app/MainActivity.java
+          }" > app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # Android Manifest
+          # AndroidManifest.xml
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
-              <application android:label='System Pro' android:theme='@android:style/Theme.DeviceDefault'>
+              <application android:label='System Pro'>
                   <activity android:name='.MainActivity' android:exported='true'>
                       <intent-filter>
                           <action android:name='android.intent.action.MAIN' />
@@ -74,16 +69,14 @@ jobs:
               </application>
           </manifest>" > app/src/main/AndroidManifest.xml
 
-      - name: Setup Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.5 # ورژن فکس کر دیا تاکہ ایرر نہ آئے
-
-      - name: Build Debug APK
+      - name: Build APK
         run: |
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace # تاکہ ایرر کی تفصیل مل سکے
+          ./gradlew assembleDebug
 
-      - name: Upload Native APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Native-App
+          name: ${{ github.event.inputs.package_name }}-APK
           path: app/build/outputs/apk/debug/*.apk
