@@ -20,17 +20,24 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: 4. Fix Project Structure
+      - name: 4. Create Project Structure
         run: |
-          # اگر گریڈل ریپر نہیں ہے تو اسے بنائیں
+          # بنیادی فولڈرز بنانا
+          mkdir -p app/src/main/java/com/systempro/test
+          mkdir -p app/src/main/res/layout
+          
+          # build.gradle فائل بنانا (اگر موجود نہ ہو)
+          if [ ! -f "build.gradle" ]; then
+            echo "buildscript { repositories { google(); mavenCentral() } }" > build.gradle
+          fi
+          
+          # ایپ لیول کی build.gradle
+          echo "plugins { id 'com.android.application' }" > app/build.gradle
+          echo "android { namespace 'com.systempro.test'; compileSdk 34; defaultconfig { applicationId 'com.systempro.test'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }" >> app/build.gradle
+
+          # گریڈل ریپر تیار کرنا
           gradle wrapper
           chmod +x gradlew
-          
-          # اگر ایپ کا فولڈر نہیں ہے تو بنیادی فائلیں بنائیں
-          if [ ! -d "app" ]; then
-            mkdir -p app/src/main/java/com/systempro/test
-            mkdir -p app/src/main/res/layout
-          fi
 
       - name: 5. Build APK
         run: ./gradlew assembleDebug --stacktrace
@@ -38,5 +45,5 @@ jobs:
       - name: 6. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V5-Final
-          path: "**/*.apk"
+          name: SystemPro-Final-APK
+          path: app/build/outputs/apk/debug/*.apk
