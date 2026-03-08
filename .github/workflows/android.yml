@@ -1,4 +1,4 @@
-name: System Pro Smart Bypass
+name: System Pro Permanent Bypass
 on:
   workflow_dispatch:
 
@@ -9,22 +9,20 @@ jobs:
       - name: 1. Checkout
         uses: actions/checkout@v4
 
-      # مرحلہ 2: لائبریریز کو محفوظ رکھنا (Bypass Delete)
-      - name: 2. Cache Gradle Dependencies
+      # مرحلہ 2: لائبریریز کو محفوظ رکھنا (بائی پاس) تاکہ وقت بچے
+      - name: 2. Cache Setup
         uses: actions/cache@v3
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-stable
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # مرحلہ 3: صرف ایپ کا ڈیٹا صاف کرنا، سسٹم فائلیں نہیں
-      - name: 3. Selective Cleanup
+      - name: 3. Selective Reset (Only App Data)
+        # یہاں ہم صرف ضروری جگہ صاف کر رہے ہیں، پوری ریپو نہیں
         run: |
-          echo "صرف پرانی ایپ فائلیں صاف کی جا رہی ہیں..."
-          rm -rf app/build
           rm -rf app/src/main/java/com/systempro/*
           rm -rf app/src/main/res/layout/*
           mkdir -p app/src/main/java/com/systempro
@@ -35,23 +33,25 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle # یہاں بھی ہم نے لائبریریز کو بائی پاس کر دیا
+          cache: gradle
 
-      - name: 5. Fast Processing
+      - name: 5. Fast Processing (Final Fix)
         run: |
-          # اگر فائلیں موجود نہ ہوں تو ہی بنائیں
-          [ -f settings.gradle ] || echo "include ':app'" > settings.gradle
+          # اگر فائلیں غائب ہوں تو ہی بنائیں (بائی پاس لاجک)
+          if [ ! -f settings.gradle ]; then echo "include ':app'" > settings.gradle; fi
           
-          if [ ! -f app/build.gradle ]; then
-            printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' } }" > app/build.gradle
-          fi
+          # مکمل بلڈ فائل بنانا تاکہ ایرر ختم ہو
+          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' }; buildTypes { release { minifyEnabled false } } }" > app/build.gradle
           
-          [ -f app/src/main/AndroidManifest.xml ] || printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          # مینی فیسٹ فائل کو ٹھیک کرنا
+          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
           
-          ./gradlew assembleDebug || (sudo apt-get update && sudo apt-get install -y gradle && gradle assembleDebug)
+          # بلڈ رن کرنا
+          sudo apt-get update && sudo apt-get install -y gradle
+          gradle assembleDebug
 
-      - name: 6. Upload APK
+      - name: 6. Upload Success APK
         uses: actions/upload-artifact@v4
         with:
-          name: Fast-Build-App
+          name: Bypass-Build-App
           path: app/build/outputs/apk/debug/*.apk
