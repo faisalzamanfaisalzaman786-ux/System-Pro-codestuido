@@ -1,4 +1,4 @@
-name: System Pro Ultimate Builder
+name: System Pro Builder
 on:
   workflow_dispatch:
 
@@ -6,42 +6,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Repository
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Auto-Clean Environment
-        # پچھلا تمام کچرا صاف کرنے کے لیے
-        run: |
-          rm -rf app/build
-          rm -rf .gradle
-          echo "Cleaned old build files."
-
-      - name: 3. Set up Java 17
+      - name: 2. Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Create Android Structure
-        # ہم براہ راست ڈائریکٹریز بنا رہے ہیں تاکہ مینی فیسٹ ایرر نہ آئے
+      - name: 3. Create Project Structure
+        # اس مرحلے کو اب سادہ اور مضبوط بنایا گیا ہے
         run: |
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
           echo "include ':app'" > settings.gradle
-          
-          # بلڈ فائل کو انتہائی سادہ رکھا ہے تاکہ فیل نہ ہو
-          echo "apply plugin: 'com.android.application'" > app/build.gradle
-          echo "android { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes 1; versionName '1.0' } }" >> app/build.gradle
+          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
 
-      - name: 5. Build Fresh APK
-        # گریڈل ریپر (Wrapper) کے بغیر براہ راست کمانڈ لائن بلڈ
+      - name: 4. Build APK
+        # ہم سسٹم کا گریڈل استعمال کریں گے تاکہ ریپر ایرر نہ آئے
         run: |
           sudo apt-get update
           sudo apt-get install -y gradle
           gradle assembleDebug
 
-      - name: 6. Upload Final APK
+      - name: 5. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
+          name: App-Build
           path: app/build/outputs/apk/debug/*.apk
