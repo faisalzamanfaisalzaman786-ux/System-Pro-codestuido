@@ -22,10 +22,10 @@ jobs:
 
       - name: 🛡️ Force Reset Environment
         run: |
-          # تمام پرانے لاگز اور میٹا ڈیٹا کا خاتمہ
+          # تمام پرانے لاگز اور میٹا ڈیٹا کا مکمل خاتمہ
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-          echo "انوائرمنٹ اب مکمل کلین ہے۔"
+          echo "انوائرمنٹ اب بالکل کلین اور تازہ ہے۔"
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
@@ -33,13 +33,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Re-Build Structure
+      - name: 🏗️ Re-Build Structure (Self-Correction)
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
-          
-          # settings.gradle
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          # 1. settings.gradle
           cat <<EOF > settings.gradle
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -49,17 +51,20 @@ jobs:
           include ':app'
           EOF
 
-          # Project build.gradle
+          # 2. Project build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # App build.gradle (Fixed for AarMetadata Error)
+          # 3. app/build.gradle (Fixed Plugins)
           cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace '$PKG'
               compileSdk 34
@@ -70,11 +75,6 @@ jobs:
                   versionCode 1 
                   versionName '1.0' 
               }
-              # میٹا ڈیٹا چیک کو بائی پاس کرنے کے لیے
-              lintOptions {
-                  checkReleaseBuilds false
-                  abortOnError false
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -82,12 +82,36 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Final Compilation (Force Build)
+          # 4. AndroidManifest.xml
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. MainActivity.java
+          cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
+          package $PKG;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
+          }
+          EOF
+
+      - name: 🔨 Final Compilation (Auto-Detect Task)
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # ایررز کو نظر انداز کر کے بلڈ مکمل کرنا
-          ./gradlew assembleDebug --no-daemon -Pandroid.experimental.self-instrumenting=true
+          # ٹاسک نہ ملنے کا مسئلہ حل کرنے کے لیے ڈائریکٹ بلڈ کال
+          ./gradlew :app:assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         if: success()
