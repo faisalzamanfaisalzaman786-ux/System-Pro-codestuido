@@ -10,25 +10,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # گٹ ہب کے ڈیفالٹ ٹوکنز اور ہیڈرز کو بائی پاس کرنے کے لیے پرمیشنز
+    permissions:
+      contents: write
     steps:
-      - name: 📥 Checkout (Force Clean)
+      - name: 📥 Checkout (Skip Submodules)
         uses: actions/checkout@v4
         with:
           clean: true
+          # سب ماڈیولز کو نظر انداز کریں تاکہ گٹ ایرر نہ آئے
+          submodules: false 
+          persist-credentials: false
 
-      - name: 🛡️ Fix Git & Deep Clean
+      - name: 🛡️ Force Reset Git Environment
         run: |
-          # گٹ سیکیورٹی اور پرانی فائلوں کی مکمل صفائی
+          # تمام گٹ رکاوٹوں کو جڑ سے ختم کرنا
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          rm -rf * .gradle .github/workflows/android.yml
-          echo "سرور اب بالکل صاف ہے اور کوئی ایرر نہیں دے گا۔"
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          # پرانی تمام فائلوں کی صفائی
+          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
+          echo "انوائرمنٹ اب مکمل طور پر صاف ہے۔"
 
-      - name: ☕ Setup Java 17 (No Cache)
+      - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          # کیشے کو ہٹا دیا گیا ہے تاکہ 'File Not Found' ایرر نہ آئے
+          # کیشے کو بند رکھیں تاکہ 'File Not Found' ایرر نہ آئے
 
       - name: 🏗️ Re-Build Structure
         run: |
@@ -60,7 +68,13 @@ jobs:
           android {
               namespace '$PKG'
               compileSdk 34
-              defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
+              defaultConfig { 
+                  applicationId '$PKG'
+                  minSdk 24 
+                  targetSdk 34 
+                  versionCode 1 
+                  versionName '1.0' 
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -68,16 +82,16 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Final Compilation (Fixed Version)
+      - name: 🔨 Final Compilation (Fixed & Fast)
         run: |
-          # گریڈل ورژن 8.2 پر فکس کریں
+          # گریڈل ورژن 8.2 پر زبردستی سیٹ کریں
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success-APK
           path: app/build/outputs/apk/debug/*.apk
