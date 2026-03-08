@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout Repository
+      - name: 📥 Checkout
         uses: actions/checkout@v4
 
       - name: ☕ Setup Java 17
@@ -21,9 +21,9 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🏗️ Fix Project & Force Repositories
+      - name: 🏗️ Create Android Structure
         run: |
-          # مکمل صفائی تاکہ پرانا ڈیٹا مداخلت نہ کرے
+          # مکمل صفائی
           rm -rf *
           
           PKG="${{ github.event.inputs.package_name }}"
@@ -32,65 +32,64 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle (حتمی حل: یہاں ریپوزٹریز کو زبردستی نافذ کیا گیا ہے)
-          echo "pluginManagement { 
-              repositories { google(); mavenCentral(); gradlePluginPortal() } 
-          }
-          dependencyResolutionManagement { 
+          # 1. settings.gradle (حتمی ریپوزٹری حل)
+          cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() } 
+              repositories { google(); mavenCentral() }
           }
-          rootProject.name = 'SystemPro'
-          include ':app'" > settings.gradle
+          include ':app'
+          EOF
 
           # 2. build.gradle (Project Level)
-          echo "buildscript { 
+          cat <<EOF > build.gradle
+          buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }" > build.gradle
+          }
+          EOF
 
-          # 3. app/build.gradle (Module Level)
-          echo "apply plugin: 'com.android.application'
+          # 3. app/build.gradle
+          cat <<EOF > app/build.gradle
+          apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
               compileSdk 34
-              defaultConfig { 
-                  applicationId '$PKG'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
+              defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-          }" > app/build.gradle
+          }
+          EOF
 
-          # 4. AndroidManifest.xml (تھیم سپورٹ کے ساتھ)
-          echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
-              <application android:label='System Pro' android:theme='@style/Theme.MaterialComponents.DayNight.NoActionBar'>
-                  <activity android:name='.MainActivity' android:exported='true'>
+          # 4. AndroidManifest.xml
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
-                          <action android:name='android.intent.action.MAIN' />
-                          <category android:name='android.intent.category.LAUNCHER' />
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-              </application></manifest>" > app/src/main/AndroidManifest.xml
+              </application>
+          </manifest>
+          EOF
 
           # 5. MainActivity.java
-          echo "package $PKG;
+          cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
+          package $PKG;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-              }
-          }" > app/src/main/java/$PKG_PATH/MainActivity.java
+              @Override protected void onCreate(Bundle s) { super.onCreate(s); }
+          }
+          EOF
 
       - name: 🔨 Final Compilation
         run: |
-          # گریڈل ریپر بنانا اور فائنل بلڈ رن کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
@@ -98,5 +97,5 @@ jobs:
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-Success-APK
+          name: ${{ github.event.inputs.package_name }}-Success
           path: app/build/outputs/apk/debug/*.apk
