@@ -1,4 +1,4 @@
-name: System Pro Clean-First
+name: System Pro Final Processor
 on:
   workflow_dispatch:
 
@@ -6,37 +6,40 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # مرحلہ 1: ریپوزٹری سے رابطہ
-      - name: 1. Checkout Repository
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      # مرحلہ 2: مکمل صفائی (صفائی پہلے)
-      - name: 2. Deep Cleaning
+      - name: 2. Smart Cleaning
         run: |
-          echo "پرانا ڈیٹا صاف کیا جا رہا ہے..."
           rm -rf app build settings.gradle build.gradle gradlew* gradle
-          # نیا ڈھانچہ بنانا
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
 
-      # مرحلہ 3: انوائرمنٹ سیٹ اپ
       - name: 3. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # مرحلہ 4: پروسیسنگ (ایپ بنانا)
-      - name: 4. Processing Project
+      - name: 4. Automatic Project Processing
         run: |
+          # ضروری اینڈرائیڈ فائلیں بنانا تاکہ ایرر نہ آئے
           echo "include ':app'" > settings.gradle
-          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
+          
+          # Root build.gradle
+          printf "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.0.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          
+          # App build.gradle
+          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCode 1; versionName '1.0' } }" > app/build.gradle
+          
+          # Manifest File (سب سے ضروری)
+          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/>\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
+          
           sudo apt-get update && sudo apt-get install -y gradle
           gradle assembleDebug
 
-      # مرحلہ 5: اے پی کے محفوظ کرنا
-      - name: 5. Save APK Artifact
+      - name: 5. Save Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: Clean-Build-App
+          name: Final-SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
