@@ -1,4 +1,4 @@
-name: System Pro Build
+name: System Pro Final Build
 on:
   workflow_dispatch:
 
@@ -15,35 +15,42 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: 4. Create Project Structure
+      - name: 3. Create Project Structure (Fixing Missing Files)
         run: |
-          # بنیادی فولڈرز بنانا
+          # Create folders
           mkdir -p app/src/main/java/com/systempro/test
           mkdir -p app/src/main/res/layout
           
-          # build.gradle فائل بنانا (اگر موجود نہ ہو)
-          if [ ! -f "build.gradle" ]; then
-            echo "buildscript { repositories { google(); mavenCentral() } }" > build.gradle
-          fi
+          # Create settings.gradle
+          echo "include ':app'" > settings.gradle
           
-          # ایپ لیول کی build.gradle
-          echo "plugins { id 'com.android.application' }" > app/build.gradle
-          echo "android { namespace 'com.systempro.test'; compileSdk 34; defaultconfig { applicationId 'com.systempro.test'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }" >> app/build.gradle
+          # Create root build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() } }" > build.gradle
+          
+          # Create app/build.gradle
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.test'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.systempro.test'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
 
-          # گریڈل ریپر تیار کرنا
-          gradle wrapper
+      - name: 4. Build APK
+        run: |
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: 5. Build APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: 6. Upload Final APK
+      - name: 5. Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-V5-APK
           path: app/build/outputs/apk/debug/*.apk
