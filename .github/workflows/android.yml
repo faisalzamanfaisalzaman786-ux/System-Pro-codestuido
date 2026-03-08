@@ -1,11 +1,86 @@
-name: System Pro Master Setup
-on: [workflow_dispatch]
+name: System Pro Native Build
+on:
+  workflow_dispatch: # آپ کی ایپ کے بٹن سے چلے گا
+
 jobs:
-  build-and-setup:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Build Structure
-        run: | 
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Initialize Android Project
+        run: |
+          # 1. مکمل اسٹرکچر بنانا
           mkdir -p app/src/main/java/com/systempro/app/
-          echo "Setup successful"
+          mkdir -p app/src/main/res/layout/
+          mkdir -p app/src/main/res/values/
+
+          # 2. گریڈل فائلز (Gradle Configuration)
+          echo "rootProject.name = 'SystemProApp'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
+
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.systempro.app'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }" > app/build.gradle
+
+          # 3. جاوا اور ڈیزائن فائلز (Java & Layout)
+          echo "package com.systempro.app;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.TextView;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  TextView tv = new TextView(this);
+                  tv.setText('Welcome to System Pro Native!');
+                  setContentView(tv);
+              }
+          }" > app/src/main/java/com/systempro/app/MainActivity.java
+
+          echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
+              <application android:label='System Pro Native' android:theme='@android:style/Theme.DeviceDefault'>
+                  <activity android:name='.MainActivity' android:exported='true'>
+                      <intent-filter>
+                          <action android:name='android.intent.action.MAIN' />
+                          <category android:name='android.intent.category.LAUNCHER' />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>" > app/src/main/AndroidManifest.xml
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Native APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Native-App
+          path: app/build/outputs/apk/debug/*.apk
