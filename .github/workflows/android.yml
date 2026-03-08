@@ -21,7 +21,7 @@ jobs:
 
       - name: 🛡️ Environment Cleanup
         run: |
-          # گٹ ہب کے تمام پرانے کچرے کی صفائی
+          # مکمل صفائی تاکہ پرانا میٹا ڈیٹا بلڈ خراب نہ کرے
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
 
@@ -31,7 +31,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Re-Build Structure (Stable Versions)
+      - name: 🏗️ Re-Build Structure (Auto-Resolve)
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
@@ -58,9 +58,9 @@ jobs:
           }
           EOF
 
-          # 3. app/build.gradle (Fixed Dependencies for No Conflict)
+          # 3. app/build.gradle (Conflict Resolver Version)
           cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins { id 'com.android.application' }
           android {
               namespace '$PKG'
               compileSdk 34
@@ -71,17 +71,20 @@ jobs:
                   versionCode 1 
                   versionName '1.0' 
               }
-              buildFeatures { viewBinding true }
+              # ورژن کے ٹکراؤ کو ختم کرنے کے لیے فورس ڈیپینڈینسی
+              configurations.all {
+                  resolutionStrategy.force 'androidx.core:core:1.12.0'
+                  resolutionStrategy.force 'androidx.appcompat:appcompat:1.6.1'
+              }
           }
           dependencies {
-              # سٹیبل ورژن استعمال کر رہے ہیں تاکہ ایرر نہ آئے
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 4. Basic Manifest & Java (برائے کمپائلیشن ٹیسٹ)
+          # 4. Basic Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -95,6 +98,7 @@ jobs:
           </manifest>
           EOF
 
+          # 5. MainActivity.java
           cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
           import android.os.Bundle;
@@ -104,12 +108,12 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Execute Build (Force Success)
+      - name: 🔨 Final Build Execution
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # تمام پرانی کیشے صاف کر کے بلڈ کریں
-          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
+          # زبردستی کیشے صاف کر کے بلڈ مکمل کرنا
+          ./gradlew clean :app:assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         if: success()
