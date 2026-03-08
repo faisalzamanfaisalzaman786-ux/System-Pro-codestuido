@@ -6,26 +6,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: 1. Cleanup & Checkout
         uses: actions/checkout@v4
+        with:
+          clean: true # یہ پرانی تمام فائلوں کو صاف کر دے گا
 
-      - name: Setup Java
+      - name: 2. Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK
+      - name: 3. Create Clean Structure
         run: |
+          # پرانے تمام فولڈرز مٹا کر نئے سرے سے بنانا
+          rm -rf app
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
           echo "include ':app'" > settings.gradle
           printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
-          sudo apt-get update && sudo apt-get install -y gradle
+
+      - name: 4. Force Build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gradle
           gradle assembleDebug
 
-      - name: Upload Artifact
+      - name: 5. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
+          name: Calculator-APK
           path: app/build/outputs/apk/debug/*.apk
