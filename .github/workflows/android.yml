@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'App Package Name'
+        description: 'Target Package'
         required: true
         default: 'com.systempro.app'
 
@@ -11,26 +11,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Setup Project
+      - name: Build Android Project
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
-          
-          # Settings & Project Files
+          mkdir -p app/src/main/res/values
+
+          # settings.gradle
           echo "include ':app'" > settings.gradle
-          
-          # build.gradle
+
+          # build.gradle (Simplified)
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
           echo "plugins { id 'com.android.application' }
           android {
@@ -42,14 +43,18 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }" > app/build.gradle
 
-          # Manifest & Java
+          # AndroidManifest.xml
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
               <application android:label='System Pro'>
                   <activity android:name='.MainActivity' android:exported='true'>
-                      <intent-filter><action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' /></intent-filter>
+                      <intent-filter>
+                          <action android:name='android.intent.action.MAIN' />
+                          <category android:name='android.intent.category.LAUNCHER' />
+                      </intent-filter>
                   </activity>
               </application></manifest>" > app/src/main/AndroidManifest.xml
 
+          # MainActivity.java
           echo "package $PKG;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -57,13 +62,13 @@ jobs:
               @Override protected void onCreate(Bundle s) { super.onCreate(s); }
           }" > app/src/main/java/$PKG_PATH/MainActivity.java
 
-      - name: 🔨 Build APK
+      - name: Generate APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📦 Upload APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.package_name }}-APK
