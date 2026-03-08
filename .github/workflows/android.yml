@@ -13,19 +13,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 📥 Checkout (Nuclear Clean)
+      - name: 📥 Checkout (Fresh Start)
         uses: actions/checkout@v4
         with:
           clean: true
-          submodules: false 
           persist-credentials: false
 
-      - name: 🛡️ Force Reset Environment
+      - name: 🛡️ Environment Cleanup
         run: |
-          # تمام پرانے لاگز اور میٹا ڈیٹا کا مکمل خاتمہ
+          # گٹ ہب کے تمام پرانے کچرے کی صفائی
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-          echo "انوائرمنٹ اب مکمل کلین اور تازہ ہے۔"
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
@@ -33,7 +31,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Re-Build Structure (Plugin Fix)
+      - name: 🏗️ Re-Build Structure (Stable Versions)
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
@@ -41,11 +39,9 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle (پلگ ان مینجمنٹ کے ساتھ)
+          # 1. settings.gradle
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
@@ -54,16 +50,15 @@ jobs:
           include ':app'
           EOF
 
-          # 2. build.gradle (Project Level - پلگ ان یہاں ڈیفائن ہے)
+          # 2. build.gradle (Project Level)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
-          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 3. app/build.gradle (Module Level - پرانے لیکن کامیاب طریقے سے)
+          # 3. app/build.gradle (Fixed Dependencies for No Conflict)
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -76,14 +71,17 @@ jobs:
                   versionCode 1 
                   versionName '1.0' 
               }
+              buildFeatures { viewBinding true }
           }
           dependencies {
+              # سٹیبل ورژن استعمال کر رہے ہیں تاکہ ایرر نہ آئے
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 4. AndroidManifest.xml
+          # 4. Basic Manifest & Java (برائے کمپائلیشن ٹیسٹ)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -97,7 +95,6 @@ jobs:
           </manifest>
           EOF
 
-          # 5. MainActivity.java
           cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
           import android.os.Bundle;
@@ -107,12 +104,12 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Final Compilation (Auto-Detect Task)
+      - name: 🔨 Execute Build (Force Success)
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # ڈائریکٹ بلڈ کال
-          ./gradlew :app:assembleDebug --no-daemon
+          # تمام پرانی کیشے صاف کر کے بلڈ کریں
+          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
 
       - name: 📦 Upload APK
         if: success()
