@@ -9,36 +9,39 @@ jobs:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Auto-Clean Old Files
-        # یہ کمانڈ پچھلی تمام عارضی فائلوں اور APK کو صاف کر دے گی
+      - name: 2. Auto-Clean Environment
+        # پچھلا تمام کچرا صاف کرنے کے لیے
         run: |
           rm -rf app/build
           rm -rf .gradle
-          find . -name "*.apk" -type f -delete
-          echo "Old build files cleaned successfully."
+          echo "Cleaned old build files."
 
-      - name: 3. Set up JDK 17
+      - name: 3. Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Create Clean Project Structure
+      - name: 4. Create Android Structure
+        # ہم براہ راست ڈائریکٹریز بنا رہے ہیں تاکہ مینی فیسٹ ایرر نہ آئے
         run: |
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
-          gradle wrapper --gradle-version 8.0
+          echo "include ':app'" > settings.gradle
+          
+          # بلڈ فائل کو انتہائی سادہ رکھا ہے تاکہ فیل نہ ہو
+          echo "apply plugin: 'com.android.application'" > app/build.gradle
+          echo "android { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes 1; versionName '1.0' } }" >> app/build.gradle
 
       - name: 5. Build Fresh APK
+        # گریڈل ریپر (Wrapper) کے بغیر براہ راست کمانڈ لائن بلڈ
         run: |
-          echo "include ':app'" > settings.gradle
-          echo "apply plugin: 'com.android.application'" > app/build.gradle
-          echo "android { compileSdk 33; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes $(date +%s); versionName '1.0' } }" >> app/build.gradle
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          sudo apt-get update
+          sudo apt-get install -y gradle
+          gradle assembleDebug
 
-      - name: 6. Upload Clean Artifact
+      - name: 6. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Fresh-Build
+          name: SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
