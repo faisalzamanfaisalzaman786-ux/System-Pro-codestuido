@@ -1,37 +1,59 @@
-name: System Pro Builder
-on:
-  workflow_dispatch:
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="30dp"
+    android:background="#0C111B"
+    android:gravity="center">
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 1. Checkout
-        uses: actions/checkout@v4
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="System Pro Calculator"
+        android:textColor="#B78AFF"
+        android:textSize="24sp"
+        android:layout_marginBottom="30dp"/>
 
-      - name: 2. Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    <EditText 
+        android:id="@+id/num1"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:hint="پہلا نمبر"
+        android:textColorHint="#5E7A9C"
+        android:textColor="#FFFFFF"
+        android:background="@android:drawable/editbox_background_normal"
+        android:inputType="numberDecimal"
+        android:padding="10dp"/>
 
-      - name: 3. Create Project Structure
-        # اس مرحلے کو اب سادہ اور مضبوط بنایا گیا ہے
-        run: |
-          mkdir -p app/src/main/java/com/systempro
-          mkdir -p app/src/main/res/layout
-          echo "include ':app'" > settings.gradle
-          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
+    <EditText 
+        android:id="@+id/num2"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:hint="دوسرا نمبر"
+        android:textColorHint="#5E7A9C"
+        android:textColor="#FFFFFF"
+        android:background="@android:drawable/editbox_background_normal"
+        android:inputType="numberDecimal"
+        android:layout_marginTop="15dp"
+        android:padding="10dp"/>
 
-      - name: 4. Build APK
-        # ہم سسٹم کا گریڈل استعمال کریں گے تاکہ ریپر ایرر نہ آئے
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gradle
-          gradle assembleDebug
+    <Button 
+        android:id="@+id/btnAdd"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="جمع کریں (+)"
+        android:backgroundTint="#1E3A5F"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="30dp"/>
 
-      - name: 5. Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: App-Build
-          path: app/build/outputs/apk/debug/*.apk
+    <TextView 
+        android:id="@+id/result"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="نتیجہ: 0"
+        android:textColor="#00FF88"
+        android:textSize="22sp"
+        android:layout_marginTop="30dp"/>
+
+</LinearLayout>
