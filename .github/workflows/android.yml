@@ -1,9 +1,9 @@
-name: System Pro Master Setup
+name: System Pro Native Builder
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Target Package Name'
+        description: 'Target Package Name from App'
         required: true
         default: 'com.systempro.test'
 
@@ -11,39 +11,76 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Status: Initialization
-        run: echo "Starting Build for ${{ github.event.inputs.package_name }}"
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-      - name: Status: Java Setup
+      - name: ☕ Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Status: Creating Folders
+      - name: 🏗️ Create Native Android Structure
         run: |
+          # پیکیج نیم حاصل کرنا اور فولڈر پاتھ بنانا
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
+          
+          # ضروری فولڈرز بنانا
           mkdir -p app/src/main/java/$PKG_PATH
-          echo "Folders created for $PKG"
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-      - name: Status: Generating Code
-        run: |
-          PKG="${{ github.event.inputs.package_name }}"
-          # Build.gradle dynamic setup
-          echo "plugins { id 'com.android.application' }" > app/build.gradle
-          echo "android { namespace '$PKG'; compileSdk 34; defaultConfig { applicationId '$PKG'; minSdk 24; targetSdk 34 } }" >> app/build.gradle
-          echo "Build files generated."
+          # Root settings.gradle
+          echo "rootProject.name = 'SystemProProject'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-      - name: Status: Compiling APK
+          # App build.gradle (نیٹو کنفیگریشن)
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace '$PKG'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PKG'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }" > app/build.gradle
+
+          # MainActivity.java بنانا
+          echo "package $PKG;
+          import android.app.Activity;
+          import android.os.Bundle;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }" > app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # AndroidManifest.xml بنانا
+          echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
+              <application android:label='System Pro' android:theme='@android:style/Theme.DeviceDefault'>
+                  <activity android:name='.MainActivity' android:exported='true'>
+                      <intent-filter>
+                          <action android:name='android.intent.action.MAIN' />
+                          <category android:name='android.intent.category.LAUNCHER' />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>" > app/src/main/AndroidManifest.xml
+
+      - name: 🔨 Compile Native APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --info
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Status: Uploading
+      - name: 📦 Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.package_name }}-APK
+          name: ${{ github.event.inputs.package_name }}-Debug
           path: app/build/outputs/apk/debug/*.apk
