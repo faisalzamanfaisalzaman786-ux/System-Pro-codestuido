@@ -1,4 +1,4 @@
-name: System Pro Final Processor
+name: System Pro Smart Bypass
 on:
   workflow_dispatch:
 
@@ -9,37 +9,49 @@ jobs:
       - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Smart Cleaning
+      # مرحلہ 2: لائبریریز کو محفوظ رکھنا (Bypass Delete)
+      - name: 2. Cache Gradle Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # مرحلہ 3: صرف ایپ کا ڈیٹا صاف کرنا، سسٹم فائلیں نہیں
+      - name: 3. Selective Cleanup
         run: |
-          rm -rf app build settings.gradle build.gradle gradlew* gradle
+          echo "صرف پرانی ایپ فائلیں صاف کی جا رہی ہیں..."
+          rm -rf app/build
+          rm -rf app/src/main/java/com/systempro/*
+          rm -rf app/src/main/res/layout/*
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
 
-      - name: 3. Setup Java 17
+      - name: 4. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle # یہاں بھی ہم نے لائبریریز کو بائی پاس کر دیا
 
-      - name: 4. Automatic Project Processing
+      - name: 5. Fast Processing
         run: |
-          # ضروری اینڈرائیڈ فائلیں بنانا تاکہ ایرر نہ آئے
-          echo "include ':app'" > settings.gradle
+          # اگر فائلیں موجود نہ ہوں تو ہی بنائیں
+          [ -f settings.gradle ] || echo "include ':app'" > settings.gradle
           
-          # Root build.gradle
-          printf "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.0.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          if [ ! -f app/build.gradle ]; then
+            printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' } }" > app/build.gradle
+          fi
           
-          # App build.gradle
-          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCode 1; versionName '1.0' } }" > app/build.gradle
+          [ -f app/src/main/AndroidManifest.xml ] || printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
           
-          # Manifest File (سب سے ضروری)
-          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/>\n</intent-filter>\n</activity>\n</application>\n</manifest>" > app/src/main/AndroidManifest.xml
-          
-          sudo apt-get update && sudo apt-get install -y gradle
-          gradle assembleDebug
+          ./gradlew assembleDebug || (sudo apt-get update && sudo apt-get install -y gradle && gradle assembleDebug)
 
-      - name: 5. Save Finished APK
+      - name: 6. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Final-SystemPro-App
+          name: Fast-Build-App
           path: app/build/outputs/apk/debug/*.apk
