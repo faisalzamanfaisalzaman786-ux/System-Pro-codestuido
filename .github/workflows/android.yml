@@ -18,26 +18,25 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.5' # مستقل ورژن جو فیل نہیں ہوگا
+          gradle-version: '8.5'
 
-      - name: 4. Ensure Wrapper Exists
+      - name: 4. Fix Project Structure
         run: |
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper
-          fi
+          # اگر گریڈل ریپر نہیں ہے تو اسے بنائیں
+          gradle wrapper
           chmod +x gradlew
+          
+          # اگر ایپ کا فولڈر نہیں ہے تو بنیادی فائلیں بنائیں
+          if [ ! -d "app" ]; then
+            mkdir -p app/src/main/java/com/systempro/test
+            mkdir -p app/src/main/res/layout
+          fi
 
-      - name: 5. Build APK (Debug)
-        run: ./gradlew assembleDebug
+      - name: 5. Build APK
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: 6. Upload Artifact
+      - name: 6. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V5-APK
-          path: app/build/outputs/apk/debug/*.apk
-      - name: 6. Upload Final APK
-        if: success()
-        uses: actions/upload-artifact@v4 # حتمی اور مستحکم ورژن
-        with:
-          name: System-Pro-Release
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemPro-V5-Final
+          path: "**/*.apk"
