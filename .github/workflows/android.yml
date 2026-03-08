@@ -1,4 +1,4 @@
-name: System Pro Final
+name: System Pro Self-Cleaner
 on:
   workflow_dispatch:
 
@@ -6,34 +6,44 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Cleanup & Checkout
+      - name: 1. Checkout
         uses: actions/checkout@v4
-        with:
-          clean: true # یہ پرانی تمام فائلوں کو صاف کر دے گا
 
-      - name: 2. Setup Java
+      - name: 2. Initial Smart Clean
+        # بلڈ شروع کرنے سے پہلے پرانی کسی بھی ایپ کا ڈیٹا صاف کرنا
+        run: |
+          rm -rf app build settings.gradle build.gradle gradlew* gradle
+          mkdir -p app/src/main/java/com/systempro
+          mkdir -p app/src/main/res/layout
+
+      - name: 3. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Create Clean Structure
+      - name: 4. Create Fresh Structure
         run: |
-          # پرانے تمام فولڈرز مٹا کر نئے سرے سے بنانا
-          rm -rf app
-          mkdir -p app/src/main/java/com/systempro
-          mkdir -p app/src/main/res/layout
           echo "include ':app'" > settings.gradle
           printf "apply plugin: 'com.android.application'\nandroid { compileSdk 33; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33 } }" > app/build.gradle
 
-      - name: 4. Force Build
+      - name: 5. Build APK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gradle
+          sudo apt-get update && sudo apt-get install -y gradle
           gradle assembleDebug
 
-      - name: 5. Upload APK
+      - name: 6. Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: Calculator-APK
+          name: SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: 7. Post-Build Auto Clean
+        # اے پی کے بننے کے بعد تمام ڈیٹا مٹا دیں تاکہ اگلی بار کوئی مسئلہ نہ آئے
+        if: always() # چاہے بلڈ پاس ہو یا فیل، یہ صفائی ضرور ہوگی
+        run: |
+          rm -rf app
+          rm -rf build
+          rm -f settings.gradle
+          rm -f build.gradle
+          echo "ریپوزٹری اب اگلی بلڈ کے لیے بالکل صاف ہے!"
