@@ -1,6 +1,6 @@
 name: System Pro Native Build
 on:
-  workflow_dispatch: # آپ کی ایپ کے بٹن سے چلے گا
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,24 +14,26 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle' # بلڈ کو تیز کرنے کے لیے
 
       - name: Initialize Android Project
         run: |
-          # 1. مکمل اسٹرکچر بنانا
           mkdir -p app/src/main/java/com/systempro/app/
           mkdir -p app/src/main/res/layout/
           mkdir -p app/src/main/res/values/
 
-          # 2. گریڈل فائلز (Gradle Configuration)
+          # Settings File
           echo "rootProject.name = 'SystemProApp'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
+          # Root Build File
           echo "buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
+          # App Build File
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
@@ -45,7 +47,7 @@ jobs:
               }
           }" > app/build.gradle
 
-          # 3. جاوا اور ڈیزائن فائلز (Java & Layout)
+          # MainActivity Java
           echo "package com.systempro.app;
           import android.app.Activity;
           import android.os.Bundle;
@@ -60,8 +62,9 @@ jobs:
               }
           }" > app/src/main/java/com/systempro/app/MainActivity.java
 
+          # Android Manifest
           echo "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>
-              <application android:label='System Pro Native' android:theme='@android:style/Theme.DeviceDefault'>
+              <application android:label='System Pro' android:theme='@android:style/Theme.DeviceDefault'>
                   <activity android:name='.MainActivity' android:exported='true'>
                       <intent-filter>
                           <action android:name='android.intent.action.MAIN' />
@@ -71,13 +74,13 @@ jobs:
               </application>
           </manifest>" > app/src/main/AndroidManifest.xml
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper
+      - name: Setup Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.5 # ورژن فکس کر دیا تاکہ ایرر نہ آئے
 
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace # تاکہ ایرر کی تفصیل مل سکے
 
       - name: Upload Native APK
         uses: actions/upload-artifact@v4
