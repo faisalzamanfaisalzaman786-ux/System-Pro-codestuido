@@ -9,33 +9,36 @@ jobs:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Set up JDK 17
+      - name: 2. Auto-Clean Old Files
+        # یہ کمانڈ پچھلی تمام عارضی فائلوں اور APK کو صاف کر دے گی
+        run: |
+          rm -rf app/build
+          rm -rf .gradle
+          find . -name "*.apk" -type f -delete
+          echo "Old build files cleaned successfully."
+
+      - name: 3. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Create Android Project Structure
+      - name: 4. Create Clean Project Structure
         run: |
           mkdir -p app/src/main/java/com/systempro
           mkdir -p app/src/main/res/layout
-          # گریڈل کی ضروری فائلیں خود بنانا
           gradle wrapper --gradle-version 8.0
 
-      - name: 4. Build Safe Directory
+      - name: 5. Build Fresh APK
         run: |
           echo "include ':app'" > settings.gradle
           echo "apply plugin: 'com.android.application'" > app/build.gradle
-          echo "android { compileSdk 33; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes 1; versionName '1.0' } }" >> app/build.gradle
+          echo "android { compileSdk 33; default { applicationId 'com.systempro'; minSdk 21; targetSdk 33; versionCodes $(date +%s); versionName '1.0' } }" >> app/build.gradle
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: 5. Grant Execute Permission
-        run: chmod +x gradlew
-
-      - name: 6. Build APK
-        run: ./gradlew assembleDebug
-
-      - name: 7. Upload APK
+      - name: 6. Upload Clean Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Release
+          name: SystemPro-Fresh-Build
           path: app/build/outputs/apk/debug/*.apk
