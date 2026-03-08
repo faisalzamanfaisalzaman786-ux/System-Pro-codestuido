@@ -13,25 +13,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 📥 Checkout (Fresh Start)
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           clean: true
-          persist-credentials: false
 
-      - name: 🛡️ Environment Cleanup
-        run: |
-          # مکمل صفائی تاکہ پرانا میٹا ڈیٹا بلڈ خراب نہ کرے
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-
-      - name: ☕ Setup Java 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Re-Build Structure (Auto-Resolve)
+      - name: Re-Build Structure
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
@@ -39,7 +32,6 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -50,7 +42,6 @@ jobs:
           include ':app'
           EOF
 
-          # 2. build.gradle (Project Level)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -58,7 +49,6 @@ jobs:
           }
           EOF
 
-          # 3. app/build.gradle (Conflict Resolver Version)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -71,10 +61,11 @@ jobs:
                   versionCode 1 
                   versionName '1.0' 
               }
-              # ورژن کے ٹکراؤ کو ختم کرنے کے لیے فورس ڈیپینڈینسی
               configurations.all {
-                  resolutionStrategy.force 'androidx.core:core:1.12.0'
-                  resolutionStrategy.force 'androidx.appcompat:appcompat:1.6.1'
+                  resolutionStrategy {
+                      force 'androidx.core:core:1.9.0'
+                      force 'androidx.appcompat:appcompat:1.6.1'
+                  }
               }
           }
           dependencies {
@@ -84,7 +75,6 @@ jobs:
           }
           EOF
 
-          # 4. Basic Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -98,7 +88,6 @@ jobs:
           </manifest>
           EOF
 
-          # 5. MainActivity.java
           cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
           package $PKG;
           import android.os.Bundle;
@@ -108,14 +97,13 @@ jobs:
           }
           EOF
 
-      - name: 🔨 Final Build Execution
+      - name: Final Build Execution
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # زبردستی کیشے صاف کر کے بلڈ مکمل کرنا
           ./gradlew clean :app:assembleDebug --no-daemon
 
-      - name: 📦 Upload APK
+      - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
