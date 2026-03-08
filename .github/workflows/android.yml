@@ -25,7 +25,7 @@ jobs:
           # تمام پرانے لاگز اور میٹا ڈیٹا کا مکمل خاتمہ
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-          echo "انوائرمنٹ اب بالکل کلین اور تازہ ہے۔"
+          echo "انوائرمنٹ اب مکمل کلین اور تازہ ہے۔"
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
@@ -33,7 +33,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Re-Build Structure (Self-Correction)
+      - name: 🏗️ Re-Build Structure (Plugin Fix)
         run: |
           PKG="${{ github.event.inputs.package_name }}"
           PKG_PATH=$(echo $PKG | tr '.' '/')
@@ -41,8 +41,11 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle
+          # 1. settings.gradle (پلگ ان مینجمنٹ کے ساتھ)
           cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
@@ -51,7 +54,7 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Project build.gradle
+          # 2. build.gradle (Project Level - پلگ ان یہاں ڈیفائن ہے)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -60,11 +63,9 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 3. app/build.gradle (Fixed Plugins)
+          # 3. app/build.gradle (Module Level - پرانے لیکن کامیاب طریقے سے)
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          apply plugin: 'com.android.application'
           android {
               namespace '$PKG'
               compileSdk 34
@@ -110,7 +111,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # ٹاسک نہ ملنے کا مسئلہ حل کرنے کے لیے ڈائریکٹ بلڈ کال
+          # ڈائریکٹ بلڈ کال
           ./gradlew :app:assembleDebug --no-daemon
 
       - name: 📦 Upload APK
