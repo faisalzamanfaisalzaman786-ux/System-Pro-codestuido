@@ -1,307 +1,43 @@
-name: System Pro Calculator
+name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build Type'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
         with:
-          gradle-version: 8.5
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Create directories
-        run: |
-          mkdir -p app/src/main/java/com/systempro/calculator
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: Create AndroidManifest.xml
-        run: |
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"
-              package=\"com.systempro.calculator\">
-              <application
-                  android:allowBackup=\"true\"
-                  android:icon=\"@mipmap/ic_launcher\"
-                  android:label=\"System Pro Calculator\"
-                  android:roundIcon=\"@mipmap/ic_launcher_round\"
-                  android:supportsRtl=\"true\"
-                  android:theme=\"@style/Theme.AppCompat.Light\">
-                  <activity
-                      android:name=\".MainActivity\"
-                      android:exported=\"true\">
-                      <intent-filter>
-                          <action android:name=\"android.intent.action.MAIN\" />
-                          <category android:name=\"android.intent.category.LAUNCHER\" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>" > app/src/main/AndroidManifest.xml
-
-      - name: Create MainActivity.java
-        run: |
-          echo "package com.systempro.calculator;
-
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              private TextView display;
-              private String currentNumber = \"\";
-              private String operator = \"\";
-              private double firstValue = 0;
-              private boolean startNewNumber = true;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  display = findViewById(R.id.display);
-              }
-
-              public void onDigitClick(View view) {
-                  Button button = (Button) view;
-                  String digit = button.getText().toString();
-                  if (startNewNumber) {
-                      currentNumber = digit;
-                      startNewNumber = false;
-                  } else {
-                      currentNumber += digit;
-                  }
-                  display.setText(currentNumber);
-              }
-
-              public void onOperatorClick(View view) {
-                  Button button = (Button) view;
-                  String op = button.getText().toString();
-                  if (!currentNumber.isEmpty()) {
-                      firstValue = Double.parseDouble(currentNumber);
-                      operator = op;
-                      startNewNumber = true;
-                  }
-              }
-
-              public void onEqualClick(View view) {
-                  if (!operator.isEmpty() && !currentNumber.isEmpty()) {
-                      double secondValue = Double.parseDouble(currentNumber);
-                      double result = 0;
-                      switch (operator) {
-                          case \"+\": result = firstValue + secondValue; break;
-                          case \"-\": result = firstValue - secondValue; break;
-                          case \"×\": result = firstValue * secondValue; break;
-                          case \"÷\": 
-                              if (secondValue != 0) result = firstValue / secondValue;
-                              else result = 0;
-                              break;
-                      }
-                      display.setText(String.valueOf(result));
-                      currentNumber = String.valueOf(result);
-                      operator = \"\";
-                      startNewNumber = true;
-                  }
-              }
-
-              public void onClearClick(View view) {
-                  currentNumber = \"\";
-                  operator = \"\";
-                  firstValue = 0;
-                  startNewNumber = true;
-                  display.setText(\"0\");
-              }
-          }" > app/src/main/java/com/systempro/calculator/MainActivity.java
-
-      - name: Create activity_main.xml
-        run: |
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"
-              android:layout_width=\"match_parent\"
-              android:layout_height=\"match_parent\"
-              android:orientation=\"vertical\"
-              android:padding=\"16dp\">
-
-              <TextView
-                  android:id=\"@+id/display\"
-                  android:layout_width=\"match_parent\"
-                  android:layout_height=\"80dp\"
-                  android:gravity=\"end|center_vertical\"
-                  android:textSize=\"32sp\"
-                  android:text=\"0\"
-                  android:background=\"#f0f0f0\"
-                  android:padding=\"8dp\"/>
-
-              <GridLayout
-                  android:layout_width=\"match_parent\"
-                  android:layout_height=\"wrap_content\"
-                  android:columnCount=\"4\"
-                  android:rowCount=\"5\"
-                  android:layout_marginTop=\"16dp\">
-
-                  <Button
-                      android:text=\"C\"
-                      android:layout_columnSpan=\"4\"
-                      android:layout_width=\"0dp\"
-                      android:layout_height=\"wrap_content\"
-                      android:layout_columnWeight=\"1\"
-                      android:onClick=\"onClearClick\"/>
-
-                  <Button android:text=\"7\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"8\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"9\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"÷\" android:onClick=\"onOperatorClick\"/>
-
-                  <Button android:text=\"4\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"5\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"6\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"×\" android:onClick=\"onOperatorClick\"/>
-
-                  <Button android:text=\"1\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"2\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"3\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"-\" android:onClick=\"onOperatorClick\"/>
-
-                  <Button android:text=\"0\" android:layout_columnSpan=\"2\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\".\" android:onClick=\"onDigitClick\"/>
-                  <Button android:text=\"+\" android:onClick=\"onOperatorClick\"/>
-                  <Button android:text=\"=\" android:layout_columnSpan=\"4\" android:onClick=\"onEqualClick\"/>
-              </GridLayout>
-          </LinearLayout>" > app/src/main/res/layout/activity_main.xml
-
-      - name: Create colors.xml
-        run: |
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <resources>
-              <color name=\"colorPrimary\">#3F51B5</color>
-              <color name=\"colorPrimaryDark\">#303F9F</color>
-              <color name=\"colorAccent\">#FF4081</color>
-          </resources>" > app/src/main/res/values/colors.xml
-
-      - name: Create strings.xml
-        run: |
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <resources>
-              <string name=\"app_name\">System Pro Calculator</string>
-          </resources>" > app/src/main/res/values/strings.xml
-
-      - name: Create styles.xml
-        run: |
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-          <resources>
-              <style name=\"AppTheme\" parent=\"Theme.AppCompat.Light.DarkActionBar\">
-                  <item name=\"colorPrimary\">@color/colorPrimary</item>
-                  <item name=\"colorPrimaryDark\">@color/colorPrimaryDark</item>
-                  <item name=\"colorAccent\">@color/colorAccent</item>
-              </style>
-          </resources>" > app/src/main/res/values/styles.xml
-
-      - name: Create settings.gradle
-        run: |
-          echo "include ':app'" > settings.gradle
-          echo "rootProject.name = 'SystemProCalculator'" >> settings.gradle
-
-      - name: Create project build.gradle
-        run: |
-          echo "buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }" > build.gradle
-
-      - name: Create app/build.gradle
-        run: |
-          echo "apply plugin: 'com.android.application'
-
-          android {
-              namespace 'com.systempro.calculator'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId 'com.systempro.calculator'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }" > app/build.gradle
-
-      - name: Create empty proguard-rules.pro
-        run: touch app/proguard-rules.pro
-
-      - name: Create gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-
-      - name: Build APK
-        run: |
-          if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
-            ./gradlew assembleRelease
-          else
-            ./gradlew assembleDebug
-          fi
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: calculator-${{ github.event.inputs.build_type || 'debug' }}.apk
-          path: app/build/outputs/apk/**/*.apk
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
