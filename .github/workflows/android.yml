@@ -8,63 +8,50 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v3
 
       - name: Create missing Gradle files
         run: |
-          # settings.gradle بنائیں اگر نہ ہو
+          # settings.gradle
           if [ ! -f settings.gradle ]; then
-            echo "Creating settings.gradle"
-            cat > settings.gradle << 'EOF'
-rootProject.name = "SystemPro"
-include ':app'
-EOF
+            echo "rootProject.name = 'SystemPro'" > settings.gradle
+            echo "include ':app'" >> settings.gradle
           fi
 
-          # پروجیکٹ لیول build.gradle بنائیں اگر نہ ہو
+          # project-level build.gradle
           if [ ! -f build.gradle ]; then
-            echo "Creating project-level build.gradle"
-            cat > build.gradle << 'EOF'
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-EOF
+            echo "buildscript {" > build.gradle
+            echo "    repositories {" >> build.gradle
+            echo "        google()" >> build.gradle
+            echo "        mavenCentral()" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "    dependencies {" >> build.gradle
+            echo "        classpath 'com.android.tools.build:gradle:7.4.2'" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "}" >> build.gradle
+            echo "allprojects {" >> build.gradle
+            echo "    repositories {" >> build.gradle
+            echo "        google()" >> build.gradle
+            echo "        mavenCentral()" >> build.gradle
+            echo "    }" >> build.gradle
+            echo "}" >> build.gradle
           fi
 
-          # gradle-wrapper.properties بنائیں اگر نہ ہو
+          # gradle-wrapper.properties
           if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
-            echo "Creating gradle-wrapper.properties"
             mkdir -p gradle/wrapper
-            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-distributionBase=GRADLE_USER_HOME
-distributionPath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip
-zipStoreBase=GRADLE_USER_HOME
-zipStorePath=wrapper/dists
-EOF
+            echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+            echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-7.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
           fi
 
       - name: Create Gradle Wrapper
