@@ -5,7 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch:        # manual trigger
+
+env:
+  # Optional: set a custom package name suffix (e.g., ".debug" or branch name)
+  PACKAGE_SUFFIX: ""        # leave empty to use default
 
 jobs:
   build:
@@ -15,14 +19,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      # Optional: Dynamically set applicationId suffix
+      - name: Update package name (optional)
+        if: env.PACKAGE_SUFFIX != ''
+        run: |
+          # Insert applicationIdSuffix into defaultConfig in app/build.gradle
+          sed -i "/defaultConfig {/a \ \ \ \ applicationIdSuffix \"${{ env.PACKAGE_SUFFIX }}\"" app/build.gradle
+          echo "Package suffix applied: ${{ env.PACKAGE_SUFFIX }}"
 
       - name: Clean build
         run: ./gradlew clean
@@ -30,8 +42,16 @@ jobs:
       - name: Build debug APK with stacktrace
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK artifact
-        if: success()   # Only upload if build succeeded
+      # Optional: Build release APK if signing configured (see notes below)
+      # - name: Build release APK
+      #   run: ./gradlew assembleRelease
+      #   env:
+      #     SIGNING_KEY_STORE: ${{ secrets.SIGNING_KEY_STORE }}
+      #     SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+      #     SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+      #     SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
