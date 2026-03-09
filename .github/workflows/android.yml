@@ -3,7 +3,7 @@ name: Android CI Build
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # آپ اسے اپنے ٹول سے بھی چلا سکتے ہیں
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,12 +19,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build with Gradle
+      # اگر ریپر فائل نہیں ہے تو یہ خود بنا لے گا
+      - name: Ensure Gradle Wrapper exists
         run: |
-          # اب سسٹم خود بخود فائل ڈھونڈ لے گا کیونکہ وہ پچھلے اسٹیپ میں ایڈ ہو چکی ہے
-          FILE=$(find . -name gradlew | head -n 1)
-          chmod +x "$FILE"
-          ./$FILE assembleDebug
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
+          chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
