@@ -1,7 +1,7 @@
 name: System Pro Native Build
 
 on:
-  workflow_dispatch: # موبائل ایپ سے بلڈ شروع کرنے کے لیے
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,22 +11,23 @@ jobs:
       actions: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4 # تازہ ترین v4 ورژن
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4 # تازہ ترین v4 ورژن
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build with Gradle
+      - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace # اسٹیک ٹریس سے ایرر کا پتہ چلے گا
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4 # v3 سے v4 پر اپڈیٹ شدہ
+      - name: Upload Actual APK
+        uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Full-V1
-          path: app/build/outputs/apk/debug/*.apk # درست فائل پاتھ
+          name: System-Pro-Final-App
+          # ہم پورے فولڈر کو اسکین کریں گے تاکہ اصلی APK چھوٹ نہ جائے
+          path: "**/build/outputs/apk/debug/*.apk" 
           retention-days: 5
