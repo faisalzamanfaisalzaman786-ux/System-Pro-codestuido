@@ -1,12 +1,10 @@
-name: System Pro Android Build
+name: Fill Project Folders
 
 on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+  workflow_dispatch: # اسے آپ گٹ ہب کے 'Actions' ٹیب سے مینولی چلائیں گے
 
 jobs:
-  build:
+  fill-files:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,32 +13,59 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Auto-Fix and Build
+      - name: Create and Fill Files in Folders
         run: |
-          # اگر گریڈل موجود نہیں ہے تو اسے زبردستی بنائیں
-          if [ ! -f gradlew ]; then
-            echo "Gradlew missing! Creating generic wrapper..."
-            gradle wrapper --gradle-version 8.0
-          fi
+          # 1. 'gradle/wrapper' میں فائلیں بنانا
+          gradle wrapper --gradle-version 8.0
           
-          chmod +x gradlew
-          
-          # اینڈرائیڈ کی بنیادی سیٹنگز چیک کریں
-          if [ ! -f settings.gradle ]; then
-            echo "include ':app'" > settings.gradle
-          fi
+          # 2. مین فولڈر (Root) کی فائلیں
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
 
-          # بلڈ شروع کریں
-          ./gradlew assembleDebug --stacktrace
+          echo "include ':app'" > settings.gradle
+          echo 'rootProject.name = "System Pro"' >> settings.gradle
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: "**/build/outputs/apk/debug/*.apk"
+          # 3. 'app' فولڈر کی فائل
+          cat <<EOF > app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              namespace 'com.system.pro'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # 4. 'app/src/main' (آخری فولڈر) میں مینی فیسٹ بنانا
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:allowBackup="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # تبدیلیوں کو گٹ ہب پر پش کرنا
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Filled all folders with required android files"
+          git push
