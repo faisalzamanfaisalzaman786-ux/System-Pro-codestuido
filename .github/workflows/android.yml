@@ -1,30 +1,86 @@
-name: GitHub-Decompiler-YAML Build
+name: Auto Repair Gradle Build
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build:
+  repair-and-build:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      - name: Repair missing Gradle files
+        run: |
+          # 1. پروجیکٹ لیول build.gradle بنائیں اگر نہ ہو
+          if [ ! -f build.gradle ]; then
+            echo "Creating project-level build.gradle"
+            cat > build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.4.2'
+    }
+}
 
-    - name: Build APK without wrapper
-      run: gradle assembleDebug --stacktrace
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+EOF
+          fi
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: SystemPro-App
-        path: app/build/outputs/apk/debug/*.apk
+          # 2. settings.gradle بنائیں اگر نہ ہو (app ماڈیول کے ساتھ)
+          if [ ! -f settings.gradle ]; then
+            echo "Creating settings.gradle"
+            cat > settings.gradle << 'EOF'
+rootProject.name = "SystemPro"
+include ':app'
+EOF
+          fi
+
+          # 3. gradle-wrapper.properties بنائیں اگر نہ ہو
+          if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
+            echo "Creating gradle-wrapper.properties"
+            mkdir -p gradle/wrapper
+            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+          fi
+
+          # 4. gradlew موجود نہ ہو تو wrapper شامل کریں
+          if [ ! -f gradlew ]; then
+            echo "Adding Gradle wrapper"
+            gradle wrapper --gradle-version 7.5
+          fi
+
+          # 5. gradlew کو executable بنائیں
+          chmod +x gradlew
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || true
+
+      - name: Build APK with Gradle
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-App
+          path: app/build/outputs/apk/debug/*.apk
