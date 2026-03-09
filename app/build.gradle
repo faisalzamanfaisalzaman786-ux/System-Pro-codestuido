@@ -1,14 +1,27 @@
 plugins {
     id 'com.android.application'
 }
+
 android {
-    namespace 'com.system.pro'
-    compileSdk 34
+    namespace 'com.system.pro' // یہ آپ کے فولڈر اسٹرکچر سے میچ کرتا ہے
+    compileSdk 33
+
     defaultConfig {
         applicationId "com.system.pro"
         minSdk 24
-        targetSdk 34
+        targetSdk 33
         versionCode 1
         versionName "1.0"
     }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
 }
