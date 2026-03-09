@@ -21,20 +21,22 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Build Professional Structure
+      - name: Force Rebuild Structure
         run: |
-          # فولڈرز اور اثاثہ جات (Assets) بنانا
+          # مکمل صفائی تاکہ پچھلا ایرر نہ آئے
+          rm -rf app build.gradle settings.gradle
+          
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/values
 
-          # 1. انٹرنیٹ پرمیشن کے ساتھ مینی فیسٹ
+          # 1. پروفیشنل مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
-                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -44,16 +46,7 @@ jobs:
           </manifest>
           EOF
 
-          # 2. انڈیکس فائل (یہاں آپ کا سورس کوڈ آئے گا)
-          cat <<EOF > app/src/main/assets/index.html
-          <!DOCTYPE html>
-          <html>
-          <head><title>System Pro</title><style>body{background:#000;color:#0f0;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace;}</style></head>
-          <body><h1>System Pro: Engine Started</h1></body>
-          </html>
-          EOF
-
-          # 3. ویب ویو والا جاوا کوڈ (WebView Logic)
+          # 2. ایپ کی مین اسکرین (WebView)
           cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.app.Activity;
@@ -74,17 +67,46 @@ jobs:
           }
           EOF
 
-          # 4. گریڈل سیٹنگز (تاکہ سائز اور پرفارمنس بہتر ہو)
+          # 3. ہوم پیج (Assets)
+          echo "<html><body style='background:#000;color:#0f0;text-align:center;padding-top:50px;'><h1>System Pro Engine V1</h1><p>Ready for your HTML code!</p></body></html>" > app/src/main/assets/index.html
+
+          # 4. گریڈل فائلز (تازہ ترین ورژنز کے ساتھ)
           echo "include ':app'" > settings.gradle
+          
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
           gradle wrapper --gradle-version 8.5
 
       - name: Grant execute permission
         run: chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Final APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Full-V1
