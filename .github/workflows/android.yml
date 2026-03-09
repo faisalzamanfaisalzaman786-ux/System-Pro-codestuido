@@ -20,7 +20,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Create missing Gradle project files
+      - name: Create missing Gradle files
         run: |
           # settings.gradle بنائیں اگر نہ ہو
           if [ ! -f settings.gradle ]; then
@@ -67,15 +67,14 @@ zipStorePath=wrapper/dists
 EOF
           fi
 
-      - name: Create Gradle Wrapper if missing
+      - name: Create Gradle Wrapper
         run: |
           if [ ! -f gradlew ]; then
-            echo "gradlew not found, creating wrapper..."
             gradle wrapper --gradle-version 7.5
           fi
           chmod +x gradlew
 
-      - name: Build APK with Gradle
+      - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
