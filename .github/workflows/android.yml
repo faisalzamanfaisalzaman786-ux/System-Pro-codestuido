@@ -1,10 +1,10 @@
-name: Fill Project Folders
+name: Ultimate Project Fixer
 
 on:
-  workflow_dispatch: # اسے آپ گٹ ہب کے 'Actions' ٹیب سے مینولی چلائیں گے
+  workflow_dispatch:
 
 jobs:
-  fill-files:
+  fix-and-fill:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -13,12 +13,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create and Fill Files in Folders
+      - name: Force Create Project Structure
         run: |
-          # 1. 'gradle/wrapper' میں فائلیں بنانا
-          gradle wrapper --gradle-version 8.0
-          
-          # 2. مین فولڈر (Root) کی فائلیں
+          # پرانے خالی فولڈرز کو صاف کر کے دوبارہ بنانا تاکہ کوئی ایرر نہ آئے
+          rm -rf app gradle build.gradle settings.gradle gradlew
+          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/java/com/system/pro
+
+          # 1. Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -29,10 +31,11 @@ jobs:
           }
           EOF
 
+          # 2. settings.gradle
           echo "include ':app'" > settings.gradle
           echo 'rootProject.name = "System Pro"' >> settings.gradle
 
-          # 3. 'app' فولڈر کی فائل
+          # 3. app/build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -48,7 +51,7 @@ jobs:
           }
           EOF
 
-          # 4. 'app/src/main' (آخری فولڈر) میں مینی فیسٹ بنانا
+          # 4. Android Manifest (آخری فولڈر کے لیے)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -63,9 +66,12 @@ jobs:
           </manifest>
           EOF
 
-          # تبدیلیوں کو گٹ ہب پر پش کرنا
+          # 5. Gradle Wrapper جنریٹ کرنا
+          gradle wrapper --gradle-version 8.0
+
+          # تبدیلیوں کو محفوظ کرنا
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "Filled all folders with required android files"
-          git push
+          git commit -m "Force fix: Created all files in correct paths"
+          git push --force origin main
