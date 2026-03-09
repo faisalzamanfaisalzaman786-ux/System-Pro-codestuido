@@ -1,4 +1,4 @@
-name: Android CI Build
+name: System Pro Android Build
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -19,16 +21,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # اگر ریپر فائل نہیں ہے تو یہ خود بنا لے گا
-      - name: Ensure Gradle Wrapper exists
+      - name: Auto-Fix and Build
         run: |
+          # اگر گریڈل موجود نہیں ہے تو اسے زبردستی بنائیں
           if [ ! -f gradlew ]; then
-            gradle wrapper
+            echo "Gradlew missing! Creating generic wrapper..."
+            gradle wrapper --gradle-version 8.0
           fi
+          
           chmod +x gradlew
+          
+          # اینڈرائیڈ کی بنیادی سیٹنگز چیک کریں
+          if [ ! -f settings.gradle ]; then
+            echo "include ':app'" > settings.gradle
+          fi
 
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+          # بلڈ شروع کریں
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
