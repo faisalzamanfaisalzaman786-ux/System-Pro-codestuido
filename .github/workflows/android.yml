@@ -1,1 +1,92 @@
+name: System Pro Final Rebuild
 
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  create-structure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build All Folders and Files
+        run: |
+          # 1. پروفیشنل اینڈرائیڈ فولڈرز بنانا
+          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          # 2. روٹ (Main) لیول کی فائلیں
+          echo "include ':app'" > settings.gradle
+          echo 'rootProject.name = "System Pro"' >> settings.gradle
+
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          # 3. ایپ لیول کی سیٹنگز
+          cat <<EOF > app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              namespace 'com.system.pro'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # 4. اینڈرائیڈ مینی فیسٹ
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:allowBackup="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. سادہ جاوا فائل (تاکہ بلڈ پاس ہو سکے)
+          cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
+          package com.system.pro;
+          import android.app.Activity;
+          import android.os.Bundle;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
+
+          # 6. گریڈل ریپر جنریٹ کرنا
+          gradle wrapper --gradle-version 8.0
+
+          # 7. تمام فائلوں کو گٹ ہب پر پش کرنا
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Success: Created full Android structure" || echo "No changes"
+          git push origin main
