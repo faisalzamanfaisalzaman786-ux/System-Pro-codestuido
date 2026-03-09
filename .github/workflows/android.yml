@@ -1,11 +1,33 @@
-name: System Pro Master Setup
-on: [workflow_dispatch]
+name: Android CI Build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: # آپ اسے اپنے ٹول سے بھی چلا سکتے ہیں
+
 jobs:
-  build-and-setup:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Build Structure
-        run: | 
-          mkdir -p app/src/main/java/com/systempro/app/
-          echo "Setup successful"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build with Gradle
+        run: |
+          # اب سسٹم خود بخود فائل ڈھونڈ لے گا کیونکہ وہ پچھلے اسٹیپ میں ایڈ ہو چکی ہے
+          FILE=$(find . -name gradlew | head -n 1)
+          chmod +x "$FILE"
+          ./$FILE assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: "**/build/outputs/apk/debug/*.apk"
