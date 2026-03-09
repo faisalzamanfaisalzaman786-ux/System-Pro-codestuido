@@ -1,14 +1,13 @@
-name: Android CI
+name: Fix Missing Gradle Wrapper
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch: # یہ بٹن آپ کے ٹول سے ٹرگر (trigger) ہو سکے گا
 
 jobs:
-  build:
+  setup-wrapper:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # فائلز پش کرنے کے لیے اجازت
 
     steps:
       - name: Checkout code
@@ -20,38 +19,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Find and build project
+      - name: Generate and Push Gradle Wrapper
         run: |
-          # This command searches for the gradlew file anywhere in your repo
-          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+          # گریڈل ریپر فائلز بنانا
+          gradle wrapper
           
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew file not found in the repository!"
-            exit 1
+          # گٹ کی کنفیگریشن
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # فائلز کو زبردستی ایڈ کرنا (تاکہ .gitignore کا مسئلہ نہ ہو)
+          git add -f gradlew
+          git add -f gradle/wrapper/gradle-wrapper.jar
+          git add -f gradle/wrapper/gradle-wrapper.properties
+          
+          # اگر کوئی تبدیلی ہے تو پش کریں
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix: Added missing Gradle Wrapper files via Tool"
+            git push
           fi
-          
-          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
-          echo "Found gradlew at: $GRADLEW_PATH"
-          echo "Project directory is: $PROJECT_DIR"
-          
-          # Grant permissions and build
-          chmod +x "$GRADLEW_PATH"
-          cd "$PROJECT_DIR"
-          ./gradlew assembleDebug
-
-      - name: Upload APK (Debug)
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          # This will find any APK generated in your build folders
-          path: "**/build/outputs/apk/debug/*.apk"
