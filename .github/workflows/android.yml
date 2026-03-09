@@ -1,57 +1,34 @@
-name: System Pro Final Success
+name: GitHub-Decompiler-YAML Build
+
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 1. Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      # لائبریریز کو محفوظ رکھنا (بائی پاس) تاکہ وقت بچے
-      - name: 2. Smart Cache Setup
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-final-v1
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-      - name: 3. Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
-      - name: 4. Final Processing & Bypass
-        # یہاں ہم صرف وہی فائلیں بدلیں گے جو بلڈ روک رہی ہیں
-        run: |
-          mkdir -p app/src/main/java/com/systempro
-          mkdir -p app/src/main/res/layout
-          
-          # Root Settings (بائی پاس اگر پہلے سے ٹھیک ہو)
-          echo "include ':app'" > settings.gradle
-          
-          # Build Script کو مکمل فکس کرنا
-          printf "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.0.2' } }\nallprojects { repositories { google(); mavenCentral() } }" > build.gradle
-          
-          # App Config
-          printf "apply plugin: 'com.android.application'\nandroid { compileSdk 34; namespace 'com.systempro'; default { applicationId 'com.systempro'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' } }" > app/build.gradle
-          
-          # Manifest (بغیر کسی تبدیلی کے محفوظ)
-          printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<application android:label='SystemPro'>\n<activity android:name='.MainActivity' android:exported='true'>\n<intent-filter>\n<action android:name='android.intent.action.MAIN'/>\n<category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+    - name: Execute Fast Build
+      run: ./gradlew assembleDebug --stacktrace
 
-      - name: 5. Execute Fast Build
-        run: |
-          sudo apt-get update && sudo apt-get install -y gradle
-          # صرف اے پی کے بنانا، فالتو چیکس کو بائی پاس کرنا
-          gradle assembleDebug --no-daemon
-
-      - name: 6. Upload Success APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Final-SystemPro-APK
-          path: app/build/outputs/apk/debug/*.apk
+    - name: Upload Success APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: SystemPro-Debug-APK
+        path: app/build/outputs/apk/debug/*.apk
