@@ -1,40 +1,11 @@
 name: System Pro Master Setup
-
-on:
-  workflow_dispatch: # یہ آپ کے ٹول سے ٹرگر ہوگا
-
+on: [workflow_dispatch]
 jobs:
-  fix-gradle:
+  build-and-setup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Create Gradle Wrapper
-        run: |
-          # گریڈل فائلز بنانا
-          gradle wrapper
-          
-          # گٹ کنفیگریشن
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          
-          # فائلز کو زبردستی ایڈ کرنا
-          git add -f gradlew gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
-          
-          # پش کرنا
-          if git diff --staged --quiet; then
-            echo "No changes needed."
-          else
-            git commit -m "Fix: Added Gradle Wrapper files via Tool"
-            git push
-          fi
+      - uses: actions/checkout@v4
+      - name: Build Structure
+        run: | 
+          mkdir -p app/src/main/java/com/systempro/app/
+          echo "Setup successful"
