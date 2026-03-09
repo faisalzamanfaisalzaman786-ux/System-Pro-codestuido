@@ -30,17 +30,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # Change path to where gradlew actually is (example: android/gradlew)
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
-
-      # Use the same path when running gradlew
-      - name: Build with Gradle
-        run: ./android/gradlew build
+      - name: Find and build project
+        run: |
+          # This command searches for the gradlew file anywhere in your repo
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+          
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew file not found in the repository!"
+            exit 1
+          fi
+          
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+          echo "Found gradlew at: $GRADLEW_PATH"
+          echo "Project directory is: $PROJECT_DIR"
+          
+          # Grant permissions and build
+          chmod +x "$GRADLEW_PATH"
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug
 
       - name: Upload APK (Debug)
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          # Adjust path if your APK is generated elsewhere
-          path: app/build/outputs/apk/debug/*.apk
+          # This will find any APK generated in your build folders
+          path: "**/build/outputs/apk/debug/*.apk"
