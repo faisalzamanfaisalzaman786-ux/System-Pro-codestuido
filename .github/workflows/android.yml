@@ -1,17 +1,20 @@
 name: System Pro Native Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # موبائل ایپ سے بلڈ شروع کرنے کے لیے
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # تازہ ترین v4 ورژن
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4 # تازہ ترین v4 ورژن
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -21,8 +24,9 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v3
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4 # v3 سے v4 پر اپڈیٹ شدہ
         with:
-          name: System-Pro-V1
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-Full-V1
+          path: app/build/outputs/apk/debug/*.apk # درست فائل پاتھ
+          retention-days: 5
