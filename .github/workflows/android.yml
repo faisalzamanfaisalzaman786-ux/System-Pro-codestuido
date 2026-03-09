@@ -1,8 +1,20 @@
-name: Auto Repair and Build
+name: System Pro Calculator Builder
 
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
 
 jobs:
   build:
@@ -10,62 +22,320 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v3
+      # Gradle انسٹال کریں تاکہ wrapper بنایا جا سکے
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
 
-      - name: Create missing Gradle files
+      - name: Create Android project directories
         run: |
-          # settings.gradle
-          if [ ! -f settings.gradle ]; then
-            echo "rootProject.name = 'SystemPro'" > settings.gradle
-            echo "include ':app'" >> settings.gradle
-          fi
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/menu
 
-          # project-level build.gradle
-          if [ ! -f build.gradle ]; then
-            echo "buildscript {" > build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "    dependencies {" >> build.gradle
-            echo "        classpath 'com.android.tools.build:gradle:7.4.2'" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
-            echo "allprojects {" >> build.gradle
-            echo "    repositories {" >> build.gradle
-            echo "        google()" >> build.gradle
-            echo "        mavenCentral()" >> build.gradle
-            echo "    }" >> build.gradle
-            echo "}" >> build.gradle
-          fi
-
-          # gradle-wrapper.properties
-          if [ ! -f gradle/wrapper/gradle-wrapper.properties ]; then
-            mkdir -p gradle/wrapper
-            echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-            echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-7.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-            echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-            echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          fi
-
-      - name: Create Gradle Wrapper
+      - name: Create AndroidManifest.xml
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 7.5
-          fi
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.systempro.app">
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="System Pro Calculator"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+
+      - name: Create MainActivity.java (Calculator Logic)
+        run: |
+          cat > app/src/main/java/com/systempro/app/MainActivity.java << 'EOF'
+package com.systempro.app;
+
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    private TextView display;
+    private String currentInput = "";
+    private String operator = "";
+    private double firstOperand = 0;
+    private boolean isNewInput = true;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        display = findViewById(R.id.display);
+    }
+
+    public void onNumberClick(View view) {
+        Button button = (Button) view;
+        String number = button.getText().toString();
+        if (isNewInput) {
+            currentInput = number;
+            isNewInput = false;
+        } else {
+            currentInput += number;
+        }
+        display.setText(currentInput);
+    }
+
+    public void onOperatorClick(View view) {
+        Button button = (Button) view;
+        String op = button.getText().toString();
+        if (!currentInput.isEmpty()) {
+            firstOperand = Double.parseDouble(currentInput);
+            operator = op;
+            isNewInput = true;
+        }
+    }
+
+    public void onEqualClick(View view) {
+        if (!operator.isEmpty() && !currentInput.isEmpty()) {
+            double secondOperand = Double.parseDouble(currentInput);
+            double result = 0;
+            switch (operator) {
+                case "+": result = firstOperand + secondOperand; break;
+                case "-": result = firstOperand - secondOperand; break;
+                case "×": result = firstOperand * secondOperand; break;
+                case "÷": result = firstOperand / secondOperand; break;
+            }
+            display.setText(String.valueOf(result));
+            currentInput = String.valueOf(result);
+            operator = "";
+            isNewInput = true;
+        }
+    }
+
+    public void onClearClick(View view) {
+        currentInput = "";
+        operator = "";
+        firstOperand = 0;
+        isNewInput = true;
+        display.setText("0");
+    }
+}
+EOF
+
+      - name: Create layout file (activity_main.xml for Calculator)
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/display"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:gravity="end|center_vertical"
+        android:textSize="32sp"
+        android:text="0"
+        android:background="#f0f0f0"
+        android:padding="8dp"/>
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="4"
+        android:rowCount="5"
+        android:layout_marginTop="16dp">
+
+        <Button
+            android:text="C"
+            android:layout_columnSpan="4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:onClick="onClearClick"/>
+
+        <Button
+            android:text="7"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="8"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="9"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="÷"
+            android:onClick="onOperatorClick"/>
+
+        <Button
+            android:text="4"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="5"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="6"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="×"
+            android:onClick="onOperatorClick"/>
+
+        <Button
+            android:text="1"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="2"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="3"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="-"
+            android:onClick="onOperatorClick"/>
+
+        <Button
+            android:text="0"
+            android:layout_columnSpan="2"
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="."
+            android:onClick="onNumberClick"/>
+        <Button
+            android:text="+"
+            android:onClick="onOperatorClick"/>
+        <Button
+            android:text="="
+            android:layout_columnSpan="4"
+            android:onClick="onEqualClick"/>
+    </GridLayout>
+</LinearLayout>
+EOF
+
+      - name: Create resource files (colors, strings, styles)
+        run: |
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#2196F3</color>
+    <color name="colorPrimaryDark">#1976D2</color>
+    <color name="colorAccent">#FF4081</color>
+</resources>
+EOF
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">System Pro Calculator</string>
+</resources>
+EOF
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+</resources>
+EOF
+
+      - name: Create settings.gradle
+        run: |
+          cat > settings.gradle << 'EOF'
+include ':app'
+rootProject.name = "SystemProCalculator"
+EOF
+
+      - name: Create project build.gradle
+        run: |
+          cat > build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+    }
+}
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+EOF
+
+      - name: Create app build.gradle
+        run: |
+          cat > app/build.gradle << 'EOF'
+apply plugin: 'com.android.application'
+android {
+    namespace 'com.systempro.app'
+    compileSdk 34
+    defaultConfig {
+        applicationId "com.systempro.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
+EOF
+
+      - name: Create gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" == "release" ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemProCalculator-${{ github.event.inputs.build_type || 'debug' }}.apk
+          path: app/build/outputs/apk/**/*.apk
