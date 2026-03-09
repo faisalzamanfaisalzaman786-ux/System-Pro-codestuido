@@ -1,10 +1,10 @@
-name: Ultimate Project Fixer
+name: System Pro Final Fixer
 
 on:
   workflow_dispatch:
 
 jobs:
-  fix-and-fill:
+  repair-and-build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -13,14 +13,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Force Create Project Structure
+      - name: Setup Project Structure
         run: |
-          # پرانے خالی فولڈرز کو صاف کر کے دوبارہ بنانا تاکہ کوئی ایرر نہ آئے
-          rm -rf app gradle build.gradle settings.gradle gradlew
+          # 1. پہلے سے موجود فولڈرز کو صاف کریں تاکہ کوئی ٹکراؤ نہ ہو
+          rm -rf gradle app build.gradle settings.gradle gradlew
+          
+          # 2. دوبارہ درست فولڈرز بنائیں
           mkdir -p gradle/wrapper
           mkdir -p app/src/main/java/com/system/pro
 
-          # 1. Root build.gradle
+          # 3. ضروری فائلیں تیار کرنا
+          echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -31,11 +35,6 @@ jobs:
           }
           EOF
 
-          # 2. settings.gradle
-          echo "include ':app'" > settings.gradle
-          echo 'rootProject.name = "System Pro"' >> settings.gradle
-
-          # 3. app/build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -45,33 +44,25 @@ jobs:
                   applicationId "com.system.pro"
                   minSdk 21
                   targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
               }
           }
           EOF
 
-          # 4. Android Manifest (آخری فولڈر کے لیے)
+          # 4. اینڈرائیڈ مینی فیسٹ (آخری فولڈر کے لیے)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:allowBackup="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
+              <application android:label="System Pro"></application>
           </manifest>
           EOF
 
-          # 5. Gradle Wrapper جنریٹ کرنا
+          # 5. گریڈل ریپر جنریٹ کرنا
           gradle wrapper --gradle-version 8.0
 
-          # تبدیلیوں کو محفوظ کرنا
+      - name: Commit and Push Changes
+        run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "Force fix: Created all files in correct paths"
-          git push --force origin main
+          git commit -m "Fixed repository structure and added required files" || echo "No changes to commit"
+          git push origin main
