@@ -19,15 +19,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Debug APK
+      - name: Build All APKs
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace # اسٹیک ٹریس سے ایرر کا پتہ چلے گا
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Actual APK
+      - name: Upload Everything Found
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-App
-          # ہم پورے فولڈر کو اسکین کریں گے تاکہ اصلی APK چھوٹ نہ جائے
-          path: "**/build/outputs/apk/debug/*.apk" 
+          name: System-Pro-Full-Package
+          # یہ لائن ہر جگہ سے APK تلاش کرے گی
+          path: "**/build/outputs/apk/**/*.apk" 
           retention-days: 5
