@@ -1,14 +1,14 @@
-name: System Pro Native Build
+name: System Pro Master Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # آپ کی ایپ سے ٹرگر کرنے کے لیے
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -18,16 +18,19 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Build All APKs
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
-      - name: Upload Everything Found
+      - name: Build with Gradle
+        # --stacktrace ایرر کی تفصیل دکھائے گا اگر بلڈ فیل ہوئی
+        run: ./gradlew assembleDebug --stacktrace --info
+
+      - name: Upload Master APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Full-Package
-          # یہ لائن ہر جگہ سے APK تلاش کرے گی
-          path: "**/build/outputs/apk/**/*.apk" 
-          retention-days: 5
+          name: System-Pro-Final-Build
+          # یہ پاتھ ہر جگہ سے APK تلاش کر کے اپلوڈ کرے گا
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
