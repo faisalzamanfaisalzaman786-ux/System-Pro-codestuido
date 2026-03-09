@@ -1,4 +1,4 @@
-name: System Pro Final Rebuild & Build APK
+name: System Pro Final WebView Build
 
 on:
   push:
@@ -20,50 +20,21 @@ jobs:
         with:
           java-version: '17'
           distribution: 'zulu'
-          cache: gradle
 
-      - name: Build All Folders and Files
+      - name: Build Professional Structure
         run: |
-          # فولڈرز کی ترتیب
-          mkdir -p gradle/wrapper
+          # فولڈرز اور اثاثہ جات (Assets) بنانا
           mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/assets
           mkdir -p app/src/main/res/values
 
-          # ضروری فائلیں
-          echo "include ':app'" > settings.gradle
-          
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOF
-
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.system.pro"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-          # مینی فیسٹ اور جاوا کوڈ
+          # 1. انٹرنیٹ پرمیشن کے ساتھ مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:allowBackup="true">
-                  <activity android:name=".MainActivity" android:exported="true">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -73,29 +44,48 @@ jobs:
           </manifest>
           EOF
 
+          # 2. انڈیکس فائل (یہاں آپ کا سورس کوڈ آئے گا)
+          cat <<EOF > app/src/main/assets/index.html
+          <!DOCTYPE html>
+          <html>
+          <head><title>System Pro</title><style>body{background:#000;color:#0f0;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace;}</style></head>
+          <body><h1>System Pro: Engine Started</h1></body>
+          </html>
+          EOF
+
+          # 3. ویب ویو والا جاوا کوڈ (WebView Logic)
           cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.app.Activity;
           import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+                  setContentView(webView);
               }
           }
           EOF
 
-          # گریڈل ریپر جنریٹ کرنا
+          # 4. گریڈل سیٹنگز (تاکہ سائز اور پرفارمنس بہتر ہو)
+          echo "include ':app'" > settings.gradle
           gradle wrapper --gradle-version 8.5
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission
         run: chmod +x gradlew
 
       - name: Build APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V1
+          name: System-Pro-Full-V1
           path: app/build/outputs/apk/debug/app-debug.apk
