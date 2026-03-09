@@ -9,6 +9,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # This ensures all 'run' commands happen inside your project folder
+    defaults:
+      run:
+        working-directory: ./YOUR_FOLDER_NAME 
 
     steps:
       - name: Checkout code
@@ -30,9 +35,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # If your gradlew is in a subfolder (e.g., android/), use:
-      # - name: Grant execute permission
-      #   run: chmod +x android/gradlew
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -43,4 +45,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          # Path must include the subfolder prefix as well
+          path: YOUR_FOLDER_NAME/app/build/outputs/apk/debug/*.apk
