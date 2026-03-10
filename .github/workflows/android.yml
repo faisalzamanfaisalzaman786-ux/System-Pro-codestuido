@@ -1,45 +1,30 @@
-name: System Pro Ultimate Build
+name: Android Build
 
 on:
-  workflow_dispatch: # آپ کے ویب انٹرفیس سے ٹرگر کرنے کے لیے
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:        # Allows manual trigger via API or GitHub UI
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. ریپوزٹری کا کوڈ چیک آؤٹ کرنا
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. جاوا ورژن 17 سیٹ اپ کرنا (Android 34+ کے لیے ضروری ہے)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+          java-version: '17'
 
-      # 3. گریڈل کیشے (Cache) کو صاف کرنا تاکہ پرانا ڈیٹا ایرر نہ دے
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      # 4. فائل پرمیشنز درست کرنا
-      - name: Grant Execute Permission for Gradlew
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 5. ایپ کو کمپائل کرنا (زیادہ میموری کے ساتھ تاکہ بلڈ فیل نہ ہو)
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace --info
-        env:
-          _JAVA_OPTIONS: "-Xmx2048m"
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
 
-      # 6. تیار شدہ APK کو ڈاؤن لوڈ کے لیے اپلوڈ کرنا
-      - name: Upload System Pro APK
+      - name: Upload APK (optional)
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V1-Build
+          name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
