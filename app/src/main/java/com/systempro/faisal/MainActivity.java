@@ -1,154 +1,64 @@
-package com.example.torchsos; // اپنا پیکیج نام تبدیل کریں
+package com.systempro.faisal;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
+import android.content.Context;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
+    private Button btnTorch;
+    private TextView statusText;
+    private boolean isFlashOn = false;
     private CameraManager cameraManager;
     private String cameraId;
-    private boolean isFlashOn = false;
-    private Handler handler = new Handler();
-    private Runnable sosRunnable;
-    private boolean sosActive = false;
-
-    private Button btnSOS, btnOff;
-
-    private static final int CAMERA_REQUEST_CODE = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        btnSOS = findViewById(R.id.btnSOS);
-        btnOff = findViewById(R.id.btnOff);
+        btnTorch = findViewById(R.id.btn_torch);
+        statusText = findViewById(R.id.status_text);
 
-        cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+        cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
-            cameraId = cameraManager.getCameraIdList()[0]; // عام طور پر بیک کیمرا
+            // بیک کیمرہ کی ID حاصل کریں
+            cameraId = cameraManager.getCameraIdList()[0];
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
 
-        // پرمیشن چیک کریں
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA}, CAMERA_REQUEST_CODE);
-        }
-
-        btnSOS.setOnClickListener(new View.OnClickListener() {
+        btnTorch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startSOS();
-            }
-        });
-
-        btnOff.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                stopSOS();
-                turnFlashOff();
+                switchFlashlight();
             }
         });
     }
 
-    private void startSOS() {
-        if (sosActive) return;
-        sosActive = true;
-        btnSOS.setEnabled(false);
-        btnOff.setEnabled(true);
-
-        // SOS پیٹرن: 3 چھوٹی، 3 لمبی، 3 چھوٹی (ڈاٹ = 200ms، ڈیش = 600ms)
-        sosRunnable = new Runnable() {
-            int step = 0;
-            long[] pattern = {200, 200, 200, 600, 600, 600, 200, 200, 200}; // آن کے اوقات
-            long[] offPattern = {200, 200, 200, 600, 600, 600, 200, 200, 200}; // آف کے اوقات (وقفے)
-
-            @Override
-            public void run() {
-                if (!sosActive) return;
-
-                if (step < pattern.length) {
-                    turnFlashOn();
-                    handler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            turnFlashOff();
-                            handler.postDelayed(this, offPattern[step]); // اگلے مرحلے کا انتظار
-                        }
-                    }, pattern[step]);
-
-                    step++;
-                    handler.postDelayed(this, pattern[step-1] + offPattern[step-1]);
-                } else {
-                    // دہرانے کے لیے دوبارہ شروع کریں
-                    step = 0;
-                    handler.post(this);
-                }
-            }
-        };
-        handler.post(sosRunnable);
-    }
-
-    private void stopSOS() {
-        sosActive = false;
-        btnSOS.setEnabled(true);
-        btnOff.setEnabled(false);
-        handler.removeCallbacks(sosRunnable);
-    }
-
-    private void turnFlashOn() {
+    private void switchFlashlight() {
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (!isFlashOn) {
                 cameraManager.setTorchMode(cameraId, true);
                 isFlashOn = true;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void turnFlashOff() {
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                btnTorch.setText("OFF");
+                btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF00E676)); // Green
+                statusText.setText("Flashlight is ON");
+            } else {
                 cameraManager.setTorchMode(cameraId, false);
                 isFlashOn = false;
+                btnTorch.setText("ON");
+                btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF2D3748)); // Dark Grey
+                statusText.setText("Flashlight is OFF");
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (CameraAccessException e) {
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "کیمرا پرمیشن مل گیا", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "پرمیشن کے بغیر ٹارچ کام نہیں کرے گی", Toast.LENGTH_LONG).show();
-            }
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        stopSOS();
-        turnFlashOff();
     }
 }
