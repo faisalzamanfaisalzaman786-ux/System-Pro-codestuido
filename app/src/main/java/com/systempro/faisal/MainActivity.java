@@ -1,17 +1,24 @@
 package com.systempro.faisal;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int CAMERA_PERMISSION_CODE = 100;
     private Button btnTorch;
     private TextView statusText;
     private boolean isFlashOn = false;
@@ -27,11 +34,30 @@ public class MainActivity extends AppCompatActivity {
         statusText = findViewById(R.id.status_text);
 
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+        // چیک کریں کہ ڈیوائس میں فلاش ہے یا نہیں
+        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) {
+            Toast.makeText(this, "آپ کے ڈیوائس میں فلاش نہیں ہے", Toast.LENGTH_LONG).show();
+            btnTorch.setEnabled(false);
+            return;
+        }
+
+        // کیمرے کی ID حاصل کریں (بیک کیمرہ)
         try {
-            // بیک کیمرہ کی ID حاصل کریں
             cameraId = cameraManager.getCameraIdList()[0];
         } catch (CameraAccessException e) {
             e.printStackTrace();
+            Toast.makeText(this, "کیمرہ تک رسائی ممکن نہیں", Toast.LENGTH_SHORT).show();
+        }
+
+        // اگر Android 6+ ہے تو کیمرے کی اجازت مانگیں
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.CAMERA},
+                        CAMERA_PERMISSION_CODE);
+            }
         }
 
         btnTorch.setOnClickListener(new View.OnClickListener() {
@@ -43,22 +69,41 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void switchFlashlight() {
+        if (cameraId == null) return;
+
         try {
             if (!isFlashOn) {
-                cameraManager.setTorchMode(cameraId, true);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    cameraManager.setTorchMode(cameraId, true);
+                }
                 isFlashOn = true;
                 btnTorch.setText("OFF");
-                btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF00E676)); // Green
+                btnTorch.setBackgroundTintList(ContextCompat.getColorStateList(this, android.R.color.holo_green_dark));
                 statusText.setText("Flashlight is ON");
             } else {
-                cameraManager.setTorchMode(cameraId, false);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    cameraManager.setTorchMode(cameraId, false);
+                }
                 isFlashOn = false;
                 btnTorch.setText("ON");
-                btnTorch.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF2D3748)); // Dark Grey
+                btnTorch.setBackgroundTintList(ContextCompat.getColorStateList(this, R.color.dark_grey));
                 statusText.setText("Flashlight is OFF");
             }
         } catch (CameraAccessException e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "خرابی: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "کیمرے کی اجازت مل گئی", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "کیمرے کی اجازت ضروری ہے", Toast.LENGTH_LONG).show();
+                btnTorch.setEnabled(false);
+            }
         }
     }
 }
