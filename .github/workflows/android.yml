@@ -1,64 +1,59 @@
-name: System Pro Advance Build
+name: Dynamic Package APK Builder
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch: # مینوئل رن کرنے کے لیے
+  workflow_dispatch:
+    inputs:
+      serial:
+        description: 'سیریل نمبر (مثلاً 001, 002)'
+        required: true
+        default: '001'
+      base_package:
+        description: 'بیس پیکج نام (ڈیفالٹ com.systempro.faisal)'
+        required: false
+        default: 'com.systempro.faisal'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout Code
+      - name: چیک آؤٹ کوڈ
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # تمام ہسٹری حاصل کرنے کے لیے تاکہ فائلیں تازہ ترین ہوں
 
-      - name: Set up JDK 17
+      - name: مقررہ پیکج نام میں سیریل شامل کریں
+        id: set_package
+        run: |
+          BASE="${{ github.event.inputs.base_package }}"
+          SERIAL="${{ github.event.inputs.serial }}"
+          # اگر سیریل نمبر پہلے سے موجود نہ ہو تو لگا دیں (مثلاً com.systempro.faisal.001)
+          NEW_PACKAGE="${BASE}.${SERIAL}"
+          echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
+          echo "نیا پیکج نام: $NEW_PACKAGE"
+
+      - name: AndroidManifest.xml میں پیکج نام تبدیل کریں
+        run: |
+          sed -i "s/package=\".*\"/package=\"${{ env.NEW_PACKAGE }}\"/" app/src/main/AndroidManifest.xml
+          echo "AndroidManifest.xml اپ ڈیٹ ہو گیا"
+
+      - name: جاوا فائلوں میں پیکج اسٹیٹمنٹ تبدیل کریں (اگر ضرورت ہو)
+        run: |
+          # فرض کریں کہ مین ایکٹیویٹی com.systempro.faisal پیکج میں ہے
+          find app/src/main/java -name "*.java" -exec sed -i "s/package com\.systempro\.faisal;/package ${{ env.NEW_PACKAGE }};/g" {} \;
+          echo "جاوا فائلیں اپ ڈیٹ ہو گئیں"
+
+      - name: جاوا ورژن سیٹ کریں
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Auto Sequence & Package Injector (1 to 1 Crore)
+      - name: Gradle بلڈ کریں
         run: |
-          # گٹ ہب کا رن نمبر حاصل کریں (یہ ہر دفعہ بڑھے گا)
-          RUN_COUNT=${{ github.run_number }}
-          NEW_PKG="com.systempro.faisal.v${RUN_COUNT}"
-          
-          echo "Setting up Build #${RUN_COUNT}"
-          echo "New Package ID: ${NEW_PKG}"
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-          # 1. Build.gradle میں ایپلیکیشن آئی ڈی اور ورژن کوڈ بدلیں
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" app/build.gradle
-          sed -i "s/versionCode .*/versionCode $RUN_COUNT/" app/build.gradle
-          sed -i "s/versionName \".*\"/versionName \"1.${RUN_COUNT}\"/" app/build.gradle
-
-          # 2. Java فائل کے اندر پیکیج نیم کو اپ ڈیٹ کریں تاکہ کوڈ کنفلکٹ نہ ہو
-          # یہ لائن آپ کے اپ لوڈ کیے گئے تازہ ترین کوڈ میں پیکیج نیم درست کرے گی
-          sed -i "s/package .*;/package $NEW_PKG;/" app/src/main/java/com/systempro/faisal/MainActivity.java
-
-          # 3. AndroidManifest.xml میں پیکیج کی مطابقت چیک کریں
-          sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/" app/src/main/AndroidManifest.xml
-
-      - name: Grant Execute Permission for Gradle
-        run: chmod +x gradlew
-
-      - name: Build with Gradle (Clean Build to avoid Default files)
-        run: ./gradlew clean assembleDebug --stacktrace
-        # 'clean' کمانڈ اس بات کو یقینی بناتی ہے کہ پرانی ڈیفالٹ فائلیں ڈیلیٹ ہو جائیں اور صرف نیا کوڈ استعمال ہو
-
-      - name: Rename APK with Sequence
-        run: |
-          RUN_COUNT=${{ github.run_number }}
-          mv app/build/outputs/apk/debug/app-debug.apk System-Pro-V${RUN_COUNT}.apk
-
-      - name: Upload Finished APK
+      - name: APK اپ لوڈ کریں (آرٹیفیکٹ)
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App-V${{ github.run_number }}
-          path: System-Pro-V${{ github.run_number }}.apk
+          name: app-${{ github.event.inputs.serial }}
+          path: app/build/outputs/apk/debug/app-debug.apk
