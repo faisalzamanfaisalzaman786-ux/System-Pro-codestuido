@@ -1,4 +1,4 @@
-package com.systempro.faisal;;
+package com.systempro.faisal;
 
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
