@@ -4,56 +4,38 @@ on:
   workflow_dispatch:
     inputs:
       serial:
-        description: 'سیریل نمبر (مثلاً 001, 002)'
+        description: 'Serial number for this build'
         required: true
         default: '001'
       base_package:
-        description: 'بیس پیکج نام (ڈیفالٹ com.systempro.faisal)'
-        required: false
+        description: 'Base package name (e.g., com.systempro.faisal)'
+        required: true
         default: 'com.systempro.faisal'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: چیک آؤٹ کوڈ
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: مقررہ پیکج نام میں سیریل شامل کریں
-        id: set_package
-        run: |
-          BASE="${{ github.event.inputs.base_package }}"
-          SERIAL="${{ github.event.inputs.serial }}"
-          # اگر سیریل نمبر پہلے سے موجود نہ ہو تو لگا دیں (مثلاً com.systempro.faisal.001)
-          NEW_PACKAGE="${BASE}.${SERIAL}"
-          echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
-          echo "نیا پیکج نام: $NEW_PACKAGE"
-
-      - name: AndroidManifest.xml میں پیکج نام تبدیل کریں
-        run: |
-          sed -i "s/package=\".*\"/package=\"${{ env.NEW_PACKAGE }}\"/" app/src/main/AndroidManifest.xml
-          echo "AndroidManifest.xml اپ ڈیٹ ہو گیا"
-
-      - name: جاوا فائلوں میں پیکج اسٹیٹمنٹ تبدیل کریں (اگر ضرورت ہو)
-        run: |
-          # فرض کریں کہ مین ایکٹیویٹی com.systempro.faisal پیکج میں ہے
-          find app/src/main/java -name "*.java" -exec sed -i "s/package com\.systempro\.faisal;/package ${{ env.NEW_PACKAGE }};/g" {} \;
-          echo "جاوا فائلیں اپ ڈیٹ ہو گئیں"
-
-      - name: جاوا ورژن سیٹ کریں
-        uses: actions/setup-java@v4
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          java-version: '11'
+          distribution: 'temurin'
 
-      - name: Gradle بلڈ کریں
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v2
 
-      - name: APK اپ لوڈ کریں (آرٹیفیکٹ)
-        uses: actions/upload-artifact@v4
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
         with:
           name: app-${{ github.event.inputs.serial }}
           path: app/build/outputs/apk/debug/app-debug.apk
