@@ -14,32 +14,33 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. جاوا سیٹ اپ کرنا
+      # 2. جاوا سیٹ اپ کرنا (کیشے کے بغیر تاکہ سرور ایرر نہ آئے)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. گریڈل سیٹ اپ (کیشے کو بند کر دیا گیا ہے تاکہ سرور ایرر نہ آئے)
+      # 3. گریڈل سیٹ اپ (کیشے مکمل بند)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           cache-disabled: true
 
-      # 4. فائل کو چلانے کی اجازت دینا
+      # 4. فائل کو ایگزیکیوٹ کرنے کی اجازت دینا
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
-      # 5. ایپ کو کلین کر کے دوبارہ بلڈ کرنا
+      # 5. ایپ کو بلڈ کرنا (مکمل تفصیلات کے ساتھ)
       - name: Build Debug APK
-        run: ./gradlew clean assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace --info
         env:
           _JAVA_OPTIONS: "-Xmx2048m"
 
-      # 6. تیار شدہ اے پی کے اپلوڈ کرنا
+      # 6. اگر بلڈ کامیاب ہو تو APK محفوظ کرنا
       - name: Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-App-Build
           path: app/build/outputs/apk/debug/app-debug.apk
