@@ -1,35 +1,46 @@
-name: Android APK Build
+name: Dynamic Android Build System
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+  repository_dispatch:
+    types: [build_new_apk]  # یہ وہ سگنل ہے جو آپ کی ایپ بھیجے گی
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      - name: Update Package and App Name Dynamically
+        run: |
+          # ایپ سے موصول ہونے والا ڈیٹا
+          NEW_PKG="${{ github.event.client_payload.package_name }}"
+          NEW_APP_NAME="${{ github.event.client_payload.app_name }}"
+          
+          echo "Starting build for Package: $NEW_PKG"
+          
+          # build.gradle میں خودکار تبدیلی
+          sed -i "s/namespace '.*'/namespace '$NEW_PKG'/g" app/build.gradle
+          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" app/build.gradle
+          
+          # strings.xml میں ایپ کا نام خودکار طور پر بدلنا
+          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
 
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: System-Pro-Release
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload Resulting APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name }}-Build
+          path: app/build/outputs/apk/debug/app-debug.apk
