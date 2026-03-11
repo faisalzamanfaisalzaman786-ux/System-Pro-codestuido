@@ -1,8 +1,11 @@
 name: Dynamic Android Build System
 
 on:
+  push:
+    branches: [ "main" ]  # فائل سیو کرتے ہی بلڈ چلے گا
+  workflow_dispatch:      # یہ لائن مینوئل "Run workflow" کا بٹن لائے گی
   repository_dispatch:
-    types: [build_new_apk]  # یہ وہ سگنل ہے جو آپ کی ایپ بھیجے گی
+    types: [build_new_apk] # یہ آپ کی ایپ سے سگنل وصول کرے گا
 
 jobs:
   build:
@@ -18,21 +21,6 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Update Package and App Name Dynamically
-        run: |
-          # ایپ سے موصول ہونے والا ڈیٹا
-          NEW_PKG="${{ github.event.client_payload.package_name }}"
-          NEW_APP_NAME="${{ github.event.client_payload.app_name }}"
-          
-          echo "Starting build for Package: $NEW_PKG"
-          
-          # build.gradle میں خودکار تبدیلی
-          sed -i "s/namespace '.*'/namespace '$NEW_PKG'/g" app/build.gradle
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g" app/build.gradle
-          
-          # strings.xml میں ایپ کا نام خودکار طور پر بدلنا
-          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
-
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
@@ -42,5 +30,5 @@ jobs:
       - name: Upload Resulting APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Build
+          name: SystemPro-Master-Build
           path: app/build/outputs/apk/debug/app-debug.apk
