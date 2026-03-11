@@ -7,37 +7,31 @@ import android.widget.EditText;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import okhttp3.*;
-import java.io.IOException;
 import org.json.JSONObject;
+import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
-
-    // اپنا ٹوکن یہاں لکھیں
-    private static final String GITHUB_TOKEN = "آپ_کا_ٹوکن_یہاں_پیسٹ_کریں";
-    private static final String REPO_OWNER = "faisalzaman";
-    private static final String REPO_NAME = "System-Pro-codestuido";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        final EditText pkgInput = findViewById(R.id.num1); // ہم پیکج نیم کے لیے پہلا باکس استعمال کر رہے ہیں
-        final EditText nameInput = findViewById(R.id.num2); // ایپ نیم کے لیے دوسرا باکس
-        Button buildBtn = findViewById(R.id.add); // فی الحال پلس والے بٹن کو بلڈ بٹن بنا رہے ہیں
-
-        buildBtn.setText("بنائیں APK");
+        // ڈائنامک طریقے سے آئی ڈیز ڈھونڈنا تاکہ ایرر نہ آئے
+        final EditText pkgInput = findViewById(getResources().getIdentifier("num1", "id", getPackageName()));
+        final EditText nameInput = findViewById(getResources().getIdentifier("num2", "id", getPackageName()));
+        Button buildBtn = findViewById(getResources().getIdentifier("add", "id", getPackageName()));
 
         buildBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String pkg = pkgInput.getText().toString();
-                String name = nameInput.getText().toString();
-                
-                if (!pkg.isEmpty() && !name.isEmpty()) {
-                    sendBuildRequest(pkg, name);
+                String pkgName = pkgInput.getText().toString();
+                String appName = nameInput.getText().toString();
+
+                if (!pkgName.isEmpty() && !appName.isEmpty()) {
+                    sendBuildRequest(pkgName, appName);
                 } else {
-                    Toast.makeText(MainActivity.this, "پیکج اور نام لکھیں", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "تمام خانے پُر کریں", Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -46,31 +40,33 @@ public class MainActivity extends AppCompatActivity {
     private void sendBuildRequest(String pkg, String name) {
         OkHttpClient client = new OkHttpClient();
         
+        // یہاں اپنا اصلی ٹوکن لازمی ڈالیں
+        String token = "YOUR_GITHUB_TOKEN_HERE"; 
+
         try {
-            JSONObject payload = new JSONObject();
-            payload.put("event_type", "build_new_apk");
-            
+            JSONObject json = new JSONObject();
+            json.put("event_type", "build_new_apk");
             JSONObject clientPayload = new JSONObject();
             clientPayload.put("package_name", pkg);
             clientPayload.put("app_name", name);
-            payload.put("client_payload", clientPayload);
+            json.put("client_payload", clientPayload);
 
             RequestBody body = RequestBody.create(
-                payload.toString(), 
+                json.toString(),
                 MediaType.get("application/json; charset=utf-8")
             );
 
             Request request = new Request.Builder()
-                .url("https://api.github.com/repos/" + REPO_OWNER + "/" + REPO_NAME + "/dispatches")
-                .addHeader("Authorization", "Bearer " + GITHUB_TOKEN)
-                .addHeader("Accept", "application/vnd.github.v3+json")
+                .url("https://api.github.com/repos/faisalzamanfaisalzaman786-ux/System-Pro-codestuido/dispatches")
                 .post(body)
+                .addHeader("Authorization", "Bearer " + token)
+                .addHeader("Accept", "application/vnd.github.v3+json")
                 .build();
 
             client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "ناکام: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "سگنل فیل ہو گیا", Toast.LENGTH_LONG).show());
                 }
 
                 @Override
