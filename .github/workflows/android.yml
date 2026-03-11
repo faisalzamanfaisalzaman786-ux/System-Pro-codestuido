@@ -1,8 +1,7 @@
 name: Dynamic Package APK Builder
 
+# صرف Manual Run - Push پر نہیں چلے گا
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       serial:
@@ -12,68 +11,41 @@ on:
       base_package:
         description: 'Base package name'
         required: true
-        default: 'com.systempro.faisalzaman'
+        default: 'com.systempro.faisal'
+
+# ایک وقت میں صرف ایک ورک فلو چلے
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          java-version: '17'
+          fetch-depth: 0
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
           distribution: 'temurin'
 
-      # اگر ضروری وسائل موجود نہ ہوں تو ڈیفالٹ بنا دیں
-      - name: Ensure resource files exist
-        run: |
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/strings.xml
-            echo '<resources>' >> app/src/main/res/values/strings.xml
-            echo '    <string name="app_name">MyApp</string>' >> app/src/main/res/values/strings.xml
-            echo '</resources>' >> app/src/main/res/values/strings.xml
-          fi
-
-          if [ ! -f app/src/main/res/values/styles.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/styles.xml
-            echo '<resources>' >> app/src/main/res/values/styles.xml
-            echo '    <style name="AppTheme" parent="android:Theme.DeviceDefault"></style>' >> app/src/main/res/values/styles.xml
-            echo '</resources>' >> app/src/main/res/values/styles.xml
-          fi
-
-          if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
-
-      # AndroidManifest.xml میں package name کو input کے مطابق تبدیل کریں
-      - name: Update package name in AndroidManifest.xml
-        run: |
-          sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.base_package }}\"/" app/src/main/AndroidManifest.xml
-
-      # اگر آپ چاہیں تو strings.xml میں app name بھی تبدیل کر سکتے ہیں (مثلاً serial کے ساتھ)
-      - name: Update app name (optional)
-        run: |
-          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">App Serial ${{ github.event.inputs.serial }}<\/string>/" app/src/main/res/values/strings.xml
-
-      # build.gradle میں applicationId کو بھی اسی package پر سیٹ کریں (اگر ضرورت ہو)
-      - name: Update applicationId in build.gradle
-        run: |
-          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.base_package }}\"/" app/build.gradle
-
-      - name: Make gradlew executable
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
+      - name: Build APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK with serial in name
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-serial-${{ github.event.inputs.serial }}
+          name: app-${{ github.event.inputs.serial }}
           path: app/build/outputs/apk/debug/app-debug.apk
