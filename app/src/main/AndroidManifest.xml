@@ -1,7 +1,7 @@
-const defaultManifest = `<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">  ✅
-    <!-- package ہٹا دیا -->
-    
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.systempro.faisal">
+
     <application
         android:allowBackup="true"
         android:icon="@drawable/icon"
@@ -16,4 +16,5 @@ const defaultManifest = `<?xml version="1.0" encoding="utf-8"?>
             </intent-filter>
         </activity>
     </application>
-</manifest>`;
+
+</manifest>
