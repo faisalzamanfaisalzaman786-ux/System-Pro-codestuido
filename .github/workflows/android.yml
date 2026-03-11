@@ -27,6 +27,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # وسائل (Resources) خودکار بنانے کا مرحلہ
+      - name: Create missing resource files
+        run: |
+          # ضروری ڈائریکٹریز بنائیں
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+
+          # strings.xml بنائیں
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/strings.xml
+          echo '<resources>' >> app/src/main/res/values/strings.xml
+          echo '    <string name="app_name">MyApp</string>' >> app/src/main/res/values/strings.xml
+          echo '</resources>' >> app/src/main/res/values/strings.xml
+
+          # styles.xml بنائیں (ڈیفالٹ تھیم)
+          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/styles.xml
+          echo '<resources>' >> app/src/main/res/values/styles.xml
+          echo '    <style name="AppTheme" parent="android:Theme.DeviceDefault"></style>' >> app/src/main/res/values/styles.xml
+          echo '</resources>' >> app/src/main/res/values/styles.xml
+
+          # ڈمی آئیکن (ic_launcher.png) بنائیں - ایک چھوٹی شفاف PNG
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
