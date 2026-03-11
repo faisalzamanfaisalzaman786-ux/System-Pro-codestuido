@@ -32,10 +32,17 @@ android {
 }
 
 dependencies {
-    // AndroidX لائبریریز جو آپ کے پروجیکٹ میں استعمال ہو رہی ہیں
+    // AndroidX لائبریریز
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // نیٹ ورک ریکوسٹ (GitHub API) کے لیے یہ لائبریری لازمی ہے
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    
+    // ڈیٹا پروسیسنگ کے لیے
+    implementation 'org.json:json:20230227'
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
