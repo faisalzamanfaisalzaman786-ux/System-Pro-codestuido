@@ -8,7 +8,7 @@ on:
         required: true
         default: '001'
       base_package:
-        description: 'Base package name (e.g., com.systempro.faisal)'
+        description: 'Base package name (fixed: com.systempro.faisal)'
         required: true
         default: 'com.systempro.faisal'
 
