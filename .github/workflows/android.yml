@@ -39,6 +39,9 @@ jobs:
 
       - name: Create Android project structure
         run: |
+          # Remove any existing manifest template files
+          rm -f app/src/main/AndroidManifest.xml
+          
           # Create necessary directories
           mkdir -p app/src/main/java/com/systempro/faisal
           mkdir -p app/src/main/res/values
@@ -50,6 +53,14 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
           mkdir -p gradle/wrapper
+
+      - name: Create gradle.properties
+        run: |
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
 
       - name: Create settings.gradle
         run: |
@@ -114,8 +125,8 @@ jobs:
                   }
               }
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
               }
           }
           
@@ -159,8 +170,12 @@ jobs:
 
       - name: Create MainActivity.java
         run: |
-          cat > app/src/main/java/com/systempro/faisal/MainActivity.java << 'EOF'
-          package com.systempro.faisal;
+          # Convert package name to path format
+          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
+          mkdir -p app/src/main/java/$PACKAGE_PATH
+          
+          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'EOF'
+          package ${{ github.event.inputs.package_name }};
           
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -221,25 +236,78 @@ jobs:
           </resources>
           EOF
 
-      - name: Create styles.xml
+      - name: Create themes.xml
         run: |
-          cat > app/src/main/res/values/styles.xml << 'EOF'
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="Theme.${app_name}" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-                  <!-- Primary brand color. -->
+              <style name="Theme.${{ github.event.inputs.app_name }}" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
                   <item name="colorPrimary">@color/purple_500</item>
                   <item name="colorPrimaryVariant">@color/purple_700</item>
                   <item name="colorOnPrimary">@color/white</item>
-                  <!-- Secondary brand color. -->
                   <item name="colorSecondary">@color/teal_200</item>
                   <item name="colorSecondaryVariant">@color/teal_700</item>
                   <item name="colorOnSecondary">@color/black</item>
-                  <!-- Status bar color. -->
                   <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
               </style>
           </resources>
           EOF
+
+      - name: Create styles.xml (for backward compatibility)
+        run: |
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+                  <item name="colorPrimary">@color/purple_500</item>
+                  <item name="colorPrimaryVariant">@color/purple_700</item>
+                  <item name="colorOnPrimary">@color/white</item>
+                  <item name="colorSecondary">@color/teal_200</item>
+                  <item name="colorSecondaryVariant">@color/teal_700</item>
+                  <item name="colorOnSecondary">@color/black</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Create simple launcher icons
+        run: |
+          # Create a simple colored square as launcher icon
+          echo "Creating placeholder icons..."
+          
+          # Create a simple ic_launcher.xml vector drawable
+          cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#6200EE"
+                  android:pathData="M0,0h108v108h-108z" />
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M30,30 L78,30 L78,78 L30,78z" />
+          </vector>
+          EOF
+          
+          # Copy the same file for round icon
+          cp app/src/main/res/drawable/ic_launcher.xml app/src/main/res/drawable/ic_launcher_round.xml
+
+      - name: Create mipmap directories with icon references
+        run: |
+          # Create mipmap XML files that reference the drawable
+          for dpi in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p app/src/main/res/mipmap-$dpi
+            cat > app/src/main/res/mipmap-$dpi/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/purple_500"/>
+              <foreground android:drawable="@drawable/ic_launcher"/>
+          </adaptive-icon>
+          EOF
+            cp app/src/main/res/mipmap-$dpi/ic_launcher.xml app/src/main/res/mipmap-$dpi/ic_launcher_round.xml
+          done
 
       - name: Create gradle wrapper
         run: |
@@ -261,6 +329,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Clean previous builds
+        run: ./gradlew clean
+
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
 
@@ -270,3 +341,13 @@ jobs:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      - name: Upload build logs (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
+          retention-days: 7
