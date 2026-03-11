@@ -27,27 +27,44 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # وسائل (Resources) خودکار بنانے کا مرحلہ
-      - name: Create missing resource files
+      # اگر ضروری وسائل موجود نہ ہوں تو ڈیفالٹ بنا دیں
+      - name: Ensure resource files exist
         run: |
-          # ضروری ڈائریکٹریز بنائیں
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          # strings.xml بنائیں
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/strings.xml
-          echo '<resources>' >> app/src/main/res/values/strings.xml
-          echo '    <string name="app_name">MyApp</string>' >> app/src/main/res/values/strings.xml
-          echo '</resources>' >> app/src/main/res/values/strings.xml
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/strings.xml
+            echo '<resources>' >> app/src/main/res/values/strings.xml
+            echo '    <string name="app_name">MyApp</string>' >> app/src/main/res/values/strings.xml
+            echo '</resources>' >> app/src/main/res/values/strings.xml
+          fi
 
-          # styles.xml بنائیں (ڈیفالٹ تھیم)
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/styles.xml
-          echo '<resources>' >> app/src/main/res/values/styles.xml
-          echo '    <style name="AppTheme" parent="android:Theme.DeviceDefault"></style>' >> app/src/main/res/values/styles.xml
-          echo '</resources>' >> app/src/main/res/values/styles.xml
+          if [ ! -f app/src/main/res/values/styles.xml ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/styles.xml
+            echo '<resources>' >> app/src/main/res/values/styles.xml
+            echo '    <style name="AppTheme" parent="android:Theme.DeviceDefault"></style>' >> app/src/main/res/values/styles.xml
+            echo '</resources>' >> app/src/main/res/values/styles.xml
+          fi
 
-          # ڈمی آئیکن (ic_launcher.png) بنائیں - ایک چھوٹی شفاف PNG
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          if [ ! -f app/src/main/res/mipmap-hdpi/ic_launcher.png ]; then
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
+
+      # AndroidManifest.xml میں package name کو input کے مطابق تبدیل کریں
+      - name: Update package name in AndroidManifest.xml
+        run: |
+          sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.base_package }}\"/" app/src/main/AndroidManifest.xml
+
+      # اگر آپ چاہیں تو strings.xml میں app name بھی تبدیل کر سکتے ہیں (مثلاً serial کے ساتھ)
+      - name: Update app name (optional)
+        run: |
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">App Serial ${{ github.event.inputs.serial }}<\/string>/" app/src/main/res/values/strings.xml
+
+      # build.gradle میں applicationId کو بھی اسی package پر سیٹ کریں (اگر ضرورت ہو)
+      - name: Update applicationId in build.gradle
+        run: |
+          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.base_package }}\"/" app/build.gradle
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -55,8 +72,8 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK with serial in name
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-debug-serial-${{ github.event.inputs.serial }}
           path: app/build/outputs/apk/debug/app-debug.apk
