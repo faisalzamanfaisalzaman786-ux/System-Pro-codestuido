@@ -1,7 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.systempro.777faisal">
-
+const defaultManifest = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">  ✅
+    <!-- package ہٹا دیا -->
+    
     <application
         android:allowBackup="true"
         android:icon="@drawable/icon"
@@ -16,5 +16,4 @@
             </intent-filter>
         </activity>
     </application>
-
-</manifest>
+</manifest>`;
