@@ -1,6 +1,8 @@
 name: Dynamic Package APK Builder
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       serial:
