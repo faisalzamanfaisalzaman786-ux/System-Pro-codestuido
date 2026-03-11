@@ -1,4 +1,4 @@
-name: Dynamic Package APK Builder
+name: Android APK Build
 
 on:
   workflow_dispatch:
@@ -7,38 +7,32 @@ on:
         description: 'App Name'
         required: true
         default: 'MyApp'
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.systempro.faisal'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create minimal Android project
+      - name: Create Android project
         run: |
-          # Create directory structure
-          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          mkdir -p app/src/main/java/$PACKAGE_PATH
-          mkdir -p app/src/main/res/values
+          # Basic structure
+          mkdir -p app/src/main/java/com/example/app
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-      - name: Create gradle-wrapper.properties
-        run: |
+          # Gradle wrapper
           cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -47,64 +41,53 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-      - name: Download gradlew
-        run: |
+          # Download gradlew
           curl -L https://github.com/gradle/gradle/raw/master/gradlew -o gradlew
           curl -L https://github.com/gradle/gradle/raw/master/gradlew.bat -o gradlew.bat
           chmod +x gradlew
 
-      - name: Create settings.gradle
-        run: |
+          # settings.gradle
           cat > settings.gradle << 'EOF'
           pluginManagement {
               repositories { google() mavenCentral() gradlePluginPortal() }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google() mavenCentral() }
           }
           include ':app'
           EOF
 
-      - name: Create build.gradle (project)
-        run: |
+          # Project build.gradle
           cat > build.gradle << 'EOF'
           plugins {
               id 'com.android.application' version '8.2.0' apply false
           }
           EOF
 
-      - name: Create app/build.gradle
-        run: |
+          # App build.gradle
           cat > app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
-          
           android {
-              namespace '${{ github.event.inputs.package_name }}'
+              namespace 'com.example.app'
               compileSdk 34
-              
               defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
+                  applicationId 'com.example.app'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0"
+                  versionName '1.0'
               }
           }
-          
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
 
-      - name: Create AndroidManifest.xml
-        run: |
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          # AndroidManifest.xml
+          cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:label="${{ github.event.inputs.app_name }}"
-                  android:theme="@style/Theme.AppCompat.Light">
+              <application android:label="${{ github.event.inputs.app_name }}">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -115,11 +98,9 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create MainActivity.java
-        run: |
-          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'EOF'
-          package ${{ github.event.inputs.package_name }};
+          # MainActivity.java
+          cat > app/src/main/java/com/example/app/MainActivity.java << 'EOF'
+          package com.example.app;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
@@ -130,8 +111,7 @@ jobs:
           }
           EOF
 
-      - name: Create layout
-        run: |
+          # Layout
           cat > app/src/main/res/layout/activity_main.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -139,6 +119,13 @@ jobs:
               android:layout_height="match_parent"
               android:text="Hello World"
               android:gravity="center" />
+          EOF
+
+          # strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
+          <resources>
+              <string name="app_name">${{ github.event.inputs.app_name }}</string>
+          </resources>
           EOF
 
       - name: Build APK
