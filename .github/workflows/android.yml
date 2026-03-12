@@ -18,26 +18,26 @@ jobs:
 
       - name: Generate Dynamic Package Name
         run: |
-          # موجودہ تاریخ اور وقت کے ساتھ نیا پیکیج نیم بنانا
+          # یونیک نمبر کے لیے ٹائم اسٹیمپ
           TIMESTAMP=$(date +%Y%m%d%H%M)
-          NEW_PACKAGE="com.systempro.faisal.$TIMESTAMP"
+          NEW_PACKAGE="com.systempro.faisal.v$TIMESTAMP"
           echo "NEW_PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
           
-          # build.gradle میں پیکیج نیم اور نیم اسپیس بدلنا
+          # build.gradle میں تبدیلی (یہاں ہم نے ریجیکس کو بہتر کیا ہے)
           sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
           
-          # Java فائل میں پیکیج نیم بدلنا
-          sed -i "s/package .*/package $NEW_PACKAGE;/g" app/src/main/java/com/systempro/faisal/MainActivity.java
+          # تمام جاوا فائلز میں پیکیج نیم اپ ڈیٹ کرنا (تاکہ ایرر نہ آئے)
+          find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $NEW_PACKAGE;/g" {} +
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build-${{ env.NEW_PACKAGE_NAME }}
+          name: System-Pro-v${{ env.NEW_PACKAGE_NAME }}
           path: app/build/outputs/apk/debug/app-debug.apk
