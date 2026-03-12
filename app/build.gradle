@@ -1,13 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
 android {
-    namespace 'com.systempro.faisal'
+    namespace 'com.faisal.systempro' // اپنا پیکیج نیم یہاں لکھیں
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.systempro.faisal"
+        applicationId "com.faisal.systempro"
         minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
-    // باقی سیٹنگز یہاں آئیں گی
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    // یہاں اپنی ضروری لائبریریز شامل کریں
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
 }
