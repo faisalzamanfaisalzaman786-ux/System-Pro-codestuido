@@ -28,9 +28,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # --- یہاں سے نیا حصہ شروع ہوتا ہے ---
+      - name: Update Package Name Dynamically
+        run: |
+          NEW_PACKAGE="${{ github.event.inputs.base_package }}"
+          echo "Updating package name to: $NEW_PACKAGE"
+          # یہ لائن build.gradle میں applicationId کو بدل دے گی
+          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
+          # یہ لائن namespace کو بھی اپڈیٹ کر دے گی
+          sed -i "s/namespace \".*\"/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
+      # --- یہاں نیا حصہ ختم ہوتا ہے ---
+
       - name: Build with Gradle
-        # یہاں ہم ایپ سے آنے والے پیکیج نیم کو گریڈل میں پاس کر رہے ہیں
-        run: ./gradlew assembleDebug -PtargetPackage=${{ github.event.inputs.base_package }}
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
