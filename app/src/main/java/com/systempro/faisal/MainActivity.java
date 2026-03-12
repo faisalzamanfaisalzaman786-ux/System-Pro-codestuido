@@ -17,11 +17,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // IDs کو جوڑنا
+        // UI Elements کو Java کے ساتھ جوڑنا
         tvCounter = findViewById(R.id.tvCounter);
         btnIncrement = findViewById(R.id.btnIncrement);
 
-        // بٹن پر کلک کرنے کی لاجک
+        // بٹن دبانے پر ہونے والا عمل
         btnIncrement.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
