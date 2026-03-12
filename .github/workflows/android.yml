@@ -1,53 +1,29 @@
-name: System Pro Build System
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#1e1e2f"
+    android:padding="20dp">
 
-on:
-  workflow_dispatch:
-    # یہاں ہم ان پٹس کو دوبارہ شامل کر رہے ہیں تاکہ ایپ کا ڈیٹا قبول ہو سکے
-    inputs:
-      serial:
-        description: 'Serial from App'
-        required: false
-      base_package:
-        description: 'Package from App'
-        required: false
+    <TextView
+        android:id="@+id/tvCounter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textSize="60sp"
+        android:textColor="#ffffff"
+        android:layout_marginBottom="40dp"/>
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    <Button
+        android:id="@+id/btnIncrement"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="اضافہ کریں"
+        android:padding="15dp"
+        android:backgroundTint="#FF4CAF50"
+        android:textColor="#FFFFFF" />
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Dynamic Package Name
-        run: |
-          # اگر ایپ سے پیکیج نیم آ رہا ہے تو وہ استعمال کریں، ورنہ آٹو نمبر بنائیں
-          APP_PKG="${{ github.event.inputs.base_package }}"
-          TIMESTAMP=$(date +%Y%m%d%H%M)
-          
-          if [ -z "$APP_PKG" ]; then
-            FINAL_PKG="com.systempro.app$TIMESTAMP"
-          else
-            # ایپ سے آنے والے پیکیج نیم کے ساتھ ٹائم اسٹیمپ جوڑنا تاکہ ہر بار منفرد ہو
-            FINAL_PKG="${APP_PKG}.$TIMESTAMP"
-          fi
-          
-          echo "Final Package Name: $FINAL_PKG"
-          echo "SERIAL_NUMBER=${{ github.event.inputs.serial || '001' }}" >> $GITHUB_ENV
-          
-          # گریڈل کو ڈیٹا پاس کرنا
-          ./gradlew assembleDebug -PtargetPackage=$FINAL_PKG
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Build-${{ env.SERIAL_NUMBER }}
-          path: app/build/outputs/apk/debug/*.apk
+</LinearLayout>
