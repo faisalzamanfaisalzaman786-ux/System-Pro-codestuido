@@ -3,19 +3,26 @@ plugins {
 }
 
 android {
-    // آپ کی MainActivity.java کے پیکیج نام کے مطابق اسے سیٹ کیا گیا ہے
-    namespace 'com.systempro.faisal' 
-    compileSdk 33
+    namespace 'com.systempro.faisal'
+    compileSdk 34
 
     defaultConfig {
-        // یہ آپ کی ایپ کی یونیک آئی ڈی ہے
         applicationId "com.systempro.faisal"
-        minSdk 24
-        targetSdk 33
-        versionCode 1
-        versionName "1.0"
+        // Redmi Note 14 اور پرانے فونز دونوں کے لیے بہترین سیٹنگ
+        minSdk 21
+        targetSdk 34
+        versionCode 2
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        debug {
+            // یہ لائنز پرانے اور نئے فونز پر انسٹالیشن یقینی بناتی ہیں
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
     }
 
     buildTypes {
@@ -23,27 +30,20 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            signingConfig signingConfigs.debug
+        }
     }
-    
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
-    // AndroidX لائبریریز
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-
-    // نیٹ ورک ریکوسٹ (GitHub API) کے لیے یہ لائبریری لازمی ہے
-    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
-    
-    // ڈیٹا پروسیسنگ کے لیے
-    implementation 'org.json:json:20230227'
-
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    // اگر آپ Firebase استعمال کر رہے ہیں تو اس کی لائنز یہاں آئیں گی
 }
