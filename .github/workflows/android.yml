@@ -1,10 +1,7 @@
 name: System Pro Build System
 
 on:
-  workflow_dispatch: # آپ بس ایک کلک سے بلڈ رن کریں گے
-  push:
-    branches:
-      - main
+  workflow_dispatch: # آپ گٹ ہب پر جا کر صرف بٹن دبائیں گے
 
 jobs:
   build:
@@ -22,31 +19,21 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Auto-Generate Package Name and Serial
+      - name: Build with Dynamic Package Name
         run: |
-          # موجودہ وقت کے مطابق ایک یونیک نمبر بنانا (مثلاً 20240312)
+          # موجودہ تاریخ اور وقت سے ایک نمبر بنانا
           TIMESTAMP=$(date +%Y%m%d%H%M)
-          # آپ کا بنیادی پیکیج نیم
-          BASE_PKG="com.systempro.master"
-          # نیا پیکیج نیم جس میں نمبر خود بخود جڑ جائے گا
-          NEW_PACKAGE="${BASE_PKG}.v${TIMESTAMP}"
+          # نیا پیکیج نیم تیار کرنا
+          DYNAMIC_PKG="com.systempro.app$TIMESTAMP"
           
-          echo "Generated Package Name: $NEW_PACKAGE"
+          echo "Building APK with Package: $DYNAMIC_PKG"
+          echo "SERIAL_NUMBER=$TIMESTAMP" >> $GITHUB_ENV
           
-          # build.gradle میں خودکار تبدیلی
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
-          sed -i "s/namespace \".*\"/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
-          
-          # نمبر کو اگلے سٹیپ کے لیے محفوظ کرنا
-          echo "FINAL_PKG=$NEW_PACKAGE" >> $GITHUB_ENV
-          echo "SERIAL=$TIMESTAMP" >> $GITHUB_ENV
-
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+          # گریڈل کو براہ راست نیا پیکیج نیم پاس کرنا (جیسا آپ کی گریڈل فائل چاہتی ہے)
+          ./gradlew assembleDebug -PtargetPackage=$DYNAMIC_PKG
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          # اب فائل کا نام بھی خود بخود بدلے گا
-          name: SystemPro-Build-${{ env.SERIAL }}
+          name: SystemPro-Build-${{ env.SERIAL_NUMBER }}
           path: app/build/outputs/apk/debug/*.apk
