@@ -3,17 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'com.faisal.systempro' // اپنا پیکیج نیم یہاں لکھیں
+    namespace "com.systempro.faisal"
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.faisal.systempro"
+        applicationId "com.systempro.faisal"
         minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -25,7 +23,6 @@ android {
 }
 
 dependencies {
-    // یہاں اپنی ضروری لائبریریز شامل کریں
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 }
