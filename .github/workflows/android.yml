@@ -29,10 +29,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew assembleDebug
-        env:
-          BUILD_SERIAL: ${{ github.event.inputs.serial }}
-          PACKAGE_NAME: ${{ github.event.inputs.base_package }}
+        # یہاں ہم ایپ سے آنے والے پیکیج نیم کو گریڈل میں پاس کر رہے ہیں
+        run: ./gradlew assembleDebug -PtargetPackage=${{ github.event.inputs.base_package }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
