@@ -3,14 +3,14 @@ name: System Pro Multi-Build Engine
 on:
   push:
     paths:
-      - '.github/workflows/android.yml'
-  workflow_dispatch:
+      - '.github/workflows/android.yml' # فائل پش ہوتے ہی بلڈ شروع ہوگی
+  workflow_dispatch: # مینوئل بٹن بھی موجود رہے گا
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      PACKAGE_NAME: "com.systempro.faisal" # ایپ اسے بدل دے گی
+      PACKAGE_NAME: "com.systempro.faisal" # ایپ اسے آٹو اپ ڈیٹ کرے گی
 
     steps:
       - name: Checkout Code
@@ -22,35 +22,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Robust Package Changer
+      - name: Auto Package & Name Changer
         run: |
-          NEW_PKG=${{ env.PACKAGE_NAME }}
-          # پرانا پیکج نیم یہاں سے نکالیں (مان لیں کہ پرانا com.example.app تھا)
-          OLD_PKG="com.example.app" 
+          NEW_PKG="${{ env.PACKAGE_NAME }}"
+          echo "Updating App to: System Pro with Package: $NEW_PKG"
           
-          echo "Updating Package to: $NEW_PKG"
+          # تمام فائلز میں پیکج نیم بدلنا
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i "s/com.old.package/$NEW_PKG/g"
 
-          # 1. فائلز کے اندر پیکج نیم بدلنا
-          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i "s/$OLD_PKG/$NEW_PKG/g"
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
 
-          # 2. فولڈر اسٹرکچر درست کرنا
-          NEW_PATH=$(echo $NEW_PKG | tr '.' '/')
-          OLD_PATH=$(echo $OLD_PKG | tr '.' '/')
-          
-          mkdir -p "app/src/main/java/$NEW_PATH"
-          
-          # اگر پرانا فولڈر موجود ہے تو اس کا مواد نئے میں منتقل کریں
-          if [ -d "app/src/main/java/$OLD_PATH" ]; then
-            cp -r app/src/main/java/$OLD_PATH/* app/src/main/java/$NEW_PATH/
-          fi
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-      - name: Build with Gradle
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: SystemPro-Release
+          name: SystemPro-APK
           path: app/build/outputs/apk/debug/*.apk
