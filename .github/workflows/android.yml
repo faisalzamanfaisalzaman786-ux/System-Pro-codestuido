@@ -1,16 +1,10 @@
 name: System Pro Build System
 
+# اب یہ ایپ سے آنے والے سگنل (repository_dispatch) پر کام کرے گا
 on:
-  workflow_dispatch:
-    inputs:
-      serial:
-        description: 'Build Serial Number'
-        required: true
-        default: '001'
-      base_package:
-        description: 'Target Package Name'
-        required: true
-        default: 'com.systempro.master'
+  repository_dispatch:
+    types: [build_app]
+  workflow_dispatch: # یہ صرف اس لیے رکھا ہے تاکہ آپ ضرورت پڑنے پر گٹ ہب سے بھی رن کر سکیں
 
 jobs:
   build:
@@ -28,16 +22,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # --- یہاں سے نیا حصہ شروع ہوتا ہے ---
       - name: Update Package Name Dynamically
         run: |
-          NEW_PACKAGE="${{ github.event.inputs.base_package }}"
+          # یہاں ہم ایپ سے آنے والے ڈیٹا (client_payload) کو اٹھا رہے ہیں
+          # اگر آپ گٹ ہب سے رن کریں گے تو یہ ڈیفالٹ ویلیوز استعمال کرے گا
+          NEW_PACKAGE="${{ github.event.client_payload.base_package || github.event.inputs.base_package || 'com.systempro.master' }}"
+          SERIAL="${{ github.event.client_payload.serial || github.event.inputs.serial || '001' }}"
+          
           echo "Updating package name to: $NEW_PACKAGE"
-          # یہ لائن build.gradle میں applicationId کو بدل دے گی
+          echo "Build Serial: $SERIAL"
+          
+          # build.gradle میں پیکیج نیم اور نیم اسپیس کو بدلنا
           sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
-          # یہ لائن namespace کو بھی اپڈیٹ کر دے گی
           sed -i "s/namespace \".*\"/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
-      # --- یہاں نیا حصہ ختم ہوتا ہے ---
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug
@@ -45,5 +42,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-${{ github.event.inputs.serial }}
+          # اب APK فائل کا نام بھی آپ کے بھیجے ہوئے سیریل نمبر کے مطابق ہوگا
+          name: SystemPro-Build-${{ github.event.client_payload.serial || github.event.inputs.serial || '001' }}
           path: app/build/outputs/apk/debug/*.apk
