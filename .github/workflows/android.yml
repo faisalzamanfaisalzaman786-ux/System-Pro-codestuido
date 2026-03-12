@@ -1,11 +1,16 @@
-name: Dynamic Android Build System
+name: System Pro Build System
 
 on:
-  push:
-    branches: [ "main" ]  # فائل سیو کرتے ہی بلڈ چلے گا
-  workflow_dispatch:      # یہ لائن مینوئل "Run workflow" کا بٹن لائے گی
-  repository_dispatch:
-    types: [build_new_apk] # یہ آپ کی ایپ سے سگنل وصول کرے گا
+  workflow_dispatch:
+    inputs:
+      serial:
+        description: 'Build Serial Number'
+        required: true
+        default: '001'
+      base_package:
+        description: 'Target Package Name'
+        required: true
+        default: 'com.systempro.master'
 
 jobs:
   build:
@@ -19,16 +24,18 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant Execute Permission
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
+      - name: Build with Gradle
         run: ./gradlew assembleDebug
+        env:
+          BUILD_SERIAL: ${{ github.event.inputs.serial }}
+          PACKAGE_NAME: ${{ github.event.inputs.base_package }}
 
-      - name: Upload Resulting APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Master-Build
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: SystemPro-Build-${{ github.event.inputs.serial }}
+          path: app/build/outputs/apk/debug/*.apk
