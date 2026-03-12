@@ -1,74 +1,56 @@
 name: System Pro Multi-Build Engine
 
 on:
+  push:
+    paths:
+      - '.github/workflows/android.yml'
   workflow_dispatch:
-    inputs:
-      # یہ وہ ان پٹس ہیں جو آپ کی ایپ (Logs کے مطابق) بھیج رہی ہے
-      serial:
-        description: 'Build Serial Number'
-        required: false
-        default: '1'
-      base_package:
-        description: 'New Package Name'
-        required: true
-        default: 'com.systempro.app'
-      app_name:
-        description: 'Application Name'
-        required: false
-        default: 'System Pro'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: "com.systempro.faisal" # ایپ اسے بدل دے گی
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Auto Package & Name Changer
+      - name: Robust Package Changer
         run: |
-          # ان پٹس حاصل کرنا
-          NEW_PKG="${{ github.event.inputs.base_package }}"
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          OLD_PKG="com.systempro.app" # یہاں وہ پیکیج لکھیں جو سورس کوڈ میں پہلے سے ہے
+          NEW_PKG=${{ env.PACKAGE_NAME }}
+          # پرانا پیکج نیم یہاں سے نکالیں (مان لیں کہ پرانا com.example.app تھا)
+          OLD_PKG="com.example.app" 
+          
+          echo "Updating Package to: $NEW_PKG"
 
-          echo "Updating App to: $APP_NAME with Package: $NEW_PKG"
+          # 1. فائلز کے اندر پیکج نیم بدلنا
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i "s/$OLD_PKG/$NEW_PKG/g"
 
-          # 1. ایپ کا نام بدلنا (strings.xml)
-          if [ -f app/src/main/res/values/strings.xml ]; then
-            sed -i "s/System Pro/$APP_NAME/g" app/src/main/res/values/strings.xml
-          fi
-
-          # 2. تمام فائلوں میں پیکیج نیم ری پلیس کرنا
-          grep -rl "$OLD_PKG" . --exclude-dir=.git | xargs sed -i "s/$OLD_PKG/$NEW_PKG/g"
-
-          # 3. جاوا فولڈر سٹرکچر کو نئے پیکیج کے مطابق منتقل کرنا
-          OLD_PATH=${OLD_PKG//./\/}
-          NEW_PATH=${NEW_PKG//./\/}
+          # 2. فولڈر اسٹرکچر درست کرنا
+          NEW_PATH=$(echo $NEW_PKG | tr '.' '/')
+          OLD_PATH=$(echo $OLD_PKG | tr '.' '/')
           
           mkdir -p "app/src/main/java/$NEW_PATH"
+          
+          # اگر پرانا فولڈر موجود ہے تو اس کا مواد نئے میں منتقل کریں
           if [ -d "app/src/main/java/$OLD_PATH" ]; then
-              cp -r app/src/main/java/$OLD_PATH/* app/src/main/java/$NEW_PATH/
-              # پرانے فولڈرز کی صفائی
-              rm -rf "app/src/main/java/${OLD_PKG%%.*}"
+            cp -r app/src/main/java/$OLD_PATH/* app/src/main/java/$NEW_PATH/
           fi
 
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      # آرٹ فیکٹ والا فیچر (تاکہ آپ اے پی کے ڈاؤن لوڈ کر سکیں)
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
         with:
-          name: Build-${{ github.event.inputs.base_package }}-${{ github.event.inputs.serial }}
+          name: SystemPro-Release
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
