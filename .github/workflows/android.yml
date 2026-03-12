@@ -1,29 +1,43 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:background="#1e1e2f"
-    android:padding="20dp">
+name: System Pro Build System
 
-    <TextView
-        android:id="@+id/tvCounter"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="0"
-        android:textSize="60sp"
-        android:textColor="#ffffff"
-        android:layout_marginBottom="40dp"/>
+on:
+  workflow_dispatch:
 
-    <Button
-        android:id="@+id/btnIncrement"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="اضافہ کریں"
-        android:padding="15dp"
-        android:backgroundTint="#FF4CAF50"
-        android:textColor="#FFFFFF" />
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-</LinearLayout>
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Generate Dynamic Package Name
+        run: |
+          # موجودہ تاریخ اور وقت کے ساتھ نیا پیکیج نیم بنانا
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          NEW_PACKAGE="com.systempro.faisal.$TIMESTAMP"
+          echo "NEW_PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
+          
+          # build.gradle میں پیکیج نیم اور نیم اسپیس بدلنا
+          sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
+          sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
+          
+          # Java فائل میں پیکیج نیم بدلنا
+          sed -i "s/package .*/package $NEW_PACKAGE;/g" app/src/main/java/com/systempro/faisal/MainActivity.java
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Build-${{ env.NEW_PACKAGE_NAME }}
+          path: app/build/outputs/apk/debug/app-debug.apk
