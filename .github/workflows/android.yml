@@ -1,22 +1,27 @@
-name: System Pro Multi-Build
+name: System Pro Multi-Build Engine
 
 on:
   workflow_dispatch:
     inputs:
-      app_name:
-        description: 'ایپ کا نام لکھیں (مثال: My New App)'
-        required: true
-        default: 'System Pro'
-      package_name:
-        description: 'یونیک پیکیج نیم (مثال: com.faisal.app1)'
+      # یہ وہ ان پٹس ہیں جو آپ کی ایپ (Logs کے مطابق) بھیج رہی ہے
+      serial:
+        description: 'Build Serial Number'
+        required: false
+        default: '1'
+      base_package:
+        description: 'New Package Name'
         required: true
         default: 'com.systempro.app'
+      app_name:
+        description: 'Application Name'
+        required: false
+        default: 'System Pro'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -26,39 +31,44 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Apply Custom Names
+      - name: Auto Package & Name Changer
         run: |
-          NEW_PKG="${{ github.event.inputs.package_name }}"
+          # ان پٹس حاصل کرنا
+          NEW_PKG="${{ github.event.inputs.base_package }}"
           APP_NAME="${{ github.event.inputs.app_name }}"
-          OLD_PKG="com.systempro.app" # یہ وہ نام ہے جو آپ کے سورس کوڈ میں پہلے سے ہے
-          
-          echo "Setting App Name to: $APP_NAME"
-          echo "Setting Package Name to: $NEW_PKG"
+          OLD_PKG="com.systempro.app" # یہاں وہ پیکیج لکھیں جو سورس کوڈ میں پہلے سے ہے
 
-          # 1. ایپ کا نام تبدیل کرنا (strings.xml میں)
-          sed -i "s/System Pro/$APP_NAME/g" app/src/main/res/values/strings.xml || true
+          echo "Updating App to: $APP_NAME with Package: $NEW_PKG"
 
-          # 2. پیکیج نیم تمام فائلوں میں بدلنا
+          # 1. ایپ کا نام بدلنا (strings.xml)
+          if [ -f app/src/main/res/values/strings.xml ]; then
+            sed -i "s/System Pro/$APP_NAME/g" app/src/main/res/values/strings.xml
+          fi
+
+          # 2. تمام فائلوں میں پیکیج نیم ری پلیس کرنا
           grep -rl "$OLD_PKG" . --exclude-dir=.git | xargs sed -i "s/$OLD_PKG/$NEW_PKG/g"
 
-          # 3. فولڈر سٹرکچر درست کرنا (جاوا فائلوں کے لیے)
+          # 3. جاوا فولڈر سٹرکچر کو نئے پیکیج کے مطابق منتقل کرنا
           OLD_PATH=${OLD_PKG//./\/}
           NEW_PATH=${NEW_PKG//./\/}
+          
           mkdir -p "app/src/main/java/$NEW_PATH"
           if [ -d "app/src/main/java/$OLD_PATH" ]; then
               cp -r app/src/main/java/$OLD_PATH/* app/src/main/java/$NEW_PATH/
-              # پرانے فولڈر ہٹانا (احتیاط کے ساتھ)
-              rm -rf "app/src/main/java/${OLD_PKG%%.*}" 
+              # پرانے فولڈرز کی صفائی
+              rm -rf "app/src/main/java/${OLD_PKG%%.*}"
           fi
 
-      - name: Grant execute permission for gradlew
+      - name: Grant Execute Permission
         run: chmod +x gradlew
 
-      - name: Build APK
+      - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      # آرٹ فیکٹ والا فیچر (تاکہ آپ اے پی کے ڈاؤن لوڈ کر سکیں)
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name }}-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Build-${{ github.event.inputs.base_package }}-${{ github.event.inputs.serial }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
