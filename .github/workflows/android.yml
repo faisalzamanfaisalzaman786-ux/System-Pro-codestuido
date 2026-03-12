@@ -18,31 +18,25 @@ jobs:
 
       - name: Generate Dynamic Package Name
         run: |
-          # یونیک نمبر کے لیے ٹائم اسٹیمپ (سیکنڈز میں)
           TIMESTAMP=$(date +%s)
           NEW_PACKAGE="com.systempro.faisal.v$TIMESTAMP"
           echo "NEW_PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
           
-          echo "Setting Package Name to: $NEW_PACKAGE"
+          # build.gradle میں نام بدلنا
+          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
+          sed -i "s/namespace \".*\"/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
           
-          # app/build.gradle میں namespace اور applicationId کو اپ ڈیٹ کرنا
-          # یہ سنگل اور ڈبل کوٹس دونوں کو ہینڈل کرے گا
-          sed -i "s/namespace .*/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
-          sed -i "s/applicationId .*/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
-          
-          # تمام جاوا فائلز میں پیکیج لائن کو بدلنا
-          # یہ لائن کے شروع میں 'package' کو ڈھونڈ کر اسے نئے نام سے بدل دے گا
+          # جاوا فائلز میں پیکیج نیم اپ ڈیٹ کرنا
           find app/src/main/java -name "*.java" -exec sed -i "s/^package .*/package $NEW_PACKAGE;/g" {} +
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # --stacktrace اور --info سے ہمیں مکمل تفصیل ملے گی اگر بلڈ فیل ہوا
-        run: ./gradlew assembleDebug --stacktrace --info
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-${{ env.NEW_PACKAGE_NAME }}
+          name: System-Pro-Build-${{ env.NEW_PACKAGE_NAME }}
           path: app/build/outputs/apk/debug/app-debug.apk
