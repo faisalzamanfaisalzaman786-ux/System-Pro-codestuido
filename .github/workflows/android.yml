@@ -1,10 +1,10 @@
 name: System Pro Build System
 
-# اب یہ ایپ سے آنے والے سگنل (repository_dispatch) پر کام کرے گا
 on:
-  repository_dispatch:
-    types: [build_app]
-  workflow_dispatch: # یہ صرف اس لیے رکھا ہے تاکہ آپ ضرورت پڑنے پر گٹ ہب سے بھی رن کر سکیں
+  workflow_dispatch: # آپ بس ایک کلک سے بلڈ رن کریں گے
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -22,19 +22,24 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Update Package Name Dynamically
+      - name: Auto-Generate Package Name and Serial
         run: |
-          # یہاں ہم ایپ سے آنے والے ڈیٹا (client_payload) کو اٹھا رہے ہیں
-          # اگر آپ گٹ ہب سے رن کریں گے تو یہ ڈیفالٹ ویلیوز استعمال کرے گا
-          NEW_PACKAGE="${{ github.event.client_payload.base_package || github.event.inputs.base_package || 'com.systempro.master' }}"
-          SERIAL="${{ github.event.client_payload.serial || github.event.inputs.serial || '001' }}"
+          # موجودہ وقت کے مطابق ایک یونیک نمبر بنانا (مثلاً 20240312)
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          # آپ کا بنیادی پیکیج نیم
+          BASE_PKG="com.systempro.master"
+          # نیا پیکیج نیم جس میں نمبر خود بخود جڑ جائے گا
+          NEW_PACKAGE="${BASE_PKG}.v${TIMESTAMP}"
           
-          echo "Updating package name to: $NEW_PACKAGE"
-          echo "Build Serial: $SERIAL"
+          echo "Generated Package Name: $NEW_PACKAGE"
           
-          # build.gradle میں پیکیج نیم اور نیم اسپیس کو بدلنا
+          # build.gradle میں خودکار تبدیلی
           sed -i "s/applicationId \".*\"/applicationId \"$NEW_PACKAGE\"/g" app/build.gradle
           sed -i "s/namespace \".*\"/namespace \"$NEW_PACKAGE\"/g" app/build.gradle
+          
+          # نمبر کو اگلے سٹیپ کے لیے محفوظ کرنا
+          echo "FINAL_PKG=$NEW_PACKAGE" >> $GITHUB_ENV
+          echo "SERIAL=$TIMESTAMP" >> $GITHUB_ENV
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug
@@ -42,6 +47,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          # اب APK فائل کا نام بھی آپ کے بھیجے ہوئے سیریل نمبر کے مطابق ہوگا
-          name: SystemPro-Build-${{ github.event.client_payload.serial || github.event.inputs.serial || '001' }}
+          # اب فائل کا نام بھی خود بخود بدلے گا
+          name: SystemPro-Build-${{ env.SERIAL }}
           path: app/build/outputs/apk/debug/*.apk
