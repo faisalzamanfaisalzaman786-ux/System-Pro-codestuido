@@ -1,43 +1,59 @@
-name: System Pro Multi-Build Engine
+name: System Pro Auto Builder
 
 on:
-  push:
-    paths:
-      - '.github/workflows/android.yml' # فائل پش ہوتے ہی بلڈ شروع ہوگی
-  workflow_dispatch: # مینوئل بٹن بھی موجود رہے گا
+  workflow_dispatch:
+    inputs:
+      # آپ کی ایپ سے آنے والا ڈیٹا یہاں ریسیو ہوگا
+      base_package:
+        description: 'New Package Name'
+        required: true
+      serial:
+        description: 'Serial Number'
+        required: false
+      app_name:
+        description: 'New App Name'
+        required: false
+        default: 'System Pro'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      PACKAGE_NAME: "com.systempro.faisal" # ایپ اسے آٹو اپ ڈیٹ کرے گی
-
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      # تمام تبدیلیاں ایک ساتھ (Package, Name, Serial)
+      - name: Auto Configuration
+        run: |
+          NEW_PKG="${{ github.event.inputs.base_package }}"
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          
+          # 1. پیکیج نیم بدلنا (Build.gradle)
+          find . -type f -name "*.gradle" -print0 | xargs -0 sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/g"
+          
+          # 2. جاوا فائلز میں پیکیج نیم درست کرنا
+          find . -type f -name "*.java" -print0 | xargs -0 sed -i "s/package .*;/package $NEW_PKG;/g"
+          
+          # 3. ایپ کا نام بدلنا (strings.xml)
+          # یہ لائن strings.xml میں جا کر app_name کو بدل دے گی
+          find . -type f -name "strings.xml" -print0 | xargs -0 sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/g"
+          
+          echo "Build Start for: $APP_NAME ($NEW_PKG)"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Auto Package & Name Changer
+      - name: Build APK
         run: |
-          NEW_PKG="${{ env.PACKAGE_NAME }}"
-          echo "Updating App to: System Pro with Package: $NEW_PKG"
-          
-          # تمام فائلز میں پیکج نیم بدلنا
-          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i "s/com.old.package/$NEW_PKG/g"
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v3
+      # آٹو ڈاؤن لوڈ کے لیے فائل تیار کرنا
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-APK
+          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.serial }}
           path: app/build/outputs/apk/debug/*.apk
