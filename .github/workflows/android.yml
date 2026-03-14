@@ -1,9 +1,7 @@
-name: System Pro Multi-App Build
+name: System Pro Single Build
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
@@ -25,20 +23,12 @@ jobs:
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
 
-    # یہاں ہم دونوں ایپس (appOne اور appTwo) کو ایک ساتھ بلڈ کر رہے ہیں
-    - name: Build Multiple APKs
-      run: ./gradlew assembleAppOneDebug assembleAppTwoDebug
+    - name: Clean and Build APK
+      # اب ہم سادہ کمانڈ استعمال کر رہے ہیں کیونکہ کوئی فلیور نہیں ہے
+      run: ./gradlew clean assembleDebug
 
-    # پہلی ایپ (appOne) کو اپ لوڈ کرنا
-    - name: Upload APK One (Counter Basic)
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: System-Pro-App-One
-        path: app/build/outputs/apk/appOne/debug/app-appOne-debug.apk
-
-    # دوسری ایپ (appTwo) کو اپ لوڈ کرنا
-    - name: Upload APK Two (Counter Pro)
-      uses: actions/upload-artifact@v4
-      with:
-        name: System-Pro-App-Two
-        path: app/build/outputs/apk/appTwo/debug/app-appTwo-debug.apk
+        name: System-Pro-App-New
+        path: app/build/outputs/apk/debug/*.apk
