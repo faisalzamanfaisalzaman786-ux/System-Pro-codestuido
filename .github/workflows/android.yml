@@ -1,7 +1,9 @@
-name: System Pro Compiler
+name: System Pro Multi-App Build
 
 on:
   push:
+    branches: [ "main" ]
+  pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
@@ -10,27 +12,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+    - name: Grant Execute Permission for Gradlew
+      run: chmod +x gradlew
 
-      # 1. Purana data clear karne ke liye 'clean' zaroori hai
-      - name: Clean and Build Debug APK
-        run: ./gradlew clean assembleDebug
+    # یہاں ہم دونوں ایپس (appOne اور appTwo) کو ایک ساتھ بلڈ کر رہے ہیں
+    - name: Build Multiple APKs
+      run: ./gradlew assembleAppOneDebug assembleAppTwoDebug
 
-      # 2. Multiple copies aur confusion se bachne ke liye unique name
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          # Run number add karne se har build ki copy alag pehchani jayegi
-          name: System-Pro-Build-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/*.apk
-          overwrite: true
+    # پہلی ایپ (appOne) کو اپ لوڈ کرنا
+    - name: Upload APK One (Counter Basic)
+      uses: actions/upload-artifact@v4
+      with:
+        name: System-Pro-App-One
+        path: app/build/outputs/apk/appOne/debug/app-appOne-debug.apk
+
+    # دوسری ایپ (appTwo) کو اپ لوڈ کرنا
+    - name: Upload APK Two (Counter Pro)
+      uses: actions/upload-artifact@v4
+      with:
+        name: System-Pro-App-Two
+        path: app/build/outputs/apk/appTwo/debug/app-appTwo-debug.apk
