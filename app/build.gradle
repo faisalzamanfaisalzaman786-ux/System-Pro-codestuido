@@ -3,12 +3,11 @@ plugins {
 }
 
 android {
-    // یہ مینیفیسٹ کے پیکیج نیم سے میچ کرتا ہے
+    // یہ مینیفیسٹ اور جاوا فائل کے پیکیج نیم سے میچ کرتا ہے
     namespace "com.systempro.counter" 
     compileSdk 34
 
     defaultConfig {
-        // یہ بنیادی آئی ڈی ہے، لیکن فلیورز اسے اوور رائڈ کریں گے
         applicationId "com.systempro.counter"
         minSdk 21
         targetSdk 34
@@ -17,23 +16,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // ملٹیپل ایپس بنانے کے لیے فلیورز کی سیٹنگ
-    flavorDimensions "version"
-    productFlavors {
-        // پہلی ایپلی کیشن (مثلاً بیسک ورژن)
-        appOne {
-            dimension "version"
-            applicationId "com.systempro.counter.one"
-            versionNameSuffix "-v1"
-        }
-        
-        // دوسری ایپلی کیشن (مثلاً پرو ورژن)
-        appTwo {
-            dimension "version"
-            applicationId "com.systempro.counter.two"
-            versionNameSuffix "-v2"
-        }
-    }
+    // یہاں سے ہم نے فلیورز ہٹا دیے ہیں تاکہ صرف ایک سنگل APK بنے
 
     buildTypes {
         release {
