@@ -1,4 +1,4 @@
-name: System Pro Single Build
+name: System Pro Unique Builder
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
+    - name: Checkout Code
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
@@ -20,15 +20,39 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Grant Execute Permission for Gradlew
+    - name: Generate Random Identity and Update Code
+      run: |
+        # ایک منفرد نمبر بنانا (وقت کی بنیاد پر)
+        RAND_NUM=$(date +%s | tail -c 4)
+        NEW_PACKAGE="com.systempro.app$RAND_NUM"
+        NEW_APP_NAME="SystemPro_$RAND_NUM"
+        
+        echo "Updating to Package: $NEW_PACKAGE"
+        echo "Updating to App Name: $NEW_APP_NAME"
+
+        # 1. build.gradle میں پیکیج نیم اور نیم اسپیس بدلنا
+        sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
+        sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
+        
+        # 2. تمام Java فائلوں میں پیکیج ڈیکلریشن بدلنا
+        find app/src/main/java -name "*.java" -exec sed -i "s/^package .*/package $NEW_PACKAGE;/g" {} +
+        
+        # 3. جاوا فائلوں میں موجود 'R' فائل کے امپورٹ کو بھی نئے پیکیج پر منتقل کرنا
+        # یہ بہت اہم ہے ورنہ کوڈ کمپائل نہیں ہوگا
+        find app/src/main/java -name "*.java" -exec sed -i "s/import com.systempro.counter.R;/import $NEW_PACKAGE.R;/g" {} +
+        
+        # 4. strings.xml میں ایپ کا نام بدلنا
+        sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
+
+    - name: Grant execute permission
       run: chmod +x gradlew
 
-    - name: Clean and Build APK
-      # اب ہم سادہ کمانڈ استعمال کر رہے ہیں کیونکہ کوئی فلیور نہیں ہے
+    - name: Clean and Build Unique APK
       run: ./gradlew clean assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: System-Pro-App-New
+        # آرٹیک فیکٹ کا نام بھی یونیک رکھیں تاکہ ڈاؤن لوڈ میں آسانی ہو
+        name: Unique-Build-${{ github.run_number }}
         path: app/build/outputs/apk/debug/*.apk
