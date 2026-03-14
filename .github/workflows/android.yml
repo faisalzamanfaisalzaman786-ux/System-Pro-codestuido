@@ -22,14 +22,15 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      # ڈیبگ بلڈ بنائیں کیونکہ یہ خودکار سائن ہوتی ہے اور ٹیسٹنگ کے لیے بہترین ہے
+      # 1. Purana data clear karne ke liye 'clean' zaroori hai
       - name: Clean and Build Debug APK
         run: ./gradlew clean assembleDebug
 
+      # 2. Multiple copies aur confusion se bachne ke liye unique name
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App-Final
-          # یہاں ہم نے پاتھ کو assembleDebug کے مطابق سیٹ کیا ہے
+          # Run number add karne se har build ki copy alag pehchani jayegi
+          name: System-Pro-Build-${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk
           overwrite: true
