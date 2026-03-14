@@ -1,33 +1,56 @@
-name: System Pro - Auto File Router
+name: System Pro Auto Pusher
 
 on:
   workflow_dispatch:
     inputs:
       file_name:
         description: 'فائل کا نام'
-        default: 'test_file.txt' # اگر ایپ نام نہ بھیجے تو یہ نام استعمال ہوگا
-        required: false
+        required: true
       file_content:
-        description: 'فائل کا مواد'
-        default: 'Empty Content'
-        required: false
+        description: 'کوڈ یا امیج ڈیٹا'
+        required: true
 
 jobs:
-  route_and_save:
+  auto_push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create File
+      - name: Process and Save File
         run: |
-          mkdir -p uploads
-          echo "${{ github.event.inputs.file_content }}" > "uploads/${{ github.event.inputs.file_name }}"
+          # فائل کا نام اور ایکسٹینشن نکالنا
+          FILENAME="${{ github.event.inputs.file_name }}"
+          EXTENSION="${FILENAME##*.}"
           
-      - name: Push to Branch
+          # فائل کی قسم کے مطابق فولڈر کا تعین
+          if [[ "$EXTENSION" == "java" ]]; then
+            TARGET_DIR="app/src/main/java/com/system/pro"
+          elif [[ "$EXTENSION" == "xml" ]]; then
+            if [[ "$FILENAME" == "AndroidManifest.xml" ]]; then
+              TARGET_DIR="app/src/main"
+            else
+              TARGET_DIR="app/src/main/res/layout"
+            fi
+          elif [[ "$EXTENSION" == "png" || "$EXTENSION" == "jpg" || "$EXTENSION" == "jpeg" ]]; then
+            TARGET_DIR="app/src/main/res/drawable"
+          else
+            TARGET_DIR="uploads"
+          fi
+
+          mkdir -p $TARGET_DIR
+
+          # اگر امیج ہے تو اسے Base64 سے ڈی کوڈ کرنا، ورنہ ٹیکسٹ کے طور پر محفوظ کرنا
+          if [[ "$EXTENSION" == "png" || "$EXTENSION" == "jpg" || "$EXTENSION" == "jpeg" ]]; then
+            echo "${{ github.event.inputs.file_content }}" | base64 --decode > "$TARGET_DIR/$FILENAME"
+          else
+            echo "${{ github.event.inputs.file_content }}" > "$TARGET_DIR/$FILENAME"
+          fi
+
+      - name: Commit and Push
         run: |
-          git config --global user.name "System Pro"
-          git config --global user.email "action@github.com"
+          git config --global user.name "System Pro Bot"
+          git config --global user.email "bot@systempro.com"
           git add .
-          git commit -m "Auto upload from App"
+          git commit -m "Auto Update: ${{ github.event.inputs.file_name }}"
           git push
