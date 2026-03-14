@@ -13,32 +13,34 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # تمام فائلز اور ہسٹری حاصل کرنے کے لیے
+        clean: true # یہ پرانی فائلز کو ورک سپیس سے صاف کر دے گا
+        fetch-depth: 0
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        # کیش کو ہٹا دیا گیا ہے تاکہ ہر بار فریش بلڈ بنے
-        
+        # کیشنگ کو مکمل طور پر بند کر دیا گیا ہے تاکہ ہر بار نیا ڈیٹا لوڈ ہو
+        cache: '' 
+
     - name: Generate Unique Identity
       run: |
-        # ایک یونیک ٹائم اسٹیمپ بنانا
+        # ٹائم اسٹیمپ کے ساتھ یونیک آئی ڈی
         UNIQUE_ID=$(date +%s)
         NEW_PACKAGE="com.system.pro.id$UNIQUE_ID"
         NEW_APP_NAME="System Pro $UNIQUE_ID"
         
         echo "Updating Package to: $NEW_PACKAGE"
         
-        # 1. Build.gradle میں تبدیلیاں
+        # 1. پیکیج نیم کی تبدیلی
         sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
         sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
         
-        # 2. Java Files میں پیکیج اپ ڈیٹ کرنا
+        # 2. جاوا فائلوں میں پیکیج اپ ڈیٹ کرنا
         find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $NEW_PACKAGE;/g" {} +
         
-        # 3. Strings.xml میں ایپ کا نام بدلنا
+        # 3. ایپ کا نام بدلنا (strings.xml)
         if [ -f app/src/main/res/values/strings.xml ]; then
           sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
         fi
@@ -46,14 +48,15 @@ jobs:
     - name: Grant execute permission
       run: chmod +x gradlew
 
-    - name: Clean and Build Unique APK
-      # ./gradlew clean لازمی ہے تاکہ پرانی تصاویر یا فائلز ڈیلیٹ ہو جائیں
-      run: ./gradlew clean assembleDebug
+    - name: Forced Clean and Build
+      # './gradlew clean' پرانے تمام امیجز اور بائنریز کو ڈیلیٹ کر دیتا ہے
+      # '--no-build-cache' گراڈل کو مجبور کرتا ہے کہ وہ پرانا ڈیٹا استعمال نہ کرے
+      run: ./gradlew clean assembleDebug --no-build-cache
 
-    - name: Upload APK
+    - name: Upload Unique APK
       uses: actions/upload-artifact@v4
       with:
-        # نام کو بھی یونیک کر دیا تاکہ پرانے کے ساتھ مکس نہ ہو
-        name: System-Pro-Build-${{ github.run_number }}
+        # ہر بار فائل کا نام مختلف ہوگا تاکہ آپ کو پتہ چلے کہ یہ نیا ورژن ہے
+        name: System-Pro-Build-${{ github.run_number }}-${{ env.UNIQUE_ID }}
         path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: error
