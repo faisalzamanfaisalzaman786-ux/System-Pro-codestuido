@@ -3,9 +3,7 @@ name: System Pro Compiler
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch: # دستی طور پر بلڈ شروع کرنے کے لیے
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,25 +19,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          # یہاں ہم cache کو ری فریش کرنے کے لیے ایک نئی کی (key) استعمال کر رہے ہیں
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      # سب سے اہم مرحلہ: پرانا ڈیٹا کلیئر کرنا
-      - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease
+      # ڈیبگ بلڈ بنائیں کیونکہ یہ خودکار سائن ہوتی ہے اور ٹیسٹنگ کے لیے بہترین ہے
+      - name: Clean and Build Debug APK
+        run: ./gradlew clean assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App-Updated
-          path: app/build/outputs/apk/release/*.apk
-          # اگر پہلے سے کوئی فائل ہے تو اسے اوور رائٹ کریں
+          name: System-Pro-App-Final
+          # یہاں ہم نے پاتھ کو assembleDebug کے مطابق سیٹ کیا ہے
+          path: app/build/outputs/apk/debug/*.apk
           overwrite: true
-          # آرٹیفیکٹ کو صرف 1 دن کے لیے رکھیں تاکہ پرانا ڈیٹا جمع نہ ہو
-          retention-days: 1
