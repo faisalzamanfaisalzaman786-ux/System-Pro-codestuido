@@ -1,5 +1,5 @@
 package com.systempro.counter;
-import com.systempro.counter.R
+import com.systempro.counter.R;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
