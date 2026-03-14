@@ -3,7 +3,7 @@ name: System Pro Unique Builder
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # یہاں سے آپ خود بھی بٹن دبا کر چلا سکتے ہیں
+  workflow_dispatch: 
 
 jobs:
   build:
@@ -12,46 +12,48 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # تمام فائلز اور ہسٹری حاصل کرنے کے لیے
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
-
-    - name: Generate Random Identity
+        # کیش کو ہٹا دیا گیا ہے تاکہ ہر بار فریش بلڈ بنے
+        
+    - name: Generate Unique Identity
       run: |
-        # ایک رینڈم نمبر بنانا
-        RAND_NUM=$(date +%s | tail -c 4)
+        # ایک یونیک ٹائم اسٹیمپ بنانا
+        UNIQUE_ID=$(date +%s)
+        NEW_PACKAGE="com.system.pro.id$UNIQUE_ID"
+        NEW_APP_NAME="System Pro $UNIQUE_ID"
         
-        # 1. پیکیج نیم بدلنا (مثال: com.system.pro.v1234)
-        NEW_PACKAGE="com.system.pro.v$RAND_NUM"
+        echo "Updating Package to: $NEW_PACKAGE"
         
-        # 2. ایپ کا نام بدلنا (مثال: System Pro 1234)
-        NEW_APP_NAME="System Pro $RAND_NUM"
-        
-        echo "نیا پیکیج: $NEW_PACKAGE"
-        echo "نیا نام: $NEW_APP_NAME"
-
-        # build.gradle میں پیکیج نیم اپ ڈیٹ کرنا
+        # 1. Build.gradle میں تبدیلیاں
         sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
         sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
         
-        # Java فائلوں کے اندر پیکیج کی لائن بدلنا
+        # 2. Java Files میں پیکیج اپ ڈیٹ کرنا
         find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $NEW_PACKAGE;/g" {} +
         
-        # strings.xml میں ایپ کا نام بدلنا (تاکہ فون پر نام بھی الگ نظر آئے)
-        sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
+        # 3. Strings.xml میں ایپ کا نام بدلنا
+        if [ -f app/src/main/res/values/strings.xml ]; then
+          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
+        fi
 
     - name: Grant execute permission
       run: chmod +x gradlew
 
-    - name: Build Unique APK
-      run: ./gradlew assembleDebug
+    - name: Clean and Build Unique APK
+      # ./gradlew clean لازمی ہے تاکہ پرانی تصاویر یا فائلز ڈیلیٹ ہو جائیں
+      run: ./gradlew clean assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: Unique-System-Pro-APK
+        # نام کو بھی یونیک کر دیا تاکہ پرانے کے ساتھ مکس نہ ہو
+        name: System-Pro-Build-${{ github.run_number }}
         path: app/build/outputs/apk/debug/*.apk
+        if-no-files-found: error
