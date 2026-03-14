@@ -5,13 +5,12 @@ on:
     inputs:
       file_name:
         description: 'فائل کا نام'
-        required: true
+        default: 'test_file.txt' # اگر ایپ نام نہ بھیجے تو یہ نام استعمال ہوگا
+        required: false
       file_content:
         description: 'فائل کا مواد'
-        required: true
-      file_type:
-        description: 'فائل کی قسم (java/xml/manifest)'
-        required: true
+        default: 'Empty Content'
+        required: false
 
 jobs:
   route_and_save:
@@ -20,21 +19,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create and Route File
+      - name: Create File
         run: |
-          # فائل کا صحیح راستہ (Path) متعین کرنا
-          DEST_DIR="uploads"
-          mkdir -p $DEST_DIR
+          mkdir -p uploads
+          echo "${{ github.event.inputs.file_content }}" > "uploads/${{ github.event.inputs.file_name }}"
           
-          # فائل بنانا
-          echo "${{ github.event.inputs.file_content }}" > "$DEST_DIR/${{ github.event.inputs.file_name }}"
-          
-          echo "✅ فائل $DEST_DIR میں تیار کر دی گئی ہے۔"
-
-      - name: Commit and Push Changes
+      - name: Push to Branch
         run: |
-          git config --global user.name "System Pro Builder"
+          git config --global user.name "System Pro"
           git config --global user.email "action@github.com"
-          git add uploads/
-          git commit -m "Auto-upload: ${{ github.event.inputs.file_name }} via System Pro"
-          git push origin main
+          git add .
+          git commit -m "Auto upload from App"
+          git push
