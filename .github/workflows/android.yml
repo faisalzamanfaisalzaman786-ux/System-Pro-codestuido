@@ -1,39 +1,40 @@
-name: System Pro - Upload Tracker
+name: System Pro - Auto File Router
 
-# یہ ورک فلو صرف تب چلے گا جب 'uploads' فولڈر میں کوئی تبدیلی ہوگی
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'uploads/**'
-  workflow_dispatch: # اس سے آپ مینوئل بھی چیک کر سکتے ہیں
+  workflow_dispatch:
+    inputs:
+      file_name:
+        description: 'فائل کا نام'
+        required: true
+      file_content:
+        description: 'فائل کا مواد'
+        required: true
+      file_type:
+        description: 'فائل کی قسم (java/xml/manifest)'
+        required: true
 
 jobs:
-  verify_files:
+  route_and_save:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Display Status Message
-      run: |
-        echo "✅ Trigger Successful: New activity detected in uploads folder!"
-        echo "Time of action: $(date)"
+      - name: Create and Route File
+        run: |
+          # فائل کا صحیح راستہ (Path) متعین کرنا
+          DEST_DIR="uploads"
+          mkdir -p $DEST_DIR
+          
+          # فائل بنانا
+          echo "${{ github.event.inputs.file_content }}" > "$DEST_DIR/${{ github.event.inputs.file_name }}"
+          
+          echo "✅ فائل $DEST_DIR میں تیار کر دی گئی ہے۔"
 
-    - name: List Received Files
-      run: |
-        echo "موصول ہونے والی فائلوں کی فہرست:"
-        ls -R uploads/
-        
-    - name: Check File Types
-      run: |
-        # یہ چیک کرے گا کہ کیا جاوا یا مینی فیسٹ فائلیں موجود ہیں
-        COUNT=$(ls uploads/*.java uploads/*.xml 2>/dev/null | wc -l)
-        echo "کل اہم فائلیں (Java/XML): $COUNT"
-        if [ $COUNT -gt 0 ]; then
-          echo "🚀 Verification Result: App is pushing files correctly!"
-        else
-          echo "⚠️ Note: Folder updated but no Java/XML files found yet."
-        fi
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "System Pro Builder"
+          git config --global user.email "action@github.com"
+          git add uploads/
+          git commit -m "Auto-upload: ${{ github.event.inputs.file_name }} via System Pro"
+          git push origin main
