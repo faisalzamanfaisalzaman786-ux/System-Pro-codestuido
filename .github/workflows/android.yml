@@ -1,62 +1,45 @@
-name: System Pro Unique Builder
+name: System Pro Compiler
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: 
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # دستی طور پر بلڈ شروع کرنے کے لیے
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        clean: true # یہ پرانی فائلز کو ورک سپیس سے صاف کر دے گا
-        fetch-depth: 0
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        # کیشنگ کو مکمل طور پر بند کر دیا گیا ہے تاکہ ہر بار نیا ڈیٹا لوڈ ہو
-        cache: '' 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Generate Unique Identity
-      run: |
-        # ٹائم اسٹیمپ کے ساتھ یونیک آئی ڈی
-        UNIQUE_ID=$(date +%s)
-        NEW_PACKAGE="com.system.pro.id$UNIQUE_ID"
-        NEW_APP_NAME="System Pro $UNIQUE_ID"
-        
-        echo "Updating Package to: $NEW_PACKAGE"
-        
-        # 1. پیکیج نیم کی تبدیلی
-        sed -i "s/namespace .*/namespace '$NEW_PACKAGE'/g" app/build.gradle
-        sed -i "s/applicationId .*/applicationId '$NEW_PACKAGE'/g" app/build.gradle
-        
-        # 2. جاوا فائلوں میں پیکیج اپ ڈیٹ کرنا
-        find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $NEW_PACKAGE;/g" {} +
-        
-        # 3. ایپ کا نام بدلنا (strings.xml)
-        if [ -f app/src/main/res/values/strings.xml ]; then
-          sed -i "s|<string name=\"app_name\">.*</string>|<string name=\"app_name\">$NEW_APP_NAME</string>|g" app/src/main/res/values/strings.xml
-        fi
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          # یہاں ہم cache کو ری فریش کرنے کے لیے ایک نئی کی (key) استعمال کر رہے ہیں
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
-    - name: Grant execute permission
-      run: chmod +x gradlew
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
-    - name: Forced Clean and Build
-      # './gradlew clean' پرانے تمام امیجز اور بائنریز کو ڈیلیٹ کر دیتا ہے
-      # '--no-build-cache' گراڈل کو مجبور کرتا ہے کہ وہ پرانا ڈیٹا استعمال نہ کرے
-      run: ./gradlew clean assembleDebug --no-build-cache
+      # سب سے اہم مرحلہ: پرانا ڈیٹا کلیئر کرنا
+      - name: Clean and Build Release APK
+        run: ./gradlew clean assembleRelease
 
-    - name: Upload Unique APK
-      uses: actions/upload-artifact@v4
-      with:
-        # ہر بار فائل کا نام مختلف ہوگا تاکہ آپ کو پتہ چلے کہ یہ نیا ورژن ہے
-        name: System-Pro-Build-${{ github.run_number }}-${{ env.UNIQUE_ID }}
-        path: app/build/outputs/apk/debug/*.apk
-        if-no-files-found: error
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-App-Updated
+          path: app/build/outputs/apk/release/*.apk
+          # اگر پہلے سے کوئی فائل ہے تو اسے اوور رائٹ کریں
+          overwrite: true
+          # آرٹیفیکٹ کو صرف 1 دن کے لیے رکھیں تاکہ پرانا ڈیٹا جمع نہ ہو
+          retention-days: 1
