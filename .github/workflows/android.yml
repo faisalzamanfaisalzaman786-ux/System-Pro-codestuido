@@ -17,34 +17,20 @@ jobs:
 
       - name: Decode and extract files
         run: |
-          # ان پٹ کو ڈی کوڈ کریں
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
-          
-          # JSON سے پیکیج نام اور فائلیں نکالیں
           PACKAGE=$(jq -r '.package' request.json)
           echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
-          
-          # Java فائل کے لیے ڈائریکٹری بنائیں (package name کو / میں تبدیل کریں)
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
           mkdir -p $JAVA_DIR
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
-          
-          # Java فائل لکھیں (پیکیج اسٹیٹمنٹ درست کریں)
           JAVA_CODE="$(jq -r '.files["MainActivity.java"]' request.json)"
-          # پیکیج لائن کو تبدیل کریں
           JAVA_CODE=$(echo "$JAVA_CODE" | sed "s/package .*/package $PACKAGE;/")
           echo "$JAVA_CODE" > $JAVA_DIR/MainActivity.java
-          
-          # Layout فائل لکھیں
           echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
-          
-          # Manifest فائل لکھیں (پیکیج تبدیل کریں)
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
           MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
-          
-          # اگر آئیکن موجود ہو تو اسے ڈی کوڈ کریں
           if jq -e '.files["icon.png"]' request.json > /dev/null; then
             echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
           fi
