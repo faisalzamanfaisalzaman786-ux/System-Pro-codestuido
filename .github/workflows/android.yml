@@ -56,7 +56,7 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle (material dependency شامل)
+          # app/build.gradle
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
@@ -100,7 +100,7 @@ jobs:
           </resources>
           EOF
 
-      - name: Place user files
+      - name: Place user files (with manifest fixes)
         run: |
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
           
@@ -110,14 +110,19 @@ jobs:
           # Layout file
           jq -r '.files["activity_main.xml"]' request.json > app/src/main/res/layout/activity_main.xml
           
-          # Manifest file: package بدلیں، اور اگر namespace نہ ہو تو شامل کریں
-          jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' > temp_manifest.xml
+          # Manifest file: 
+          # 1. پیکیج تبدیل کریں
+          # 2. اگر namespace نہ ہو تو شامل کریں
+          # 3. android:icon کو ہٹا دیں
+          jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' | sed '/android:icon/d' > temp_manifest.xml
+          
           if ! grep -q 'xmlns:android=' temp_manifest.xml; then
               sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' temp_manifest.xml
           fi
+          
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # Icon if present
+          # Icon if present (یوزر نے اپ لوڈ کیا ہو تو)
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
             jq -r '.files["icon.png"]' request.json | base64 --decode > app/src/main/res/drawable/icon.png
           fi
@@ -142,7 +147,6 @@ jobs:
             exit 1
           fi
 
-      # لاگ ہمیشہ اپ لوڈ کریں (چاہے بلڈ کامیاب ہو یا ناکام)
       - name: Upload logs (always)
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,7 +155,6 @@ jobs:
           path: build.log
           if-no-files-found: warn
 
-      # APK صرف کامیاب بلڈ پر اپ لوڈ کریں
       - name: Upload APK (if exists)
         if: success()
         uses: actions/upload-artifact@v4
