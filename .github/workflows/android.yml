@@ -1,76 +1,25 @@
-name: System Pro APK Builder
-
-on:
-  workflow_dispatch:
-    inputs:
-      file_content:
-        description: 'Encoded JSON payload from System Pro App'
-        required: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Decode and Prepare Project Structure
-        run: |
-          # JSON ڈیٹا کو ڈی کوڈ کرنا
-          echo "${{ github.event.inputs.file_content }}" | base64 -d > payload.json
-          
-          # پیکیج نیم نکالنا اور اسے منفرد بنانا (ٹائم اسٹیمپ کے ساتھ)
-          BASE_PKG=$(jq -r '.package' payload.json)
-          TIMESTAMP=$(date +%s)
-          UNIQUE_PKG="${BASE_PKG}.v${TIMESTAMP}"
-          echo "UNIQUE_PKG=$UNIQUE_PKG" >> $GITHUB_ENV
-          
-          # ڈائریکٹری سٹرکچر بنانا
-          PKG_PATH=$(echo $UNIQUE_PKG | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          
-          # فائلیں سیٹ اپ کرنا
-          jq -r '.files["MainActivity.java"]' payload.json > app/src/main/java/$PKG_PATH/MainActivity.java
-          jq -r '.files["activity_main.xml"]' payload.json > app/src/main/res/layout/activity_main.xml
-          jq -r '.files["AndroidManifest.xml"]' payload.json > app/src/main/AndroidManifest.xml
-          
-          # پیکیج نیم کو خودکار طریقے سے تمام فائلوں میں اپ ڈیٹ کرنا (Multi-Install Feature)
-          sed -i "s/package=\"$BASE_PKG\"/package=\"$UNIQUE_PKG\"/g" app/src/main/AndroidManifest.xml
-          sed -i "s/package $BASE_PKG/package $UNIQUE_PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
-
       - name: Generate Modern Gradle Files
         run: |
           # settings.gradle
           echo "rootProject.name = 'SystemProApp'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # build.gradle (Project Level)
+          # build.gradle (Project Level) - Gradle 8.2 استعمال کریں
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.1' }
           }
           allprojects {
               repositories { google(); mavenCentral() }
           }
           EOF
 
-          # app/build.gradle (Module Level) - Upgraded to API 34
+          # app/build.gradle
           cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace '${{ env.UNIQUE_PKG }}'
               compileSdk 34
@@ -79,11 +28,12 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0_${{ env.UNIQUE_PKG }}"
+                  versionName "1.0"
               }
               buildTypes {
                   release {
                       minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
               compileOptions {
@@ -99,17 +49,8 @@ jobs:
           EOF
 
       - name: Build APK
-        run: gradle assembleRelease
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-${{ env.UNIQUE_PKG }}
-          path: app/build/outputs/apk/release/*.apk
-
-      - name: Upload Error Logs (On Failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-error-logs
-          path: app/build/reports/
+        # یہاں مخصوص Gradle ورژن استعمال کرنے کے لیے 'gradle' کی جگہ './gradlew' یا ورژن لاک کریں
+        run: |
+          # ہم خودکار طور پر ریپرز (Wrappers) سیٹ کریں گے تاکہ 9.4 ورژن استعمال نہ ہو
+          gradle wrapper --gradle-version 8.2
+          ./gradlew assembleRelease
