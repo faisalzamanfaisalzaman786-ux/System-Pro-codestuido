@@ -9,7 +9,7 @@ on:
         type: string
 
 env:
-  # Node.js 20 وارننگ سے بچنے کے لیے (عارضی حل)
+  # Node.js 20 وارننگ سے بچنے کے لیے
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
@@ -23,13 +23,13 @@ jobs:
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
           echo "PACKAGE=$(jq -r '.package' request.json)" >> $GITHUB_ENV
 
-      - name: Create Android project
+      - name: Create Android project with Gradle 8.10.2
         run: |
-          # Gradle wrapper
+          # Gradle wrapper (نسخہ 8.10.2)
           mkdir -p gradle/wrapper
-          curl -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradle/wrapper/gradle-wrapper.jar
-          curl -s -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradle/wrapper/gradle-wrapper.properties
-          curl -s -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradlew
+          curl -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
+          curl -s -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.properties
+          curl -s -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradlew
           chmod +x gradlew
 
           # جاوا اور وسائل کے فولڈر
@@ -131,7 +131,6 @@ jobs:
         continue-on-error: true
         run: |
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
-          # اگر بلڈ فیل ہوا تو آخری 50 لائنیں پرنٹ کریں اور ناکامی کو ظاہر کریں
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "❌ Build failed. Last 50 lines of log:"
             tail -50 build.log
