@@ -1,251 +1,287 @@
-<?xml version="1.0" encoding="utf-8"?>
-<project-repair-tool>
-    
-    <!-- Basic Project Structure Check -->
-    <project-structure>
-        <check>AndroidManifest.xml</check>
-        <check>MainActivity.java</check>
-        <check>activity_main.xml</check>
-        <check>build.gradle</check>
-        <check>strings.xml</check>
-        <check>colors.xml</check>
-    </project-structure>
-    
-    <!-- AndroidManifest.xml Generator -->
-    <manifest-generator>
-        <file-path>app/src/main/AndroidManifest.xml</file-path>
-        <content>
-            <![CDATA[
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.yourpackage.app">
+name: System Pro APK Builder
 
-    <!-- Basic Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    
-    <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/AppTheme">
-        
-        <activity android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        
-    </application>
-</manifest>
-            ]]>
-        </content>
-    </manifest-generator>
-    
-    <!-- MainActivity.java Generator -->
-    <activity-generator>
-        <file-path>app/src/main/java/com/yourpackage/app/MainActivity.java</file-path>
-        <content>
-            <![CDATA[
-package com.yourpackage.app;
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version Name (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+        type: string
+      version_code:
+        description: 'Version Code (e.g., 1)'
+        required: true
+        default: '1'
+        type: number
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.systempro.faisal'
+        type: string
 
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
+env:
+  APP_NAME: "System Pro"
+  PACKAGE_NAME: ${{ github.event.inputs.package_name || 'com.systempro.faisal' }}
+  VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}
+  VERSION_CODE: ${{ github.event.inputs.version_code || '1' }}
 
-public class MainActivity extends AppCompatActivity {
-    
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+jobs:
+  validate-environment:
+    name: Validate Environment
+    runs-on: ubuntu-latest
+    outputs:
+      java-version: ${{ steps.java-check.outputs.version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          
+      - name: Check Java Version
+        id: java-check
+        run: |
+          if [ -f "gradle.properties" ]; then
+            JAVA_VERSION=$(grep "javaVersion" gradle.properties | cut -d'=' -f2 || echo "17")
+          else
+            JAVA_VERSION="17"
+          fi
+          echo "version=$JAVA_VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Validate Project Structure
+        run: |
+          REQUIRED_FILES=(
+            "app/src/main/AndroidManifest.xml"
+            "app/src/main/java/com/systempro/faisal/MainActivity.java"
+            "app/src/main/res/layout/activity_main.xml"
+            "build.gradle"
+            "settings.gradle"
+          )
+          
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing required file: $file"
+              exit 1
+            fi
+          done
+          echo "✅ All required files present"
+
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: validate-environment
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.validate-environment.outputs.java-version }}
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+            
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
         
-        // Initialize views
-        Button btnTest = findViewById(R.id.btnTest);
+      - name: Update Version in Manifest
+        run: |
+          sed -i "s/android:versionName=\".*\"/android:versionName=\"${{ env.VERSION_NAME }}\"/" app/src/main/AndroidManifest.xml
+          sed -i "s/android:versionCode=\".*\"/android:versionCode=\"${{ env.VERSION_CODE }}\"/" app/src/main/AndroidManifest.xml
+          sed -i "s/package=\".*\"/package=\"${{ env.PACKAGE_NAME }}\"/" app/src/main/AndroidManifest.xml
+          echo "✅ Manifest updated with version ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})"
+          
+      - name: Clean Project
+        run: ./gradlew clean
         
-        btnTest.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Toast.makeText(MainActivity.this, "App is working!", Toast.LENGTH_SHORT).show();
+      - name: Build ${{ github.event.inputs.build_type || 'debug' }} APK
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" == "release" ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+        env:
+          BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
+          
+      - name: Sign APK (Release Only)
+        if: github.event.inputs.build_type == 'release'
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        continue-on-error: true
+        
+      - name: Rename APK
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          APK_DIR="app/build/outputs/apk/${BUILD_TYPE}"
+          if [ -d "$APK_DIR" ]; then
+            cd "$APK_DIR"
+            for apk in *.apk; do
+              if [ -f "$apk" ]; then
+                NEW_NAME="${APP_NAME}-v${VERSION_NAME}-${BUILD_TYPE}.apk"
+                mv "$apk" "$NEW_NAME"
+                echo "✅ Renamed $apk to $NEW_NAME"
+              fi
+            done
+          fi
+          
+      - name: Generate Build Info
+        run: |
+          cat > build-info.txt << EOF
+          App Name: ${{ env.APP_NAME }}
+          Package: ${{ env.PACKAGE_NAME }}
+          Version: ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
+          Build Type: ${{ github.event.inputs.build_type || 'debug' }}
+          Build Date: $(date)
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Workflow: ${{ github.workflow }}
+          Status: ✅ Success
+          EOF
+          
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-v${{ env.VERSION_NAME }}-${{ github.event.inputs.build_type || 'debug' }}
+          path: |
+            app/build/outputs/apk/**/*.apk
+            build-info.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          
+      - name: Upload to Release (if tagged)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            app/build/outputs/apk/**/*.apk
+            build-info.txt
+          generate_release_notes: true
+          prerelease: ${{ github.event.inputs.build_type == 'debug' }}
+          
+      - name: Send Notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Build completed successfully for ${{ env.PACKAGE_NAME }}"
+            echo "📱 APK is ready for download"
+          else
+            echo "❌ Build failed for ${{ env.PACKAGE_NAME }}"
+            echo "📝 Check logs for details"
+          fi
+          
+      - name: Upload Build Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.run_id }}
+          path: |
+            app/build/reports/
+            **/build/outputs/logs/
+          retention-days: 7
+
+  test-apk:
+    name: Test APK
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: github.event.inputs.build_type == 'release'
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-v${{ env.VERSION_NAME }}-${{ github.event.inputs.build_type || 'debug' }}
+          path: ./downloaded-apk
+          
+      - name: Verify APK
+        run: |
+          cd downloaded-apk
+          APK_FILE=$(find . -name "*.apk" | head -n 1)
+          if [ -f "$APK_FILE" ]; then
+            echo "✅ APK found: $APK_FILE"
+            ls -lh "$APK_FILE"
+            file "$APK_FILE"
+          else
+            echo "❌ No APK found"
+            exit 1
+          fi
+          
+      - name: Basic APK Validation
+        run: |
+          if command -v aapt &> /dev/null; then
+            aapt dump badging downloaded-apk/*.apk | grep "package: name"
+          else
+            echo "⚠️ aapt not installed, skipping validation"
+          fi
+
+  cleanup:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build-apk, test-apk]
+    steps:
+      - name: Delete Old Artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const now = Date.now();
+            const daysToKeep = 7;
+            
+            for (const artifact of artifacts.artifacts) {
+              const artifactDate = new Date(artifact.created_at).getTime();
+              const daysOld = (now - artifactDate) / (1000 * 60 * 60 * 24);
+              
+              if (daysOld > daysToKeep && artifact.name.includes('build-logs')) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+                console.log(`Deleted old artifact: ${artifact.name}`);
+              }
             }
-        });
-    }
-    
-    // Method to check corrupted files
-    private void checkCorruptedFiles() {
-        // Auto repair logic here
-    }
-}
-            ]]>
-        </content>
-    </activity-generator>
-    
-    <!-- activity_main.xml Generator -->
-    <layout-generator>
-        <file-path>app/src/main/res/layout/activity_main.xml</file-path>
-        <content>
-            <![CDATA[
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:gravity="center">
-    
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="App Repaired Successfully!"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="20dp"/>
-    
-    <Button
-        android:id="@+id/btnTest"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Test App"/>
-    
-</LinearLayout>
-            ]]>
-        </content>
-    </layout-generator>
-    
-    <!-- strings.xml Generator -->
-    <strings-generator>
-        <file-path>app/src/main/res/values/strings.xml</file-path>
-        <content>
-            <![CDATA[
-<resources>
-    <string name="app_name">Repaired App</string>
-    <string name="hello_world">Hello World!</string>
-    <string name="action_settings">Settings</string>
-</resources>
-            ]]>
-        </content>
-    </strings-generator>
-    
-    <!-- colors.xml Generator -->
-    <colors-generator>
-        <file-path>app/src/main/res/values/colors.xml</file-path>
-        <content>
-            <![CDATA[
-<resources>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#03DAC5</color>
-</resources>
-            ]]>
-        </content>
-    </colors-generator>
-    
-    <!-- styles.xml Generator -->
-    <styles-generator>
-        <file-path>app/src/main/res/values/styles.xml</file-path>
-        <content>
-            <![CDATA[
-<resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
-    </style>
-</resources>
-            ]]>
-        </content>
-    </styles-generator>
-    
-    <!-- build.gradle Generator -->
-    <gradle-generator>
-        <file-path>app/build.gradle</file-path>
-        <content>
-            <![CDATA[
-apply plugin: 'com.android.application'
-
-android {
-    compileSdkVersion 33
-    buildToolsVersion "30.0.3"
-    
-    defaultConfig {
-        applicationId "com.yourpackage.app"
-        minSdkVersion 21
-        targetSdkVersion 33
-        versionCode 1
-        versionName "1.0"
-    }
-    
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-}
-            ]]>
-        </content>
-    </gradle-generator>
-    
-    <!-- Auto Repair Script (Batch) -->
-    <auto-repair-script>
-        <commands>
-            <command>echo "Checking project structure..."</command>
-            <command>mkdir -p app/src/main/java/com/yourpackage/app</command>
-            <command>mkdir -p app/src/main/res/layout</command>
-            <command>mkdir -p app/src/main/res/values</command>
-            <command>mkdir -p app/src/main/res/mipmap</command>
-            
-            <!-- Check and repair missing files -->
-            <command>if not exist app/src/main/AndroidManifest.xml copy /b manifest-template.xml app/src/main/AndroidManifest.xml</command>
-            <command>if not exist app/src/main/res/values/strings.xml copy /b strings-template.xml app/src/main/res/values/strings.xml</command>
-            
-            <!-- Fix corrupted files -->
-            <command>echo "Repairing corrupted files..."</command>
-            <command>attrib -r app/src/main/AndroidManifest.xml</command>
-            <command>attrib -r app/src/main/res/layout/activity_main.xml</command>
-            
-            <!-- Validate XML syntax -->
-            <command>echo "Validating XML syntax..."</command>
-            <command>for /r %%i in (*.xml) do findstr /v "invalid" "%%i"</command>
-        </commands>
-    </auto-repair-script>
-    
-    <!-- Validation Rules -->
-    <validation-rules>
-        <rule>
-            <file>AndroidManifest.xml</file>
-            <must-have>package=</must-have>
-            <must-have>activity android:name=</must-have>
-        </rule>
-        <rule>
-            <file>activity_main.xml</file>
-            <must-have>android:id</must-have>
-            <must-have>android:layout_width</must-have>
-        </rule>
-    </validation-rules>
-    
-    <!-- Logging -->
-    <repair-log>
-        <enabled>true</enabled>
-        <log-file>repair_log.txt</log-file>
-        <entries>
-            <entry>Repair started at: %timestamp%</entry>
-            <entry>Found missing files: %missing_files%</entry>
-            <entry>Fixed corrupted files: %corrupted_files%</entry>
-        </entries>
-    </repair-log>
-    
-</project-repair-tool>
