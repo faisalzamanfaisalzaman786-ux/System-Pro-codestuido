@@ -1,67 +1,44 @@
 name: System Pro APK Builder
-
 on:
   workflow_dispatch:
     inputs:
-      file_content:
-        description: 'Base64 encoded project files'
-        required: true
+      file_content: { required: true }
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Generate and Force Inject Package
+      - uses: actions/checkout@v4
+      - name: Force Fix Project Structure
         run: |
-          # 1. ایک منفرد پیکیج نیم بنانا
-          RAND_STR=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
-          NEW_PKG="com.systempro.app$RAND_STR"
-          echo "NEW_PKG=$NEW_PKG" >> $GITHUB_ENV
-          echo "🎯 Generating APK with Package: $NEW_PKG"
-
-      - name: Auto-Process Project Files
-        run: |
-          echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
+          # رینڈم پیکیج بنانا
+          ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
+          PKG="com.systempro.app$ID"
+          echo "PKG=$PKG" >> $GITHUB_ENV
+          
+          echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
           python3 -c "
           import json, os, re
-          new_pkg = '${{ env.NEW_PKG }}'
-          pkg_path = new_pkg.replace('.', '/')
-          
-          with open('project_data.json', 'r') as f:
-              data = json.load(f)
-              files = data.get('files', {})
+          pkg = '$PKG'
+          with open('data.json', 'r') as f:
+              files = json.load(f).get('files', {})
               for name, content in files.items():
-                  # جاوا فائلوں میں پیکیج اور R فائل کو زبردستی ٹھیک کرنا
                   if name.endswith('.java'):
-                      content = re.sub(r'package\s+[\w\.]+;', f'package {new_pkg};', content)
-                      content = re.sub(r'import\s+[\w\.]+\.R;', f'import {new_pkg}.R;', content)
-                      full_path = f'app/src/main/java/{pkg_path}/{name}'
-                  
-                  # مینی فیسٹ کو خود بخود درست کرنا
+                      # پہلی لائن پر نیا پیکیج لکھنا اور R امپورٹ کو خود بخود ٹھیک کرنا
+                      content = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', content)
+                      content = re.sub(r'import\s+[\w\.]+\.R;', f'import {pkg}.R;', content)
+                      path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   elif name == 'AndroidManifest.xml':
-                      content = re.sub(r'package=\"[\w\.]+\"', '', content)
-                      content = content.replace('.MainActivity', f'{new_pkg}.MainActivity')
-                      full_path = 'app/src/main/AndroidManifest.xml'
-                  
-                  elif name.endswith('.xml') and 'layout' in name:
-                      full_path = f'app/src/main/res/layout/{name}'
-                  else:
-                      continue
-
-                  os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                  with open(full_path, 'w') as out: out.write(content)
+                      content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
+                      path = 'app/src/main/AndroidManifest.xml'
+                  elif 'layout' in name: path = f'app/src/main/res/layout/{name}'
+                  else: continue
+                  os.makedirs(os.path.dirname(path), exist_ok=True)
+                  with open(path, 'w') as out: out.write(content)
           "
-
-      - name: Build and Sign APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload Unique APK
-        uses: actions/upload-artifact@v4
+      - name: Build APK
+        run: chmod +x gradlew && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.NEW_PKG }}-Build
+          name: Generated-APK
           path: app/build/outputs/apk/debug/*.apk
