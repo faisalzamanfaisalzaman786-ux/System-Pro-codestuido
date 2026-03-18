@@ -1,4 +1,5 @@
-name: System Pro Dynamic Builder
+# نام واپس پرانا کر دیا تاکہ موبائل ایپ اسے تلاش کر سکے
+name: System Pro APK Builder
 
 on:
   workflow_dispatch:
@@ -16,7 +17,7 @@ jobs:
 
       - name: Generate Random Package Name
         run: |
-          # ایک رینڈم آئی ڈی بنانا تاکہ پیکیج ہر بار الگ ہو
+          # ہر بار ایک نیا رینڈم آئی ڈی بنانا
           RANDOM_ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           NEW_PACKAGE="com.systempro.$RANDOM_ID"
           echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
@@ -26,6 +27,7 @@ jobs:
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
+          echo "🧹 Cleanup done!"
 
       - name: Decode and Inject Dynamic Package
         run: |
@@ -39,7 +41,7 @@ jobs:
               data = json.load(f)
               files = data.get('files', {})
               for name, content in files.items():
-                  # پیکیج نیم کو ہر فائل میں خود بخود بدلنا
+                  # پیکیج نیم کو تمام فائلوں میں بدلنا
                   content = re.sub(r'package\s+[\w\.]+;', f'package {new_pkg};', content)
                   content = re.sub(r'import\s+[\w\.]+\.R;', f'import {new_pkg}.R;', content)
                   
@@ -50,7 +52,6 @@ jobs:
                       path = f'app/src/main/res/layout/{name}'
                   elif name == 'AndroidManifest.xml':
                       path = 'app/src/main/AndroidManifest.xml'
-                      # مینی فیسٹ میں ایکٹیویٹی کا راستہ درست کرنا
                       content = content.replace('.MainActivity', f'{new_pkg}.MainActivity')
                   
                   if path:
@@ -58,13 +59,13 @@ jobs:
                       with open(path, 'w') as out: out.write(content)
           "
 
-      - name: Build APK with Dynamic Namespace
+      - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug -Pandroid.experimental.self-contained-resource-output=true
+          ./gradlew assembleDebug
 
       - name: Upload Dynamic APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.NEW_PACKAGE }}-APK
+          name: Faisal-Dynamic-APK
           path: app/build/outputs/apk/debug/*.apk
