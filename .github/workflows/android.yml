@@ -9,11 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Advanced Package Injector
+      - name: Ultimate Package Fixer
         run: |
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
+          
+          # build.gradle میں پیکیج نیم سیٹ کرنا (R فائل کے لیے لازمی)
+          sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
+          sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
           echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
           python3 -c "
@@ -24,16 +28,10 @@ jobs:
               for name, content in files.items():
                   if name.endswith('.java'):
                       lines = content.split('\n')
-                      # صرف پیکیج اور پرانے R امپورٹ کو نکالنا، باقی امپورٹس کو رہنے دینا
-                      final_lines = []
-                      for line in lines:
-                          if line.strip().startswith('package '): continue
-                          if '.R;' in line: continue
-                          final_lines.append(line)
-                      
-                      # نیا پیکیج اور نیا R امپورٹ سب سے اوپر ڈالنا
-                      header = f'package {pkg};\nimport {pkg}.R;\n'
-                      final_content = header + '\n'.join(final_lines)
+                      # پرانے پیکیج اور R امپورٹ ہٹانا
+                      clean = [l for l in lines if not l.strip().startswith('package ') and '.R;' not in l.strip()]
+                      # نیا ہیڈر لگانا
+                      final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
@@ -47,5 +45,5 @@ jobs:
         run: chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: Generated-APK
+          name: Successful-APK
           path: app/build/outputs/apk/debug/*.apk
