@@ -56,7 +56,7 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle
+          # app/build.gradle (material dependency شامل)
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
@@ -88,6 +88,7 @@ jobs:
 
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
 
@@ -109,7 +110,7 @@ jobs:
           # Layout file
           jq -r '.files["activity_main.xml"]' request.json > app/src/main/res/layout/activity_main.xml
           
-          # Manifest file: first replace package, then add namespace if missing
+          # Manifest file: package بدلیں، اور اگر namespace نہ ہو تو شامل کریں
           jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' > temp_manifest.xml
           if ! grep -q 'xmlns:android=' temp_manifest.xml; then
               sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' temp_manifest.xml
@@ -141,14 +142,16 @@ jobs:
             exit 1
           fi
 
+      # لاگ ہمیشہ اپ لوڈ کریں (چاہے بلڈ کامیاب ہو یا ناکام)
       - name: Upload logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-error-logs
+          name: build-logs
           path: build.log
           if-no-files-found: warn
 
+      # APK صرف کامیاب بلڈ پر اپ لوڈ کریں
       - name: Upload APK (if exists)
         if: success()
         uses: actions/upload-artifact@v4
