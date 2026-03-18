@@ -1,40 +1,46 @@
-          
-          # مین برانچ پر فورس پش کرنا تاکہ پرانا ڈیٹا مکمل ریپلیس ہو جائے
-          git push origin main --force
-name: Ultimate Deep Clean & Push
+name: Build and Clean System Pro
 
 on:
   workflow_dispatch:
 
 jobs:
-  deep-clean:
+  build-and-replace:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # یہ لکھنا ضروری ہے تاکہ فائلیں اپ ڈیٹ ہوں
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Git Config
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
+
+      - name: Build APK (Java and XML)
+        run: ./gradlew assembleDebug
+
+      - name: Deep Clean and Force Sync
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Force Clean and Overwrite
-        run: |
-          # تمام ان ٹریکڈ فائلز کو صاف کرنا
-          git clean -fdx 
           
-          # اگر آپ چاہتے ہیں کہ تمام فائلیں 'now' دکھائیں، تو ہم 'touch' استعمال کریں گے
+          # تمام فائلوں کا ٹائم اسٹیمپ تازہ کرنا تاکہ "last week" ختم ہو جائے
           find . -maxdepth 2 -not -path '*/.*' -exec touch {} +
           
-          # خالی تبدیلی پیدا کرنا تاکہ گٹ ہب اسے نیا سمجھے
-          date > last_sync.txt
-
-      - name: Push Changes Back to GitHub
-        run: |
           git add .
-          git commit -m "System Pro: Deep Clean & Data Replaced $(date)" || echo "No changes"
+          git commit -m "APK Built & Data Deep Cleaned" || echo "No changes"
           git push origin main --force
+
+      - name: Upload Finished APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-App
+          path: app/build/outputs/apk/debug/*.apk
