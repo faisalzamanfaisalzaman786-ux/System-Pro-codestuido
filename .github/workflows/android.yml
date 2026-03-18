@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # مکمل ہسٹری لیں تاکہ کوئی فائل مس نہ ہو
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -20,34 +22,36 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 1. پرانی فائلوں کی صفائی (تاکہ کاؤنٹر والی فائل دوبارہ نہ آئے)
-      - name: Clean Old Source Files
+      # سٹیپ ۱: ہر چیز کو زیرو کر دینا (تاکہ پرانا کاؤنٹر ڈیلیٹ ہو جائے)
+      - name: Nuclear Clean
         run: |
-          echo "Cleaning up old build artifacts..."
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          rm -rf app/src/main/assets/*
+          echo "Cleaning all previous build data..."
+          rm -rf app/src/main/java/com/systempro/faisal/*
+          rm -rf app/src/main/res/layout/*
+          mkdir -p app/src/main/java/com/systempro/faisal/
+          mkdir -p app/src/main/res/layout/
 
-      # 2. نئی فائلیں اپلوڈ کر کے ریپلیس کرنا
-      # نوٹ: یہاں 'path/to/your/upload' کو اپنے فولڈر کے نام سے بدلیں جہاں فائلیں آتی ہیں
-      - name: Sync New Files
+      # سٹیپ ۲: نئی فائلیں جو اپلوڈ ہوئی ہیں، انہیں صحیح جگہ پر لانا
+      - name: Force Sync New Files
         run: |
-          echo "Syncing new source files into the project..."
-          if [ -d "uploads" ]; then
-            cp -Rf uploads/* app/src/main/
+          echo "Moving new files to source directory..."
+          # یہاں ہم چیک کر رہے ہیں کہ کیا 'uploads' فولڈر میں کوئی فائل ہے؟
+          if [ -d "uploads" ] && [ "$(ls -A uploads)" ]; then
+            cp -rf uploads/*.java app/src/main/java/com/systempro/faisal/ || echo "No Java files found"
+            cp -rf uploads/*.xml app/src/main/res/layout/ || echo "No XML files found"
           else
-            echo "No upload folder found, skipping sync."
+            echo "Warning: No new files found in uploads folder!"
           fi
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      # 3. مکمل کلین بلڈ (تاکہ کیشے سے پرانا ڈیٹا نہ اٹھے)
-      - name: Build APK with Clean
-        run: ./gradlew clean assembleDebug
+      # سٹیپ ۳: زبردستی نیا بلڈ بنانا (No Cache)
+      - name: Build New APK
+        run: ./gradlew clean assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: Updated-System-Pro-Build
           path: app/build/outputs/apk/debug/*.apk
