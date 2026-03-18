@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Force Build System
+      - name: Advanced Package Injector
         run: |
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
@@ -23,19 +23,17 @@ jobs:
               files = json.load(f).get('files', {})
               for name, content in files.items():
                   if name.endswith('.java'):
-                      # تمام پرانے پیکیج اور امپورٹ ہٹانا
                       lines = content.split('\n')
-                      clean_lines = [l for l in lines if not l.strip().startswith('package ') and not l.strip().startswith('import ')]
-                      # نئی پیکیج لائن اور ضروری اینڈرائیڈ امپورٹس زبردستی ڈالنا
-                      header = f'package {pkg};\n'
-                      # کوڈ کے اندر جہاں بھی R. لکھا ہے اسے مکمل پیکیج نیم سے بدلنا (e.g. com.systempro.app123.R)
-                      body = '\n'.join(clean_lines)
-                      body = body.replace('R.layout.', f'{pkg}.R.layout.')
-                      body = body.replace('R.id.', f'{pkg}.R.id.')
-                      body = body.replace('R.string.', f'{pkg}.R.string.')
-                      body = body.replace('R.drawable.', f'{pkg}.R.drawable.')
+                      # صرف پیکیج اور پرانے R امپورٹ کو نکالنا، باقی امپورٹس کو رہنے دینا
+                      final_lines = []
+                      for line in lines:
+                          if line.strip().startswith('package '): continue
+                          if '.R;' in line: continue
+                          final_lines.append(line)
                       
-                      final_content = header + body
+                      # نیا پیکیج اور نیا R امپورٹ سب سے اوپر ڈالنا
+                      header = f'package {pkg};\nimport {pkg}.R;\n'
+                      final_content = header + '\n'.join(final_lines)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
