@@ -11,7 +11,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Auto-Inject Package
         run: |
-          # رینڈم پیکیج نیم بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
@@ -24,10 +23,11 @@ jobs:
               files = json.load(f).get('files', {})
               for name, content in files.items():
                   if name.endswith('.java'):
-                      # جاوا فائل کی پہلی 2 لائنیں مٹا کر نئی لائنیں ڈالنا
+                      # جاوا فائل کو بالکل شروع سے صاف کر کے لکھنا
                       lines = content.split('\n')
-                      clean_lines = [l for l in lines if 'package ' not in l and 'import ' not in l or '.R;' not in l]
-                      final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean_lines)
+                      # 'package' اور 'import' والی پرانی لائنیں نکالنا
+                      filtered_lines = [l for l in lines if not l.strip().startswith('package') and not (l.strip().startswith('import') and '.R;' in l)]
+                      final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(filtered_lines)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
