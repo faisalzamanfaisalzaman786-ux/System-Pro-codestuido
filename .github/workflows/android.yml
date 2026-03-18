@@ -9,13 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Advanced Build System
+      - name: Perfect Build System
         run: |
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
           
-          # پیکیج اور نیم اسپیس فکس کرنا
+          # Gradle فکسنگ
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
@@ -26,27 +26,30 @@ jobs:
           with open('data.json', 'r') as f:
               files = json.load(f).get('files', {})
               for name, content in files.items():
+                  # جاوا فائل پروسیسنگ
                   if name.endswith('.java'):
                       lines = content.split('\n')
                       clean = [l for l in lines if not l.strip().startswith('package ') and '.R;' not in l.strip()]
                       final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
+                  # مینی فیسٹ فکسنگ
                   elif name == 'AndroidManifest.xml':
-                      # ایپ کا نام 'System Pro Calc' سیٹ کرنا
                       content = re.sub(r'android:label=\"[^\"]*\"', 'android:label=\"System Pro Calc\"', content)
                       content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
                       path = 'app/src/main/AndroidManifest.xml'
-                  elif 'layout' in name:
-                      path = f'app/src/main/res/layout/activity_main.xml'
+                  # لے آؤٹ فائل فکسنگ (تمام XML فائلوں کو activity_main.xml کے طور پر لینا)
+                  elif name.endswith('.xml'):
+                      path = 'app/src/main/res/layout/activity_main.xml'
                   else: continue
+                  
                   os.makedirs(os.path.dirname(path), exist_ok=True)
                   with open(path, 'w') as out: out.write(final_content if name.endswith('.java') else content)
           "
-      - name: Build and Sign
+      - name: Build Clean APK
         run: |
           chmod +x gradlew
           ./gradlew clean assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: Neon-Calculator-APK
+          name: Final-Neon-APK
           path: app/build/outputs/apk/debug/*.apk
