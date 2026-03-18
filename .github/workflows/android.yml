@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       file_content:
-        description: 'Encoded JSON payload'
+        description: 'Encoded JSON payload from System Pro'
         required: true
 
 jobs:
@@ -22,37 +22,43 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Decode and Prepare Project
+      - name: Decode and Auto-Refactor Project
         run: |
-          # Payload decode
+          # 1. Payload Decode
           echo "${{ github.event.inputs.file_content }}" | base64 -d > payload.json
           
-          # Extract Base Package
+          # 2. Extract Base Package & Create Unique Version (For Multi-Install)
           BASE_PKG=$(jq -r '.package' payload.json)
-          # Create unique package for multi-install (timestamp based)
           UNIQUE_PKG="${BASE_PKG}.v$(date +%s)"
           echo "UNIQUE_PKG=$UNIQUE_PKG" >> $GITHUB_ENV
           
-          # Create Directories
+          # 3. Create Modern Directory Structure
           PKG_PATH=$(echo $UNIQUE_PKG | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
           
-          # Extract Files
+          # 4. Extract Source Files
           jq -r '.files["MainActivity.java"]' payload.json > app/src/main/java/$PKG_PATH/MainActivity.java
           jq -r '.files["activity_main.xml"]' payload.json > app/src/main/res/layout/activity_main.xml
           jq -r '.files["AndroidManifest.xml"]' payload.json > app/src/main/AndroidManifest.xml
           
-          # Inject Unique Package Name
-          sed -i "s/$BASE_PKG/$UNIQUE_PKG/g" app/src/main/AndroidManifest.xml
+          # 5. Fix Package Name in AndroidManifest
+          sed -i "s/package=\"$BASE_PKG\"/package=\"$UNIQUE_PKG\"/g" app/src/main/AndroidManifest.xml
+          
+          # 6. Refactor Java Code (Fix R Class & Package)
+          # پیکیج لائن کو اپ ڈیٹ کرنا
           sed -i "s/package $BASE_PKG/package $UNIQUE_PKG/g" app/src/main/java/$PKG_PATH/MainActivity.java
+          # تمام پرانی R imports کو ختم کرنا تاکہ 'symbol not found' ایرر نہ آئے
+          sed -i "/import .* \.R;/d" app/src/main/java/$PKG_PATH/MainActivity.java
+          sed -i "/import .*\.R;/d" app/src/main/java/$PKG_PATH/MainActivity.java
 
-      - name: Setup Gradle Environment
+      - name: Generate Upgraded Gradle Files (API 34)
         run: |
-          # Create settings.gradle
+          # settings.gradle
           echo "include ':app'" > settings.gradle
           
-          # Project build.gradle
+          # Project Level build.gradle (Locked to Stable 8.2.1)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -63,7 +69,7 @@ jobs:
           }
           EOF
 
-          # App build.gradle (API 34 Support)
+          # Module Level build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -74,7 +80,7 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0-Pro"
+                  versionName "1.0-SystemPro"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
@@ -84,23 +90,27 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: Build with Gradle 8.2
+      - name: Build APK with Wrapper Lockdown
         run: |
+          # Gradle 9.x سے بچنے کے لیے 8.2 ورژن لاک کرنا
           gradle wrapper --gradle-version 8.2
           ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Upload Success Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.UNIQUE_PKG }}-release
+          name: Build-${{ env.UNIQUE_PKG }}
           path: app/build/outputs/apk/release/*.apk
 
-      - name: Log Failure
+      - name: Upload Error Logs (Only on Failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: error-report
-          path: app/build/reports/
+          name: Build-Errors-${{ env.UNIQUE_PKG }}
+          path: |
+            app/build/reports/
+            app/src/main/java/
