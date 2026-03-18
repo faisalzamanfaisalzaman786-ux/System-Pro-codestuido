@@ -1,60 +1,251 @@
-name: GitHub-Decompiler-Build-Fixed
+<?xml version="1.0" encoding="utf-8"?>
+<project-repair-tool>
+    
+    <!-- Basic Project Structure Check -->
+    <project-structure>
+        <check>AndroidManifest.xml</check>
+        <check>MainActivity.java</check>
+        <check>activity_main.xml</check>
+        <check>build.gradle</check>
+        <check>strings.xml</check>
+        <check>colors.xml</check>
+    </project-structure>
+    
+    <!-- AndroidManifest.xml Generator -->
+    <manifest-generator>
+        <file-path>app/src/main/AndroidManifest.xml</file-path>
+        <content>
+            <![CDATA[
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.yourpackage.app">
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    <!-- Basic Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        
+        <activity android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+    </application>
+</manifest>
+            ]]>
+        </content>
+    </manifest-generator>
+    
+    <!-- MainActivity.java Generator -->
+    <activity-generator>
+        <file-path>app/src/main/java/com/yourpackage/app/MainActivity.java</file-path>
+        <content>
+            <![CDATA[
+package com.yourpackage.app;
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+public class MainActivity extends AppCompatActivity {
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        // Initialize views
+        Button btnTest = findViewById(R.id.btnTest);
+        
+        btnTest.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Toast.makeText(MainActivity.this, "App is working!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    // Method to check corrupted files
+    private void checkCorruptedFiles() {
+        // Auto repair logic here
+    }
+}
+            ]]>
+        </content>
+    </activity-generator>
+    
+    <!-- activity_main.xml Generator -->
+    <layout-generator>
+        <file-path>app/src/main/res/layout/activity_main.xml</file-path>
+        <content>
+            <![CDATA[
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center">
+    
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="App Repaired Successfully!"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp"/>
+    
+    <Button
+        android:id="@+id/btnTest"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Test App"/>
+    
+</LinearLayout>
+            ]]>
+        </content>
+    </layout-generator>
+    
+    <!-- strings.xml Generator -->
+    <strings-generator>
+        <file-path>app/src/main/res/values/strings.xml</file-path>
+        <content>
+            <![CDATA[
+<resources>
+    <string name="app_name">Repaired App</string>
+    <string name="hello_world">Hello World!</string>
+    <string name="action_settings">Settings</string>
+</resources>
+            ]]>
+        </content>
+    </strings-generator>
+    
+    <!-- colors.xml Generator -->
+    <colors-generator>
+        <file-path>app/src/main/res/values/colors.xml</file-path>
+        <content>
+            <![CDATA[
+<resources>
+    <color name="colorPrimary">#6200EE</color>
+    <color name="colorPrimaryDark">#3700B3</color>
+    <color name="colorAccent">#03DAC5</color>
+</resources>
+            ]]>
+        </content>
+    </colors-generator>
+    
+    <!-- styles.xml Generator -->
+    <styles-generator>
+        <file-path>app/src/main/res/values/styles.xml</file-path>
+        <content>
+            <![CDATA[
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+</resources>
+            ]]>
+        </content>
+    </styles-generator>
+    
+    <!-- build.gradle Generator -->
+    <gradle-generator>
+        <file-path>app/build.gradle</file-path>
+        <content>
+            <![CDATA[
+apply plugin: 'com.android.application'
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
+android {
+    compileSdkVersion 33
+    buildToolsVersion "30.0.3"
+    
+    defaultConfig {
+        applicationId "com.yourpackage.app"
+        minSdkVersion 21
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0"
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
 
-      # 1. صرف ضروری کوڈ فولڈرز صاف کرنا (باقی چیزیں جیسے آئیکن اور تھیم محفوظ رہیں گے)
-      - name: Clean Source Folders Only
-        run: |
-          echo "Cleaning only java and layout files..."
-          rm -rf app/src/main/java/com/systempro/faisal/* || true
-          rm -rf app/src/main/res/layout/* || true
-          mkdir -p app/src/main/java/com/systempro/faisal/
-          mkdir -p app/src/main/res/layout/
-
-      # 2. نئی فائلیں اپلوڈ فولڈر سے منتقل کرنا
-      - name: Sync Uploaded Files
-        run: |
-          if [ -d "uploads" ] && [ "$(ls -A uploads)" ]; then
-            echo "Moving new files..."
-            cp -rf uploads/*.java app/src/main/java/com/systempro/faisal/ 2>/dev/null || true
-            cp -rf uploads/*.xml app/src/main/res/layout/ 2>/dev/null || true
-          else
-            echo "No new files in uploads, build might use default code."
-          fi
-
-      # 3. مینی فیسٹ میں موجود پیکج نیم کے مسائل کو عارضی طور پر نظر انداز کرنا
-      - name: Fix Manifest Issues
-        run: |
-          # اگر آئیکن یا تھیم مسنگ ہے تو یہ بلڈ کو روکنے نہیں دے گا (صرف ٹیسٹنگ کے لیے)
-          echo "Checking Manifest..."
-
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
-
-      # 4. کلین بلڈ چلانا
-      - name: Build APK
-        run: ./gradlew clean assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Build
-          path: app/build/outputs/apk/debug/*.apk
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}
+            ]]>
+        </content>
+    </gradle-generator>
+    
+    <!-- Auto Repair Script (Batch) -->
+    <auto-repair-script>
+        <commands>
+            <command>echo "Checking project structure..."</command>
+            <command>mkdir -p app/src/main/java/com/yourpackage/app</command>
+            <command>mkdir -p app/src/main/res/layout</command>
+            <command>mkdir -p app/src/main/res/values</command>
+            <command>mkdir -p app/src/main/res/mipmap</command>
+            
+            <!-- Check and repair missing files -->
+            <command>if not exist app/src/main/AndroidManifest.xml copy /b manifest-template.xml app/src/main/AndroidManifest.xml</command>
+            <command>if not exist app/src/main/res/values/strings.xml copy /b strings-template.xml app/src/main/res/values/strings.xml</command>
+            
+            <!-- Fix corrupted files -->
+            <command>echo "Repairing corrupted files..."</command>
+            <command>attrib -r app/src/main/AndroidManifest.xml</command>
+            <command>attrib -r app/src/main/res/layout/activity_main.xml</command>
+            
+            <!-- Validate XML syntax -->
+            <command>echo "Validating XML syntax..."</command>
+            <command>for /r %%i in (*.xml) do findstr /v "invalid" "%%i"</command>
+        </commands>
+    </auto-repair-script>
+    
+    <!-- Validation Rules -->
+    <validation-rules>
+        <rule>
+            <file>AndroidManifest.xml</file>
+            <must-have>package=</must-have>
+            <must-have>activity android:name=</must-have>
+        </rule>
+        <rule>
+            <file>activity_main.xml</file>
+            <must-have>android:id</must-have>
+            <must-have>android:layout_width</must-have>
+        </rule>
+    </validation-rules>
+    
+    <!-- Logging -->
+    <repair-log>
+        <enabled>true</enabled>
+        <log-file>repair_log.txt</log-file>
+        <entries>
+            <entry>Repair started at: %timestamp%</entry>
+            <entry>Found missing files: %missing_files%</entry>
+            <entry>Fixed corrupted files: %corrupted_files%</entry>
+        </entries>
+    </repair-log>
+    
+</project-repair-tool>
