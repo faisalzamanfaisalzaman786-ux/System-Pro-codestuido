@@ -25,7 +25,7 @@ jobs:
 
       - name: Create Android project with Gradle 8.10.2
         run: |
-          # Gradle wrapper (نسخہ 8.10.2)
+          # Gradle wrapper (stable 8.10.2)
           mkdir -p gradle/wrapper
           curl -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
           curl -s -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.properties
@@ -58,18 +58,18 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle
+          # app/build.gradle (درست شدہ)
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace '$PACKAGE'
+              namespace System.getenv('PACKAGE')
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PACKAGE"
+                  applicationId System.getenv('PACKAGE')
                   minSdk 21
                   targetSdk 34
                   versionCode 1
