@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Auto-Inject Package
+      - name: Force Build System
         run: |
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
@@ -23,11 +23,19 @@ jobs:
               files = json.load(f).get('files', {})
               for name, content in files.items():
                   if name.endswith('.java'):
-                      # جاوا فائل کو بالکل شروع سے صاف کر کے لکھنا
+                      # تمام پرانے پیکیج اور امپورٹ ہٹانا
                       lines = content.split('\n')
-                      # 'package' اور 'import' والی پرانی لائنیں نکالنا
-                      filtered_lines = [l for l in lines if not l.strip().startswith('package') and not (l.strip().startswith('import') and '.R;' in l)]
-                      final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(filtered_lines)
+                      clean_lines = [l for l in lines if not l.strip().startswith('package ') and not l.strip().startswith('import ')]
+                      # نئی پیکیج لائن اور ضروری اینڈرائیڈ امپورٹس زبردستی ڈالنا
+                      header = f'package {pkg};\n'
+                      # کوڈ کے اندر جہاں بھی R. لکھا ہے اسے مکمل پیکیج نیم سے بدلنا (e.g. com.systempro.app123.R)
+                      body = '\n'.join(clean_lines)
+                      body = body.replace('R.layout.', f'{pkg}.R.layout.')
+                      body = body.replace('R.id.', f'{pkg}.R.id.')
+                      body = body.replace('R.string.', f'{pkg}.R.string.')
+                      body = body.replace('R.drawable.', f'{pkg}.R.drawable.')
+                      
+                      final_content = header + body
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'package=\"[\w\.]+\"', '', content).replace('.MainActivity', f'{pkg}.MainActivity')
