@@ -103,18 +103,20 @@ jobs:
         run: |
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
           
-          # جاوا فائل
+          # Java file
           jq -r '.files["MainActivity.java"]' request.json | sed "s/package .*/package $PACKAGE;/" > $JAVA_DIR/MainActivity.java
           
-          # لے آؤٹ فائل
+          # Layout file
           jq -r '.files["activity_main.xml"]' request.json > app/src/main/res/layout/activity_main.xml
           
-          # مینی فیسٹ فائل (درست شدہ: android namespace شامل)
-          jq -r '.files["AndroidManifest.xml"]' request.json | \
-            sed 's/package=".*"/package="'$PACKAGE'"/' | \
-            sed 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' > app/src/main/AndroidManifest.xml
+          # Manifest file: first replace package, then add namespace if missing
+          jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' > temp_manifest.xml
+          if ! grep -q 'xmlns:android=' temp_manifest.xml; then
+              sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' temp_manifest.xml
+          fi
+          mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # اگر آئیکن موجود ہو
+          # Icon if present
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
             jq -r '.files["icon.png"]' request.json | base64 --decode > app/src/main/res/drawable/icon.png
           fi
