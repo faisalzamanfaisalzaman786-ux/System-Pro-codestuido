@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.systempro.counter.app-merged_res-31:/drawable_icon.png.flat",
+        "source": "com.systempro.counter.app-main-33:/drawable/icon.png"
+    },
+    {
+        "merged": "com.systempro.counter.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.systempro.counter.app-main-33:/layout/activity_main.xml"
+    }
+]
