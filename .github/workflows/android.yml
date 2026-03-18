@@ -1,4 +1,4 @@
-name: System Pro APK Builder
+name: System Pro Dynamic Builder
 
 on:
   workflow_dispatch:
@@ -14,44 +14,57 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Force Clean Old Files
+      - name: Generate Random Package Name
         run: |
-          # پرانے کوڈ کو مکمل صاف کرنا تاکہ نیا پیکیج لاگو ہو سکے
-          rm -rf app/src/main/java/com/*
+          # ایک رینڈم آئی ڈی بنانا تاکہ پیکیج ہر بار الگ ہو
+          RANDOM_ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
+          NEW_PACKAGE="com.systempro.$RANDOM_ID"
+          echo "NEW_PACKAGE=$NEW_PACKAGE" >> $GITHUB_ENV
+          echo "🚀 New Package Name: $NEW_PACKAGE"
+
+      - name: Clean and Setup Environment
+        run: |
+          rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
-          echo "🧹 Cleanup complete!"
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Decode and Setup New Project
+      - name: Decode and Inject Dynamic Package
         run: |
           echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
           python3 -c "
-          import json, os
+          import json, os, re
+          new_pkg = '${{ env.NEW_PACKAGE }}'
+          pkg_path = new_pkg.replace('.', '/')
+          
           with open('project_data.json', 'r') as f:
               data = json.load(f)
               files = data.get('files', {})
               for name, content in files.items():
+                  # پیکیج نیم کو ہر فائل میں خود بخود بدلنا
+                  content = re.sub(r'package\s+[\w\.]+;', f'package {new_pkg};', content)
+                  content = re.sub(r'import\s+[\w\.]+\.R;', f'import {new_pkg}.R;', content)
+                  
                   path = ''
-                  if name.endswith('.java'): path = f'app/src/main/java/com/systempro/faisal/{name}'
-                  elif name.endswith('.xml') and 'layout' in name: path = f'app/src/main/res/layout/{name}'
-                  elif name == 'AndroidManifest.xml': path = 'app/src/main/AndroidManifest.xml'
+                  if name.endswith('.java'):
+                      path = f'app/src/main/java/{pkg_path}/{name}'
+                  elif name.endswith('.xml') and 'layout' in name:
+                      path = f'app/src/main/res/layout/{name}'
+                  elif name == 'AndroidManifest.xml':
+                      path = 'app/src/main/AndroidManifest.xml'
+                      # مینی فیسٹ میں ایکٹیویٹی کا راستہ درست کرنا
+                      content = content.replace('.MainActivity', f'{new_pkg}.MainActivity')
+                  
                   if path:
                       os.makedirs(os.path.dirname(path), exist_ok=True)
                       with open(path, 'w') as out: out.write(content)
           "
 
-      - name: Build New APK
+      - name: Build APK with Dynamic Namespace
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug -Pandroid.experimental.self-contained-resource-output=true
 
-      - name: Upload Unique APK
+      - name: Upload Dynamic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Faisal-Torch-APK
+          name: ${{ env.NEW_PACKAGE }}-APK
           path: app/build/outputs/apk/debug/*.apk
