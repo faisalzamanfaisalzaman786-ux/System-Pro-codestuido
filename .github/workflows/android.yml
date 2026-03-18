@@ -20,18 +20,22 @@ jobs:
       - name: Decode input
         run: |
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
-          echo "PACKAGE=$(jq -r '.package' request.json)" >> $GITHUB_ENV
+          PACKAGE=$(jq -r '.package' request.json)
+          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
+          echo "Package: $PACKAGE"
 
-      - name: Create Android project with Gradle 8.10.2
+      - name: Create Android project
         run: |
-          # Gradle wrapper (stable 8.10.2)
+          # Gradle wrapper
           mkdir -p gradle/wrapper
           curl -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
           curl -s -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.properties
           curl -s -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradlew
           chmod +x gradlew
 
-          mkdir -p app/src/main/java/$(echo $PACKAGE | tr '.' '/')
+          # Java directory
+          JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
+          mkdir -p $JAVA_DIR
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
@@ -63,11 +67,11 @@ jobs:
           }
 
           android {
-              namespace System.getenv('PACKAGE')
+              namespace '$PACKAGE'
               compileSdk 34
 
               defaultConfig {
-                  applicationId System.getenv('PACKAGE')
+                  applicationId "$PACKAGE"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -80,10 +84,6 @@ jobs:
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_1_8
-                  targetCompatibility JavaVersion.VERSION_1_8
-              }
           }
 
           dependencies {
@@ -92,39 +92,48 @@ jobs:
           }
           EOF
 
-          touch app/proguard-rules.pro
-
+          # strings.xml
           cat > app/src/main/res/values/strings.xml <<'EOF'
           <resources>
               <string name="app_name">System Pro</string>
           </resources>
           EOF
 
-      - name: Place user files (with manifest fixes)
+          # themes.xml
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#f97316</item>
+                  <item name="colorPrimaryDark">#c2410c</item>
+                  <item name="colorAccent">#f97316</item>
+              </style>
+          </resources>
+          EOF
+
+          # proguard
+          touch app/proguard-rules.pro
+
+      - name: Place user files
         run: |
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
           
-          # Java file
-          jq -r '.files["MainActivity.java"]' request.json | sed "s/package .*/package $PACKAGE;/" > $JAVA_DIR/MainActivity.java
+          # Java file - پیکیج خودکار تبدیل
+          echo "$(jq -r '.files["MainActivity.java"]' request.json)" | sed "s/package .*;/package $PACKAGE;/" > $JAVA_DIR/MainActivity.java
           
           # Layout file
-          jq -r '.files["activity_main.xml"]' request.json > app/src/main/res/layout/activity_main.xml
+          echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
           
-          # Manifest file: 
-          # 1. پیکیج تبدیل کریں
-          # 2. اگر namespace نہ ہو تو شامل کریں
-          # 3. android:icon کو ہٹا دیں
-          jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' | sed '/android:icon/d' > temp_manifest.xml
-          
-          if ! grep -q 'xmlns:android=' temp_manifest.xml; then
-              sed -i 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' temp_manifest.xml
+          # Manifest file - پیکیج تبدیل اور namespace چیک
+          MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
+          MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
+          if ! echo "$MANIFEST" | grep -q 'xmlns:android='; then
+              MANIFEST=$(echo "$MANIFEST" | sed 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /')
           fi
+          echo "$MANIFEST" > app/src/main/AndroidManifest.xml
           
-          mv temp_manifest.xml app/src/main/AndroidManifest.xml
-          
-          # Icon if present (یوزر نے اپ لوڈ کیا ہو تو)
+          # Icon if present
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
-            jq -r '.files["icon.png"]' request.json | base64 --decode > app/src/main/res/drawable/icon.png
+            echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
           fi
 
       - name: Set up JDK 17
@@ -136,15 +145,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK (with log capture)
+      - name: Build APK
         id: build
         continue-on-error: true
         run: |
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Build failed. Last 50 lines of log:"
+            echo "❌ Build failed. Last 50 lines:"
             tail -50 build.log
-            exit 1
           fi
 
       - name: Upload logs (always)
@@ -153,7 +161,6 @@ jobs:
         with:
           name: build-logs
           path: build.log
-          if-no-files-found: warn
 
       - name: Upload APK (if exists)
         if: success()
