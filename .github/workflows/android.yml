@@ -1,57 +1,27 @@
-name: System Pro APK Builder
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-on:
-  workflow_dispatch:
-    inputs:
-      file_content:
-        description: 'Base64 encoded project files'
-        required: true  # اب یہ خالی نہیں چھوڑا جا سکتا
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" />
+    <uses-feature android:name="android.hardware.camera.flash" />
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="System Pro Torch"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
-      - name: Force Clean Old Files
-        run: |
-          # پرانے تمام کوڈ فولڈرز کو ڈیلیٹ کرنا تاکہ صرف نیا ڈیٹا رہے
-          rm -rf app/src/main/java/com/*
-          rm -rf app/src/main/res/layout/*
-          echo "🧹 Old files cleared!"
+        <activity
+            android:name="com.systempro.faisal.MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    </application>
 
-      - name: Decode and Setup New Project
-        run: |
-          echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
-          python3 -c "
-          import json, os
-          with open('project_data.json', 'r') as f:
-              data = json.load(f)
-              files = data.get('files', {})
-              for name, content in files.items():
-                  path = ''
-                  if name.endswith('.java'): path = f'app/src/main/java/com/systempro/faisal/{name}'
-                  elif name.endswith('.xml') and 'layout' in name: path = f'app/src/main/res/layout/{name}'
-                  elif name == 'AndroidManifest.xml': path = 'app/src/main/AndroidManifest.xml'
-                  if path:
-                      os.makedirs(os.path.dirname(path), exist_ok=True)
-                      with open(path, 'w') as out: out.write(content)
-          "
-
-      - name: Build New APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload Unique APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Faisal-SystemPro-v2
-          path: app/build/outputs/apk/debug/*.apk
+</manifest>
