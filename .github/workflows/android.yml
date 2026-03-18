@@ -9,7 +9,6 @@ on:
         type: string
 
 env:
-  # Node.js 20 وارننگ سے بچنے کے لیے
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
@@ -32,7 +31,6 @@ jobs:
           curl -s -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradlew
           chmod +x gradlew
 
-          # جاوا اور وسائل کے فولڈر
           mkdir -p app/src/main/java/$(echo $PACKAGE | tr '.' '/')
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
@@ -58,7 +56,7 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle (درست شدہ)
+          # app/build.gradle
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
@@ -93,10 +91,8 @@ jobs:
           }
           EOF
 
-          # خالی proguard-rules.pro
           touch app/proguard-rules.pro
 
-          # strings.xml
           cat > app/src/main/res/values/strings.xml <<'EOF'
           <resources>
               <string name="app_name">System Pro</string>
@@ -106,12 +102,18 @@ jobs:
       - name: Place user files
         run: |
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
+          
           # جاوا فائل
           jq -r '.files["MainActivity.java"]' request.json | sed "s/package .*/package $PACKAGE;/" > $JAVA_DIR/MainActivity.java
+          
           # لے آؤٹ فائل
           jq -r '.files["activity_main.xml"]' request.json > app/src/main/res/layout/activity_main.xml
-          # مینی فیسٹ فائل
-          jq -r '.files["AndroidManifest.xml"]' request.json | sed 's/package=".*"/package="'$PACKAGE'"/' > app/src/main/AndroidManifest.xml
+          
+          # مینی فیسٹ فائل (درست شدہ: android namespace شامل)
+          jq -r '.files["AndroidManifest.xml"]' request.json | \
+            sed 's/package=".*"/package="'$PACKAGE'"/' | \
+            sed 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /' > app/src/main/AndroidManifest.xml
+          
           # اگر آئیکن موجود ہو
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
             jq -r '.files["icon.png"]' request.json | base64 --decode > app/src/main/res/drawable/icon.png
