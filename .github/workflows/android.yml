@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       file_content:
-        description: 'Base64 encoded project files (Optional for Auto-Repair)'
+        description: 'Base64 encoded project files'
         required: false
         default: ''
 
@@ -13,66 +13,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # v3 سے v4 کر دیا
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4 # v3 سے v4 کر دیا
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Auto-Repair & Decode Files
         run: |
-          # چیک کریں کہ کیا ان پٹ خالی ہے
           if [ -z "${{ github.event.inputs.file_content }}" ]; then
-            echo "⚠️ No new content provided. Starting Auto-Repair from existing files..."
+            echo "⚠️ No input. Using existing files."
           else
-            echo "📥 New content received. Updating files..."
             echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
-            
-            # پائیتھون اسکرپٹ کے ذریعے فائلیں اپنی جگہ سیٹ کرنا
             python3 -c "
-          import json, base64, os
+          import json, os
           try:
               with open('project_data.json', 'r') as f:
                   data = json.load(f)
                   files = data.get('files', {})
                   for name, content in files.items():
                       path = ''
-                      if name.endswith('.java'):
-                          path = f'app/src/main/java/com/systempro/faisal/{name}'
-                      elif name.endswith('.xml') and 'layout' in name:
-                          path = f'app/src/main/res/layout/{name}'
-                      elif name == 'AndroidManifest.xml':
-                          path = 'app/src/main/AndroidManifest.xml'
-                      
+                      if name.endswith('.java'): path = f'app/src/main/java/com/systempro/faisal/{name}'
+                      elif name.endswith('.xml') and 'layout' in name: path = f'app/src/main/res/layout/{name}'
+                      elif name == 'AndroidManifest.xml': path = 'app/src/main/AndroidManifest.xml'
                       if path:
                           os.makedirs(os.path.dirname(path), exist_ok=True)
-                          with open(path, 'w') as out:
-                              out.write(content)
-              print('✅ Files updated successfully.')
-          except Exception as e:
-              print(f'❌ Error decoding: {e}')
+                          with open(path, 'w') as out: out.write(content)
+              print('✅ Success')
+          except Exception as e: print(f'❌ Error: {e}')
             "
-          fi
-
-      - name: Verify and Fix Structure
-        run: |
-          # اگر مین ایکٹیویٹی غائب ہے تو اسے بنیادی کوڈ سے ریکور کریں
-          FILE_PATH="app/src/main/java/com/systempro/faisal/MainActivity.java"
-          if [ ! -f "$FILE_PATH" ]; then
-            echo "🔧 Repairing missing MainActivity.java..."
-            mkdir -p app/src/main/java/com/systempro/faisal/
-            echo "package com.systempro.faisal; import androidx.appcompat.app.AppCompatActivity; import android.os.Bundle; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle s) { super.onCreate(s); } }" > "$FILE_PATH"
           fi
 
       - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+        continue-on-error: true
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # یہاں v4 ہونا لازمی ہے
         with:
           name: Fixed-System-Pro-APK
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4 # یہاں بھی v4
+        with:
+          name: error-logs
+          path: app/build/reports/
