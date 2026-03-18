@@ -22,72 +22,138 @@ jobs:
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
           PACKAGE=$(jq -r '.package' request.json)
           echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
+          echo "Base package: $PACKAGE"
+
+      - name: Add serial number
+        run: |
+          SERIAL_FILE="serial.txt"
+          if [ -f "$SERIAL_FILE" ]; then
+            SERIAL=$(cat $SERIAL_FILE)
+            NEXT_SERIAL=$((SERIAL + 1))
+          else
+            SERIAL=0
+            NEXT_SERIAL=1
+          fi
+          echo $NEXT_SERIAL > $SERIAL_FILE
+          FORMATTED_SERIAL=$(printf "%03d" $NEXT_SERIAL)
+          PACKAGE_WITH_SERIAL="${PACKAGE}.v${FORMATTED_SERIAL}"
+          echo "PACKAGE_WITH_SERIAL=$PACKAGE_WITH_SERIAL" >> $GITHUB_ENV
+          echo "Using package: $PACKAGE_WITH_SERIAL"
 
       - name: Create Android project
         run: |
+          # Gradle wrapper
           mkdir -p gradle/wrapper
           curl -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.jar
           curl -s -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradle/wrapper/gradle-wrapper.properties
           curl -s -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.10.2/gradlew
           chmod +x gradlew
 
-          JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
+          # Java directory
+          JAVA_DIR="app/src/main/java/$(echo $PACKAGE_WITH_SERIAL | tr '.' '/')"
           mkdir -p $JAVA_DIR
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
 
+          # settings.gradle
           cat > settings.gradle <<'EOF'
-          pluginManagement { repositories { google() mavenCentral() gradlePluginPortal() } }
-          dependencyResolutionManagement { repositories { google() mavenCentral() } }
-          rootProject.name = "MyApp"; include ':app'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "MyApp"
+          include ':app'
           EOF
 
+          # app/build.gradle
           cat > app/build.gradle <<'EOF'
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
+
           android {
-              namespace System.getenv('PACKAGE')
+              namespace System.getenv('PACKAGE_WITH_SERIAL')
               compileSdk 34
+
               defaultConfig {
-                  applicationId System.getenv('PACKAGE')
+                  applicationId System.getenv('PACKAGE_WITH_SERIAL')
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro' } }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
           }
+
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
 
+          # strings.xml
           cat > app/src/main/res/values/strings.xml <<'EOF'
-          <resources><string name="app_name">System Pro</string></resources>
+          <resources>
+              <string name="app_name">System Pro</string>
+          </resources>
           EOF
 
+          # themes.xml
           cat > app/src/main/res/values/themes.xml <<'EOF'
-          <resources><style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar"><item name="colorPrimary">#f97316</item></style></resources>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#f97316</item>
+                  <item name="colorPrimaryDark">#c2410c</item>
+                  <item name="colorAccent">#f97316</item>
+              </style>
+          </resources>
           EOF
 
+          # proguard
           touch app/proguard-rules.pro
 
       - name: Place user files
         run: |
-          JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
-          echo "$(jq -r '.files["MainActivity.java"]' request.json)" | sed "s/package .*;/package $PACKAGE;/" > $JAVA_DIR/MainActivity.java
+          JAVA_DIR="app/src/main/java/$(echo $PACKAGE_WITH_SERIAL | tr '.' '/')"
+          
+          # Java file - پیکیج خودکار تبدیل
+          echo "$(jq -r '.files["MainActivity.java"]' request.json)" | sed "s/package .*;/package $PACKAGE_WITH_SERIAL;/" > $JAVA_DIR/MainActivity.java
+          
+          # Layout file
           echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
+          
+          # Manifest file - پیکیج تبدیل
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
-          MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
+          MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE_WITH_SERIAL\"/")
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
+          
+          # Icon if present
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
             echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
           fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
-        with: { java-version: '17', distribution: 'temurin' }
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -105,9 +171,22 @@ jobs:
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: build-logs, path: build.log }
+        with:
+          name: build-logs
+          path: build.log
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
-        with: { name: app-debug, path: app/build/outputs/apk/debug/app-debug.apk }
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Commit serial number
+        if: always()
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add serial.txt
+          git commit -m "Update serial number" || echo "No changes to commit"
+          git push
