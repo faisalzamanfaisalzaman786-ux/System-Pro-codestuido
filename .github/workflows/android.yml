@@ -5,62 +5,53 @@ on:
     inputs:
       file_content:
         description: 'Base64 encoded project files'
-        required: false
-        default: ''
+        required: true  # اب یہ خالی نہیں چھوڑا جا سکتا
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4  # v3 سے v4 کر دیا
+        uses: actions/checkout@v4
+
+      - name: Force Clean Old Files
+        run: |
+          # پرانے تمام کوڈ فولڈرز کو ڈیلیٹ کرنا تاکہ صرف نیا ڈیٹا رہے
+          rm -rf app/src/main/java/com/*
+          rm -rf app/src/main/res/layout/*
+          echo "🧹 Old files cleared!"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4 # v3 سے v4 کر دیا
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Auto-Repair & Decode Files
+      - name: Decode and Setup New Project
         run: |
-          if [ -z "${{ github.event.inputs.file_content }}" ]; then
-            echo "⚠️ No input. Using existing files."
-          else
-            echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
-            python3 -c "
+          echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
+          python3 -c "
           import json, os
-          try:
-              with open('project_data.json', 'r') as f:
-                  data = json.load(f)
-                  files = data.get('files', {})
-                  for name, content in files.items():
-                      path = ''
-                      if name.endswith('.java'): path = f'app/src/main/java/com/systempro/faisal/{name}'
-                      elif name.endswith('.xml') and 'layout' in name: path = f'app/src/main/res/layout/{name}'
-                      elif name == 'AndroidManifest.xml': path = 'app/src/main/AndroidManifest.xml'
-                      if path:
-                          os.makedirs(os.path.dirname(path), exist_ok=True)
-                          with open(path, 'w') as out: out.write(content)
-              print('✅ Success')
-          except Exception as e: print(f'❌ Error: {e}')
-            "
-          fi
+          with open('project_data.json', 'r') as f:
+              data = json.load(f)
+              files = data.get('files', {})
+              for name, content in files.items():
+                  path = ''
+                  if name.endswith('.java'): path = f'app/src/main/java/com/systempro/faisal/{name}'
+                  elif name.endswith('.xml') and 'layout' in name: path = f'app/src/main/res/layout/{name}'
+                  elif name == 'AndroidManifest.xml': path = 'app/src/main/AndroidManifest.xml'
+                  if path:
+                      os.makedirs(os.path.dirname(path), exist_ok=True)
+                      with open(path, 'w') as out: out.write(content)
+          "
 
-      - name: Build APK
+      - name: Build New APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
-        continue-on-error: true
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4 # یہاں v4 ہونا لازمی ہے
+      - name: Upload Unique APK
+        uses: actions/upload-artifact@v4
         with:
-          name: Fixed-System-Pro-APK
+          name: Faisal-SystemPro-v2
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4 # یہاں بھی v4
-        with:
-          name: error-logs
-          path: app/build/reports/
