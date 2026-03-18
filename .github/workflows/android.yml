@@ -1,62 +1,83 @@
-name: GitHub-Decompiler-Build-Final-Fix
+name: System Pro APK Builder
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      file_content:
+        description: 'Base64 encoded project files'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-          # کیشے کو عارضی طور پر ہٹا رہے ہیں تاکہ پرانا ڈیٹا تنگ نہ کرے
-          # cache: 'gradle' 
 
-      # سٹیپ 1: مکمل صفائی (Force Clean)
-      - name: Hard Clean Folders
+      - name: Decode and Prepare Files
         run: |
-          mkdir -p app/src/main/java/com/systempro/faisal/
-          mkdir -p app/src/main/res/layout/
-          # صرف جاوا اور لے آؤٹ فائلز اڑائیں
-          find app/src/main/java/ -name "*.java" -delete || true
-          find app/src/main/res/layout/ -name "*.xml" -delete || true
+          # یہاں ہم آپ کے بھیجے گئے ڈیٹا کو ڈی کوڈ کریں گے
+          echo "${{ github.event.inputs.file_content }}" | base64 -d > project_data.json
+          
+          # فولڈر سٹرکچر بنانا (com.systempro.faisal کے مطابق)
+          mkdir -p app/src/main/java/com/systempro/faisal
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/mipmap-mdpi
 
-      # سٹیپ 2: نئی فائلیں لانا
-      - name: Sync Uploaded Files
+          # فائلوں کو ان کی صحیح جگہ پر رکھنا
+          # نوٹ: اگر جاوا فائل ریپوزٹری میں پہلے سے موجود ہے تو یہ اسے اپ ڈیٹ کر دے گا
+          python3 -c "
+          import json, base64, os
+          with open('project_data.json', 'r') as f:
+              data = json.load(f)
+              files = data.get('files', {})
+              for name, content in files.items():
+                  path = ''
+                  if name.endswith('.java'):
+                      path = f'app/src/main/java/com/systempro/faisal/{name}'
+                  elif name.endswith('.xml') and 'layout' in name:
+                      path = f'app/src/main/res/layout/{name}'
+                  elif name == 'AndroidManifest.xml':
+                      path = 'app/src/main/AndroidManifest.xml'
+                  
+                  if path:
+                      os.makedirs(os.path.dirname(path), exist_ok=True)
+                      with open(path, 'w') as out:
+                          out.write(content)
+          "
+
+      - name: Verify Java Files (Repair Check)
         run: |
-          if [ -d "uploads" ] && [ "$(ls -A uploads)" ]; then
-            cp -rf uploads/*.java app/src/main/java/com/systempro/faisal/ 2>/dev/null || true
-            cp -rf uploads/*.xml app/src/main/res/layout/ 2>/dev/null || true
+          echo "Checking for MainActivity.java..."
+          if [ -f app/src/main/java/com/systempro/faisal/MainActivity.java ]; then
+            echo "✅ MainActivity.java is present."
+          else
+            echo "❌ ERROR: MainActivity.java is MISSING! Please check your source."
+            exit 1
           fi
 
-      # سٹیپ 3: مینی فیسٹ کو اٹو پیچ کرنا (Very Important)
-      - name: Auto-Repair Manifest
-        run: |
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            # تمام تھیمز اور آئیکونز کو ڈیفالٹ پر سیٹ کریں تاکہ ایرر نہ آئے
-            sed -i 's/android:theme="[^"]*"/android:theme="@android:style\/Theme.DeviceDefault"/g' $MANIFEST
-            sed -i 's/android:icon="[^"]*"/android:icon="@android:drawable\/sym_def_app_icon"/g' $MANIFEST
-          fi
-
-      - name: Grant Execute Permission
+      - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
+        continue-on-error: true
 
-      # سٹیپ 4: زبردستی بلڈ بنانا (No Daemon Mode)
-      - name: Build APK (Force Mode)
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-        
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: Final-System-Pro-Build
+          name: System-Pro-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload Error Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-error-logs
+          path: app/build/reports/
