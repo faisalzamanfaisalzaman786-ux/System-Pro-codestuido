@@ -1,39 +1,40 @@
-name: Deep Clean and Replace Data
+          
+          # مین برانچ پر فورس پش کرنا تاکہ پرانا ڈیٹا مکمل ریپلیس ہو جائے
+          git push origin main --force
+name: Ultimate Deep Clean & Push
 
 on:
-  workflow_dispatch: # آپ اسے دستی طور پر رن کر سکتے ہیں
+  workflow_dispatch:
 
 jobs:
-  clean-and-replace:
+  deep-clean:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # یہ لکھنا ضروری ہے تاکہ فائلیں اپ ڈیٹ ہوں
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Environment
+      - name: Git Config
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Deep Clean Action
+      - name: Force Clean and Overwrite
         run: |
-          # تمام لوکل تبدیلیوں کو زبردستی ختم کرنا
-          git reset --hard HEAD
+          # تمام ان ٹریکڈ فائلز کو صاف کرنا
           git clean -fdx 
+          
+          # اگر آپ چاہتے ہیں کہ تمام فائلیں 'now' دکھائیں، تو ہم 'touch' استعمال کریں گے
+          find . -maxdepth 2 -not -path '*/.*' -exec touch {} +
+          
+          # خالی تبدیلی پیدا کرنا تاکہ گٹ ہب اسے نیا سمجھے
+          date > last_sync.txt
 
-          # یہاں آپ اپنی نئی فائلوں کو جنریٹ یا کاپی کرنے کا کمانڈ لکھ سکتے ہیں
-          # مثال کے طور پر اگر آپ کسی فولڈر سے ڈیٹا ریپلیس کرنا چاہتے ہیں:
-          # cp -rf ./source_folder/* ./dest_folder/
-
-          echo "Cleaning and replacing process started..."
-
-      - name: Force Update Files
+      - name: Push Changes Back to GitHub
         run: |
           git add .
-          # اگر کوئی تبدیلی نہ ہو تو ایرر سے بچنے کے لیے
-          git commit -m "Deep Clean: All files replaced and updated" || echo "No changes to commit"
-          
-          # مین برانچ پر فورس پش کرنا تاکہ پرانا ڈیٹا مکمل ریپلیس ہو جائے
+          git commit -m "System Pro: Deep Clean & Data Replaced $(date)" || echo "No changes"
           git push origin main --force
