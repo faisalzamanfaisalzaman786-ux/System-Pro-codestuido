@@ -12,25 +12,100 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (empty)
         uses: actions/checkout@v4
 
-      - name: Decode and extract files
+      - name: Decode input
         run: |
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
-          PACKAGE=$(jq -r '.package' request.json)
-          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
-          JAVA_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
-          mkdir -p $JAVA_DIR
+          echo "PACKAGE=$(jq -r '.package' request.json)" >> $GITHUB_ENV
+
+      - name: Create Android project structure
+        run: |
+          # Gradle wrapper files
+          mkdir -p gradle/wrapper
+          curl -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradle/wrapper/gradle-wrapper.jar
+          curl -o gradle/wrapper/gradle-wrapper.properties https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradle/wrapper/gradle-wrapper.properties
+          curl -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradlew
+          curl -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v8.0.2/gradlew.bat
+          chmod +x gradlew
+
+          # Create settings.gradle
+          echo "rootProject.name = 'MyApp'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
+
+          # Create app module
+          mkdir -p app/src/main
+          mkdir -p app/src/main/java/$(echo $PACKAGE | tr '.' '/')
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
+
+          # Create build.gradle for app
+          cat > app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+
+          android {
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PACKAGE"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+          }
+          EOF
+
+          # Create proguard-rules.pro (empty)
+          touch app/proguard-rules.pro
+
+          # Create res/values files
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources>
+              <string name="app_name">System Pro</string>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#f97316</item>
+                  <item name="colorPrimaryDark">#c2410c</item>
+                  <item name="colorAccent">#f97316</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Place user files
+        run: |
+          PACKAGE_DIR="app/src/main/java/$(echo $PACKAGE | tr '.' '/')"
+
+          # Java file
           JAVA_CODE="$(jq -r '.files["MainActivity.java"]' request.json)"
           JAVA_CODE=$(echo "$JAVA_CODE" | sed "s/package .*/package $PACKAGE;/")
-          echo "$JAVA_CODE" > $JAVA_DIR/MainActivity.java
+          echo "$JAVA_CODE" > $PACKAGE_DIR/MainActivity.java
+
+          # Layout file
           echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
+
+          # Manifest file
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
           MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
+
+          # Icon if present
           if jq -e '.files["icon.png"]' request.json > /dev/null; then
             echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
           fi
@@ -43,9 +118,6 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
 
       - name: Build APK
         run: ./gradlew assembleDebug
