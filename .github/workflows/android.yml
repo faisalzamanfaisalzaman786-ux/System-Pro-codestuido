@@ -60,18 +60,18 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle
+          # app/build.gradle (درست شدہ)
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
           }
 
           android {
-              namespace '$PACKAGE'
+              namespace System.getenv('PACKAGE')
               compileSdk 34
 
               defaultConfig {
-                  applicationId "$PACKAGE"
+                  applicationId System.getenv('PACKAGE')
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -150,6 +150,7 @@ jobs:
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "❌ Build failed. Last 50 lines:"
             tail -50 build.log
+            exit 1
           fi
 
       - name: Upload logs (always)
