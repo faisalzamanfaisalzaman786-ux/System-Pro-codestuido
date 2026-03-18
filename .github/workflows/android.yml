@@ -15,19 +15,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Decode and debug input
+      - name: Decode input
         run: |
-          echo "Received file_content length: ${#FILE_CONTENT}"
-          echo "$FILE_CONTENT" | base64 --decode > request.json
-          echo "Decoded JSON size: $(wc -c < request.json) bytes"
-          cat request.json | jq '.' || echo "Invalid JSON"
-          PACKAGE=$(jq -r '.package' request.json)
-          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
-          echo "Package name: $PACKAGE"
-        env:
-          FILE_CONTENT: ${{ github.event.inputs.file_content }}
+          echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
+          echo "PACKAGE=$(jq -r '.package' request.json)" >> $GITHUB_ENV
 
-      - name: Create Android project skeleton
+      - name: Create Android project structure
         run: |
           # Gradle wrapper
           mkdir -p gradle/wrapper
@@ -38,8 +31,24 @@ jobs:
           chmod +x gradlew
 
           # settings.gradle
-          echo "rootProject.name = 'MyApp'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "MyApp"
+          include ':app'
+          EOF
 
           # app module directories
           mkdir -p app/src/main
@@ -49,11 +58,15 @@ jobs:
           mkdir -p app/src/main/res/values
 
           # app/build.gradle
-          cat > app/build.gradle << EOF
-          apply plugin: 'com.android.application'
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
 
           android {
+              namespace '$PACKAGE'
               compileSdk 34
+
               defaultConfig {
                   applicationId "$PACKAGE"
                   minSdk 21
@@ -61,11 +74,16 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+
               buildTypes {
                   release {
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
               }
           }
 
@@ -79,14 +97,14 @@ jobs:
           touch app/proguard-rules.pro
 
           # strings.xml
-          cat > app/src/main/res/values/strings.xml << EOF
+          cat > app/src/main/res/values/strings.xml << 'EOF'
           <resources>
               <string name="app_name">System Pro</string>
           </resources>
           EOF
 
           # themes.xml
-          cat > app/src/main/res/values/themes.xml << EOF
+          cat > app/src/main/res/values/themes.xml << 'EOF'
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
                   <item name="colorPrimary">#f97316</item>
@@ -103,13 +121,11 @@ jobs:
           # Java file
           JAVA_CODE="$(jq -r '.files["MainActivity.java"]' request.json)"
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
-            echo "❌ MainActivity.java missing in request"
+            echo "❌ MainActivity.java missing"
             exit 1
           fi
-          # Fix package line
           JAVA_CODE=$(echo "$JAVA_CODE" | sed "s/package .*/package $PACKAGE;/")
           echo "$JAVA_CODE" > $JAVA_DIR/MainActivity.java
-          echo "✅ Java file written"
 
           # Layout file
           LAYOUT="$(jq -r '.files["activity_main.xml"]' request.json)"
@@ -118,7 +134,6 @@ jobs:
             exit 1
           fi
           echo "$LAYOUT" > app/src/main/res/layout/activity_main.xml
-          echo "✅ Layout file written"
 
           # Manifest file
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
@@ -128,12 +143,10 @@ jobs:
           fi
           MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
-          echo "✅ Manifest written"
 
           # Icon if present
           if jq -e '.files["icon.png"]' request.json > /dev/null; then
             echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
-            echo "✅ Icon written"
           fi
 
       - name: Set up JDK 17
