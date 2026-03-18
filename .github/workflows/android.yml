@@ -123,12 +123,9 @@ jobs:
           # Layout file
           echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
           
-          # Manifest file - پیکیج تبدیل اور namespace چیک
+          # Manifest file - پیکیج تبدیل
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
           MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE\"/")
-          if ! echo "$MANIFEST" | grep -q 'xmlns:android='; then
-              MANIFEST=$(echo "$MANIFEST" | sed 's/<manifest /<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android" /')
-          fi
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
           
           # Icon if present
