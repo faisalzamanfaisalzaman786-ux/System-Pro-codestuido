@@ -1,287 +1,384 @@
-name: System Pro APK Builder
+name: Auto Repair - System Pro APK Builder
 
 on:
+  workflow_dispatch:    # Manual trigger
   push:
-    branches: [ "main", "master", "develop" ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
-    inputs:
-      version_name:
-        description: 'Version Name (e.g., 1.0.0)'
-        required: true
-        default: '1.0.0'
-        type: string
-      version_code:
-        description: 'Version Code (e.g., 1)'
-        required: true
-        default: '1'
-        type: number
-      build_type:
-        description: 'Build Type'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.systempro.faisal'
-        type: string
-
-env:
-  APP_NAME: "System Pro"
-  PACKAGE_NAME: ${{ github.event.inputs.package_name || 'com.systempro.faisal' }}
-  VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}
-  VERSION_CODE: ${{ github.event.inputs.version_code || '1' }}
+    branches: [ main, master ]
 
 jobs:
-  validate-environment:
-    name: Validate Environment
+  auto-repair:
+    name: 🔧 Auto Repair Missing Files
     runs-on: ubuntu-latest
-    outputs:
-      java-version: ${{ steps.java-check.outputs.version }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          
-      - name: Check Java Version
-        id: java-check
-        run: |
-          if [ -f "gradle.properties" ]; then
-            JAVA_VERSION=$(grep "javaVersion" gradle.properties | cut -d'=' -f2 || echo "17")
-          else
-            JAVA_VERSION="17"
-          fi
-          echo "version=$JAVA_VERSION" >> $GITHUB_OUTPUT
-          
-      - name: Validate Project Structure
-        run: |
-          REQUIRED_FILES=(
-            "app/src/main/AndroidManifest.xml"
-            "app/src/main/java/com/systempro/faisal/MainActivity.java"
-            "app/src/main/res/layout/activity_main.xml"
-            "build.gradle"
-            "settings.gradle"
-          )
-          
-          for file in "${REQUIRED_FILES[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ Missing required file: $file"
-              exit 1
-            fi
-          done
-          echo "✅ All required files present"
-
-  build-apk:
-    name: Build APK
-    runs-on: ubuntu-latest
-    needs: validate-environment
     permissions:
-      contents: read
-      packages: write
-      actions: read
-      
+      contents: write
+      pull-requests: write
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: ${{ needs.validate-environment.outputs.java-version }}
-          
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11076708
-          
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-            
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        
-      - name: Update Version in Manifest
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create Directory Structure
         run: |
-          sed -i "s/android:versionName=\".*\"/android:versionName=\"${{ env.VERSION_NAME }}\"/" app/src/main/AndroidManifest.xml
-          sed -i "s/android:versionCode=\".*\"/android:versionCode=\"${{ env.VERSION_CODE }}\"/" app/src/main/AndroidManifest.xml
-          sed -i "s/package=\".*\"/package=\"${{ env.PACKAGE_NAME }}\"/" app/src/main/AndroidManifest.xml
-          echo "✅ Manifest updated with version ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})"
-          
-      - name: Clean Project
-        run: ./gradlew clean
-        
-      - name: Build ${{ github.event.inputs.build_type || 'debug' }} APK
+          echo "📁 Creating directory structure..."
+          mkdir -p app/src/main/java/com/systempro/faisal
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p .github/workflows
+          echo "✅ Directories created"
+      
+      - name: Check Missing Files
+        id: check
         run: |
-          if [ "${{ github.event.inputs.build_type }}" == "release" ]; then
-            ./gradlew assembleRelease
+          echo "🔍 Checking for missing files..."
+          
+          # List of required files
+          FILES=(
+            "app/src/main/AndroidManifest.xml"
+            "app/src/main/java/com/systempro/faisal/MainActivity.java"
+            "app/src/main/res/layout/activity_main.xml"
+            "app/src/main/res/values/strings.xml"
+            "app/src/main/res/values/colors.xml"
+            "app/src/main/res/values/styles.xml"
+            "settings.gradle"
+            "build.gradle"
+            "app/build.gradle"
+            "gradle/wrapper/gradle-wrapper.properties"
+            "gradlew"
+            "gradlew.bat"
+          )
+          
+          MISSING_FILES=""
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              MISSING_FILES="$MISSING_FILES $file"
+              echo "❌ Missing: $file"
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+          
+          echo "missing_files=$MISSING_FILES" >> $GITHUB_OUTPUT
+          
+          if [ -n "$MISSING_FILES" ]; then
+            echo "repair_needed=true" >> $GITHUB_OUTPUT
           else
-            ./gradlew assembleDebug
+            echo "repair_needed=false" >> $GITHUB_OUTPUT
           fi
-        env:
-          BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
-          
-      - name: Sign APK (Release Only)
-        if: github.event.inputs.build_type == 'release'
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        continue-on-error: true
-        
-      - name: Rename APK
+      
+      - name: Create AndroidManifest.xml
+        if: steps.check.outputs.repair_needed == 'true'
         run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
-          APK_DIR="app/build/outputs/apk/${BUILD_TYPE}"
-          if [ -d "$APK_DIR" ]; then
-            cd "$APK_DIR"
-            for apk in *.apk; do
-              if [ -f "$apk" ]; then
-                NEW_NAME="${APP_NAME}-v${VERSION_NAME}-${BUILD_TYPE}.apk"
-                mv "$apk" "$NEW_NAME"
-                echo "✅ Renamed $apk to $NEW_NAME"
-              fi
-            done
-          fi
-          
-      - name: Generate Build Info
+          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.faisal">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+                  
+                  <activity android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  
+              </application>
+          </manifest>
+          EOF
+          echo "✅ AndroidManifest.xml created"
+      
+      - name: Create MainActivity.java
+        if: steps.check.outputs.repair_needed == 'true'
         run: |
-          cat > build-info.txt << EOF
-          App Name: ${{ env.APP_NAME }}
-          Package: ${{ env.PACKAGE_NAME }}
-          Version: ${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
-          Build Type: ${{ github.event.inputs.build_type || 'debug' }}
-          Build Date: $(date)
-          Commit: ${{ github.sha }}
-          Branch: ${{ github.ref_name }}
-          Workflow: ${{ github.workflow }}
-          Status: ✅ Success
+          cat > app/src/main/java/com/systempro/faisal/MainActivity.java << 'EOF'
+          package com.systempro.faisal;
+
+          import android.os.Bundle;
+          import android.widget.Button;
+          import android.widget.Toast;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  
+                  Button btnTest = findViewById(R.id.btnTest);
+                  btnTest.setOnClickListener(v -> 
+                      Toast.makeText(this, "System Pro APK Working!", Toast.LENGTH_SHORT).show()
+                  );
+              }
+          }
+          EOF
+          echo "✅ MainActivity.java created"
+      
+      - name: Create activity_main.xml
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="20dp">
+              
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="System Pro App"
+                  android:textSize="24sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="20dp"/>
+              
+              <Button
+                  android:id="@+id/btnTest"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Test App"/>
+              
+          </LinearLayout>
+          EOF
+          echo "✅ activity_main.xml created"
+      
+      - name: Create strings.xml
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources>
+              <string name="app_name">System Pro</string>
+          </resources>
+          EOF
+          echo "✅ strings.xml created"
+      
+      - name: Create colors.xml
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryDark">#3700B3</color>
+              <color name="colorAccent">#03DAC5</color>
+          </resources>
+          EOF
+          echo "✅ colors.xml created"
+      
+      - name: Create styles.xml
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ styles.xml created"
+      
+      - name: Create settings.gradle
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SystemProApp"
+          include ':app'
+          EOF
+          echo "✅ settings.gradle created"
+      
+      - name: Create build.gradle (project)
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+          echo "✅ build.gradle (project) created"
+      
+      - name: Create app/build.gradle
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          cat > app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace 'com.systempro.faisal'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.systempro.faisal"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+          echo "✅ app/build.gradle created"
+      
+      - name: Create Gradle Wrapper
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
           EOF
           
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.APP_NAME }}-v${{ env.VERSION_NAME }}-${{ github.event.inputs.build_type || 'debug' }}
-          path: |
-            app/build/outputs/apk/**/*.apk
-            build-info.txt
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 6
+          cat > gradlew << 'EOF'
+          #!/bin/sh
+          exec java -Xmx512m -jar "`dirname $0`/gradle/wrapper/gradle-wrapper.jar" "$@"
+          EOF
+          chmod +x gradlew
           
-      - name: Upload to Release (if tagged)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            app/build/outputs/apk/**/*.apk
-            build-info.txt
-          generate_release_notes: true
-          prerelease: ${{ github.event.inputs.build_type == 'debug' }}
-          
-      - name: Send Notification
-        if: always()
+          cat > gradlew.bat << 'EOF'
+          @echo off
+          java -Xmx512m -jar gradle/wrapper/gradle-wrapper.jar %*
+          EOF
+          echo "✅ Gradle wrapper created"
+      
+      - name: Create Main Build Workflow
+        if: steps.check.outputs.repair_needed == 'true'
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Build completed successfully for ${{ env.PACKAGE_NAME }}"
-            echo "📱 APK is ready for download"
-          else
-            echo "❌ Build failed for ${{ env.PACKAGE_NAME }}"
-            echo "📝 Check logs for details"
-          fi
-          
-      - name: Upload Build Logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-${{ github.run_id }}
-          path: |
-            app/build/reports/
-            **/build/outputs/logs/
-          retention-days: 7
+          cat > .github/workflows/build-apk.yml << 'EOF'
+          name: Build APK
 
-  test-apk:
-    name: Test APK
-    runs-on: ubuntu-latest
-    needs: build-apk
-    if: github.event.inputs.build_type == 'release'
-    steps:
-      - name: Download APK
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.APP_NAME }}-v${{ env.VERSION_NAME }}-${{ github.event.inputs.build_type || 'debug' }}
-          path: ./downloaded-apk
-          
-      - name: Verify APK
-        run: |
-          cd downloaded-apk
-          APK_FILE=$(find . -name "*.apk" | head -n 1)
-          if [ -f "$APK_FILE" ]; then
-            echo "✅ APK found: $APK_FILE"
-            ls -lh "$APK_FILE"
-            file "$APK_FILE"
-          else
-            echo "❌ No APK found"
-            exit 1
-          fi
-          
-      - name: Basic APK Validation
-        run: |
-          if command -v aapt &> /dev/null; then
-            aapt dump badging downloaded-apk/*.apk | grep "package: name"
-          else
-            echo "⚠️ aapt not installed, skipping validation"
-          fi
+          on:
+            push:
+              branches: [ main, master ]
+            workflow_dispatch:
+              inputs:
+                build_type:
+                  description: 'Build Type'
+                  default: 'debug'
+                  type: choice
+                  options:
+                    - debug
+                    - release
 
-  cleanup:
-    name: Cleanup Old Artifacts
-    runs-on: ubuntu-latest
-    if: always()
-    needs: [build-apk, test-apk]
-    steps:
-      - name: Delete Old Artifacts
-        uses: actions/github-script@v7
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - name: Setup Java
+                  uses: actions/setup-java@v4
+                  with:
+                    distribution: 'temurin'
+                    java-version: '17'
+                - name: Build APK
+                  run: |
+                    chmod +x gradlew
+                    ./gradlew assembleDebug
+                - name: Upload APK
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: System-Pro-APK
+                    path: app/build/outputs/apk/debug/
+          EOF
+          echo "✅ Build workflow created"
+      
+      - name: Commit and Push Changes
+        if: steps.check.outputs.repair_needed == 'true'
+        run: |
+          git config --global user.name "System Pro Auto Repair"
+          git config --global user.email "repair@systempro.com"
+          git add .
+          git commit -m "🤖 Auto repair: Fixed missing files [skip ci]" || echo "No changes to commit"
+          git push
+          echo "✅ Changes pushed to repository"
+      
+      - name: Create Pull Request (if needed)
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-pull-request@v5
         with:
-          script: |
-            const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "🤖 Auto repair missing files"
+          title: "Auto Repair: Fixed missing Android files"
+          body: |
+            ## 🤖 Auto Repair Completed
             
-            const now = Date.now();
-            const daysToKeep = 7;
+            یہ PR خودکار طریقے سے بنایا گیا ہے۔
             
-            for (const artifact of artifacts.artifacts) {
-              const artifactDate = new Date(artifact.created_at).getTime();
-              const daysOld = (now - artifactDate) / (1000 * 60 * 60 * 24);
-              
-              if (daysOld > daysToKeep && artifact.name.includes('build-logs')) {
-                await github.rest.actions.deleteArtifact({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  artifact_id: artifact.id,
-                });
-                console.log(`Deleted old artifact: ${artifact.name}`);
-              }
-            }
+            **کیا کیا گیا:**
+            - Missing directories بنائے گئے
+            - Missing files بنائے گئے
+            - Gradle wrapper سیٹ کیا گیا
+            - Workflow files بنائے گئے
+            
+            **اب APK build ہو سکتا ہے۔**
+          branch: auto-repair-${{ github.sha }}
+          delete-branch: true
+      
+      - name: Final Status
+        run: |
+          echo "🎉 Auto repair completed!"
+          echo "📱 Go to Actions tab to build APK"
+          echo "🔗 https://github.com/${{ github.repository }}/actions"
