@@ -22,6 +22,7 @@ jobs:
           echo '${{ github.event.inputs.file_content }}' | base64 --decode > request.json
           PACKAGE=$(jq -r '.package' request.json)
           echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
+          echo "✅ Base package: $PACKAGE"
 
       - name: Add serial number
         run: |
@@ -37,6 +38,7 @@ jobs:
           FORMATTED_SERIAL=$(printf "%03d" $NEXT_SERIAL)
           PACKAGE_WITH_SERIAL="${PACKAGE}.v${FORMATTED_SERIAL}"
           echo "PACKAGE_WITH_SERIAL=$PACKAGE_WITH_SERIAL" >> $GITHUB_ENV
+          echo "✅ Using package: $PACKAGE_WITH_SERIAL"
 
       - name: Create Android project
         run: |
@@ -87,17 +89,25 @@ jobs:
           EOF
 
           touch app/proguard-rules.pro
+          echo "✅ Android project created"
 
       - name: Place user files
         run: |
           JAVA_DIR="app/src/main/java/$(echo $PACKAGE_WITH_SERIAL | tr '.' '/')"
           echo "$(jq -r '.files["MainActivity.java"]' request.json)" | sed "s/package .*;/package $PACKAGE_WITH_SERIAL;/" > $JAVA_DIR/MainActivity.java
+          echo "✅ Java file placed"
+          
           echo "$(jq -r '.files["activity_main.xml"]' request.json)" > app/src/main/res/layout/activity_main.xml
+          echo "✅ Layout file placed"
+          
           MANIFEST="$(jq -r '.files["AndroidManifest.xml"]' request.json)"
           MANIFEST=$(echo "$MANIFEST" | sed "s/package=\".*\"/package=\"$PACKAGE_WITH_SERIAL\"/")
           echo "$MANIFEST" > app/src/main/AndroidManifest.xml
+          echo "✅ Manifest file placed"
+          
           if jq -e '.files["icon.png"]' request.json >/dev/null; then
             echo "$(jq -r '.files["icon.png"]' request.json)" | base64 --decode > app/src/main/res/drawable/icon.png
+            echo "✅ Icon file placed"
           fi
 
       - name: Set up JDK 17
@@ -111,13 +121,24 @@ jobs:
         id: build
         continue-on-error: true
         run: |
+          echo "🚀 Starting Gradle build..."
           ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Build failed. Last 50 lines:"
-            tail -50 build.log
+            echo "❌❌❌ BUILD FAILED ❌❌❌"
+            echo ""
+            echo "========== ERROR SUMMARY =========="
+            grep -A 10 -B 5 "FAILURE:" build.log || echo "No FAILURE line found"
+            echo ""
+            echo "========== COMPILATION ERRORS =========="
+            grep -A 5 "error:" build.log || echo "No compilation errors found"
+            echo ""
+            echo "==================================="
+            echo "Full log is in build.log artifact"
+          else
+            echo "✅✅✅ BUILD SUCCESSFUL ✅✅✅"
+            ls -la app/build/outputs/apk/debug/ || echo "APK directory not found"
           fi
 
-      # ✅ Logs ہمیشہ اپ لوڈ ہوں گے
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -125,7 +146,6 @@ jobs:
           name: build-logs
           path: build.log
 
-      # ✅ APK صرف کامیاب بلڈ پر اپ لوڈ ہو گی
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
