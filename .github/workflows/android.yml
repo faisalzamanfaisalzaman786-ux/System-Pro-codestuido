@@ -18,12 +18,12 @@ jobs:
 
       - name: Icon & Package Injector
         run: |
-          # یونیک پیکیج آئی ڈی بنانا
+          # پیکیج آئی ڈی بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.app$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
           
-          # Gradle فائلز میں پیکیج اپڈیٹ کرنا
+          # Gradle فائلز اپڈیٹ کرنا
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
@@ -32,13 +32,15 @@ jobs:
           
           python3 -c "
           import json, os, re, base64
-          pkg = os.environ['PKG']
+          # پیکیج نیم براہ راست یہاں سے اٹھائیں
+          pkg = '${{ env.PKG }}' if '${{ env.PKG }}' else 'com.systempro.default'
+          
           with open('data.json', 'r') as f:
               data = json.load(f)
               files = data.get('files', {})
               
               for name, content in files.items():
-                  # 1. جاوا فائلز ہینڈلنگ
+                  # 1. جاوا فائلز
                   if name.endswith('.java'):
                       lines = content.split('\n')
                       clean = [l for l in lines if not l.strip().startswith('package ')]
@@ -48,9 +50,7 @@ jobs:
                   
                   # 2. مینی فیسٹ (Round Icon کا مکمل خاتمہ)
                   elif name == 'AndroidManifest.xml':
-                      # وہ لائن نکالنا جو بلڈ روک رہی ہے
                       content = re.sub(r'android:roundIcon=\"[^\"]*\"', '', content)
-                      # پیکیج نیم درست کرنا
                       content = re.sub(r'package=\"[\w\.]+\"', f'package=\"{pkg}\"', content)
                       path = 'app/src/main/AndroidManifest.xml'
                       file_data = content
