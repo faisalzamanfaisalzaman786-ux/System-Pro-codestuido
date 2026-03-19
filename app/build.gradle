@@ -3,12 +3,12 @@ plugins {
 }
 
 android {
-    // یہ آپ کا نیا پیکج نام (Namespace) ہے
-    namespace 'com.systempro.faisal'
+    // یہ لائن پیکج نیم کے مسئلے کا مستقل حل ہے
+    namespace 'com.systempro.appyz48c4s'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.systempro.faisal"
+        applicationId "com.systempro.appyz48c4s"
         minSdk 24
         targetSdk 34
         versionCode 1
@@ -32,6 +32,6 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
