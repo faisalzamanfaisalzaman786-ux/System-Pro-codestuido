@@ -1,3 +1,10 @@
+
+      - name: Upload Repaired APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Fixed-APK
+          path: "**/*.apk" # یہ پوری ریپوزٹری میں جہاں بھی APK ملے گا اسے ڈھونڈ لے گا
 name: System Pro Ultimate Repair & Build
 
 on:
@@ -6,9 +13,6 @@ on:
 jobs:
   repair-and-rebuild:
     runs-on: ubuntu-latest
-    # اگر کوئی سٹیپ فیل ہو تو یہ اسے اگنور کر کے آگے بڑھے گا (تاکہ بلڈ مکمل ہو)
-    continue-on-error: false 
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,25 +23,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Auto-Fix Permissions & Files
+      - name: 🛠️ Clean and Fix
         run: |
-          echo "Granting permissions..."
           chmod +x gradlew || true
-          
-          echo "Fixing line endings for Android..."
-          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i 's/\r$//'
-          
-          echo "Force cleaning cache..."
-          rm -rf .gradle/ build/ app/build/
+          # پرانے کیشے کو مکمل ختم کریں
+          ./gradlew clean
+          # لائن اینڈنگز درست کریں
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
 
-      - name: 🚀 Build with Error Suppression
-        run: |
-          # یہاں ہم کوشش کریں گے کہ بلڈ ہر حال میں چلے
-          ./gradlew assembleDebug --stacktrace --no-daemon || (echo "Build failed, but checking logs..." && exit 1)
-
-      - name: Upload Repaired APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Fixed-APK
-          path: "**/*.apk" # یہ پوری ریپوزٹری میں جہاں بھی APK ملے گا اسے ڈھونڈ لے گا
+      - name: 🚀 Force Build Debug
+        run: ./gradlew assembleDebug --no-daemon
