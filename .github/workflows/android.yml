@@ -20,12 +20,12 @@ jobs:
         env:
           FILE_CONTENT: ${{ github.event.inputs.file_content }}
         run: |
-          # یونیک پیکیج آئی ڈی بنانا
+          # محفوظ پیکیج آئی ڈی بنانا (کسی ریزرو کی ورڈ کے بغیر)
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
-          PKG="com.systempro.app$ID"
+          PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
           
-          # Gradle میں نیم اسپیس سیٹ کرنا
+          # Gradle سیٹنگز
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
@@ -34,15 +34,15 @@ jobs:
           
           python3 -c "
           import json, os, re, base64
-          # پیکیج نیم کو براہ راست انوائرمنٹ سے اٹھانا
-          pkg = os.getenv('PKG', 'com.systempro.default')
+          # پیکیج نیم کو محفوظ طریقے سے اٹھانا
+          pkg = os.getenv('PKG')
           
           with open('data.json', 'r') as f:
               data = json.load(f)
               files = data.get('files', {})
               
               for name, content in files.items():
-                  # 1. جاوا فائلز (پیکیج فکس)
+                  # 1. جاوا فائلز کا پیکیج فکس
                   if name.endswith('.java'):
                       lines = content.split('\n')
                       clean = [l for l in lines if not l.strip().startswith('package ')]
@@ -50,7 +50,7 @@ jobs:
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                       file_data = final_content
                   
-                  # 2. مینی فیسٹ
+                  # 2. مینی فیسٹ کلین اپ
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'android:roundIcon=\"[^\"]*\"', '', content)
                       content = re.sub(r'package=\"[^\"]*\"', '', content)
@@ -58,7 +58,7 @@ jobs:
                       path = 'app/src/main/AndroidManifest.xml'
                       file_data = content
                   
-                  # 3. امیجز
+                  # 3. آئیکنز کی پروسیسنگ
                   elif name.lower().endswith(('.png', '.jpg', '.jpeg')):
                       for folder in ['mipmap-hdpi', 'mipmap-mdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi']:
                           img_dir = f'app/src/main/res/{folder}'
@@ -67,7 +67,7 @@ jobs:
                               img_file.write(base64.b64decode(content))
                       continue
                   
-                  # 4. ریسورس فائلز
+                  # 4. XML ریسورسز
                   elif name.endswith('.xml'):
                       if 'activity_main' in name or 'layout' in name:
                           path = 'app/src/main/res/layout/activity_main.xml'
