@@ -9,99 +9,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Icon & Package Injector
+      - name: Code Injector
         run: |
-          # پرانی تمام جاوا فائلز اور فولڈرز کی صفائی
           rm -rf app/src/main/java/*
-          
-          # نیا محفوظ پیکیج آئی ڈی بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
-          
-          # Gradle سیٹنگز اپڈیٹ کرنا
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
-          
-          # ڈیٹا ڈی کوڈ کرنا
           echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
           
           python3 -c "
-          import json, os, re, base64
+          import json, os, base64
           pkg = '$PKG'
-          
           with open('data.json', 'r') as f:
-              data = json.load(f)
-              files = data.get('files', {})
-              
+              files = json.load(f).get('files', {})
               for name, content in files.items():
-                  file_data = content
-                  
-                  # 1. جاوا فائلز کی ہینڈلنگ
                   if name.endswith('.java'):
                       lines = content.split('\n')
-                      clean_lines = []
-                      # پرانی پیکیج اور R امپورٹ لائنز کو نکالنا
-                      for line in lines:
-                          s_line = line.strip()
-                          if s_line.startswith('package ') or (s_line.startswith('import ') and '.R;' in s_line):
-                              continue
-                          clean_lines.append(line)
-                      
-                      # نیا پیکیج اور درست R امپورٹ شامل کرنا
-                      file_data = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean_lines)
+                      clean = [l for l in lines if not (l.strip().startswith('package ') or (l.strip().startswith('import ') and '.R;' in l))]
+                      final = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
-                  
-                  # 2. مینی فیسٹ (Manifest)
                   elif name == 'AndroidManifest.xml':
-                      content = re.sub(r'android:roundIcon=\"[^\"]*\"', '', content)
-                      content = re.sub(r'package=\"[^\"]*\"', '', content)
-                      file_data = content.replace('.MainActivity', f'{pkg}.MainActivity')
+                      # مینی فیسٹ کو محفوظ طریقے سے اپڈیٹ کرنا
+                      content = content.replace('package=\"\"', f'package=\"{pkg}\"')
+                      content = content.replace('.MainActivity', f'{pkg}.MainActivity')
                       path = 'app/src/main/AndroidManifest.xml'
-                  
-                  # 3. آئیکنز (Images)
-                  elif name.lower().endswith(('.png', '.jpg', '.jpeg')):
-                      for folder in ['mipmap-hdpi', 'mipmap-mdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi']:
-                          img_dir = f'app/src/main/res/{folder}'
-                          os.makedirs(img_dir, exist_ok=True)
-                          with open(f'{img_dir}/ic_launcher.png', 'wb') as img_file:
-                              img_file.write(base64.b64decode(content))
-                      continue
-                  
-                  # 4. ریسورس فائلز (XML)
                   elif name.endswith('.xml'):
-                      if 'layout' in name or 'activity_main' in name:
-                          path = 'app/src/main/res/layout/activity_main.xml'
-                      elif 'strings' in name:
-                          path = 'app/src/main/res/values/strings.xml'
-                      elif 'colors' in name:
-                          path = 'app/src/main/res/values/colors.xml'
-                      elif 'themes' in name or 'styles' in name:
-                          path = 'app/src/main/res/values/themes.xml'
-                      else:
-                          path = f'app/src/main/res/values/{name}'
+                      if 'layout' in name: path = 'app/src/main/res/layout/activity_main.xml'
+                      else: path = f'app/src/main/res/values/{name}'
                   else: continue
-                  
                   os.makedirs(os.path.dirname(path), exist_ok=True)
-                  with open(path, 'w', encoding='utf-8') as f_out:
-                      f_out.write(file_data)
+                  with open(path, 'w') as f_out: f_out.write(final if name.endswith('.java') else content)
           "
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew clean assembleDebug --no-build-cache
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Build & Upload
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-build-cache
+      - uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: Calculator-App
           path: app/build/outputs/apk/debug/*.apk
