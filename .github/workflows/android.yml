@@ -17,10 +17,8 @@ jobs:
           distribution: 'temurin'
 
       - name: Icon & Package Injector
-        env:
-          FILE_CONTENT: ${{ github.event.inputs.file_content }}
         run: |
-          # محفوظ پیکیج آئی ڈی بنانا (کسی ریزرو کی ورڈ کے بغیر)
+          # محفوظ پیکیج آئی ڈی بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
@@ -30,12 +28,12 @@ jobs:
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
           # ڈیٹا ڈی کوڈ کرنا
-          echo "$FILE_CONTENT" | base64 -d > data.json
+          echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
           
           python3 -c "
           import json, os, re, base64
-          # پیکیج نیم کو محفوظ طریقے سے اٹھانا
-          pkg = os.getenv('PKG')
+          # پیکیج نیم کو براہ راست یہاں پاس کریں
+          pkg = '$PKG'
           
           with open('data.json', 'r') as f:
               data = json.load(f)
@@ -58,7 +56,7 @@ jobs:
                       path = 'app/src/main/AndroidManifest.xml'
                       file_data = content
                   
-                  # 3. آئیکنز کی پروسیسنگ
+                  # 3. امیجز
                   elif name.lower().endswith(('.png', '.jpg', '.jpeg')):
                       for folder in ['mipmap-hdpi', 'mipmap-mdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi']:
                           img_dir = f'app/src/main/res/{folder}'
