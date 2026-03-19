@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.systempro.apph3bqzy">
+    package="com.systempro.appy2j07j">
 
     <application
         android:allowBackup="true"
@@ -8,6 +8,7 @@
         android:label="System Pro"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -16,6 +17,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
     </application>
 
 </manifest>
