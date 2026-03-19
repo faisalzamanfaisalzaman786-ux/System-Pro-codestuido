@@ -1,76 +1,54 @@
-name: System Pro APK Builder
+name: System Pro Ultimate Repair & Build
+
 on:
-  workflow_dispatch:
-    inputs:
-      file_content: { required: true }
+  workflow_dispatch: # آپ اسے مینوئلی رن کر سکتے ہیں
 
 jobs:
-  build:
+  repair-and-rebuild:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/set-up-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Code Injector
+      - name: 🛠️ Repair & Clean Files
         run: |
-          # پرانی فائلوں کی مکمل صفائی
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/values/*
-          
-          ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
-          PKG="com.systempro.appy$ID"
-          echo "PKG=$PKG" >> $GITHUB_ENV
-          
-          sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
-          sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
-          
-          echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
-          
-          python3 -c "
-          import json, os, base64
-          pkg = '$PKG'
-          with open('data.json', 'r') as f:
-              files = json.load(f).get('files', {})
-              for name, content in files.items():
-                  final_data = content
-                  # 1. جاوا فائلز
-                  if name.endswith('.java'):
-                      lines = content.split('\n')
-                      clean = [l for l in lines if not (l.strip().startswith('package ') or (l.strip().startswith('import ') and '.R;' in l))]
-                      final_data = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
-                      path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
-                  # 2. مینی فیسٹ
-                  elif name == 'AndroidManifest.xml':
-                      final_data = content.replace('.MainActivity', f'{pkg}.MainActivity')
-                      path = 'app/src/main/AndroidManifest.xml'
-                  # 3. لے آؤٹ (XML) - اب یہ صحیح فولڈر میں جائے گی
-                  elif 'layout' in name or 'activity_main' in name:
-                      path = 'app/src/main/res/layout/activity_main.xml'
-                  # 4. دیگر ریسورسز
-                  elif name.endswith('.xml'):
-                      if 'strings' in name: path = 'app/src/main/res/values/strings.xml'
-                      elif 'colors' in name: path = 'app/src/main/res/values/colors.xml'
-                      elif 'themes' in name or 'styles' in name: path = 'app/src/main/res/values/themes.xml'
-                      else: path = f'app/src/main/res/values/{name}'
-                  else: continue
-                  
-                  os.makedirs(os.path.dirname(path), exist_ok=True)
-                  with open(path, 'w', encoding='utf-8') as f_out:
-                      f_out.write(final_data)
-          "
-
-      - name: Build APK
-        run: |
+          echo "Cleaning old build artifacts..."
           chmod +x gradlew
-          ./gradlew assembleDebug --no-build-cache
+          ./gradlew clean
+          
+          echo "Repairing file permissions and line endings..."
+          find . -type f -name "*.xml" -exec sed -i 's/\r$//' {} +
+          find . -type f -name "*.java" -exec sed -i 's/\r$//' {} +
+          find . -type f -name "*.gradle" -exec sed -i 's/\r$//' {} +
+          
+          echo "Removing potential cache conflicts..."
+          rm -rf .gradle/
+          rm -rf build/
+          rm -rf app/build/
 
-      - name: Upload APK
+      - name: 🛡️ Verify Manifest & Assets
+        run: |
+          # یہ سٹیپ چیک کرے گا کہ Manifest فائل موجود ہے یا نہیں
+          if [ ! -f app/src/main/AndroidManifest.xml ]; then
+            echo "ERROR: AndroidManifest.xml missing!"
+            exit 1
+          fi
+
+      - name: 🚀 Powerful Build (Debug APK)
+        run: ./gradlew assembleDebug --stacktrace --info
+
+      - name: Upload Repaired APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: Repaired-SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
