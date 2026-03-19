@@ -3,6 +3,7 @@ plugins {
 }
 
 android {
+    // یہ آپ کا نیا پیکج نام (Namespace) ہے
     namespace 'com.systempro.faisal'
     compileSdk 34
 
