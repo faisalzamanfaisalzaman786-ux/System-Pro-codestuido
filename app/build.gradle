@@ -1,38 +1,10 @@
-plugins {
-    id 'com.android.application'
-}
-
 android {
-    // یہ مینیفیسٹ اور جاوا فائل کے پیکیج نیم سے میچ کرتا ہے
-    namespace "com.systempro.counter" 
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.systempro.counter"
-        minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    // یہاں سے ہم نے فلیورز ہٹا دیے ہیں تاکہ صرف ایک سنگل APK بنے
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
+    // یہ آپ کے کوڈ (R.java) کے لیے ہے
+    namespace 'com.systempro.faisal' 
     
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+    defaultConfig {
+        // یہ پلے اسٹور اور موبائل انسٹالیشن کے لیے ہے
+        applicationId "com.systempro.faisal"
+        ...
     }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
