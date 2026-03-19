@@ -32,7 +32,7 @@ jobs:
           
           python3 -c "
           import json, os, re, base64
-          pkg = '${{ env.PKG }}' if '${{ env.PKG }}' else 'com.systempro.default'
+          pkg = '${{ env.PKG }}'
           
           with open('data.json', 'r') as f:
               data = json.load(f)
@@ -47,14 +47,14 @@ jobs:
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                       file_data = final_content
                   
-                  # 2. مینی فیسٹ (جدید اینڈرائیڈ کے مطابق کلین اپ)
+                  # 2. مینی فیسٹ (مکمل کلین اپ)
                   elif name == 'AndroidManifest.xml':
                       # راؤنڈ آئیکن ختم کرنا
                       content = re.sub(r'android:roundIcon=\"[^\"]*\"', '', content)
-                      # پیکیج والی لائن مکمل ختم کرنا (جو ایرر دے رہی ہے)
+                      # پیکیج والی لائن مکمل ختم کرنا (Gradle 8+ کی ضرورت)
                       content = re.sub(r'package=\"[^\"]*\"', '', content)
-                      # مینی فیسٹ کے اندر مین ایکٹیویٹی کا راستہ درست کرنا
-                      content = content.replace('.MainActivity', f'{pkg}.MainActivity')
+                      # مینی فیسٹ کے اندر تمام ریلیٹو نیمز کو فل پاتھ سے بدلنا
+                      content = content.replace('android:name=\".', f'android:name=\"{pkg}.')
                       path = 'app/src/main/AndroidManifest.xml'
                       file_data = content
                   
