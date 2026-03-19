@@ -1,20 +1,35 @@
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
 
 android {
-    // یہ لائن پیکج نیم کے مسئلے کا مستقل حل ہے
     namespace 'com.systempro.appyz48c4s'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.systempro.appyz48c4s"
-        minSdk 24
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
+    }
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    // یہ وہ جادوئی حصہ ہے جو ملٹیپل ایپس بنائے گا
+    flavorDimensions "version"
+    productFlavors {
+        app1 {
+            dimension "version"
+            applicationId "com.systempro.app1"
+            resValue "string", "app_name", "System Pro One"
+        }
+        app2 {
+            dimension "version"
+            applicationId "com.systempro.app2"
+            resValue "string", "app_name", "System Pro Two"
+        }
+        app3 {
+            dimension "version"
+            applicationId "com.systempro.app3"
+            resValue "string", "app_name", "System Pro Three"
+        }
+        // آپ یہاں app20 تک اسی طرح لائنیں بڑھا سکتے ہیں
     }
 
     buildTypes {
@@ -25,8 +40,8 @@ android {
     }
     
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
