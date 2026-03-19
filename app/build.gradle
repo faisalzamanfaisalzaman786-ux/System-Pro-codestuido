@@ -1,35 +1,22 @@
 apply plugin: 'com.android.application'
 
+// یہ لائن خود بخود موجودہ وقت (سیکنڈز تک) نکال لے گی
+def timestamp = new Date().format("MMddHHmm") 
+
 android {
     namespace 'com.systempro.appyz48c4s'
     compileSdk 34
 
     defaultConfig {
+        // پیکیج نیم خود بخود بدلے گا، جیسے: com.systempro.app03191945
+        applicationId "com.systempro.faisal.app${timestamp}"
         minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
-    }
-
-    // یہ وہ جادوئی حصہ ہے جو ملٹیپل ایپس بنائے گا
-    flavorDimensions "version"
-    productFlavors {
-        app1 {
-            dimension "version"
-            applicationId "com.systempro.app1"
-            resValue "string", "app_name", "System Pro One"
-        }
-        app2 {
-            dimension "version"
-            applicationId "com.systempro.app2"
-            resValue "string", "app_name", "System Pro Two"
-        }
-        app3 {
-            dimension "version"
-            applicationId "com.systempro.app3"
-            resValue "string", "app_name", "System Pro Three"
-        }
-        // آپ یہاں app20 تک اسی طرح لائنیں بڑھا سکتے ہیں
+        
+        // ایپ کا نام بھی وقت کے ساتھ بدلے گا تاکہ آپ کو پہچان رہے
+        resValue "string", "app_name", "System Pro ${timestamp}"
     }
 
     buildTypes {
@@ -38,15 +25,4 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
