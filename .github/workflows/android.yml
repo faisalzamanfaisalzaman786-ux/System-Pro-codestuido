@@ -2,8 +2,11 @@ name: System Pro APK Builder
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "main" ]
+    inputs:
+      file_content:
+        description: 'Code content from app'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -23,6 +26,7 @@ jobs:
       - name: 🛠️ Auto-Repair & Permissions
         run: |
           chmod +x gradlew || true
+          # غیر ضروری ونڈوز کریکٹرز ختم کریں
           find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
           ./gradlew clean
 
