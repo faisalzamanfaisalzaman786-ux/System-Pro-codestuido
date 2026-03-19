@@ -17,12 +17,18 @@ jobs:
 
       - name: Code Injector
         run: |
+          # پرانی فائلوں کی مکمل صفائی
           rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/values/*
+          
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
+          
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
+          
           echo "${{ github.event.inputs.file_content }}" | base64 -d > data.json
           
           python3 -c "
@@ -31,28 +37,40 @@ jobs:
           with open('data.json', 'r') as f:
               files = json.load(f).get('files', {})
               for name, content in files.items():
+                  final_data = content
+                  # 1. جاوا فائلز
                   if name.endswith('.java'):
                       lines = content.split('\n')
                       clean = [l for l in lines if not (l.strip().startswith('package ') or (l.strip().startswith('import ') and '.R;' in l))]
-                      final = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
+                      final_data = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
+                  # 2. مینی فیسٹ
                   elif name == 'AndroidManifest.xml':
-                      # مینی فیسٹ کو محفوظ طریقے سے اپڈیٹ کرنا
-                      content = content.replace('package=\"\"', f'package=\"{pkg}\"')
-                      content = content.replace('.MainActivity', f'{pkg}.MainActivity')
+                      final_data = content.replace('.MainActivity', f'{pkg}.MainActivity')
                       path = 'app/src/main/AndroidManifest.xml'
+                  # 3. لے آؤٹ (XML) - اب یہ صحیح فولڈر میں جائے گی
+                  elif 'layout' in name or 'activity_main' in name:
+                      path = 'app/src/main/res/layout/activity_main.xml'
+                  # 4. دیگر ریسورسز
                   elif name.endswith('.xml'):
-                      if 'layout' in name: path = 'app/src/main/res/layout/activity_main.xml'
+                      if 'strings' in name: path = 'app/src/main/res/values/strings.xml'
+                      elif 'colors' in name: path = 'app/src/main/res/values/colors.xml'
+                      elif 'themes' in name or 'styles' in name: path = 'app/src/main/res/values/themes.xml'
                       else: path = f'app/src/main/res/values/{name}'
                   else: continue
+                  
                   os.makedirs(os.path.dirname(path), exist_ok=True)
-                  with open(path, 'w') as f_out: f_out.write(final if name.endswith('.java') else content)
+                  with open(path, 'w', encoding='utf-8') as f_out:
+                      f_out.write(final_data)
           "
-      - name: Build & Upload
+
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-build-cache
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: Calculator-App
+          name: System-Pro-App
           path: app/build/outputs/apk/debug/*.apk
