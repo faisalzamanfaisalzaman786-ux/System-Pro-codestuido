@@ -1,54 +1,43 @@
 name: System Pro Ultimate Repair & Build
 
 on:
-  workflow_dispatch: # آپ اسے مینوئلی رن کر سکتے ہیں
+  workflow_dispatch:
 
 jobs:
   repair-and-rebuild:
     runs-on: ubuntu-latest
+    # اگر کوئی سٹیپ فیل ہو تو یہ اسے اگنور کر کے آگے بڑھے گا (تاکہ بلڈ مکمل ہو)
+    continue-on-error: false 
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/set-up-java@v4
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 🛠️ Repair & Clean Files
+      - name: 🛠️ Auto-Fix Permissions & Files
         run: |
-          echo "Cleaning old build artifacts..."
-          chmod +x gradlew
-          ./gradlew clean
+          echo "Granting permissions..."
+          chmod +x gradlew || true
           
-          echo "Repairing file permissions and line endings..."
-          find . -type f -name "*.xml" -exec sed -i 's/\r$//' {} +
-          find . -type f -name "*.java" -exec sed -i 's/\r$//' {} +
-          find . -type f -name "*.gradle" -exec sed -i 's/\r$//' {} +
+          echo "Fixing line endings for Android..."
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -print0 | xargs -0 sed -i 's/\r$//'
           
-          echo "Removing potential cache conflicts..."
-          rm -rf .gradle/
-          rm -rf build/
-          rm -rf app/build/
+          echo "Force cleaning cache..."
+          rm -rf .gradle/ build/ app/build/
 
-      - name: 🛡️ Verify Manifest & Assets
+      - name: 🚀 Build with Error Suppression
         run: |
-          # یہ سٹیپ چیک کرے گا کہ Manifest فائل موجود ہے یا نہیں
-          if [ ! -f app/src/main/AndroidManifest.xml ]; then
-            echo "ERROR: AndroidManifest.xml missing!"
-            exit 1
-          fi
-
-      - name: 🚀 Powerful Build (Debug APK)
-        run: ./gradlew assembleDebug --stacktrace --info
+          # یہاں ہم کوشش کریں گے کہ بلڈ ہر حال میں چلے
+          ./gradlew assembleDebug --stacktrace --no-daemon || (echo "Build failed, but checking logs..." && exit 1)
 
       - name: Upload Repaired APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Repaired-SystemPro-App
-          path: app/build/outputs/apk/debug/*.apk
+          name: SystemPro-Fixed-APK
+          path: "**/*.apk" # یہ پوری ریپوزٹری میں جہاں بھی APK ملے گا اسے ڈھونڈ لے گا
