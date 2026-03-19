@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="Theme.MaterialComponents.Light.DarkActionBar">
+    <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">#6200EE</item>
-        <item name="colorPrimaryVariant">#3700B3</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#03DAC6</item>
-        <item name="colorSecondaryVariant">#018786</item>
-        <item name="colorOnSecondary">#000000</item>
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="colorPrimaryDark">#3700B3</item>
+        <item name="colorAccent">#03DAC6</item>
+
+        <item name="android:statusBarColor">#0F0F0F</item>
+        <item name="android:windowBackground">#0F0F0F</item>
     </style>
 </resources>
