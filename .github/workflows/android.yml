@@ -18,13 +18,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🚀 Build Unique App
+      - name: 🛠️ Repair & Clean
         run: |
           chmod +x gradlew || true
-          ./gradlew assembleDebug --no-daemon
+          # غیر ضروری ونڈوز کریکٹرز اور کیشے ختم کریں
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
+          ./gradlew clean
+
+      - name: 🚀 Build Unique App
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-New-Build
+          name: SystemPro-Success-Build
           path: app/build/outputs/apk/debug/*.apk
