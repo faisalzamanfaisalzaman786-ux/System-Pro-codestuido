@@ -2,16 +2,12 @@ name: System Pro APK Builder
 
 on:
   workflow_dispatch:
-    inputs:
-      file_content:
-        description: 'Code content from app'
-        required: false
-        default: ''
+  push:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -21,20 +17,14 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 🛠️ Auto-Repair & Permissions
+      - name: 🚀 Build Unique App
         run: |
           chmod +x gradlew || true
-          # غیر ضروری ونڈوز کریکٹرز ختم کریں
-          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
-          ./gradlew clean
-
-      - name: 🚀 Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-New-Build
           path: app/build/outputs/apk/debug/*.apk
