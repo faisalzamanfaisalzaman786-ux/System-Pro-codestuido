@@ -2,8 +2,15 @@ name: System Pro APK Builder
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "main" ]
+    inputs:
+      file_content:
+        description: 'Code from App'
+        required: false
+        default: ''
+      app_index:
+        description: 'Unique ID'
+        required: false
+        default: '1'
 
 jobs:
   build:
@@ -18,18 +25,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Repair & Clean
+      - name: 🛠️ Auto-Fix & Clean
         run: |
           chmod +x gradlew || true
-          # غیر ضروری ونڈوز کریکٹرز اور کیشے ختم کریں
+          # تمام فائلوں سے ونڈوز کریکٹرز صاف کریں
           find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
           ./gradlew clean
 
-      - name: 🚀 Build Unique App
+      - name: 🚀 Build Unique APK
         run: ./gradlew assembleDebug --no-daemon
 
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-Build
+          name: SystemPro-Build
           path: app/build/outputs/apk/debug/*.apk
