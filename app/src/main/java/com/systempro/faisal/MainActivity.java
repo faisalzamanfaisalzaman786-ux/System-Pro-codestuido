@@ -1,45 +1,49 @@
-package com.systempro.faisal;
+package com.systempro.apph3bqzy;
 
-import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.os.Handler;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    private WebView myWebView;
+    private TextView clockText;
+    private TextView dateText;
+    private Handler handler = new Handler();
 
-    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // WebView کو براہ راست سکرین پر دکھانے کے لیے
-        myWebView = new WebView(this);
-        setContentView(myWebView);
+        setContentView(R.layout.activity_main);
 
-        WebSettings webSettings = myWebView.getSettings();
-        
-        // تمام ضروری سیٹنگز تاکہ HTML اور JS صحیح چلیں
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
-        webSettings.setAllowFileAccess(true);
-        webSettings.setAllowContentAccess(true);
+        clockText = findViewById(R.id.clockText);
+        dateText = findViewById(R.id.dateText);
 
-        myWebView.setWebViewClient(new WebViewClient());
+        startClock();
+    }
 
-        // وہ لائن جو آپ کے assets فولڈر سے index.html کو لوڈ کرے گی
-        myWebView.loadUrl("file:///android_asset/index.html");
+    private void startClock() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                Calendar calendar = Calendar.getInstance();
+                SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+                SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault());
+
+                clockText.setText(timeFormat.format(calendar.getTime()));
+                dateText.setText(dateFormat.format(calendar.getTime()));
+
+                handler.postDelayed(this, 1000);
+            }
+        });
     }
 
     @Override
-    public void onBackPressed() {
-        if (myWebView.canGoBack()) {
-            myWebView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacksAndMessages(null);
     }
 }
