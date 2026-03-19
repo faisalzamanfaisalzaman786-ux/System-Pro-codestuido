@@ -1,11 +1,14 @@
-name: System Pro Ultimate Repair & Build
+name: System Pro Ultimate Build & Repair
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # مینوئلی رن کرنے کے لیے
+  push:
+    branches: [ "main" ] # مین برانچ پر کوڈ آنے پر خودکار رن ہوگا
 
 jobs:
-  repair-and-rebuild:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -15,9 +18,23 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 🛠️ Repair and Build
+      - name: 🛠️ Auto-Repair & Permissions
         run: |
+          echo "Granting executable permissions to gradlew..."
           chmod +x gradlew || true
+          
+          echo "Fixing line endings and cleaning cache..."
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
           ./gradlew clean
-          ./gradlew assembleDebug --no-daemon
+
+      - name: 🚀 Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: 📦 Upload Repaired APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Final-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
