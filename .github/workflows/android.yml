@@ -18,12 +18,12 @@ jobs:
 
       - name: Icon & Package Injector
         run: |
-          # محفوظ پیکیج آئی ڈی بنانا
+          # پیکیج آئی ڈی بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
           
-          # Gradle سیٹنگز
+          # Gradle فائلز میں پیکیج اپڈیٹ کرنا
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
@@ -32,7 +32,6 @@ jobs:
           
           python3 -c "
           import json, os, re, base64
-          # پیکیج نیم کو براہ راست یہاں پاس کریں
           pkg = '$PKG'
           
           with open('data.json', 'r') as f:
@@ -40,23 +39,22 @@ jobs:
               files = data.get('files', {})
               
               for name, content in files.items():
-                  # 1. جاوا فائلز کا پیکیج فکس
+                  file_data = content
+                  # 1. جاوا فائلز کی ہینڈلنگ
                   if name.endswith('.java'):
                       lines = content.split('\n')
                       clean = [l for l in lines if not l.strip().startswith('package ')]
-                      final_content = f'package {pkg};\n' + '\n'.join(clean)
+                      file_data = f'package {pkg};\n' + '\n'.join(clean)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
-                      file_data = final_content
                   
                   # 2. مینی فیسٹ کلین اپ
                   elif name == 'AndroidManifest.xml':
                       content = re.sub(r'android:roundIcon=\"[^\"]*\"', '', content)
                       content = re.sub(r'package=\"[^\"]*\"', '', content)
-                      content = content.replace('.MainActivity', f'{pkg}.MainActivity')
+                      file_data = content.replace('.MainActivity', f'{pkg}.MainActivity')
                       path = 'app/src/main/AndroidManifest.xml'
-                      file_data = content
                   
-                  # 3. امیجز
+                  # 3. آئیکنز (Images)
                   elif name.lower().endswith(('.png', '.jpg', '.jpeg')):
                       for folder in ['mipmap-hdpi', 'mipmap-mdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi']:
                           img_dir = f'app/src/main/res/{folder}'
@@ -65,13 +63,18 @@ jobs:
                               img_file.write(base64.b64decode(content))
                       continue
                   
-                  # 4. XML ریسورسز
+                  # 4. ریسورس فائلز (XML)
                   elif name.endswith('.xml'):
-                      if 'activity_main' in name or 'layout' in name:
+                      if 'layout' in name or 'activity_main' in name:
                           path = 'app/src/main/res/layout/activity_main.xml'
+                      elif 'strings' in name:
+                          path = 'app/src/main/res/values/strings.xml'
+                      elif 'colors' in name:
+                          path = 'app/src/main/res/values/colors.xml'
+                      elif 'themes' in name or 'styles' in name:
+                          path = 'app/src/main/res/values/themes.xml'
                       else:
                           path = f'app/src/main/res/values/{name}'
-                      file_data = content
                   else: continue
                   
                   os.makedirs(os.path.dirname(path), exist_ok=True)
