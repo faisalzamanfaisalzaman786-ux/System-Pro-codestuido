@@ -18,12 +18,15 @@ jobs:
 
       - name: Icon & Package Injector
         run: |
-          # محفوظ پیکیج آئی ڈی بنانا
+          # پرانی تمام جاوا فائلز اور فولڈرز کی صفائی
+          rm -rf app/src/main/java/*
+          
+          # نیا محفوظ پیکیج آئی ڈی بنانا
           ID=$(head /dev/urandom | tr -dc a-z0-9 | head -c 6)
           PKG="com.systempro.appy$ID"
           echo "PKG=$PKG" >> $GITHUB_ENV
           
-          # Gradle فائلز میں پیکیج اپڈیٹ کرنا
+          # Gradle سیٹنگز اپڈیٹ کرنا
           sed -i "s/namespace .*/namespace '$PKG'/g" app/build.gradle
           sed -i "s/applicationId .*/applicationId '$PKG'/g" app/build.gradle
           
@@ -41,20 +44,19 @@ jobs:
               for name, content in files.items():
                   file_data = content
                   
-                  # 1. جاوا فائلز کی درست ہینڈلنگ
+                  # 1. جاوا فائلز کی ہینڈلنگ
                   if name.endswith('.java'):
-                      # صرف پرانی پیکیج اور غلط R امپورٹ کی لائنز ہٹانا
                       lines = content.split('\n')
                       clean_lines = []
+                      # پرانی پیکیج اور R امپورٹ لائنز کو نکالنا
                       for line in lines:
                           s_line = line.strip()
                           if s_line.startswith('package ') or (s_line.startswith('import ') and '.R;' in s_line):
                               continue
                           clean_lines.append(line)
                       
-                      # نیا پیکیج اور R امپورٹ سب سے اوپر لگانا
-                      final_content = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean_lines)
-                      file_data = final_content
+                      # نیا پیکیج اور درست R امپورٹ شامل کرنا
+                      file_data = f'package {pkg};\nimport {pkg}.R;\n' + '\n'.join(clean_lines)
                       path = f'app/src/main/java/{pkg.replace(\".\", \"/\")}/{name}'
                   
                   # 2. مینی فیسٹ (Manifest)
@@ -88,7 +90,7 @@ jobs:
                   else: continue
                   
                   os.makedirs(os.path.dirname(path), exist_ok=True)
-                  with open(path, 'w') as f_out:
+                  with open(path, 'w', encoding='utf-8') as f_out:
                       f_out.write(file_data)
           "
 
