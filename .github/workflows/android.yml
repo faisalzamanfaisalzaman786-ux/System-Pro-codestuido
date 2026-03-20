@@ -1,42 +1,276 @@
-s/gradle-8.4-bin.zip
-zipStoreBase=GRADLE_USER_HOME
-zipStorePath=wrapper/dists
-EOF
+name: System Pro Complete APK Builder
 
-      - name: ⚙️ CREATE GRADLE PROPERTIES
-        run: |
-          cat > gradle.properties << 'EOF'
-org.gradle.jvmargs=-Xmx2048m
-android.useAndroidX=true
-android.enableJetifier=true
-EOF
+on:
+  repository_dispatch:
+    types: [build_apk]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name (e.g., com.example.app)'
+        required: true
+        default: 'com.example.app'
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyDynamicApp'
+      java_code:
+        description: 'Base64 encoded Java code'
+        required: true
+      layout_code:
+        description: 'Base64 encoded Layout code'
+        required: true
 
-      - name: 🏗️ SETUP GRADLE WRAPPER
+permissions:
+  contents: write
+  actions: write
+  statuses: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          
+      - name: Setup Android SDK
         run: |
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          mv cmdline-tools cmdline-tools_temp 2>/dev/null || true
+          mkdir -p cmdline-tools
+          mv cmdline-tools_temp cmdline-tools/latest
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          
+      - name: Accept Android Licenses
+        run: |
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          
+      - name: Install Android Platform Tools
+        run: |
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          
+      - name: Decode Package Info
+        id: decode
+        run: |
+          # Get values from either repository_dispatch or workflow_dispatch
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            PACKAGE_NAME='${{ github.event.client_payload.package_name }}'
+            APP_NAME='${{ github.event.client_payload.app_name }}'
+            JAVA_BASE64='${{ github.event.client_payload.java_code }}'
+            LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
+          else
+            PACKAGE_NAME='${{ github.event.inputs.package_name }}'
+            APP_NAME='${{ github.event.inputs.app_name }}'
+            JAVA_BASE64='${{ github.event.inputs.java_code }}'
+            LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
           fi
-          chmod +x gradlew
-
-      - name: 🔨 BUILD APK
+          
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          
+          # Save decoded files
+          echo "$JAVA_BASE64" | base64 -d > MainActivity.java
+          echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml
+          
+      - name: Create Android Project Structure
         run: |
-          ./gradlew clean
-          ./gradlew assembleDebug
-
-      - name: 📤 UPLOAD APK
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+          
+          # Create project structure
+          mkdir -p app/src/main/java/$PACKAGE_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          
+          # Move decoded files
+          mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
+          mv activity_main.xml app/src/main/res/layout/
+          
+      - name: Create AndroidManifest.xml
+        run: |
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          
+          cat > app/src/main/AndroidManifest.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PACKAGE_NAME">
+              
+              <uses-permission android:name="android.permission.INTERNET" />
+              
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="$APP_NAME"
+                  android:theme="@style/AppTheme">
+                  
+                  <activity
+                      android:name="${PACKAGE_NAME}.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          
+      - name: Create Build Files
+        run: |
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          
+          # Create settings.gradle
+          cat > settings.gradle << EOF
+          rootProject.name = "MyDynamicApp"
+          include ':app'
+          EOF
+          
+          # Create build.gradle (Project level)
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+          
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+          
+          # Create app/build.gradle
+          cat > app/build.gradle << EOF
+          apply plugin: 'com.android.application'
+          
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              
+              defaultConfig {
+                  applicationId "$PACKAGE_NAME"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+          
+      - name: Create Resource Files
+        run: |
+          # Create styles.xml
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryDark">#3700B3</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+          </resources>
+          EOF
+          
+          # Create strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">${{ steps.decode.outputs.app_name }}</string>
+          </resources>
+          EOF
+          
+      - name: Generate Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+          
+      - name: Build APK
+        run: |
+          ./gradlew clean assembleDebug --stacktrace
+          
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ steps.trigger.outputs.letters }}${{ steps.trigger.outputs.num1 }}
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
-
-      - name: ✅ SUCCESS MESSAGE
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          
+      - name: Create Release
         if: success()
         run: |
-          echo "════════════════════════════════════════════"
-          echo "✅ BUILD SUCCESSFUL"
-          echo "════════════════════════════════════════════"
-          echo "📦 Package: ${{ steps.trigger.outputs.final_pkg }}"
-          echo "📱 App Name: ${{ steps.trigger.outputs.final_app }}"
-          echo "📥 Download from Actions tab"
-          echo "════════════════════════════════════════════"
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +'%Y-%m-%d_%H-%M-%S')
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          
+          # Create a tag for this build
+          TAG_NAME="build-${BUILD_DATE}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "$TAG_NAME" -m "Auto-build: $APP_NAME ($PACKAGE_NAME)"
+          git push origin "$TAG_NAME" || true
+          
+      - name: Send Repository Dispatch (Completion Signal)
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            -d '{
+              "event_type": "build_complete",
+              "client_payload": {
+                "status": "'"$STATUS"'",
+                "app_name": "${{ steps.decode.outputs.app_name }}",
+                "package_name": "${{ steps.decode.outputs.package_name }}",
+                "build_time": "'$(date)'"
+              }
+            }'
