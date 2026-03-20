@@ -41,13 +41,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           
-      - name: Setup Android SDK (FIXED VERSION)
+      - name: Setup Android SDK (FINAL FIX)
         run: |
           # Install required packages
           sudo apt-get update
           sudo apt-get install -y wget unzip
           
-          # Set correct Android SDK path
+          # Set Android SDK path
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           mkdir -p $ANDROID_SDK_ROOT
@@ -57,39 +57,34 @@ jobs:
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
           
-          # Clean up and organize properly
-          rm -rf cmdline-tools
+          # Create correct directory structure
           mkdir -p cmdline-tools
-          mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || mv cmdline-tools/* cmdline-tools/ 2>/dev/null || true
-          
-          # Setup correct directory structure
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || true
+          rm -rf cmdline-tools_temp
           
           # Set environment variables
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/bin" >> $GITHUB_PATH
           
-      - name: Verify SDK Installation (FIXED)
+      - name: Install Android SDK Components
         run: |
-          echo "Android SDK location: $ANDROID_HOME"
-          echo "Contents of Android SDK:"
-          ls -la $ANDROID_HOME/cmdline-tools/latest/bin/ || echo "Directory not found, checking alternative path..."
+          # Add to PATH for this step
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin
           
-          # Alternative check
-          find $ANDROID_HOME -name "sdkmanager" 2>/dev/null || echo "sdkmanager not found yet"
+          # Install latest cmdline-tools first
+          yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager "cmdline-tools;latest" --sdk_root=$ANDROID_HOME
           
-          # Export PATH again to ensure it's available
+          # Update PATH to use latest cmdline-tools
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           
-      - name: Accept Android Licenses (FIXED)
+      - name: Accept Android Licenses
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           yes | sdkmanager --licenses || true
           
-      - name: Install Android Platform Tools (FIXED)
+      - name: Install Platform Tools
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
