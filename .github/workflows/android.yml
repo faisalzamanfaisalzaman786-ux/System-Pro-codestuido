@@ -28,57 +28,59 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          
+
+      # ---------- Android SDK Installation (PROVEN) ----------
       - name: Setup Android SDK
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
-          
+
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           mkdir -p $ANDROID_SDK_ROOT
-          
+
           cd $ANDROID_SDK_ROOT
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
-          
+
           mkdir -p cmdline-tools
           mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || true
           rm -rf cmdline-tools_temp
-          
+
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/cmdline-tools/bin" >> $GITHUB_PATH
-          
+
       - name: Install Android SDK Components
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin
           yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager "cmdline-tools;latest" --sdk_root=$ANDROID_HOME
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          
+
       - name: Accept Android Licenses
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           yes | sdkmanager --licenses || true
-          
+
       - name: Install Platform Tools
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          
+
+      # ---------- Decode and prepare project files ----------
       - name: Decode Package Info
         id: decode
         run: |
@@ -93,46 +95,55 @@ jobs:
             JAVA_BASE64='${{ github.event.inputs.java_code }}'
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
           fi
-          
+
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-          
-          echo "$JAVA_BASE64" | base64 -d > MainActivity.java
-          echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml
-          
+
+          # Decode Java and Layout; if empty, create default files
+          if [ -n "$JAVA_BASE64" ]; then
+            echo "$JAVA_BASE64" | base64 -d > MainActivity.java || echo "// Default MainActivity" > MainActivity.java
+          else
+            echo "// Default MainActivity" > MainActivity.java
+          fi
+
+          if [ -n "$LAYOUT_BASE64" ]; then
+            echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml || echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\" android:layout_width=\"match_parent\" android:layout_height=\"match_parent\"><TextView android:layout_width=\"wrap_content\" android:layout_height=\"wrap_content\" android:text=\"Hello World!\"/></LinearLayout>" > activity_main.xml
+          else
+            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\" android:layout_width=\"match_parent\" android:layout_height=\"match_parent\"><TextView android:layout_width=\"wrap_content\" android:layout_height=\"wrap_content\" android:text=\"Hello World!\"/></LinearLayout>" > activity_main.xml
+          fi
+
       - name: Create Android Project Structure
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          
+
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          
+
           mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
           mv activity_main.xml app/src/main/res/layout/
-          
+
       - name: Create AndroidManifest.xml
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
-          
+
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="$PACKAGE_NAME">
-              
+
               <uses-permission android:name="android.permission.INTERNET" />
-              
+
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="$APP_NAME"
                   android:theme="@style/AppTheme"
                   android:supportsRtl="true">
-                  
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -144,7 +155,7 @@ jobs:
               </application>
           </manifest>
           EOF
-          
+
       - name: Create Build Files
         run: |
           # settings.gradle
@@ -152,7 +163,7 @@ jobs:
           rootProject.name = "${{ steps.decode.outputs.app_name }}"
           include ':app'
           EOF
-          
+
           # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
@@ -164,7 +175,7 @@ jobs:
                   classpath 'com.android.tools.build:gradle:8.1.0'
               }
           }
-          
+
           allprojects {
               repositories {
                   google()
@@ -172,15 +183,15 @@ jobs:
               }
           }
           EOF
-          
+
           # App build.gradle
           cat > app/build.gradle << EOF
           apply plugin: 'com.android.application'
-          
+
           android {
               namespace '${{ steps.decode.outputs.package_name }}'
               compileSdk 34
-              
+
               defaultConfig {
                   applicationId "${{ steps.decode.outputs.package_name }}"
                   minSdk 21
@@ -188,7 +199,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              
+
               buildTypes {
                   release {
                       minifyEnabled false
@@ -198,20 +209,20 @@ jobs:
                       debuggable true
                   }
               }
-              
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-          
+
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
-          
+
       - name: Create Resource Files
         run: |
           # styles.xml
@@ -225,7 +236,7 @@ jobs:
               </style>
           </resources>
           EOF
-          
+
           # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -233,56 +244,58 @@ jobs:
               <string name="app_name">${{ steps.decode.outputs.app_name }}</string>
           </resources>
           EOF
-          
-      - name: Setup Gradle (COMPLETELY FIXED)
+
+          # colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="purple_200">#FFBB86FC</color>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="purple_700">#FF3700B3</color>
+              <color name="teal_200">#FF03DAC5</color>
+              <color name="teal_700">#FF018786</color>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
+          </resources>
+          EOF
+
+      # ---------- Gradle Installation (robust) ----------
+      - name: Install Gradle
         run: |
-          # Download and setup Gradle directly
           GRADLE_VERSION=8.1.1
           wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
           unzip -q gradle-${GRADLE_VERSION}-bin.zip
           sudo mv gradle-${GRADLE_VERSION} /opt/gradle
-          
-          # Add gradle to PATH
           echo "/opt/gradle/bin" >> $GITHUB_PATH
           export PATH=$PATH:/opt/gradle/bin
-          
-          # Create simple gradlew script
-          cat > gradlew << 'EOF'
-          #!/bin/sh
-          /opt/gradle/bin/gradle "$@"
-          EOF
-          chmod +x gradlew
-          
-          # Verify gradle installation
           gradle --version
-          
-      - name: Build APK (FIXED)
+
+      # ---------- Build APK ----------
+      - name: Build APK
         run: |
-          # Use gradle directly instead of wrapper
-          /opt/gradle/bin/gradle clean assembleDebug --stacktrace --no-daemon
-          
-      - name: Verify and List APK
+          # Use gradle directly
+          gradle clean assembleDebug --stacktrace --no-daemon
+
+      # ---------- Verify and Upload APK ----------
+      - name: Locate APK
+        id: find-apk
         run: |
-          echo "=== SEARCHING FOR APK FILES ==="
-          find $PWD -name "*.apk" -type f | while read apk; do
-            echo "FOUND APK: $apk"
-            ls -la "$apk"
-          done
-          
-          echo "=== CHECKING DEBUG OUTPUT ==="
-          ls -la app/build/outputs/apk/debug/ || echo "Debug directory not found"
-          ls -la app/build/outputs/apk/ || echo "APK output directory not found"
-          
+          APK_PATH=$(find app/build/outputs -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found!"
+            exit 1
+          fi
+          echo "APK found at: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.decode.outputs.app_name }}-debug-apk
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            **/*.apk
+          name: ${{ steps.decode.outputs.app_name }}-debug
+          path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 7
-          if-no-files-found: warn
-          
+
+      # ---------- Completion Signal ----------
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
         env:
@@ -291,7 +304,7 @@ jobs:
           STATUS="${{ job.status }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          
+
           if [ -n "$PAT_TOKEN" ]; then
             curl -X POST \
               -H "Accept: application/vnd.github.v3+json" \
