@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -25,18 +27,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Auto-Fix & Clean
+      - name: 🧹 Clean Old Data & Cache
         run: |
+          # پرانے بلڈ اور عارضی فائلوں کو مکمل صاف کرنا
+          rm -rf .gradle
+          rm -rf build
+          rm -rf app/build
           chmod +x gradlew || true
-          # تمام فائلوں سے ونڈوز کریکٹرز صاف کریں
-          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
           ./gradlew clean
 
+      - name: 📝 Update Source Code
+        run: |
+          # اگر ایپ سے نیا کوڈ (file_content) آیا ہے تو اسے مین فائل میں اوور رائٹ کریں
+          if [ ! -z "${{ github.event.inputs.file_content }}" ]; then
+            echo "${{ github.event.inputs.file_content }}" > app/src/main/java/com/example/todoapp/MainActivity.java
+            echo "New code updated successfully."
+          fi
+          
+          # ونڈوز فارمیٹنگ کو درست کرنا
+          find . -type f \( -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) -exec sed -i 's/\r$//' {} +
+
       - name: 🚀 Build Unique APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build
+          name: SystemPro-Build-${{ github.event.inputs.app_index }}
           path: app/build/outputs/apk/debug/*.apk
