@@ -41,7 +41,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ---------- Android SDK Installation (PROVEN) ----------
+      # ---------- Android SDK Installation (stable) ----------
       - name: Setup Android SDK
         run: |
           sudo apt-get update
@@ -140,7 +140,7 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
+                  android:icon="@drawable/ic_launcher"   # Changed from mipmap to drawable
                   android:label="$APP_NAME"
                   android:theme="@style/AppTheme"
                   android:supportsRtl="true">
@@ -259,7 +259,21 @@ jobs:
           </resources>
           EOF
 
-      # ---------- Gradle Installation (robust) ----------
+          # Create a simple vector drawable for the launcher icon
+          cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FF6200EE"
+                  android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
+          </vector>
+          EOF
+
+      # ---------- Install Gradle ----------
       - name: Install Gradle
         run: |
           GRADLE_VERSION=8.1.1
@@ -273,10 +287,9 @@ jobs:
       # ---------- Build APK ----------
       - name: Build APK
         run: |
-          # Use gradle directly
           gradle clean assembleDebug --stacktrace --no-daemon
 
-      # ---------- Verify and Upload APK ----------
+      # ---------- Locate and Upload APK ----------
       - name: Locate APK
         id: find-apk
         run: |
