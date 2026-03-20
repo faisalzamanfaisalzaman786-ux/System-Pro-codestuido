@@ -1,168 +1,96 @@
-# ==============================================
-# SYSTEM PRO - ULTIMATE ANDROID 14 APK BUILDER
-# ==============================================
-# ✅ FIXED: Trigger issue resolved
-# ✅ FIXED: Failure problem solved
-# ✅ FIXED: All bugs removed
-# ==============================================
-
-name: System-Pro-Android14-Builder
+name: System Pro Triple-Clean Builder
 
 on:
-  # Repository Dispatch Trigger - App سے آنے والے requests کے لیے
   repository_dispatch:
-    types: [build_apk, trigger_build, systempro_build]
-    
-  # Workflow Dispatch - Manual trigger کے لیے
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.systempro.app'
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'SystemPro'
-      java_code:
-        description: 'Java Code (Base64)'
-        required: false
-        default: ''
-      layout_code:
-        description: 'Layout Code (Base64)'
-        required: false
-        default: ''
-
-# Permissions
-permissions:
-  contents: write
-  actions: write
-  checks: write
+    types: [build_apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-    # Timeout - 10 منٹ کے بعد fail ہو جائے
-    timeout-minutes: 10
-    
     steps:
-      # ============== STEP 1: CHECKOUT ==============
-      - name: 📥 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ============== STEP 2: DEBUG INFORMATION ==============
-      - name: 🔍 Debug Information
-        run: |
-          echo "════════════════════════════════════════════"
-          echo "🔍 DEBUG INFORMATION"
-          echo "════════════════════════════════════════════"
-          echo "Event Name: ${{ github.event_name }}"
-          
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            echo "Event Type: ${{ github.event.action }}"
-            echo "Client Payload: ${{ toJson(github.event.client_payload) }}"
-          fi
-          
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref }}"
-          echo "════════════════════════════════════════════"
-
-      # ============== STEP 3: SETUP JAVA ==============
-      - name: ☕ Setup Java 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      # ============== STEP 4: PROCESS PAYLOAD ==============
-      - name: 📦 Process Payload
+      - name: 🔄 PROCESS PAYLOAD FROM APP
         id: payload
         run: |
-          # Initialize variables
-          PKG=""
-          APP=""
-          JAVA=""
-          LAYOUT=""
+          # App سے آنے والا ڈیٹا حاصل کریں
+          PKG_NAME="${{ github.event.client_payload.package_name }}"
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          JAVA_CODE="${{ github.event.client_payload.java_code }}"
+          LAYOUT_CODE="${{ github.event.client_payload.layout_code }}"
           
-          # Get data from event source
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            # Repository Dispatch سے ڈیٹا لیں
-            PKG="${{ github.event.client_payload.package_name }}"
-            APP="${{ github.event.client_payload.app_name }}"
-            JAVA="${{ github.event.client_payload.java_code }}"
-            LAYOUT="${{ github.event.client_payload.layout_code }}"
-            
-            echo "✅ Data received from Repository Dispatch"
-          else
-            # Workflow Dispatch سے ڈیٹا لیں
-            PKG="${{ github.event.inputs.package_name }}"
-            APP="${{ github.event.inputs.app_name }}"
-            JAVA="${{ github.event.inputs.java_code }}"
-            LAYOUT="${{ github.event.inputs.layout_code }}"
-            
-            echo "✅ Data received from Workflow Dispatch"
+          # ڈیٹا چیک کریں
+          if [[ -z "$PKG_NAME" ]]; then
+            PKG_NAME="com.systempro.app"
           fi
           
-          # Set default values if empty
-          if [[ -z "$PKG" || "$PKG" == "" ]]; then
-            PKG="com.systempro.app"
-            echo "⚠️ Using default package name"
+          if [[ -z "$APP_NAME" ]]; then
+            APP_NAME="SystemPro"
           fi
           
-          if [[ -z "$APP" || "$APP" == "" ]]; then
-            APP="SystemPro"
-            echo "⚠️ Using default app name"
-          fi
+          # پیکج پاتھ بنائیں
+          PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
           
-          # Clean package name
-          CLEAN_PKG=$(echo "$PKG" | sed 's/[^a-zA-Z0-9.]//g' | sed 's/^\.//' | sed 's/\.$//')
+          # ایک منفرد بلڈ آئی ڈی بنائیں
+          RANDOM_DIGITS=$((100000 + RANDOM % 900000))
+          FINAL_PKG="${PKG_NAME}.build${RANDOM_DIGITS}"
+          FINAL_APP="${APP_NAME} (Build ${RANDOM_DIGITS})"
+          FINAL_PATH=$(echo $FINAL_PKG | sed 's/\./\//g')
           
-          if [[ -z "$CLEAN_PKG" ]]; then
-            CLEAN_PKG="com.systempro.app"
-          fi
-          
-          # Generate unique ID
-          TIMESTAMP=$(date +%s)
-          RANDOM_ID=$((RANDOM % 9000 + 1000))
-          UNIQUE_ID="${TIMESTAMP: -6}${RANDOM_ID}"
-          
-          # Final package and app name
-          FINAL_PKG="${CLEAN_PKG}.build${UNIQUE_ID}"
-          FINAL_APP="${APP} (Build ${UNIQUE_ID: -4})"
-          
-          # Save to outputs
+          # آؤٹ پٹ میں سیو کریں
+          echo "original_pkg=$PKG_NAME" >> $GITHUB_OUTPUT
+          echo "original_app=$APP_NAME" >> $GITHUB_OUTPUT
           echo "final_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
           echo "final_app=$FINAL_APP" >> $GITHUB_OUTPUT
-          echo "build_id=$UNIQUE_ID" >> $GITHUB_OUTPUT
-          echo "java_code=$JAVA" >> $GITHUB_OUTPUT
-          echo "layout_code=$LAYOUT" >> $GITHUB_OUTPUT
+          echo "pkg_path=$PKG_PATH" >> $GITHUB_OUTPUT
+          echo "final_path=$FINAL_PATH" >> $GITHUB_OUTPUT
+          echo "random_digits=$RANDOM_DIGITS" >> $GITHUB_OUTPUT
+          echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
+          echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
           
-          # Display info
+          # ڈیبگ معلومات
           echo "════════════════════════════════════════════"
-          echo "🚀 BUILD CONFIGURATION"
+          echo "📱 APP TRIGGER RECEIVED"
           echo "════════════════════════════════════════════"
-          echo "📦 Package: $FINAL_PKG"
-          echo "📱 App Name: $FINAL_APP"
-          echo "🆔 Build ID: $UNIQUE_ID"
+          echo "Original Package: $PKG_NAME"
+          echo "Original App Name: $APP_NAME"
+          echo "Final Package: $FINAL_PKG"
+          echo "Final App Name: $FINAL_APP"
+          echo "Random Digits: $RANDOM_DIGITS"
+          echo "Java Code Provided: $([[ -n "$JAVA_CODE" ]] && echo "YES" || echo "NO")"
+          echo "Layout Code Provided: $([[ -n "$LAYOUT_CODE" ]] && echo "YES" || echo "NO")"
           echo "════════════════════════════════════════════"
 
-      # ============== STEP 5: COMPLETE CLEANUP ==============
-      - name: 🧹 Complete Cleanup
+      - name: 🧹 TRIPLE-CLEAN & RESET
         run: |
-          echo "🧹 Starting cleanup..."
+          echo "📁 Step 1: Triple-Clean starting..."
           
-          # Remove old directories
+          # پہلا کلین: جاوا فولڈرز
+          echo "  → Cleaning Java directories"
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
+          
+          # دوسرا کلین: ریزورسز
+          echo "  → Cleaning Resources"
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/values/*
+          rm -rf app/src/main/res/drawable/*
+          rm -rf app/src/main/res/mipmap*
+          
+          # تیسرا کلین: بلڈ فائلز
+          echo "  → Cleaning Build files"
           rm -rf app/build
           rm -rf .gradle
           
-          # Create fresh directories
-          mkdir -p app/src/main/java
+          # نیا سٹرکچر بنائیں
+          echo "📁 Creating new structure"
+          mkdir -p "app/src/main/java/${{ steps.payload.outputs.final_path }}"
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
@@ -171,22 +99,12 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/xml
           
-          echo "✅ Cleanup complete"
+          echo "✅ Triple-Clean complete"
 
-      # ============== STEP 6: CREATE PACKAGE STRUCTURE ==============
-      - name: 🏗️ Create Package Structure
-        run: |
-          PKG_NAME="${{ steps.payload.outputs.final_pkg }}"
-          PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
-          
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          echo "✅ Package path: $PKG_PATH"
-
-      # ============== STEP 7: CREATE RESOURCE FILES ==============
-      - name: 📝 Create Resource Files
+      - name: 📝 CREATE BASE FILES
         run: |
           APP_NAME="${{ steps.payload.outputs.final_app }}"
-          BUILD_ID="${{ steps.payload.outputs.build_id }}"
+          BUILD_ID="${{ steps.payload.outputs.random_digits }}"
           
           # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
@@ -201,13 +119,11 @@ EOF
           cat > app/src/main/res/values/colors.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
 </resources>
 EOF
           
@@ -223,28 +139,13 @@ EOF
 </resources>
 EOF
           
-          # backup_rules.xml
-          cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <include domain="sharedpref" path="."/>
-</full-backup-content>
-EOF
+          # XML files
+          echo '<?xml version="1.0" encoding="utf-8"?><full-backup-content/>' > app/src/main/res/xml/backup_rules.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><data-extraction-rules><cloud-backup/></data-extraction-rules>' > app/src/main/res/xml/data_extraction_rules.xml
           
-          # data_extraction_rules.xml
-          cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<data-extraction-rules>
-    <cloud-backup>
-        <include domain="sharedpref" path="."/>
-    </cloud-backup>
-</data-extraction-rules>
-EOF
-          
-          echo "✅ Resource files created"
+          echo "✅ Base files created"
 
-      # ============== STEP 8: CREATE ANDROID MANIFEST ==============
-      - name: 📄 Create AndroidManifest.xml
+      - name: 📄 CREATE ANDROID MANIFEST
         run: |
           PKG_NAME="${{ steps.payload.outputs.final_pkg }}"
           
@@ -279,27 +180,24 @@ EOF
 EOF
           echo "✅ AndroidManifest.xml created"
 
-      # ============== STEP 9: CREATE MAIN ACTIVITY ==============
-      - name: 📱 Create MainActivity
+      - name: ☕ CREATE MAIN ACTIVITY
         run: |
           PKG_NAME="${{ steps.payload.outputs.final_pkg }}"
-          PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
+          FINAL_PATH="${{ steps.payload.outputs.final_path }}"
           JAVA_CODE="${{ steps.payload.outputs.java_code }}"
           
-          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
+          JAVA_FILE="app/src/main/java/$FINAL_PATH/MainActivity.java"
           
-          # Try to use provided code
+          # اگر app نے کوڈ بھیجا ہے تو استعمال کریں
           if [[ -n "$JAVA_CODE" && "$JAVA_CODE" != "" ]]; then
-            echo "📝 Using provided Java code"
-            if echo "$JAVA_CODE" | base64 --decode > "$JAVA_FILE" 2>/dev/null; then
-              echo "✅ Java code decoded successfully"
-            else
-              echo "⚠️ Failed to decode, using default"
+            echo "📝 Using Java code from app"
+            echo "$JAVA_CODE" | base64 --decode > "$JAVA_FILE" 2>/dev/null || {
+              echo "⚠️ Base64 decode failed, using default"
               JAVA_CODE=""
-            fi
+            }
           fi
           
-          # Create default if needed
+          # ڈیفالٹ کوڈ
           if [[ -z "$JAVA_CODE" || ! -f "$JAVA_FILE" ]]; then
             echo "📝 Creating default MainActivity"
             cat > "$JAVA_FILE" << 'EOF'
@@ -315,41 +213,39 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        TextView tv = findViewById(R.id.textView);
-        tv.setText(getString(R.string.app_name) + "\nBuild: " + getString(R.string.build_id));
+        TextView textView = findViewById(R.id.textView);
+        textView.setText(getString(R.string.app_name) + 
+                        "\nBuild ID: " + getString(R.string.build_id));
     }
 }
 EOF
           fi
           
-          # Fix package name
+          # پیکج نام درست کریں
           sed -i "s/PKG_NAME_PLACEHOLDER/$PKG_NAME/g" "$JAVA_FILE"
           
-          # Add R import if missing
+          # R import شامل کریں
           if ! grep -q "import $PKG_NAME.R;" "$JAVA_FILE"; then
             sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$JAVA_FILE"
           fi
           
-          echo "✅ MainActivity created"
+          echo "✅ MainActivity.java created"
 
-      # ============== STEP 10: CREATE LAYOUT ==============
-      - name: 🎨 Create Layout
+      - name: 🎨 CREATE LAYOUT
         run: |
           LAYOUT_CODE="${{ steps.payload.outputs.layout_code }}"
           LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
           
-          # Try to use provided layout
+          # اگر app نے لے آؤٹ بھیجا ہے تو استعمال کریں
           if [[ -n "$LAYOUT_CODE" && "$LAYOUT_CODE" != "" ]]; then
-            echo "📝 Using provided layout code"
-            if echo "$LAYOUT_CODE" | base64 --decode > "$LAYOUT_FILE" 2>/dev/null; then
-              echo "✅ Layout decoded successfully"
-            else
-              echo "⚠️ Failed to decode, using default"
+            echo "📝 Using Layout code from app"
+            echo "$LAYOUT_CODE" | base64 --decode > "$LAYOUT_FILE" 2>/dev/null || {
+              echo "⚠️ Base64 decode failed, using default"
               LAYOUT_CODE=""
-            fi
+            }
           fi
           
-          # Create default if needed
+          # ڈیفالٹ لے آؤٹ
           if [[ -z "$LAYOUT_CODE" || ! -f "$LAYOUT_FILE" ]]; then
             echo "📝 Creating default layout"
             cat > "$LAYOUT_FILE" << 'EOF'
@@ -374,10 +270,9 @@ EOF
 EOF
           fi
           
-          echo "✅ Layout created"
+          echo "✅ activity_main.xml created"
 
-      # ============== STEP 11: CREATE GRADLE FILES ==============
-      - name: ⚙️ Create Gradle Files
+      - name: ⚙️ CREATE GRADLE FILES
         run: |
           PKG_NAME="${{ steps.payload.outputs.final_pkg }}"
           
@@ -463,47 +358,33 @@ EOF
           
           echo "✅ Gradle files created"
 
-      # ============== STEP 12: SETUP GRADLE WRAPPER ==============
-      - name: 🏗️ Setup Gradle Wrapper
+      - name: 🏗️ SETUP GRADLE WRAPPER
         run: |
           if [ ! -f "gradlew" ]; then
             gradle wrapper --gradle-version 8.4
           fi
           chmod +x gradlew
 
-      # ============== STEP 13: BUILD APK ==============
-      - name: 🔨 Build APK
-        id: build
+      - name: 🔨 BUILD APK
         run: |
-          echo "🏗️ Starting build..."
-          
-          # Clean build
+          echo "🏗️ Building APK..."
           ./gradlew clean
-          
-          # Assemble debug
           ./gradlew assembleDebug
           
-          # Check if APK exists
           if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
             echo "✅ Build successful!"
-            echo "status=success" >> $GITHUB_OUTPUT
           else
             echo "❌ Build failed"
-            echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
 
-      # ============== STEP 14: UPLOAD APK ==============
-      - name: 📤 Upload APK
-        if: success()
+      - name: 📤 UPLOAD APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ steps.payload.outputs.build_id }}
+          name: SystemPro-${{ steps.payload.outputs.random_digits }}
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
 
-      # ============== STEP 15: SUCCESS MESSAGE ==============
-      - name: ✅ Success
+      - name: ✅ SUCCESS
         if: success()
         run: |
           echo "════════════════════════════════════════════"
@@ -511,15 +392,5 @@ EOF
           echo "════════════════════════════════════════════"
           echo "📱 App: ${{ steps.payload.outputs.final_app }}"
           echo "📦 Package: ${{ steps.payload.outputs.final_pkg }}"
-          echo "🆔 Build ID: ${{ steps.payload.outputs.build_id }}"
-          echo "════════════════════════════════════════════"
-
-      # ============== STEP 16: FAILURE MESSAGE ==============
-      - name: ❌ Failure
-        if: failure()
-        run: |
-          echo "════════════════════════════════════════════"
-          echo "❌❌❌ BUILD FAILED ❌❌❌"
-          echo "════════════════════════════════════════════"
-          echo "Please check the error logs above"
+          echo "🆔 Build ID: ${{ steps.payload.outputs.random_digits }}"
           echo "════════════════════════════════════════════"
