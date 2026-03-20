@@ -94,12 +94,10 @@ jobs:
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
           fi
 
-          # Replace hyphens with underscores (valid package name)
           PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
           echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-          # Decode Java and Layout if provided
           if [ -n "$JAVA_BASE64" ]; then
             echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
           fi
@@ -118,7 +116,6 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # Use decoded files if they exist and are valid, otherwise use default working ones
           if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
             mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
           else
@@ -189,15 +186,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Gradle Build Files
+      - name: Create Gradle Build Files (with repositories)
         run: |
-          # settings.gradle
           cat > settings.gradle << EOF
           rootProject.name = "${{ steps.decode.outputs.app_name }}"
           include ':app'
           EOF
 
-          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -208,9 +203,15 @@ jobs:
                   classpath 'com.android.tools.build:gradle:8.1.0'
               }
           }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           EOF
 
-          # App build.gradle (with complete defaultConfig)
           cat > app/build.gradle << EOF
           apply plugin: 'com.android.application'
 
@@ -251,7 +252,6 @@ jobs:
 
       - name: Create Resource Files
         run: |
-          # styles.xml
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -263,7 +263,6 @@ jobs:
           </resources>
           EOF
 
-          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -271,7 +270,6 @@ jobs:
           </resources>
           EOF
 
-          # vector drawable icon
           cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
