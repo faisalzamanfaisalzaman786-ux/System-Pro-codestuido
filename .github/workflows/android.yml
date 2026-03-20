@@ -1,19 +1,21 @@
 name: System Pro Valid APK Builder
 
 on:
-  # 1. ایپ سے خودکار ٹریگر کے لیے
+  # 1. بیرونی ایپ سے خودکار ٹریگر کے لیے (Main Trigger)
   repository_dispatch:
     types: [build_apk]
-  
-  # 2. مینوئل ٹیسٹنگ کے لیے (GitHub ویب سائٹ سے)
+
+  # 2. مینوئل چیکنگ کے لیے (تاکہ آپ گٹ ہب سے بھی رن کر سکیں)
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # یہ لائن یقینی بناتی ہے کہ گٹ ہب کو فائل لکھنے کی اجازت ہے
+    
+    # ٹریگرنگ اور آرٹی فیکٹ ہینڈلنگ کے لیے ضروری پرمیشنز
     permissions:
       contents: write
+      actions: write
       
     steps:
       - name: Checkout Repository
@@ -25,80 +27,50 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 🔍 DEBUG - CHECK TRIGGER
+      - name: 🔍 DEBUG TRIGGER
         run: |
           echo "════════════════════════════════════════════"
-          echo "📢 TRIGGER RECEIVED: ${{ github.event_name }}"
-          echo "📢 EVENT TYPE: ${{ github.event.action }}"
+          echo "📢 TRIGGER EVENT: ${{ github.event_name }}"
+          echo "📢 ACTION TYPE: ${{ github.event.action }}"
           echo "════════════════════════════════════════════"
-          # اگر پے لوڈ موجود ہے تو دکھائیں
-          echo "📦 Package from Payload: ${{ github.event.client_payload.package_name }}"
-          echo "📱 App Name from Payload: ${{ github.event.client_payload.app_name }}"
+          # پے لوڈ چیک کرنے کے لیے
+          echo "📦 Received Package: ${{ github.event.client_payload.package_name }}"
+          echo "📱 Received App Name: ${{ github.event.client_payload.app_name }}"
           echo "════════════════════════════════════════════"
 
-      - name: ♾️ GENERATE VALID ANDROID PACKAGE
+      - name: ♾️ GENERATE VALID PACKAGE
         id: random
         run: |
-          # App سے ڈیٹا حاصل کریں
+          # ایپ سے ڈیٹا وصول کرنا
           PKG_FROM_APP="${{ github.event.client_payload.package_name }}"
           APP_NAME="${{ github.event.client_payload.app_name }}"
           JAVA_CODE="${{ github.event.client_payload.java_code }}"
           LAYOUT_CODE="${{ github.event.client_payload.layout_code }}"
           
-          # ڈیفالٹ ویلیوز اگر پے لوڈ خالی ہو
+          # اگر ایپ سے ڈیٹا نہ آئے تو ڈیفالٹ ویلیوز
           if [[ -z "$PKG_FROM_APP" ]]; then PKG_FROM_APP="com.systempro.app"; fi
           if [[ -z "$APP_NAME" ]]; then APP_NAME="SystemPro"; fi
           
-          # رینڈم حروف (پیکج کے لیے)
-          RANDOM_LETTERS=$(tr -dc 'a-z' < /dev/urandom | head -c 6)
-          RANDOM_NUM1=$((1000 + RANDOM % 9000))
-          RANDOM_NUM2=$((1000 + RANDOM % 9000))
+          # والیڈ رینڈم جنریٹر (صرف حروف سے شروع ہونے والا نام)
+          RANDOM_LETTERS=$(tr -dc 'a-z' < /dev/urandom | head -c 4)
+          RANDOM_NUM=$((1000 + RANDOM % 9000))
+          TIMESTAMP=$(date +%d%H%M)
           
           # بیس پیکج نکالنا
           BASE_PKG=$(echo "$PKG_FROM_APP" | cut -d. -f1-2)
           if [[ -z "$BASE_PKG" ]]; then BASE_PKG="com.systempro"; fi
           
-          # فائنل والیڈ پیکج (نمبر سے شروع نہیں ہوگا)
-          FINAL_PKG="${BASE_PKG}.${RANDOM_LETTERS:0:4}${RANDOM_NUM1:0:3}.pkg${RANDOM_NUM2}"
-          UNIQUE_APP="${APP_NAME} (${RANDOM_LETTERS:0:3})"
+          # فائنل والیڈ پیکج (Android Standards کے مطابق)
+          FINAL_PKG="${BASE_PKG}.${RANDOM_LETTERS}${RANDOM_NUM:0:3}.build${TIMESTAMP}"
+          UNIQUE_APP="${APP_NAME} (${RANDOM_LETTERS}${TIMESTAMP: -3})"
           
-          # Outputs سیٹ کریں
+          # آؤٹ پٹس کو محفوظ کریں
           echo "unique_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
           echo "unique_app=$UNIQUE_APP" >> $GITHUB_OUTPUT
           echo "pkg_path=$(echo $FINAL_PKG | sed 's/\./\//g')" >> $GITHUB_OUTPUT
           echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
           echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
-          echo "random_id=${RANDOM_LETTERS}${RANDOM_NUM1}" >> $GITHUB_OUTPUT
-
-      # --- باقی تمام سٹیپس (Cleanup, Create Files, Build) ویسے ہی رہیں گے جیسے آپ نے دیے تھے ---
-
-      - name: 🧹 COMPLETE CLEANUP
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          rm -rf app/build
-          mkdir -p "app/src/main/java/${{ steps.random.outputs.pkg_path }}"
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-
-      - name: 📝 CREATE RESOURCE FILES
-        run: |
-          cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">${{ steps.random.outputs.unique_app }}</string>
-              <string name="package_name">${{ steps.random.outputs.unique_pkg }}</string>
-          </resources>
-          EOF
-          # (باقی کلرز اور تھیمز یہاں آئیں گے)
-
-      - name: 🔨 BUILD APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-build-cache
-
-      - name: 📤 UPLOAD APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-${{ steps.random.outputs.random_id }}
-          path: app/build/outputs/apk/debug/*.apk
+          echo "random_letters=$RANDOM_LETTERS" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          
+          echo "✅ Trigger Payload Processed Successfully"
