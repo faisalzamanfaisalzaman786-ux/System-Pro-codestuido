@@ -1,90 +1,96 @@
-name: System Pro APK Builder
+import os
+from pathlib import Path
 
-on:
-  workflow_dispatch:
-    inputs:
-      file_content:
-        description: 'Code from App'
-        required: true
-        default: ''
-      app_index:
-        description: 'Unique ID'
-        required: true
-        default: '1'
+def show_folder_structure(path, prefix="", is_last=True, max_depth=None, current_depth=0):
+    """
+    فولڈر سٹرکچر دکھانے کا فنکشن
+    
+    Args:
+        path: فولڈر کا راستہ
+        prefix: پرنٹنگ کے لیے پریفکس
+        is_last: آخری آئٹم ہے یا نہیں
+        max_depth: زیادہ سے زیادہ ڈیپتھ (None = تمام)
+        current_depth: موجودہ ڈیپتھ
+    """
+    if max_depth is not None and current_depth > max_depth:
+        return
+    
+    # موجودہ فولڈر کا نام
+    folder_name = os.path.basename(path)
+    
+    # پہلی بار کے لیے
+    if current_depth == 0:
+        print(f"📁 {folder_name}/")
+        prefix = ""
+    
+    try:
+        # فولڈر کی تمام آئٹمز حاصل کریں
+        items = sorted(os.listdir(path))
+        
+        for i, item in enumerate(items):
+            item_path = os.path.join(path, item)
+            is_last_item = (i == len(items) - 1)
+            
+            # فولڈر ہے تو
+            if os.path.isdir(item_path):
+                if is_last_item:
+                    print(f"{prefix}    └── 📁 {item}/")
+                    show_folder_structure(item_path, prefix + "        ", True, max_depth, current_depth + 1)
+                else:
+                    print(f"{prefix}    ├── 📁 {item}/")
+                    show_folder_structure(item_path, prefix + "    │   ", False, max_depth, current_depth + 1)
+            
+            # فائل ہے تو
+            else:
+                if is_last_item:
+                    print(f"{prefix}    └── 📄 {item}")
+                else:
+                    print(f"{prefix}    ├── 📄 {item}")
+                    
+    except PermissionError:
+        print(f"{prefix}    └── [Permission Denied]")
+    except Exception as e:
+        print(f"{prefix}    └── [Error: {str(e)}]")
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+def main():
+    """
+    مین فنکشن
+    """
+    # ریپانسری کا راستہ (موجودہ ڈائریکٹری)
+    repo_path = input("ریپانسری کا راستہ درج کریں (Enter دبائیں موجودہ ڈائریکٹری کے لیے): ").strip()
+    
+    if not repo_path:
+        repo_path = "."
+    
+    # زیادہ سے زیادہ ڈیپتھ (اختیاری)
+    depth_input = input("زیادہ سے زیادہ ڈیپتھ درج کریں (Enter دبائیں تمام کے لیے): ").strip()
+    
+    if depth_input:
+        try:
+            max_depth = int(depth_input)
+        except:
+            max_depth = None
+    else:
+        max_depth = None
+    
+    # فولڈر موجود ہے چیک کریں
+    if not os.path.exists(repo_path):
+        print("❌ یہ راستہ موجود نہیں ہے!")
+        return
+    
+    if not os.path.isdir(repo_path):
+        print("❌ یہ کوئی فولڈر نہیں ہے!")
+        return
+    
+    print("\n" + "="*50)
+    print("📂 ریپانسری فولڈر سٹرکچر")
+    print("="*50 + "\n")
+    
+    # فولڈر سٹرکچر دکھائیں
+    show_folder_structure(repo_path, max_depth=max_depth)
+    
+    print("\n" + "="*50)
+    print("✅ مکمل")
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 🧹 Deep Clean & Reset
-        run: |
-          # پرانی تمام فائلیں اور کیشے ختم کرنا
-          rm -rf .gradle build app/build
-          rm -rf app/src/main/java/*
-          chmod +x gradlew || true
-          ./gradlew clean
-
-      - name: 🛠️ Auto-Update Package & Paths
-        run: |
-          # پائیتھون اسکرپٹ جو کوڈ سے پیکیج نکال کر ہر جگہ اپڈیٹ کرے گی
-          cat <<EOF > update_app.py
-          import os
-          import re
-
-          code = """${{ github.event.inputs.file_content }}"""
-          # کوڈ سے پیکیج نیم نکالنا
-          match = re.search(r'package\s+([\w\.]+);', code)
-          
-          if match:
-              new_package = match.group(1)
-              print(f"New Package Found: {new_package}")
-              
-              # 1. فولڈر بنانا اور فائل سیو کرنا
-              path = "app/src/main/java/" + new_package.replace('.', '/')
-              os.makedirs(path, exist_ok=True)
-              with open(os.path.join(path, "MainActivity.java"), "w") as f:
-                  f.write(code)
-              
-              # 2. AndroidManifest.xml میں پیکیج اپڈیٹ کرنا
-              manifest_path = "app/src/main/AndroidManifest.xml"
-              if os.path.exists(manifest_path):
-                  with open(manifest_path, 'r') as f:
-                      content = f.read()
-                  # package="..." اور android:name=".MainActivity" کو ہینڈل کرنا
-                  content = re.sub(r'package="[\w\.]+"', f'package="{new_package}"', content)
-                  with open(manifest_path, 'w') as f:
-                      f.write(content)
-
-              # 3. build.gradle میں applicationId اپڈیٹ کرنا
-              gradle_path = "app/build.gradle"
-              if os.path.exists(gradle_path):
-                  with open(gradle_path, 'r') as f:
-                      content = f.read()
-                  content = re.sub(r'applicationId\s+"[\w\.]+"', f'applicationId "{new_package}"', content)
-                  with open(gradle_path, 'w') as f:
-                      f.write(content)
-              
-              print("Successfully updated Folders, Manifest, and Gradle.")
-          else:
-              print("Error: No package name found in provided code!")
-          EOF
-          
-          python3 update_app.py
-
-      - name: 🚀 Build Unique APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: 📦 Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Build-${{ github.event.inputs.app_index }}
-          path: app/build/outputs/apk/debug/*.apk
+if __name__ == "__main__":
+    main()
