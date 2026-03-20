@@ -1,71 +1,404 @@
-name: System Pro Ultimate Builder
+# ==============================================
+# SYSTEM PRO - FINAL WORKING VERSION
+# ==============================================
+# یہ ورک فلو ایک ہی رن میں:
+# ✅ رینڈم پیکج بنائے گا
+# ✅ APK بنائے گا
+# ✅ آرٹیفیکٹ اپ لوڈ کرے گا
+# ✅ تمام فیچرز کے ساتھ
+# ==============================================
+
+name: System Pro Final Builder
 
 on:
-  # 1. بیرونی ایپ سے ٹرگر کے لیے (Main Trigger)
   repository_dispatch:
     types: [build_apk]
-
-  # 2. مینوئل چیکنگ کے لیے (تاکہ آپ گٹ ہب ویب سائٹ سے بھی رن کر سکیں)
   workflow_dispatch:
-
-# 🔐 ٹرگر کو فعال کرنے کے لیے ضروری پرمیشنز (اس کے بغیر ٹرگر کام نہیں کرے گا)
-permissions:
-  contents: write
-  actions: write
-  statuses: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      checks: write
+      pull-requests: write
+      statuses: write
+    
     steps:
-      - name: Checkout Repository
+      # ============== BASIC SETUP ==============
+      - name: 📥 Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Java 17
+      - name: ☕ Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 🔄 PROCESS TRIGGER
-        id: trigger
+      # ============== PROCESS TRIGGER DATA ==============
+      - name: 🔄 PROCESS DATA
+        id: data
         run: |
-          # پے لوڈ سے ڈیٹا حاصل کرنا (چاہے وہ کسی بھی فارمیٹ میں ہو)
+          # Get data from trigger
           PKG="${{ github.event.client_payload.package_name }}"
           APP="${{ github.event.client_payload.app_name }}"
-          JAVA="${{ github.event.client_payload.java_code }}"
-          LAYOUT="${{ github.event.client_payload.layout_code }}"
+          JAVA_CODE="${{ github.event.client_payload.java_code }}"
+          LAYOUT_CODE="${{ github.event.client_payload.layout_code }}"
           
-          # اگر ڈیٹا نہ ملے تو ڈیفالٹ سیٹ کرنا
+          # Default values
           [[ -z "$PKG" ]] && PKG="com.systempro.app"
           [[ -z "$APP" ]] && APP="SystemPro"
           
-          RANDOM1=$((RANDOM % 9000 + 1000))
-          RANDOM2=$((RANDOM % 9000 + 1000))
+          # Generate random components
+          RAND1=$((RANDOM % 9000 + 1000))
+          RAND2=$((RANDOM % 9000 + 1000))
+          RAND3=$((RANDOM % 900 + 100))
           TIMESTAMP=$(date +%s)
+          RANDOM_LETTERS=$(tr -dc 'a-z' < /dev/urandom | head -c 4)
           
-          FINAL_PKG="${PKG}.v${TIMESTAMP: -4}.r${RANDOM1}"
-          FINAL_APP="${APP} (${RANDOM2})"
+          # Create unique package name (VALID ANDROID FORMAT)
+          BASE_PKG=$(echo "$PKG" | cut -d. -f1-2)
+          FINAL_PKG="${BASE_PKG}.${RANDOM_LETTERS}${RAND1}.v${TIMESTAMP: -4}"
+          FINAL_APP="${APP} (${RANDOM_LETTERS}${RAND2:0:3})"
+          PKG_PATH=$(echo $FINAL_PKG | tr '.' '/')
           
+          # Save outputs
           echo "final_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
           echo "final_app=$FINAL_APP" >> $GITHUB_OUTPUT
-          echo "java_code=$JAVA" >> $GITHUB_OUTPUT
-          echo "layout_code=$LAYOUT" >> $GITHUB_OUTPUT
-          echo "pkg_path=$(echo $FINAL_PKG | tr '.' '/')" >> $GITHUB_OUTPUT
-          echo "random1=$RANDOM1" >> $GITHUB_OUTPUT
-          echo "random2=$RANDOM2" >> $GITHUB_OUTPUT
+          echo "pkg_path=$PKG_PATH" >> $GITHUB_OUTPUT
+          echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
+          echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
+          echo "rand1=$RAND1" >> $GITHUB_OUTPUT
+          echo "rand2=$RAND2" >> $GITHUB_OUTPUT
+          echo "rand3=$RAND3" >> $GITHUB_OUTPUT
+          echo "letters=$RANDOM_LETTERS" >> $GITHUB_OUTPUT
           
-          echo "✅ Trigger Successfully Processed for $FINAL_PKG"
+          echo "════════════════════════════════════════════"
+          echo "✅ DATA PROCESSED"
+          echo "════════════════════════════════════════════"
+          echo "📦 Package: $FINAL_PKG"
+          echo "📱 App Name: $FINAL_APP"
+          echo "📁 Path: $PKG_PATH"
+          echo "════════════════════════════════════════════"
 
-      # --- آپ کے باقی تمام اسٹیپس یہاں سے شروع ہوتے ہیں (بغیر کسی تبدیلی کے) ---
-
-      - name: 🧹 CLEAN ALL
+      # ============== CLEAN EVERYTHING ==============
+      - name: 🧹 COMPLETE CLEANUP
         run: |
+          echo "🧹 Cleaning old files..."
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf app/build
           rm -rf .gradle
+          rm -rf ~/.gradle/caches/
+          echo "✅ Clean complete"
 
-      # ... (باقی تمام مراحل: CREATE STRUCTURE, MANIFEST, JAVA, LAYOUT, BUILD وغیرہ بالکل وہی رہیں گے) ...
+      # ============== CREATE DIRECTORY STRUCTURE ==============
+      - name: 📁 CREATE STRUCTURE
+        run: |
+          mkdir -p app/src/main/java/${{ steps.data.outputs.pkg_path }}
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/xml
+          echo "✅ Structure created"
+
+      # ============== RESOURCE FILES ==============
+      - name: 📝 CREATE RESOURCES
+        run: |
+          # strings.xml
+          cat > app/src/main/res/values/strings.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">${{ steps.data.outputs.final_app }}</string>
+    <string name="build_id">${{ steps.data.outputs.rand1 }}-${{ steps.data.outputs.rand2 }}</string>
+    <string name="package_name">${{ steps.data.outputs.final_pkg }}</string>
+</resources>
+EOF
+
+          # colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>
+EOF
+
+          # themes.xml
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="colorAccent">@color/teal_200</item>
+    </style>
+</resources>
+EOF
+
+          # backup_rules.xml
+          cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="sharedpref" path="."/>
+</full-backup-content>
+EOF
+
+          # data_extraction_rules.xml
+          cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="."/>
+    </cloud-backup>
+</data-extraction-rules>
+EOF
+          echo "✅ Resources created"
+
+      # ============== ANDROID MANIFEST ==============
+      - name: 📄 CREATE MANIFEST
+        run: |
+          cat > app/src/main/AndroidManifest.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="${{ steps.data.outputs.final_pkg }}">
+    
+    <uses-permission android:name="android.permission.INTERNET" />
+    
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+          echo "✅ Manifest created"
+
+      # ============== MAIN ACTIVITY ==============
+      - name: ☕ CREATE ACTIVITY
+        run: |
+          JAVA_FILE="app/src/main/java/${{ steps.data.outputs.pkg_path }}/MainActivity.java"
+          
+          # Use provided Java code if available
+          if [[ -n "${{ steps.data.outputs.java_code }}" && "${{ steps.data.outputs.java_code }}" != "null" ]]; then
+            echo "${{ steps.data.outputs.java_code }}" | base64 -d > "$JAVA_FILE" 2>/dev/null || true
+          fi
+          
+          # Create default if not exists
+          if [[ ! -s "$JAVA_FILE" ]]; then
+            cat > "$JAVA_FILE" << 'EOF'
+package PKG_PLACEHOLDER;
+
+import android.os.Bundle;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        TextView tv = findViewById(R.id.textView);
+        tv.setText(getString(R.string.app_name) + "\n" + getString(R.string.package_name));
+    }
+}
+EOF
+            sed -i "s/PKG_PLACEHOLDER/${{ steps.data.outputs.final_pkg }}/g" "$JAVA_FILE"
+          fi
+          echo "✅ Activity created"
+
+      # ============== LAYOUT ==============
+      - name: 🎨 CREATE LAYOUT
+        run: |
+          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
+          
+          # Use provided layout if available
+          if [[ -n "${{ steps.data.outputs.layout_code }}" && "${{ steps.data.outputs.layout_code }}" != "null" ]]; then
+            echo "${{ steps.data.outputs.layout_code }}" | base64 -d > "$LAYOUT_FILE" 2>/dev/null || true
+          fi
+          
+          # Create default if not exists
+          if [[ ! -s "$LAYOUT_FILE" ]]; then
+            cat > "$LAYOUT_FILE" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="20dp">
+    
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="24sp"
+        android:textColor="#6200EE"
+        android:gravity="center" />
+    
+</LinearLayout>
+EOF
+          fi
+          echo "✅ Layout created"
+
+      # ============== GRADLE FILES ==============
+      - name: ⚙️ CREATE GRADLE FILES
+        run: |
+          # settings.gradle
+          cat > settings.gradle << 'EOF'
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SystemPro"
+include ':app'
+EOF
+
+          # build.gradle (project)
+          cat > build.gradle << 'EOF'
+plugins {
+    id 'com.android.application' version '8.1.0' apply false
+}
+EOF
+
+          # app/build.gradle
+          cat > app/build.gradle << EOF
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace '${{ steps.data.outputs.final_pkg }}'
+    compileSdk 34
+    
+    defaultConfig {
+        applicationId '${{ steps.data.outputs.final_pkg }}'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+}
+EOF
+
+          # gradle-wrapper.properties
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+
+          # gradle.properties
+          cat > gradle.properties << 'EOF'
+org.gradle.jvmargs=-Xmx2048m
+android.useAndroidX=true
+android.enableJetifier=true
+org.gradle.parallel=true
+org.gradle.caching=true
+EOF
+          echo "✅ Gradle files created"
+
+      # ============== GRADLE WRAPPER ==============
+      - name: 🏗️ SETUP WRAPPER
+        run: |
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
+          fi
+          chmod +x gradlew
+          echo "✅ Wrapper ready"
+
+      # ============== BUILD APK ==============
+      - name: 🔨 BUILD APK
+        id: build
+        run: |
+          echo "🏗️ Building APK..."
+          ./gradlew clean
+          ./gradlew assembleDebug
+          
+          # Check if APK exists
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ APK built successfully!"
+            
+            # Create unique APK name
+            APK_NAME="SystemPro_${{ steps.data.outputs.letters }}_${{ steps.data.outputs.rand1 }}.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/$APK_NAME"
+            echo "✅ APK renamed to: $APK_NAME"
+          else
+            echo "❌ APK build failed"
+            exit 1
+          fi
+
+      # ============== UPLOAD APK ==============
+      - name: 📤 UPLOAD APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-${{ steps.data.outputs.letters }}${{ steps.data.outputs.rand1 }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # ============== VERIFY UPLOAD ==============
+      - name: ✅ VERIFY ARTIFACT
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "✅✅✅ BUILD COMPLETE - ARTIFACT READY ✅✅✅"
+          echo "════════════════════════════════════════════"
+          echo "📦 Package: ${{ steps.data.outputs.final_pkg }}"
+          echo "📱 App Name: ${{ steps.data.outputs.final_app }}"
+          echo "📁 Artifact: SystemPro-${{ steps.data.outputs.letters }}${{ steps.data.outputs.rand1 }}"
+          echo "════════════════════════════════════════════"
+          echo "📥 Download from Actions tab"
+          echo "════════════════════════════════════════════"
