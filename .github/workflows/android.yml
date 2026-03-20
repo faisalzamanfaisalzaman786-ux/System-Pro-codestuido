@@ -79,7 +79,7 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Decode and Fix Package Info
+      - name: Decode and Clean Package Info
         id: decode
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
@@ -94,26 +94,22 @@ jobs:
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
           fi
 
-          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          # Replace hyphens with underscores (valid package name)
+          PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
+          echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
-          # Clean package name: replace hyphens with underscores
-          PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
-          echo "package_name_clean=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
-
-          # Decode Java
+          # Decode Java and Layout if provided
           if [ -n "$JAVA_BASE64" ]; then
             echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
           fi
-
-          # Decode Layout
           if [ -n "$LAYOUT_BASE64" ]; then
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
           fi
 
-      - name: Create Minimal Working Project
+      - name: Create Complete Android Project
         run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name_clean }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
 
@@ -122,8 +118,11 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # Create a simple working MainActivity if decoded file is invalid
-          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_EOF'
+          # Use decoded files if they exist and are valid, otherwise use default working ones
+          if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
+            mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
+          else
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << JAVA_EOF
           package $PACKAGE_NAME;
 
           import android.os.Bundle;
@@ -140,11 +139,12 @@ jobs:
               }
           }
           JAVA_EOF
-          # Replace package name placeholder
-          sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
+          fi
 
-          # Create a simple layout file
-          cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_EOF'
+          if [ -s activity_main.xml ] && grep -q "LinearLayout" activity_main.xml; then
+            mv activity_main.xml app/src/main/res/layout/
+          else
+            cat > app/src/main/res/layout/activity_main.xml << LAYOUT_EOF
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -160,10 +160,11 @@ jobs:
                   android:textSize="24sp"/>
           </LinearLayout>
           LAYOUT_EOF
+          fi
 
       - name: Create AndroidManifest.xml
         run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name_clean }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
 
           cat > app/src/main/AndroidManifest.xml << EOF
@@ -188,13 +189,15 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Build Files
+      - name: Create Gradle Build Files
         run: |
+          # settings.gradle
           cat > settings.gradle << EOF
           rootProject.name = "${{ steps.decode.outputs.app_name }}"
           include ':app'
           EOF
 
+          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -207,18 +210,20 @@ jobs:
           }
           EOF
 
-          cat > app/build.gradle << 'EOF'
+          # App build.gradle (with complete defaultConfig)
+          cat > app/build.gradle << EOF
           apply plugin: 'com.android.application'
 
           android {
+              namespace '${{ steps.decode.outputs.package_name }}'
               compileSdk 34
 
               defaultConfig {
+                  applicationId "${{ steps.decode.outputs.package_name }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
               buildTypes {
@@ -226,7 +231,11 @@ jobs:
                       minifyEnabled false
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
+                  debug {
+                      debuggable true
+                  }
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -242,6 +251,7 @@ jobs:
 
       - name: Create Resource Files
         run: |
+          # styles.xml
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -253,6 +263,7 @@ jobs:
           </resources>
           EOF
 
+          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -260,6 +271,7 @@ jobs:
           </resources>
           EOF
 
+          # vector drawable icon
           cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
