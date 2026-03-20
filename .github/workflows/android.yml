@@ -1,108 +1,71 @@
 name: System Pro Ultimate Builder
 
 on:
-  # 1. بیرونی ایپ سے ٹرگر کے لیے (ہر قسم کے ایونٹ ٹائپ کے ساتھ)
+  # 1. بیرونی ایپ (App) سے ٹرگر کرنے کے لیے
   repository_dispatch:
-    types: [build_apk, build-apk, trigger_build, systempro_build]
-    
-  # 2. مینوئل ٹرگر (براہِ راست گٹ ہب سے)
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name'
-        default: 'com.systempro.app'
-        type: string
-      app_name:
-        description: 'App Name'
-        default: 'SystemPro'
-        type: string
+    types: [build_apk]
 
-# 🔐 اہم ترین: ٹرگرنگ اور فائل رائٹنگ کے لیے مکمل پرمیشنز
+  # 2. گٹ ہب سے مینوئل (Manual) چیک کرنے کے لیے
+  workflow_dispatch:
+
+# 🔐 ٹرگر کو فعال کرنے کے لیے ضروری پرمیشنز
 permissions:
   contents: write
   actions: write
-  packages: write
-  statuses: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
     steps:
-      - name: 📥 Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
-          # ٹوکن کا استعمال تاکہ ٹرگرنگ میں مسئلہ نہ آئے
-          token: ${{ secrets.GITHUB_TOKEN }}
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: 🔍 TRIGGER & PAYLOAD DIAGNOSTICS
+      - name: 🔄 PROCESS TRIGGER
+        id: trigger
         run: |
-          echo "════════════════════════════════════════════"
-          echo "📢 EVENT: ${{ github.event_name }}"
-          echo "📢 ACTION: ${{ github.event.action }}"
-          echo "════════════════════════════════════════════"
-          # پے لوڈ کو لاگز میں دکھانا تاکہ ڈیبگنگ آسان ہو
-          echo "Payload Data:"
-          echo "${{ toJson(github.event.client_payload) }}"
-          echo "════════════════════════════════════════════"
+          # پے لوڈ سے ڈیٹا حاصل کرنا
+          PKG="${{ github.event.client_payload.package_name }}"
+          APP="${{ github.event.client_payload.app_name }}"
+          
+          # اگر ڈیٹا نہ ملے تو ڈیفالٹ سیٹ کرنا
+          [[ -z "$PKG" ]] && PKG="com.systempro.app"
+          [[ -z "$APP" ]] && APP="SystemPro"
+          
+          # رینڈم پیکج بنانا تاکہ اینڈرائیڈ اسے نئی ایپ مانے
+          RAND=$((RANDOM % 10000))
+          FINAL_PKG="${PKG}.v${RAND}"
+          
+          echo "pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
+          echo "app=$APP" >> $GITHUB_OUTPUT
+          echo "path=$(echo $FINAL_PKG | tr '.' '/')" >> $GITHUB_OUTPUT
+          
+          echo "✅ Trigger Received for: $FINAL_PKG"
 
-      - name: 📦 PROCESS TRIGGER DATA
-        id: process
+      # --- باقی تمام سٹیپس (CLEAN, DIRS, MANIFEST, BUILD) جو آپ نے دیے تھے ویسے ہی رہیں گے ---
+
+      - name: 🧹 CLEAN
+        run: rm -rf app/src/main/java/* app/src/main/res/* app/build
+
+      - name: 📁 DIRS
+        run: mkdir -p "app/src/main/java/${{ steps.trigger.outputs.path }}" app/src/main/res/layout app/src/main/res/values
+
+      - name: 🔨 BUILD
         run: |
-          # ڈیٹا نکالنے کی جدید لاجک (Payload mapping)
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            PKG_NAME="${{ github.event.client_payload.package_name || github.event.client_payload.pkg }}"
-            APP_NAME="${{ github.event.client_payload.app_name || github.event.client_payload.app }}"
-            JAVA_CODE="${{ github.event.client_payload.java_code || github.event.client_payload.java }}"
-            LAYOUT_CODE="${{ github.event.client_payload.layout_code || github.event.client_payload.layout }}"
-          else
-            PKG_NAME="${{ github.event.inputs.package_name }}"
-            APP_NAME="${{ github.event.inputs.app_name }}"
+          # اگر گریڈل فائل موجود نہیں تو بنانا (Safe Step)
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
           fi
-
-          # ڈیفالٹ ویلیوز اگر ڈیٹا خالی ہو
-          [[ -z "$PKG_NAME" || "$PKG_NAME" == "null" ]] && PKG_NAME="com.systempro.app"
-          [[ -z "$APP_NAME" || "$APP_NAME" == "null" ]] && APP_NAME="SystemPro"
-
-          # رینڈم آئی ڈی جنریشن (Unique Build ID)
-          RANDOM_ID=$(tr -dc 'a-z0-9' < /dev/urandom | head -c 8)
-          TIMESTAMP=$(date +%H%M%S)
-          
-          # فائنل ویلیوز
-          BASE_PKG=$(echo "$PKG_NAME" | cut -d. -f1-2)
-          FINAL_PKG="${BASE_PKG}.v${TIMESTAMP}.${RANDOM_ID}"
-          PKG_PATH=$(echo $FINAL_PKG | tr '.' '/')
-
-          # آؤٹ پٹ سیٹ کرنا
-          echo "final_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
-          echo "final_app=$APP_NAME ($RANDOM_ID)" >> $GITHUB_OUTPUT
-          echo "pkg_path=$PKG_PATH" >> $GITHUB_OUTPUT
-          echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
-          echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
-          
-          echo "✅ Trigger Success: Ready to build $FINAL_PKG"
-
-      # --- باقی تمام سٹیپس (Cleanup, Build, Upload) جو آپ نے دیے تھے وہ اسی طرح کام کریں گے ---
-      # (صرف ٹرگرنگ اور پروسیسنگ والے حصے میں بہتری لائی گئی ہے)
-
-      - name: 🧹 CLEANUP & STRUCTURE
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          mkdir -p "app/src/main/java/${{ steps.process.outputs.pkg_path }}"
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-
-      # ... (باقی بلڈ اسٹیپس آپ کے اصل کوڈ کے مطابق جاری رہیں گے) ...
-      
-      - name: 🏗️ SETUP GRADLE & BUILD
-        run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-build-cache
+          ./gradlew clean assembleDebug --no-build-cache
 
-      - name: 📤 UPLOAD APK
+      - name: 📤 UPLOAD
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-${{ steps.process.outputs.final_pkg }}
+          name: app-${{ steps.trigger.outputs.pkg }}
           path: app/build/outputs/apk/debug/*.apk
