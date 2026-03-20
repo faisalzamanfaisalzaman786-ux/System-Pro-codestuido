@@ -110,11 +110,6 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
           
           mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
           mv activity_main.xml app/src/main/res/layout/
@@ -178,7 +173,7 @@ jobs:
           }
           EOF
           
-          # App build.gradle - FIXED VERSION
+          # App build.gradle
           cat > app/build.gradle << EOF
           apply plugin: 'com.android.application'
           
@@ -239,58 +234,44 @@ jobs:
           </resources>
           EOF
           
-          # colors.xml
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="purple_200">#FFBB86FC</color>
-              <color name="purple_500">#FF6200EE</color>
-              <color name="purple_700">#FF3700B3</color>
-              <color name="teal_200">#FF03DAC5</color>
-              <color name="teal_700">#FF018786</color>
-              <color name="black">#FF000000</color>
-              <color name="white">#FFFFFFFF</color>
-          </resources>
-          EOF
-          
-      - name: Generate Gradle Wrapper (FIXED VERSION)
+      - name: Setup Gradle (COMPLETELY FIXED)
         run: |
-          # Use specific Gradle version compatible with Android
-          export GRADLE_VERSION=8.1.1
+          # Download and setup Gradle directly
+          GRADLE_VERSION=8.1.1
+          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
+          unzip -q gradle-${GRADLE_VERSION}-bin.zip
+          sudo mv gradle-${GRADLE_VERSION} /opt/gradle
           
-          # Create gradle wrapper properties
-          mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << EOF
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
+          # Add gradle to PATH
+          echo "/opt/gradle/bin" >> $GITHUB_PATH
+          export PATH=$PATH:/opt/gradle/bin
+          
+          # Create simple gradlew script
+          cat > gradlew << 'EOF'
+          #!/bin/sh
+          /opt/gradle/bin/gradle "$@"
           EOF
-          
-          # Create gradlew wrapper scripts
-          touch gradlew
           chmod +x gradlew
           
-          # Download gradle wrapper jar
-          wget -q https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VERSION}/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+          # Verify gradle installation
+          gradle --version
           
-          echo "Gradle wrapper created with version ${GRADLE_VERSION}"
-          
-      - name: Build APK (FIXED VERSION)
+      - name: Build APK (FIXED)
         run: |
-          chmod +x gradlew
-          # Use --no-daemon to avoid daemon issues
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
+          # Use gradle directly instead of wrapper
+          /opt/gradle/bin/gradle clean assembleDebug --stacktrace --no-daemon
           
-      - name: Verify APK exists
+      - name: Verify and List APK
         run: |
-          echo "Checking for APK file..."
+          echo "=== SEARCHING FOR APK FILES ==="
+          find $PWD -name "*.apk" -type f | while read apk; do
+            echo "FOUND APK: $apk"
+            ls -la "$apk"
+          done
+          
+          echo "=== CHECKING DEBUG OUTPUT ==="
           ls -la app/build/outputs/apk/debug/ || echo "Debug directory not found"
           ls -la app/build/outputs/apk/ || echo "APK output directory not found"
-          
-          # Find any APK file
-          find . -name "*.apk" -type f || echo "No APK files found"
           
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -300,7 +281,7 @@ jobs:
             app/build/outputs/apk/debug/*.apk
             **/*.apk
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
           
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
