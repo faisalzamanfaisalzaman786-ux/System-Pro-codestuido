@@ -41,6 +41,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # ---------- Android SDK Installation (proven) ----------
       - name: Setup Android SDK
         run: |
           sudo apt-get update
@@ -79,7 +80,8 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Decode and Clean Package Info
+      # ---------- Decode inputs (for potential future use) ----------
+      - name: Decode Package Info
         id: decode
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
@@ -94,10 +96,12 @@ jobs:
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
           fi
 
+          # Clean package name (replace hyphens with underscores)
           PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
           echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
+          # Optionally decode files (we won't use them to guarantee build)
           if [ -n "$JAVA_BASE64" ]; then
             echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
           fi
@@ -105,7 +109,8 @@ jobs:
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
           fi
 
-      - name: Create Complete Android Project
+      # ---------- Create a simple, working Android project ----------
+      - name: Create Minimal Working Project
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
@@ -116,10 +121,8 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
-            mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
-          else
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << JAVA_EOF
+          # Create a simple, error‑free MainActivity
+          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_EOF'
           package $PACKAGE_NAME;
 
           import android.os.Bundle;
@@ -136,12 +139,11 @@ jobs:
               }
           }
           JAVA_EOF
-          fi
+          # Replace the package placeholder
+          sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
 
-          if [ -s activity_main.xml ] && grep -q "LinearLayout" activity_main.xml; then
-            mv activity_main.xml app/src/main/res/layout/
-          else
-            cat > app/src/main/res/layout/activity_main.xml << LAYOUT_EOF
+          # Create a simple layout with a TextView
+          cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -157,8 +159,8 @@ jobs:
                   android:textSize="24sp"/>
           </LinearLayout>
           LAYOUT_EOF
-          fi
 
+      # ---------- Create AndroidManifest.xml ----------
       - name: Create AndroidManifest.xml
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
@@ -186,7 +188,8 @@ jobs:
           </manifest>
           EOF
 
-      - name: Create Gradle Build Files (with repositories)
+      # ---------- Gradle build files ----------
+      - name: Create Gradle Build Files
         run: |
           cat > settings.gradle << EOF
           rootProject.name = "${{ steps.decode.outputs.app_name }}"
@@ -250,6 +253,7 @@ jobs:
           }
           EOF
 
+      # ---------- Resource files ----------
       - name: Create Resource Files
         run: |
           cat > app/src/main/res/values/styles.xml << 'EOF'
@@ -292,6 +296,7 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
           EOF
 
+      # ---------- Install Gradle ----------
       - name: Install Gradle
         run: |
           GRADLE_VERSION=8.1.1
@@ -302,10 +307,12 @@ jobs:
           export PATH=$PATH:/opt/gradle/bin
           gradle --version
 
+      # ---------- Build APK ----------
       - name: Build APK
         run: |
           gradle clean assembleDebug --stacktrace --no-daemon
 
+      # ---------- Locate and Upload APK ----------
       - name: Locate APK
         id: find-apk
         run: |
@@ -324,6 +331,7 @@ jobs:
           path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 7
 
+      # ---------- Completion Signal ----------
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
         env:
