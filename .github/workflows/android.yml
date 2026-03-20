@@ -17,54 +17,48 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Purge & Reconstruct Project Structure
+      - name: 🚨 FORCE CLEAN & RECONSTRUCT 🚨
         run: |
-          # 1. ایپ سے آنے والا ڈیٹا حاصل کرنا
+          # 1. ڈیٹا نکالنا
           PKG_NAME="${{ github.event.client_payload.package_name }}"
           APP_NAME="${{ github.event.client_payload.app_name }}"
           PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
 
-          echo "Building: $APP_NAME ($PKG_NAME)"
+          echo "Cleaning old data for: $PKG_NAME"
 
-          # 2. پرانے تمام سورس کوڈ کو صاف کرنا
+          # 2. پرانے تمام اسٹرکچر کا خاتمہ (SURE CLEAN)
+          # ہم پورے جاوا اور ریسورس فولڈر کو ڈیلیٹ کر کے دوبارہ خالی بنا رہے ہیں
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
-          
-          # 3. نیا فولڈر اسٹرکچر بنانا
+          rm -rf app/src/main/res/values/strings.xml
+
+          # 3. نیا اور صاف ستھرا اسٹرکچر بنانا
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
+          mkdir -p "app/src/main/res/values"
 
-          # 4. Base64 کوڈ کو ڈی کوڈ کر کے فائلوں میں محفوظ کرنا
+          # 4. نئی فائلیں اپلوڈ/تخلیق کرنا (Base64 Decode)
           echo "${{ github.event.client_payload.java_code }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
-          # 5. Gradle فائل میں Package Name اور App Name اپ ڈیٹ کرنا
+          # 5. 'R' کلاس کا مسئلہ حل کرنا (Import Injection)
+          # یہ لائن جاوا فائل میں پیکج کے فوراً بعد صحیح R امپورٹ ڈالے گی
+          sed -i "s/^package .*;/package $PKG_NAME;\nimport $PKG_NAME.R;/g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+
+          # 6. ایپ کا نام اور گریڈل اپ ڈیٹ کرنا
+          echo "<?xml version='1.0' encoding='utf-8'?><resources><string name='app_name'>$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
+          
           sed -i "s/namespace .*/namespace '$PKG_NAME'/g" app/build.gradle || true
           sed -i "s/applicationId .*/applicationId '$PKG_NAME'/g" app/build.gradle || true
-          
-          # 6. ایپ کا نام (Strings.xml) اپ ڈیٹ کرنا
-          mkdir -p app/src/main/res/values
-          echo "<?xml version='1.0' encoding='utf-8'?>
-          <resources>
-              <string name='app_name'>$APP_NAME</string>
-          </resources>" > app/src/main/res/values/strings.xml
-
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
 
       - name: Build Clean APK
-        run: ./gradlew clean assembleDebug --no-build-cache
+        run: |
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --no-build-cache
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.package_name }}-APK
+          name: ${{ github.event.client_payload.package_name }}-Fresh-Build
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload Error Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-error-logs
-          path: app/build/reports/
