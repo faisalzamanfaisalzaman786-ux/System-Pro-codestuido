@@ -41,7 +41,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ---------- Android SDK Installation (stable) ----------
       - name: Setup Android SDK
         run: |
           sudo apt-get update
@@ -80,7 +79,6 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # ---------- Decode and prepare project files ----------
       - name: Decode Package Info
         id: decode
         run: |
@@ -126,7 +124,7 @@ jobs:
           mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
           mv activity_main.xml app/src/main/res/layout/
 
-      - name: Create AndroidManifest.xml
+      - name: Create AndroidManifest.xml (with drawable icon)
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
@@ -140,7 +138,7 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"   # Changed from mipmap to drawable
+                  android:icon="@drawable/ic_launcher"
                   android:label="$APP_NAME"
                   android:theme="@style/AppTheme"
                   android:supportsRtl="true">
@@ -158,13 +156,11 @@ jobs:
 
       - name: Create Build Files
         run: |
-          # settings.gradle
           cat > settings.gradle << EOF
           rootProject.name = "${{ steps.decode.outputs.app_name }}"
           include ':app'
           EOF
 
-          # Project build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -184,7 +180,6 @@ jobs:
           }
           EOF
 
-          # App build.gradle
           cat > app/build.gradle << EOF
           apply plugin: 'com.android.application'
 
@@ -225,7 +220,6 @@ jobs:
 
       - name: Create Resource Files
         run: |
-          # styles.xml
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -237,7 +231,6 @@ jobs:
           </resources>
           EOF
 
-          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -245,7 +238,6 @@ jobs:
           </resources>
           EOF
 
-          # colors.xml
           cat > app/src/main/res/values/colors.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -259,7 +251,7 @@ jobs:
           </resources>
           EOF
 
-          # Create a simple vector drawable for the launcher icon
+          # Create a valid vector drawable for the launcher icon
           cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -273,7 +265,6 @@ jobs:
           </vector>
           EOF
 
-      # ---------- Install Gradle ----------
       - name: Install Gradle
         run: |
           GRADLE_VERSION=8.1.1
@@ -284,12 +275,10 @@ jobs:
           export PATH=$PATH:/opt/gradle/bin
           gradle --version
 
-      # ---------- Build APK ----------
       - name: Build APK
         run: |
           gradle clean assembleDebug --stacktrace --no-daemon
 
-      # ---------- Locate and Upload APK ----------
       - name: Locate APK
         id: find-apk
         run: |
@@ -308,7 +297,6 @@ jobs:
           path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 7
 
-      # ---------- Completion Signal ----------
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
         env:
