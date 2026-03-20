@@ -43,27 +43,47 @@ jobs:
           
       - name: Setup Android SDK
         run: |
+          # Install required packages
           sudo apt-get update
           sudo apt-get install -y wget unzip
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools-linux-9477386_latest.zip
+          
+          # Create SDK directory
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          
+          # Download and extract command line tools
+          cd $ANDROID_SDK_ROOT
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          
+          # Properly organize cmdline-tools
           mkdir -p cmdline-tools/latest
           mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          mv cmdline-tools cmdline-tools_temp 2>/dev/null || true
-          mkdir -p cmdline-tools
-          mv cmdline-tools_temp cmdline-tools/latest
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          rm -rf cmdline-tools 2>/dev/null || true
+          mv cmdline-tools_temp cmdline-tools/latest 2>/dev/null || true
+          
+          # Set environment variables
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          
+      - name: Verify SDK Installation
+        run: |
+          echo "Checking SDK location..."
+          ls -la $ANDROID_HOME/cmdline-tools/latest/bin/
+          which sdkmanager || echo "sdkmanager not in PATH yet"
           
       - name: Accept Android Licenses
         run: |
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          # Wait for PATH to be updated
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses || true
           
       - name: Install Android Platform Tools
         run: |
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           
       - name: Decode Package Info
         id: decode
@@ -84,9 +104,9 @@ jobs:
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           
-          # Save decoded files
-          echo "$JAVA_BASE64" | base64 -d > MainActivity.java
-          echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml
+          # Save decoded files with proper error handling
+          echo "$JAVA_BASE64" | base64 -d > MainActivity.java || echo "Error decoding Java"
+          echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml || echo "Error decoding Layout"
           
       - name: Create Android Project Structure
         run: |
@@ -98,10 +118,20 @@ jobs:
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
           
-          # Move decoded files
-          mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
-          mv activity_main.xml app/src/main/res/layout/
+          # Move decoded files if they exist
+          if [ -f MainActivity.java ]; then
+            mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
+          fi
+          if [ -f activity_main.xml ]; then
+            mv activity_main.xml app/src/main/res/layout/
+          fi
           
       - name: Create AndroidManifest.xml
         run: |
@@ -114,15 +144,17 @@ jobs:
               package="$PACKAGE_NAME">
               
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="$APP_NAME"
-                  android:theme="@style/AppTheme">
+                  android:theme="@style/AppTheme"
+                  android:supportsRtl="true">
                   
                   <activity
-                      android:name="${PACKAGE_NAME}.MainActivity"
+                      android:name=".MainActivity"
                       android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -135,8 +167,6 @@ jobs:
           
       - name: Create Build Files
         run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          
           # Create settings.gradle
           cat > settings.gradle << EOF
           rootProject.name = "MyDynamicApp"
@@ -151,7 +181,7 @@ jobs:
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath 'com.android.tools.build:gradle:8.2.0'
               }
           }
           
@@ -161,6 +191,10 @@ jobs:
                   mavenCentral()
               }
           }
+          
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
           EOF
           
           # Create app/build.gradle
@@ -168,24 +202,27 @@ jobs:
           apply plugin: 'com.android.application'
           
           android {
-              namespace '$PACKAGE_NAME'
+              namespace '${{ steps.decode.outputs.package_name }}'
               compileSdk 34
               
               defaultConfig {
-                  applicationId "$PACKAGE_NAME"
+                  applicationId "${{ steps.decode.outputs.package_name }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
+                  
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
               
               buildTypes {
                   release {
                       minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
                   debug {
                       debuggable true
+                      minifyEnabled false
                   }
               }
               
@@ -197,8 +234,12 @@ jobs:
           
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.core:core-ktx:1.12.0'
+              testImplementation 'junit:junit:4.13.2'
+              androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+              androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
           }
           EOF
           
@@ -212,7 +253,22 @@ jobs:
                   <item name="colorPrimary">#6200EE</item>
                   <item name="colorPrimaryDark">#3700B3</item>
                   <item name="colorAccent">#03DAC5</item>
+                  <item name="android:windowBackground">@color/white</item>
               </style>
+          </resources>
+          EOF
+          
+          # Create colors.xml
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="purple_200">#FFBB86FC</color>
+              <color name="purple_500">#FF6200EE</color>
+              <color name="purple_700">#FF3700B3</color>
+              <color name="teal_200">#FF03DAC5</color>
+              <color name="teal_700">#FF018786</color>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
           </resources>
           EOF
           
@@ -224,53 +280,81 @@ jobs:
           </resources>
           EOF
           
+          # Create simple launcher icon (using built-in Android icon)
+          mkdir -p app/src/main/res/drawable
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FF6200EE"
+                  android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
+          </vector>' > app/src/main/res/drawable/ic_launcher.xml
+          
       - name: Generate Gradle Wrapper
         run: |
-          gradle wrapper --gradle-version 8.4
+          # Use gradle wrapper directly from system
+          gradle wrapper --gradle-version 8.4 --distribution-type bin
           chmod +x gradlew
           
       - name: Build APK
         run: |
-          ./gradlew clean assembleDebug --stacktrace
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
           
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: ${{ steps.decode.outputs.app_name }}-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+          if-no-files-found: warn
           
       - name: Create Release
         if: success()
         run: |
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date +'%Y-%m-%d_%H-%M-%S')
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          
-          # Create a tag for this build
-          TAG_NAME="build-${BUILD_DATE}"
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "$TAG_NAME" -m "Auto-build: $APP_NAME ($PACKAGE_NAME)"
-          git push origin "$TAG_NAME" || true
+          if [ -f "$APK_PATH" ]; then
+            COMMIT_HASH=$(git rev-parse --short HEAD)
+            BUILD_DATE=$(date +'%Y-%m-%d_%H-%M-%S')
+            APP_NAME="${{ steps.decode.outputs.app_name }}"
+            PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+            
+            # Create a tag for this build
+            TAG_NAME="build-${BUILD_DATE}"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "$TAG_NAME" -m "Auto-build: $APP_NAME ($PACKAGE_NAME)"
+            git push origin "$TAG_NAME" || echo "Tag already exists or push failed"
+          fi
           
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           STATUS="${{ job.status }}"
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: Bearer ${{ secrets.PAT_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{
-              "event_type": "build_complete",
-              "client_payload": {
-                "status": "'"$STATUS"'",
-                "app_name": "${{ steps.decode.outputs.app_name }}",
-                "package_name": "${{ steps.decode.outputs.package_name }}",
-                "build_time": "'$(date)'"
-              }
-            }'
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          
+          if [ -n "$PAT_TOKEN" ]; then
+            curl -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: Bearer $PAT_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${{ github.repository }}/dispatches \
+              -d '{
+                "event_type": "build_complete",
+                "client_payload": {
+                  "status": "'"$STATUS"'",
+                  "app_name": "'"$APP_NAME"'",
+                  "package_name": "'"$PACKAGE_NAME"'",
+                  "build_time": "'$(date)'",
+                  "run_id": "${{ github.run_id }}"
+                }
+              }' || echo "Failed to send completion signal"
+          else
+            echo "PAT_TOKEN not set, skipping completion signal"
+          fi
