@@ -6,13 +6,25 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Base Package Name'
+        description: 'Base Package Name (e.g., com.example.app)'
         required: true
         default: 'com.example.app'
+        type: string
       app_name:
-        description: 'App Name'
+        description: 'App Name (e.g., MyApplication)'
         required: true
-        default: 'MyApp'
+        default: 'MyApplication'
+        type: string
+      java_code:
+        description: 'Base64 encoded Java code (optional)'
+        required: false
+        default: ''
+        type: string
+      layout_code:
+        description: 'Base64 encoded Layout code (optional)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   build:
@@ -43,9 +55,13 @@ jobs:
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
             ORIGINAL_PKG="${{ github.event.client_payload.package_name }}"
             ORIGINAL_APP="${{ github.event.client_payload.app_name }}"
+            JAVA_CODE="${{ github.event.client_payload.java_code }}"
+            LAYOUT_CODE="${{ github.event.client_payload.layout_code }}"
           else
             ORIGINAL_PKG="${{ github.event.inputs.package_name }}"
             ORIGINAL_APP="${{ github.event.inputs.app_name }}"
+            JAVA_CODE="${{ github.event.inputs.java_code }}"
+            LAYOUT_CODE="${{ github.event.inputs.layout_code }}"
           fi
           
           # Clean package name (remove special characters)
@@ -64,6 +80,8 @@ jobs:
           echo "final_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
           echo "final_app=$FINAL_APP" >> $GITHUB_OUTPUT
           echo "build_id=${{ steps.build_id.outputs.build_id }}" >> $GITHUB_OUTPUT
+          echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
+          echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
           
           echo "════════════════════════════════════════════"
           echo "📱 Original Package: $CLEAN_PKG"
@@ -110,6 +128,7 @@ jobs:
           mkdir -p "app/src/main/res/mipmap-xhdpi"
           mkdir -p "app/src/main/res/mipmap-xxhdpi"
           mkdir -p "app/src/main/res/mipmap-xxxhdpi"
+          mkdir -p "app/src/main/res/xml"
           
           echo "✅ Structure created"
 
@@ -156,6 +175,26 @@ EOF
 </resources>
 EOF
 
+          # Create backup_rules.xml
+          cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="sharedpref" path="."/>
+    <include domain="database" path="."/>
+</full-backup-content>
+EOF
+
+          # Create data_extraction_rules.xml
+          cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="."/>
+        <include domain="database" path="."/>
+    </cloud-backup>
+</data-extraction-rules>
+EOF
+
       - name: 📄 Create Perfect AndroidManifest.xml
         run: |
           PKG_NAME="${{ steps.package_info.outputs.final_pkg }}"
@@ -194,13 +233,26 @@ EOF
 EOF
           echo "✅ AndroidManifest.xml created"
 
-      - name: 📱 Create MainActivity.java (Fixed Version)
+      - name: 📱 Create MainActivity.java
         run: |
           PKG_NAME="${{ steps.package_info.outputs.final_pkg }}"
           PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
+          JAVA_CODE="${{ steps.package_info.outputs.java_code }}"
           
-          # Create MainActivity with proper structure
-          cat > "app/src/main/java/$PKG_PATH/MainActivity.java" << 'EOF'
+          if [[ -n "$JAVA_CODE" && "$JAVA_CODE" != "" ]]; then
+            # Use provided Java code
+            echo "$JAVA_CODE" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
+            
+            # Fix package name if needed
+            sed -i "s/^package .*;/package $PKG_NAME;/g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+            
+            # Add R import if missing
+            if ! grep -q "import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"; then
+              sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"
+            fi
+          else
+            # Create default MainActivity
+            cat > "app/src/main/java/$PKG_PATH/MainActivity.java" << 'EOF'
 package PKG_NAME_PLACEHOLDER;
 
 import android.os.Bundle;
@@ -223,15 +275,22 @@ public class MainActivity extends AppCompatActivity {
     }
 }
 EOF
-          
-          # Replace placeholder with actual package name
-          sed -i "s/PKG_NAME_PLACEHOLDER/$PKG_NAME/g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+            # Replace placeholder with actual package name
+            sed -i "s/PKG_NAME_PLACEHOLDER/$PKG_NAME/g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+          fi
           
           echo "✅ MainActivity.java created"
 
-      - name: 🎨 Create activity_main.xml (Perfect Layout)
+      - name: 🎨 Create activity_main.xml
         run: |
-          cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+          LAYOUT_CODE="${{ steps.package_info.outputs.layout_code }}"
+          
+          if [[ -n "$LAYOUT_CODE" && "$LAYOUT_CODE" != "" ]]; then
+            # Use provided layout code
+            echo "$LAYOUT_CODE" | base64 --decode > app/src/main/res/layout/activity_main.xml
+          else
+            # Create default layout
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -261,18 +320,48 @@ EOF
     
 </LinearLayout>
 EOF
+          fi
+          
           echo "✅ activity_main.xml created"
 
-      - name: ⚙️ Fix Gradle Files
+      - name: ⚙️ Create/Fix Gradle Files
         run: |
           PKG_NAME="${{ steps.package_info.outputs.final_pkg }}"
           
-          # Update app/build.gradle
-          if [ -f "app/build.gradle" ]; then
-            sed -i "s/namespace .*/namespace '$PKG_NAME'/g" app/build.gradle || echo "android { namespace '$PKG_NAME' }" >> app/build.gradle
-            sed -i "s/applicationId .*/applicationId '$PKG_NAME'/g" app/build.gradle
-          else
-            cat > app/build.gradle << EOF
+          # Create settings.gradle if not exists
+          if [ ! -f "settings.gradle" ]; then
+            cat > settings.gradle << 'EOF'
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "MyApplication"
+include ':app'
+EOF
+          fi
+          
+          # Create build.gradle (project level) if not exists
+          if [ ! -f "build.gradle" ]; then
+            cat > build.gradle << 'EOF'
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+    id 'com.android.library' version '8.2.0' apply false
+}
+EOF
+          fi
+          
+          # Create/Update app/build.gradle
+          cat > app/build.gradle << EOF
 plugins {
     id 'com.android.application'
 }
@@ -292,8 +381,12 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
@@ -303,11 +396,17 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
 EOF
-          fi
           
-          echo "✅ Gradle files updated"
+          # Create gradle.properties
+          cat > gradle.properties << 'EOF'
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.enableJetifier=true
+EOF
+          
+          echo "✅ Gradle files created/updated"
 
-      - name: 🏗️ Gradle Wrapper Setup
+      - name: 🏗️ Setup Gradle Wrapper
         run: |
           if [ ! -f "gradlew" ]; then
             gradle wrapper
@@ -323,8 +422,8 @@ EOF
           if [ $? -eq 0 ]; then
             echo "✅ Build successful!"
           else
-            echo "❌ Build failed, trying alternative..."
-            ./gradlew assembleDebug --no-build-cache
+            echo "❌ Build failed, trying with no cache..."
+            ./gradlew assembleDebug --no-build-cache --stacktrace
           fi
 
       - name: 📤 Upload APK
@@ -334,6 +433,7 @@ EOF
           path: app/build/outputs/apk/debug/*.apk
           
       - name: 📋 Build Success Summary
+        if: success()
         run: |
           echo "════════════════════════════════════════════"
           echo "✅✅✅ BUILD COMPLETED SUCCESSFULLY ✅✅✅"
@@ -344,4 +444,13 @@ EOF
           echo "📁 Structure: app/src/main/java/$(echo ${{ steps.package_info.outputs.final_pkg }} | sed 's/\./\//g')"
           echo "════════════════════════════════════════════"
           echo "🎉 APK is ready to install and will NOT crash!"
+          echo "════════════════════════════════════════════"
+
+      - name: ❌ Build Failure Summary
+        if: failure()
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "❌❌❌ BUILD FAILED ❌❌❌"
+          echo "════════════════════════════════════════════"
+          echo "Please check the logs for more information"
           echo "════════════════════════════════════════════"
