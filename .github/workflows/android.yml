@@ -80,7 +80,7 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # ---------- Decode inputs (for potential future use) ----------
+      # ---------- Decode inputs (for reference) ----------
       - name: Decode Package Info
         id: decode
         run: |
@@ -109,12 +109,15 @@ jobs:
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
           fi
 
-      # ---------- Create a simple, working Android project ----------
-      - name: Create Minimal Working Project
+      # ---------- Clean any old Java files and create fresh project ----------
+      - name: Create Clean Android Project
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+
+          # Remove any existing Java source files to avoid conflicts
+          rm -rf app/src/main/java/*
 
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
