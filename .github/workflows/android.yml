@@ -79,7 +79,7 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Decode Package Info
+      - name: Decode and Fix Package Info
         id: decode
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
@@ -97,79 +97,24 @@ jobs:
           echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
 
+          # Clean package name: replace hyphens with underscores
+          PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
+          echo "package_name_clean=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
+
           # Decode Java
           if [ -n "$JAVA_BASE64" ]; then
             echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
-          fi
-          if [ ! -s MainActivity.java ]; then
-            # Fallback to a simple working Java file
-            cat > MainActivity.java << 'JAVA_EOF'
-          package $PACKAGE_NAME;
-
-          import android.os.Bundle;
-          import android.widget.Button;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              private TextView tvCounter;
-              private Button btnIncrement;
-              private int count = 0;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-
-                  tvCounter = findViewById(R.id.tvCounter);
-                  btnIncrement = findViewById(R.id.btnIncrement);
-
-                  btnIncrement.setOnClickListener(v -> {
-                      count++;
-                      tvCounter.setText(String.valueOf(count));
-                  });
-              }
-          }
-          JAVA_EOF
-            # Replace placeholder with actual package name
-            sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" MainActivity.java
           fi
 
           # Decode Layout
           if [ -n "$LAYOUT_BASE64" ]; then
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
           fi
-          if [ ! -s activity_main.xml ]; then
-            # Fallback to a simple working layout
-            cat > activity_main.xml << 'LAYOUT_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="20dp">
 
-              <TextView
-                  android:id="@+id/tvCounter"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="0"
-                  android:textSize="60sp"
-                  android:layout_marginBottom="20dp"/>
-
-              <Button
-                  android:id="@+id/btnIncrement"
-                  android:layout_width="200dp"
-                  android:layout_height="80dp"
-                  android:text="Increment"/>
-          </LinearLayout>
-          LAYOUT_EOF
-          fi
-
-      - name: Create Android Project Structure
+      - name: Create Minimal Working Project
         run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name_clean }}"
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
 
           mkdir -p app/src/main/java/$PACKAGE_PATH
@@ -177,21 +122,54 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          mv MainActivity.java app/src/main/java/$PACKAGE_PATH/
-          mv activity_main.xml app/src/main/res/layout/
+          # Create a simple working MainActivity if decoded file is invalid
+          cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_EOF'
+          package $PACKAGE_NAME;
+
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  TextView textView = findViewById(R.id.textView);
+                  textView.setText("Hello from GitHub Actions!");
+              }
+          }
+          JAVA_EOF
+          # Replace package name placeholder
+          sed -i "s/\$PACKAGE_NAME/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
+
+          # Create a simple layout file
+          cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="20dp">
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Hello World!"
+                  android:textSize="24sp"/>
+          </LinearLayout>
+          LAYOUT_EOF
 
       - name: Create AndroidManifest.xml
         run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name_clean }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
 
           cat > app/src/main/AndroidManifest.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$PACKAGE_NAME">
-
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
@@ -227,28 +205,20 @@ jobs:
                   classpath 'com.android.tools.build:gradle:8.1.0'
               }
           }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
           EOF
 
-          cat > app/build.gradle << EOF
+          cat > app/build.gradle << 'EOF'
           apply plugin: 'com.android.application'
 
           android {
-              namespace '${{ steps.decode.outputs.package_name }}'
               compileSdk 34
 
               defaultConfig {
-                  applicationId "${{ steps.decode.outputs.package_name }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
               buildTypes {
@@ -256,11 +226,7 @@ jobs:
                       minifyEnabled false
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
-                  debug {
-                      debuggable true
-                  }
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -276,7 +242,6 @@ jobs:
 
       - name: Create Resource Files
         run: |
-          # styles.xml
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -288,7 +253,6 @@ jobs:
           </resources>
           EOF
 
-          # strings.xml
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -296,21 +260,6 @@ jobs:
           </resources>
           EOF
 
-          # colors.xml
-          cat > app/src/main/res/values/colors.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="purple_200">#FFBB86FC</color>
-              <color name="purple_500">#FF6200EE</color>
-              <color name="purple_700">#FF3700B3</color>
-              <color name="teal_200">#FF03DAC5</color>
-              <color name="teal_700">#FF018786</color>
-              <color name="black">#FF000000</color>
-              <color name="white">#FFFFFFFF</color>
-          </resources>
-          EOF
-
-          # Create a valid vector drawable for the launcher icon
           cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -324,7 +273,7 @@ jobs:
           </vector>
           EOF
 
-      - name: Create gradle.properties (suppress warnings)
+      - name: Create gradle.properties
         run: |
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
