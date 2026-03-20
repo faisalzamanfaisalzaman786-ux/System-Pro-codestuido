@@ -1,4 +1,4 @@
-name: System Pro AI Builder v2
+name: System Pro Triple-Clean Builder
 
 on:
   repository_dispatch:
@@ -17,48 +17,60 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 🚨 FORCE CLEAN & RECONSTRUCT 🚨
+      - name: 🧹 TRIPLE-CLEAN & AUTO-PATH LOGIC 🧹
         run: |
-          # 1. ڈیٹا نکالنا
+          # 1. نئے پیکج اور ایپ نیم کو ریڈ کرنا
           PKG_NAME="${{ github.event.client_payload.package_name }}"
           APP_NAME="${{ github.event.client_payload.app_name }}"
           PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
 
-          echo "Cleaning old data for: $PKG_NAME"
+          echo "Reading New Package: $PKG_NAME"
+          echo "Target Structure: app/src/main/java/$PKG_PATH"
 
-          # 2. پرانے تمام اسٹرکچر کا خاتمہ (SURE CLEAN)
-          # ہم پورے جاوا اور ریسورس فولڈر کو ڈیلیٹ کر کے دوبارہ خالی بنا رہے ہیں
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/values/strings.xml
+          # --- مرحلہ 1: ٹرپل کلین (Triple-Clean) ---
+          echo "Step 1: Deep cleaning directories..."
+          rm -rf app/src/main/java/* # پہلا کلین: تمام جاوا فولڈرز ختم
+          rm -rf app/src/main/res/layout/* # دوسرا کلین: تمام لے آؤٹ ختم
+          rm -rf app/build/* # تیسرا کلین: پرانے بلڈ کے نشانات ختم
 
-          # 3. نیا اور صاف ستھرا اسٹرکچر بنانا
+          # --- مرحلہ 2: نیا اسٹرکچر بنانا (Dynamic Path) ---
+          echo "Step 2: Creating new package structure..."
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
-          mkdir -p "app/src/main/res/values"
 
-          # 4. نئی فائلیں اپلوڈ/تخلیق کرنا (Base64 Decode)
+          # --- مرحلہ 3: فائلیں انجیکٹ کرنا (Injection) ---
+          echo "Step 3: Injecting new code..."
           echo "${{ github.event.client_payload.java_code }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
-          echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
+          
+          # مین فیسٹ کو نئے پیکج کے مطابق ری-رائٹ کرنا
+          echo "<?xml version='1.0' encoding='utf-8'?>
+          <manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$PKG_NAME'>
+              <application android:label='$APP_NAME' android:theme='@style/Theme.AppCompat.Light.DarkActionBar'>
+                  <activity android:name='$PKG_NAME.MainActivity' android:exported='true'>
+                      <intent-filter>
+                          <action android:name='android.intent.action.MAIN'/>
+                          <category android:name='android.intent.category.LAUNCHER'/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>" > app/src/main/AndroidManifest.xml
 
-          # 5. 'R' کلاس کا مسئلہ حل کرنا (Import Injection)
-          # یہ لائن جاوا فائل میں پیکج کے فوراً بعد صحیح R امپورٹ ڈالے گی
+          # --- مرحلہ 4: جاوا فائل کی اصلاح (Fixing Imports) ---
+          # یہ لائن جاوا فائل کے اندر موجود پیکج کو نئے پیکج سے بدل دے گی اور R import ڈال دے گی
           sed -i "s/^package .*;/package $PKG_NAME;\nimport $PKG_NAME.R;/g" "app/src/main/java/$PKG_PATH/MainActivity.java"
 
-          # 6. ایپ کا نام اور گریڈل اپ ڈیٹ کرنا
-          echo "<?xml version='1.0' encoding='utf-8'?><resources><string name='app_name'>$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
-          
+          # --- مرحلہ 5: گریڈل سنک (Gradle Sync) ---
           sed -i "s/namespace .*/namespace '$PKG_NAME'/g" app/build.gradle || true
           sed -i "s/applicationId .*/applicationId '$PKG_NAME'/g" app/build.gradle || true
 
-      - name: Build Clean APK
+      - name: 🚀 CLEAN BUILD 🚀
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-build-cache
+          ./gradlew clean assembleDebug --no-build-cache --stacktrace
 
-      - name: Upload APK
+      - name: Upload Stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.package_name }}-Fresh-Build
+          name: ${{ github.event.client_payload.package_name }}-Final
           path: app/build/outputs/apk/debug/*.apk
