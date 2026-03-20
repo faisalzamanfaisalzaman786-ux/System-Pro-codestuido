@@ -1,4 +1,4 @@
-name: System Pro Infinite App Builder
+name: System Pro Valid APK Builder
 
 on:
   repository_dispatch:
@@ -17,133 +17,357 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: ♾️ GENERATE INFINITE UNIQUE DATA
+      - name: 🔍 DEBUG - CHECK TRIGGER
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "📢 TRIGGER RECEIVED: ${{ github.event_name }}"
+          echo "📢 EVENT TYPE: ${{ github.event.action }}"
+          echo "════════════════════════════════════════════"
+          echo "📦 Package: ${{ github.event.client_payload.package_name }}"
+          echo "📱 App Name: ${{ github.event.client_payload.app_name }}"
+          echo "════════════════════════════════════════════"
+
+      - name: ♾️ GENERATE VALID ANDROID PACKAGE
         id: random
         run: |
-          # 1. ایپ سے آنے والا ڈیٹا ریڈ کرنا (Safe Method)
+          # App سے ڈیٹا حاصل کریں
           PKG_FROM_APP="${{ github.event.client_payload.package_name }}"
-          APP_NAME_FROM_APP="${{ github.event.client_payload.app_name }}"
+          APP_NAME="${{ github.event.client_payload.app_name }}"
+          JAVA_CODE="${{ github.event.client_payload.java_code }}"
+          LAYOUT_CODE="${{ github.event.client_payload.layout_code }}"
           
-          # ڈیفالٹ ویلیوز
-          if [[ -z "$PKG_FROM_APP" ]]; then PKG_FROM_APP="com.systempro.app"; fi
-          if [[ -z "$APP_NAME_FROM_APP" ]]; then APP_NAME_FROM_APP="SystemPro"; fi
-
-          # 2. انفینٹ کومبینیشن جنریٹر
-          TIMESTAMP=$(date +%s%N)
-          R1=$RANDOM; R2=$RANDOM; R3=$RANDOM; R4=$RANDOM; R5=$RANDOM
-          RUN_ID=${{ github.run_id }}
+          # ڈیٹا چیک کریں
+          if [[ -z "$PKG_FROM_APP" ]]; then
+            PKG_FROM_APP="com.systempro.app"
+            echo "⚠️ No package provided, using default"
+          fi
           
-          # بیس پیکج نکالنا (پہلے دو حصے، جیسے com.example)
+          if [[ -z "$APP_NAME" ]]; then
+            APP_NAME="SystemPro"
+            echo "⚠️ No app name provided, using default"
+          fi
+          
+          # رینڈم حروف تہجی بنائیں (a-z)
+          RANDOM_LETTERS=""
+          for i in {1..6}; do
+            LETTER_CODE=$((97 + RANDOM % 26))
+            LETTER=$(printf "\\$(printf "%03o" "$LETTER_CODE")")
+            RANDOM_LETTERS="${RANDOM_LETTERS}${LETTER}"
+          done
+          
+          # رینڈم نمبر
+          RANDOM_NUM1=$((1000 + RANDOM % 9000))
+          RANDOM_NUM2=$((1000 + RANDOM % 9000))
+          
+          # بیس پیکج (com.systempro)
           BASE_PKG=$(echo "$PKG_FROM_APP" | cut -d. -f1-2)
+          if [[ -z "$BASE_PKG" ]]; then
+            BASE_PKG="com.systempro"
+          fi
           
-          # 3. فائنل یونیک ویلیوز
-          # فارمیٹ: base.pkg.timestamp_randoms_runid
-          UNIQUE_PKG="${BASE_PKG}.${TIMESTAMP}_${R1}_${R2}_${RUN_ID}"
-          UNIQUE_APP="${APP_NAME_FROM_APP} (${TIMESTAMP: -4})"
+          # والیڈ پیکج نام - com.systempro.abc123.def456
+          FINAL_PKG="${BASE_PKG}.${RANDOM_LETTERS:0:4}${RANDOM_NUM1:0:3}.build${RANDOM_NUM2}"
           
-          # ڈیٹا کو اگلے سٹیپس کے لیے سیو کرنا
-          echo "unique_pkg=$UNIQUE_PKG" >> $GITHUB_OUTPUT
+          # ایپ کا منفرد نام
+          UNIQUE_APP="${APP_NAME} (${RANDOM_LETTERS:0:3}${RANDOM_NUM2:0:3})"
+          
+          # آؤٹ پٹ میں سیو کریں
+          echo "unique_pkg=$FINAL_PKG" >> $GITHUB_OUTPUT
           echo "unique_app=$UNIQUE_APP" >> $GITHUB_OUTPUT
-          echo "pkg_path=$(echo $UNIQUE_PKG | sed 's/\./\//g')" >> $GITHUB_OUTPUT
-          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
-
-          # 4. کوڈ کو عارضی فائلوں میں محفوظ کرنا (Base64 Safe Handling)
-          echo "${{ github.event.client_payload.java_code }}" > java_b64.txt
-          echo "${{ github.event.client_payload.layout_code }}" > layout_b64.txt
+          echo "random_letters=$RANDOM_LETTERS" >> $GITHUB_OUTPUT
+          echo "random_num1=$RANDOM_NUM1" >> $GITHUB_OUTPUT
+          echo "random_num2=$RANDOM_NUM2" >> $GITHUB_OUTPUT
+          echo "java_code=$JAVA_CODE" >> $GITHUB_OUTPUT
+          echo "layout_code=$LAYOUT_CODE" >> $GITHUB_OUTPUT
           
-          echo "✅ Infinite Data Generated: $UNIQUE_PKG"
+          echo "════════════════════════════════════════════"
+          echo "✅ VALID PACKAGE GENERATED"
+          echo "════════════════════════════════════════════"
+          echo "📦 Package: $FINAL_PKG"
+          echo "📱 App Name: $UNIQUE_APP"
+          echo "════════════════════════════════════════════"
 
-      - name: 🧹 DEEP CLEANUP
+      - name: 🧹 COMPLETE CLEANUP
         run: |
+          echo "🧹 Cleaning old files..."
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/values/*
+          rm -rf app/src/main/res/*
           rm -rf app/build
+          rm -rf .gradle
           
-          mkdir -p "app/src/main/java/${{ steps.random.outputs.pkg_path }}"
+          mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
           echo "✅ Cleanup complete"
 
-      - name: 📝 INJECT INFINITE CODE
+      - name: 🏗️ CREATE PACKAGE STRUCTURE
         run: |
           PKG_NAME="${{ steps.random.outputs.unique_pkg }}"
-          PKG_PATH="${{ steps.random.outputs.pkg_path }}"
-          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
-          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
+          PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
           
-          # Java Decode
-          if [ -s java_b64.txt ]; then
-             cat java_b64.txt | base64 --decode > "$JAVA_FILE"
-          else
-             echo "package $PKG_NAME; import androidx.appcompat.app.AppCompatActivity; import android.os.Bundle; public class MainActivity extends AppCompatActivity { protected void onCreate(Bundle s) { super.onCreate(s); setContentView(R.layout.activity_main); } }" > "$JAVA_FILE"
-          fi
-          
-          # Layout Decode
-          if [ -s layout_b64.txt ]; then
-             cat layout_b64.txt | base64 --decode > "$LAYOUT_FILE"
-          else
-             echo "<?xml version='1.0' encoding='utf-8'?><LinearLayout xmlns:android='http://schemas.android.com/apk/res/android' android:layout_width='match_parent' android:layout_height='match_parent' android:gravity='center'><TextView android:layout_width='wrap_content' android:layout_height='wrap_content' android:text='Infinite App Build' /></LinearLayout>" > "$LAYOUT_FILE"
-          fi
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          echo "✅ Package path created: $PKG_PATH"
 
-          # اہم: پیکج اور R import کی زبردستی درستگی
-          sed -i "1s|^package .*|package $PKG_NAME;|" "$JAVA_FILE"
+      - name: 📝 CREATE RESOURCE FILES
+        run: |
+          APP_NAME="${{ steps.random.outputs.unique_app }}"
+          
+          cat > app/src/main/res/values/strings.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">$APP_NAME</string>
+    <string name="package_name">${{ steps.random.outputs.unique_pkg }}</string>
+</resources>
+EOF
+          
+          cat > app/src/main/res/values/colors.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>
+EOF
+          
+          cat > app/src/main/res/values/themes.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="colorAccent">@color/teal_200</item>
+    </style>
+</resources>
+EOF
+          
+          echo '<?xml version="1.0" encoding="utf-8"?><full-backup-content/>' > app/src/main/res/xml/backup_rules.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><data-extraction-rules><cloud-backup/></data-extraction-rules>' > app/src/main/res/xml/data_extraction_rules.xml
+          
+          echo "✅ Resource files created"
+
+      - name: 📄 CREATE ANDROID MANIFEST
+        run: |
+          PKG_NAME="${{ steps.random.outputs.unique_pkg }}"
+          
+          cat > app/src/main/AndroidManifest.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="$PKG_NAME">
+    
+    <uses-permission android:name="android.permission.INTERNET" />
+    
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+          echo "✅ AndroidManifest.xml created"
+
+      - name: ☕ CREATE MAIN ACTIVITY
+        run: |
+          PKG_NAME="${{ steps.random.outputs.unique_pkg }}"
+          PKG_PATH=$(echo $PKG_NAME | sed 's/\./\//g')
+          JAVA_CODE="${{ steps.random.outputs.java_code }}"
+          
+          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
+          
+          if [[ -n "$JAVA_CODE" && "$JAVA_CODE" != "" ]]; then
+            echo "📝 Using provided Java code"
+            echo "$JAVA_CODE" | base64 --decode > "$JAVA_FILE" 2>/dev/null || {
+              echo "⚠️ Decode failed, using default"
+              JAVA_CODE=""
+            }
+          fi
+          
+          if [[ -z "$JAVA_CODE" || ! -f "$JAVA_FILE" ]]; then
+            echo "📝 Creating default MainActivity"
+            cat > "$JAVA_FILE" << 'EOF'
+package PKG_NAME_PLACEHOLDER;
+
+import android.os.Bundle;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        TextView tv = findViewById(R.id.textView);
+        tv.setText(getString(R.string.app_name) + "\n" + getString(R.string.package_name));
+    }
+}
+EOF
+          fi
+          
+          sed -i "s/PKG_NAME_PLACEHOLDER/$PKG_NAME/g" "$JAVA_FILE"
+          
           if ! grep -q "import $PKG_NAME.R;" "$JAVA_FILE"; then
             sed -i "/package $PKG_NAME;/a import $PKG_NAME.R;" "$JAVA_FILE"
           fi
+          
+          echo "✅ MainActivity created"
 
-      - name: 📄 CREATE MANIFEST & RESOURCES
+      - name: 🎨 CREATE LAYOUT
+        run: |
+          LAYOUT_CODE="${{ steps.random.outputs.layout_code }}"
+          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
+          
+          if [[ -n "$LAYOUT_CODE" && "$LAYOUT_CODE" != "" ]]; then
+            echo "📝 Using provided layout"
+            echo "$LAYOUT_CODE" | base64 --decode > "$LAYOUT_FILE" 2>/dev/null || {
+              echo "⚠️ Decode failed, using default"
+              LAYOUT_CODE=""
+            }
+          fi
+          
+          if [[ -z "$LAYOUT_CODE" || ! -f "$LAYOUT_FILE" ]]; then
+            echo "📝 Creating default layout"
+            cat > "$LAYOUT_FILE" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="20dp">
+    
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textColor="#6200EE"
+        android:gravity="center" />
+    
+</LinearLayout>
+EOF
+          fi
+          
+          echo "✅ Layout created"
+
+      - name: ⚙️ CREATE GRADLE FILES
         run: |
           PKG_NAME="${{ steps.random.outputs.unique_pkg }}"
-          APP_NAME="${{ steps.random.outputs.unique_app }}"
           
-          # Manifest
-          echo "<?xml version='1.0' encoding='utf-8'?>
-          <manifest xmlns:android='http://schemas.android.com/apk/res/android' package='$PKG_NAME'>
-              <application android:label='$APP_NAME' android:theme='@style/Theme.AppCompat.Light.DarkActionBar'>
-                  <activity android:name='$PKG_NAME.MainActivity' android:exported='true'>
-                      <intent-filter>
-                          <action android:name='android.intent.action.MAIN'/>
-                          <category android:name='android.intent.category.LAUNCHER'/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>" > app/src/main/AndroidManifest.xml
+          cat > settings.gradle << 'EOF'
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SystemPro"
+include ':app'
+EOF
           
-          # Strings
-          echo "<?xml version='1.0' encoding='utf-8'?><resources><string name='app_name'>$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
-          # Themes (Basic)
-          echo "<?xml version='1.0' encoding='utf-8'?><resources><style name='AppTheme' parent='Theme.AppCompat.Light.DarkActionBar' /></resources>" > app/src/main/res/values/themes.xml
-
-      - name: ⚙️ SYNC GRADLE
-        run: |
-          PKG_NAME="${{ steps.random.outputs.unique_pkg }}"
+          cat > build.gradle << 'EOF'
+plugins {
+    id 'com.android.application' version '8.1.0' apply false
+}
+EOF
+          
           cat > app/build.gradle << EOF
-          plugins { id 'com.android.application' }
-          android {
-              namespace '$PKG_NAME'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '$PKG_NAME'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
+plugins {
+    id 'com.android.application'
+}
 
-      - name: 🔨 BUILD INFINITE APK
+android {
+    namespace '$PKG_NAME'
+    compileSdk 34
+    
+    defaultConfig {
+        applicationId '$PKG_NAME'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
+EOF
+          
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+          
+          echo "✅ Gradle files created"
+
+      - name: 🏗️ SETUP GRADLE WRAPPER
         run: |
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
+          fi
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-build-cache
 
-      - name: 📤 UPLOAD ARTIFACT
+      - name: 🔨 BUILD APK
+        run: |
+          echo "🏗️ Building APK..."
+          ./gradlew clean
+          ./gradlew assembleDebug
+          
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✅ Build successful!"
+          else
+            echo "❌ Build failed"
+            exit 1
+          fi
+
+      - name: 📤 UPLOAD APK
         uses: actions/upload-artifact@v4
         with:
-          name: Infinite-APK-${{ steps.random.outputs.timestamp }}
+          name: SystemPro-${{ steps.random.outputs.random_letters }}${{ steps.random.outputs.random_num1 }}
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: ✅ SUCCESS MESSAGE
+        run: |
+          echo "════════════════════════════════════════════"
+          echo "✅✅✅ BUILD SUCCESSFUL ✅✅✅"
+          echo "════════════════════════════════════════════"
+          echo "📦 Package: ${{ steps.random.outputs.unique_pkg }}"
+          echo "📱 App Name: ${{ steps.random.outputs.unique_app }}"
+          echo "════════════════════════════════════════════"
