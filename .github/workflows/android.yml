@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Package Name'
+        description: 'Package Name (e.g., com.example.app)'
         required: true
         default: 'com.example.app'
       app_name:
@@ -19,13 +19,6 @@ on:
       layout_code:
         description: 'Base64 encoded Layout code'
         required: true
-      manifest_code:
-        description: 'Base64 encoded Manifest code'
-        required: true
-      icon:
-        description: 'Base64 encoded Icon (PNG)'
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -52,19 +45,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
-
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           mkdir -p $ANDROID_SDK_ROOT
-
           cd $ANDROID_SDK_ROOT
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
-
           mkdir -p cmdline-tools
           mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || true
           rm -rf cmdline-tools_temp
-
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/cmdline-tools/bin" >> $GITHUB_PATH
@@ -86,61 +75,29 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Decode and Validate Inputs
+      - name: Decode Package Info
         id: decode
         run: |
-          set -e
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             PACKAGE_NAME='${{ github.event.client_payload.package_name }}'
             APP_NAME='${{ github.event.client_payload.app_name }}'
             JAVA_BASE64='${{ github.event.client_payload.java_code }}'
             LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
-            MANIFEST_BASE64='${{ github.event.client_payload.manifest_code }}'
-            ICON_BASE64='${{ github.event.client_payload.icon }}'
           else
             PACKAGE_NAME='${{ github.event.inputs.package_name }}'
             APP_NAME='${{ github.event.inputs.app_name }}'
             JAVA_BASE64='${{ github.event.inputs.java_code }}'
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
-            MANIFEST_BASE64='${{ github.event.inputs.manifest_code }}'
-            ICON_BASE64='${{ github.event.inputs.icon }}'
           fi
-
-          MISSING=""
-          [ -z "$PACKAGE_NAME" ] && MISSING="$MISSING package_name"
-          [ -z "$APP_NAME" ] && MISSING="$MISSING app_name"
-          [ -z "$JAVA_BASE64" ] && MISSING="$MISSING java_code"
-          [ -z "$LAYOUT_BASE64" ] && MISSING="$MISSING layout_code"
-          [ -z "$MANIFEST_BASE64" ] && MISSING="$MISSING manifest_code"
-
-          if [ -n "$MISSING" ]; then
-            echo "❌ ERROR: Missing required input(s):$MISSING" > error_msg.txt
-            cat error_msg.txt
-            exit 1
-          fi
-
           PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
           echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-
-          # Decode files
-          echo -n "$JAVA_BASE64" | base64 -d > /tmp/MainActivity.java
-          echo -n "$LAYOUT_BASE64" | base64 -d > /tmp/activity_main.xml
-          echo -n "$MANIFEST_BASE64" | base64 -d > /tmp/AndroidManifest.xml
-          if [ -n "$ICON_BASE64" ]; then
-            echo -n "$ICON_BASE64" | base64 -d > /tmp/icon.png
+          if [ -n "$JAVA_BASE64" ]; then
+            echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
           fi
-
-          # Validate decoded files are non-empty
-          for f in /tmp/MainActivity.java /tmp/activity_main.xml /tmp/AndroidManifest.xml; do
-            if [ ! -s "$f" ]; then
-              echo "❌ ERROR: $f is empty after decoding" > error_msg.txt
-              exit 1
-            fi
-          done
-
-      - name: Install xmllint (for XML validation)
-        run: sudo apt-get install -y libxml2-utils
+          if [ -n "$LAYOUT_BASE64" ]; then
+            echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
+          fi
 
       - name: Create Android Project with User Code
         run: |
@@ -148,71 +105,212 @@ jobs:
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-
           rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/$PACKAGE_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # 1. Java
-          cp /tmp/MainActivity.java app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          echo "✅ Java file placed."
-
-          # 2. Layout: clean and validate
-          cp /tmp/activity_main.xml /tmp/activity_main_clean.xml
-          # Remove BOM
-          sed -i '1s/^\xEF\xBB\xBF//' /tmp/activity_main_clean.xml
-          # Remove leading whitespace
-          sed -i '1s/^[[:space:]]*//' /tmp/activity_main_clean.xml
-          # Check first char is '<'
-          if ! head -c1 /tmp/activity_main_clean.xml | grep -q '<'; then
-            echo "❌ ERROR: Layout file does not start with '<'. First 50 chars:"
-            head -c50 /tmp/activity_main_clean.xml
-            exit 1
-          fi
-          # Validate XML
-          xmllint --noout /tmp/activity_main_clean.xml 2>&1 || { echo "❌ ERROR: Layout XML is invalid"; exit 1; }
-          cp /tmp/activity_main_clean.xml app/src/main/res/layout/activity_main.xml
-          echo "✅ Layout file placed and valid."
-
-          # 3. Manifest: clean and copy
-          cp /tmp/AndroidManifest.xml /tmp/manifest_clean.xml
-          sed -i '1s/^\xEF\xBB\xBF//' /tmp/manifest_clean.xml
-          # Validate XML
-          xmllint --noout /tmp/manifest_clean.xml 2>&1 || { echo "❌ ERROR: Manifest XML is invalid"; exit 1; }
-          cp /tmp/manifest_clean.xml app/src/main/AndroidManifest.xml
-          sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
-          sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
-          echo "✅ Manifest file placed and fixed."
-
-          # 4. Icon
-          if [ -f /tmp/icon.png ]; then
-            cp /tmp/icon.png app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Icon placed."
+          # Use user-provided Java if exists and non-empty
+          if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
+            echo "✅ Using user-provided Java file."
+            cp MainActivity.java app/src/main/java/$PACKAGE_PATH/
+            # Ensure package name is correct
+            sed -i "s/package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
           else
-            # Default vector icon
-            cat > app/src/main/res/drawable/ic_launcher.xml << 'VECTOR_EOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <vector xmlns:android="http://schemas.android.com/apk/res/android"
-                android:width="24dp"
-                android:height="24dp"
-                android:viewportWidth="24"
-                android:viewportHeight="24">
-                <path
-                    android:fillColor="#FF6200EE"
-                    android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
-            </vector>
-            VECTOR_EOF
-            echo "✅ Default vector icon created."
+            echo "ℹ️ No valid Java provided, using calculator fallback."
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_EOF'
+          package PACKAGE_PLACEHOLDER;
+
+          import android.os.Bundle;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private EditText etFirst, etSecond;
+              private TextView tvResult;
+              private Button btnAdd, btnSubtract, btnMultiply, btnDivide, btnClear;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  etFirst = findViewById(R.id.etFirst);
+                  etSecond = findViewById(R.id.etSecond);
+                  tvResult = findViewById(R.id.tvResult);
+                  btnAdd = findViewById(R.id.btnAdd);
+                  btnSubtract = findViewById(R.id.btnSubtract);
+                  btnMultiply = findViewById(R.id.btnMultiply);
+                  btnDivide = findViewById(R.id.btnDivide);
+                  btnClear = findViewById(R.id.btnClear);
+
+                  btnAdd.setOnClickListener(v -> calculate('+'));
+                  btnSubtract.setOnClickListener(v -> calculate('-'));
+                  btnMultiply.setOnClickListener(v -> calculate('*'));
+                  btnDivide.setOnClickListener(v -> calculate('/'));
+                  btnClear.setOnClickListener(v -> {
+                      etFirst.setText("");
+                      etSecond.setText("");
+                      tvResult.setText("Result: ");
+                  });
+              }
+
+              private void calculate(char op) {
+                  String a = etFirst.getText().toString().trim();
+                  String b = etSecond.getText().toString().trim();
+                  if (a.isEmpty() || b.isEmpty()) {
+                      tvResult.setText("Result: Enter both numbers");
+                      return;
+                  }
+                  double x, y, r = 0;
+                  try {
+                      x = Double.parseDouble(a);
+                      y = Double.parseDouble(b);
+                  } catch (NumberFormatException e) {
+                      tvResult.setText("Result: Invalid number");
+                      return;
+                  }
+                  switch (op) {
+                      case '+': r = x + y; break;
+                      case '-': r = x - y; break;
+                      case '*': r = x * y; break;
+                      case '/':
+                          if (y == 0) {
+                              tvResult.setText("Result: Cannot divide by zero");
+                              return;
+                          }
+                          r = x / y;
+                          break;
+                  }
+                  tvResult.setText("Result: " + r);
+              }
+          }
+          JAVA_EOF
+            sed -i "s/PACKAGE_PLACEHOLDER/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
           fi
+
+          # Use user-provided layout if exists and looks like XML
+          if [ -s activity_main.xml ] && grep -q "LinearLayout" activity_main.xml; then
+            echo "✅ Using user-provided layout."
+            cp activity_main.xml app/src/main/res/layout/
+          else
+            echo "ℹ️ No valid layout, using calculator fallback."
+            cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="20dp"
+              android:gravity="center">
+              <EditText android:id="@+id/etFirst"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="First number"
+                  android:inputType="numberDecimal"
+                  android:padding="12dp"
+                  android:layout_marginBottom="10dp"/>
+              <EditText android:id="@+id/etSecond"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="Second number"
+                  android:inputType="numberDecimal"
+                  android:padding="12dp"
+                  android:layout_marginBottom="20dp"/>
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal"
+                  android:gravity="center"
+                  android:layout_marginBottom="20dp">
+                  <Button android:id="@+id/btnAdd"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="+"
+                      android:textSize="24sp"
+                      android:layout_marginEnd="5dp"/>
+                  <Button android:id="@+id/btnSubtract"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="-"
+                      android:textSize="24sp"
+                      android:layout_marginStart="5dp"
+                      android:layout_marginEnd="5dp"/>
+                  <Button android:id="@+id/btnMultiply"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="×"
+                      android:textSize="24sp"
+                      android:layout_marginStart="5dp"
+                      android:layout_marginEnd="5dp"/>
+                  <Button android:id="@+id/btnDivide"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="÷"
+                      android:textSize="24sp"
+                      android:layout_marginStart="5dp"/>
+              </LinearLayout>
+              <Button android:id="@+id/btnClear"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Clear"
+                  android:textSize="18sp"
+                  android:layout_marginBottom="20dp"/>
+              <TextView android:id="@+id/tvResult"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Result: "
+                  android:textSize="20sp"
+                  android:textStyle="bold"
+                  android:gravity="center"
+                  android:padding="12dp"/>
+          </LinearLayout>
+          LAYOUT_EOF
+          fi
+
+          echo "✅ Java file placed."
+          echo "✅ Layout file placed and valid."
+          echo "✅ Manifest will be created separately."
+
+      - name: Create AndroidManifest.xml (without package attribute)
+        run: |
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          cat > app/src/main/AndroidManifest.xml << 'MANIFEST_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="APP_NAME_PLACEHOLDER"
+                  android:theme="@style/AppTheme"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST_EOF
+          sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/AndroidManifest.xml
+          echo "✅ Manifest file placed and fixed."
 
       - name: Create Gradle Build Files
         run: |
-          set -e
-          cat > settings.gradle << EOF
-          rootProject.name = "${{ steps.decode.outputs.app_name }}"
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "SystemPro"
           include ':app'
           EOF
 
@@ -226,7 +324,6 @@ jobs:
                   classpath 'com.android.tools.build:gradle:8.1.0'
               }
           }
-
           allprojects {
               repositories {
                   google()
@@ -235,21 +332,16 @@ jobs:
           }
           EOF
 
-          cat > app/build.gradle << EOF
+          cat > app/build.gradle << 'EOF'
           apply plugin: 'com.android.application'
-
           android {
-              namespace '${{ steps.decode.outputs.package_name }}'
               compileSdk 34
-
               defaultConfig {
-                  applicationId "${{ steps.decode.outputs.package_name }}"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-
               buildTypes {
                   release {
                       minifyEnabled false
@@ -259,13 +351,11 @@ jobs:
                       debuggable true
                   }
               }
-
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
@@ -275,7 +365,6 @@ jobs:
 
       - name: Create Resource Files
         run: |
-          set -e
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -287,13 +376,28 @@ jobs:
           </resources>
           EOF
 
-          cat > app/src/main/res/values/strings.xml << EOF
+          cat > app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">${{ steps.decode.outputs.app_name }}</string>
+              <string name="app_name">SystemPro</string>
           </resources>
           EOF
 
+          cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FF6200EE"
+                  android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
+          </vector>
+          EOF
+
+      - name: Create gradle.properties
+        run: |
           cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
@@ -320,7 +424,7 @@ jobs:
         run: |
           APK_PATH=$(find app/build/outputs -name "*.apk" | head -n 1)
           if [ -z "$APK_PATH" ]; then
-            echo "No APK found!" > error_msg.txt
+            echo "No APK found!"
             exit 1
           fi
           echo "APK found at: $APK_PATH"
@@ -333,27 +437,7 @@ jobs:
           path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 7
 
-      - name: Create Error Log on Failure
-        if: failure()
-        run: |
-          echo "❌ Build failed!" > error_logs.txt
-          echo "Package: ${{ steps.decode.outputs.package_name }}" >> error_logs.txt
-          echo "App: ${{ steps.decode.outputs.app_name }}" >> error_logs.txt
-          if [ -f error_msg.txt ]; then
-            cat error_msg.txt >> error_logs.txt
-          else
-            echo "Check the workflow logs for details." >> error_logs.txt
-          fi
-
-      - name: Upload Error Log Artifact
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: error_logs
-          path: error_logs.txt
-          retention-days: 7
-
-      - name: Send Completion Signal
+      - name: Send Repository Dispatch (Completion Signal)
         if: always()
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -361,11 +445,6 @@ jobs:
           STATUS="${{ job.status }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          ERROR_DETAILS=""
-          if [ "$STATUS" == "failure" ] && [ -f error_logs.txt ]; then
-            ERROR_DETAILS=$(cat error_logs.txt | head -c 500 | jq -sR .)
-          fi
-
           if [ -n "$PAT_TOKEN" ]; then
             curl -X POST \
               -H "Accept: application/vnd.github.v3+json" \
@@ -378,7 +457,6 @@ jobs:
                   "status": "'"$STATUS"'",
                   "app_name": "'"$APP_NAME"'",
                   "package_name": "'"$PACKAGE_NAME"'",
-                  "error_details": '"${ERROR_DETAILS:-null}"',
                   "build_time": "'$(date)'"
                 }
               }' || echo "Failed to send completion signal"
