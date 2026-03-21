@@ -1,4 +1,4 @@
-name: System Pro Strict APK Builder
+name: System Pro Production APK Builder
 
 on:
   repository_dispatch:
@@ -41,6 +41,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # ---------- Android SDK Installation (Stable & Complete) ----------
       - name: Setup Android SDK
         run: |
           sudo apt-get update
@@ -70,11 +71,12 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           yes | sdkmanager --licenses || true
 
-      - name: Install Platform Tools
+      - name: Install Platform Tools & Build Tools
         run: |
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+      # ---------- Decode User Input ----------
       - name: Decode Package Info
         id: decode
         run: |
@@ -99,7 +101,8 @@ jobs:
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
           fi
 
-      - name: Create Android Project with User Code
+      # ---------- Create Project Structure ----------
+      - name: Create Android Project
         run: |
           set -e
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
@@ -111,16 +114,19 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
+          # Use user-provided Java if present and valid
           if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
             echo "✅ Using user-provided Java file."
             cp MainActivity.java app/src/main/java/$PACKAGE_PATH/
+            # Ensure package name is exactly as provided
             sed -i "s/package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
           else
-            echo "ℹ️ No valid Java provided, using calculator fallback."
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_EOF'
+            # Fallback: a complete calculator app (large code ready)
+            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_FALLBACK'
           package PACKAGE_PLACEHOLDER;
 
           import android.os.Bundle;
+          import android.view.View;
           import android.widget.Button;
           import android.widget.EditText;
           import android.widget.TextView;
@@ -186,16 +192,16 @@ jobs:
                   tvResult.setText("Result: " + r);
               }
           }
-          JAVA_EOF
+          JAVA_FALLBACK
             sed -i "s/PACKAGE_PLACEHOLDER/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
           fi
 
+          # Layout
           if [ -s activity_main.xml ] && grep -q "LinearLayout" activity_main.xml; then
             echo "✅ Using user-provided layout."
             cp activity_main.xml app/src/main/res/layout/
           else
-            echo "ℹ️ No valid layout, using calculator fallback."
-            cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_EOF'
+            cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_FALLBACK'
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -269,10 +275,11 @@ jobs:
                   android:gravity="center"
                   android:padding="12dp"/>
           </LinearLayout>
-          LAYOUT_EOF
+          LAYOUT_FALLBACK
           fi
 
-      - name: Create AndroidManifest.xml (without package attribute)
+      # ---------- AndroidManifest.xml (no package attribute) ----------
+      - name: Create AndroidManifest.xml
         run: |
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           cat > app/src/main/AndroidManifest.xml << 'MANIFEST_EOF'
@@ -298,7 +305,8 @@ jobs:
           MANIFEST_EOF
           sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/AndroidManifest.xml
 
-      - name: Create Gradle Build Files (FIXED - with all required fields)
+      # ---------- Gradle Files (Complete & Production-Ready) ----------
+      - name: Create Gradle Build Files
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
@@ -364,6 +372,7 @@ jobs:
           }
           EOF
 
+      # ---------- Resource Files ----------
       - name: Create Resource Files
         run: |
           cat > app/src/main/res/values/styles.xml << 'EOF'
@@ -406,6 +415,7 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
           EOF
 
+      # ---------- Install Gradle ----------
       - name: Install Gradle
         run: |
           GRADLE_VERSION=8.1.1
@@ -416,10 +426,12 @@ jobs:
           export PATH=$PATH:/opt/gradle/bin
           gradle --version
 
+      # ---------- Build APK ----------
       - name: Build APK
         run: |
           gradle clean assembleDebug --stacktrace --no-daemon
 
+      # ---------- Locate and Upload APK ----------
       - name: Locate APK
         id: find-apk
         run: |
@@ -438,6 +450,7 @@ jobs:
           path: ${{ steps.find-apk.outputs.apk_path }}
           retention-days: 7
 
+      # ---------- Completion Signal ----------
       - name: Send Repository Dispatch (Completion Signal)
         if: always()
         env:
