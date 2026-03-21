@@ -19,6 +19,10 @@ on:
       layout_code:
         description: 'Base64 encoded Layout code'
         required: true
+      icon_base64:
+        description: 'Base64 encoded app icon (PNG)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -85,11 +89,13 @@ jobs:
             APP_NAME='${{ github.event.client_payload.app_name }}'
             JAVA_BASE64='${{ github.event.client_payload.java_code }}'
             LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
+            ICON_BASE64='${{ github.event.client_payload.icon_base64 }}'
           else
             PACKAGE_NAME='${{ github.event.inputs.package_name }}'
             APP_NAME='${{ github.event.inputs.app_name }}'
             JAVA_BASE64='${{ github.event.inputs.java_code }}'
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
+            ICON_BASE64='${{ github.event.inputs.icon_base64 }}'
           fi
           PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
           echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
@@ -99,6 +105,13 @@ jobs:
           fi
           if [ -n "$LAYOUT_BASE64" ]; then
             echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
+          fi
+          # Decode icon if provided
+          if [ -n "$ICON_BASE64" ]; then
+            echo "$ICON_BASE64" | base64 -d > app_icon.png 2>/dev/null || true
+            if [ -s app_icon.png ]; then
+              echo "icon_provided=true" >> $GITHUB_OUTPUT
+            fi
           fi
 
       # ---------- Create Project Structure ----------
@@ -393,18 +406,26 @@ jobs:
           </resources>
           EOF
 
-          cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="24dp"
-              android:height="24dp"
-              android:viewportWidth="24"
-              android:viewportHeight="24">
-              <path
-                  android:fillColor="#FF6200EE"
-                  android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
-          </vector>
-          EOF
+          # Custom icon handling
+          if [ -f app_icon.png ] && [ -s app_icon.png ]; then
+            echo "✅ Using custom icon from base64"
+            cp app_icon.png app/src/main/res/drawable/ic_launcher.png
+            # No need to create fallback vector icon
+          else
+            echo "ℹ️ No custom icon provided; using default vector icon."
+            cat > app/src/main/res/drawable/ic_launcher.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <vector xmlns:android="http://schemas.android.com/apk/res/android"
+                android:width="24dp"
+                android:height="24dp"
+                android:viewportWidth="24"
+                android:viewportHeight="24">
+                <path
+                    android:fillColor="#FF6200EE"
+                    android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
+            </vector>
+            EOF
+          fi
 
       - name: Create gradle.properties
         run: |
