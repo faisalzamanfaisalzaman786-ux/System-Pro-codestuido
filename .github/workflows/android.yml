@@ -1,62 +1,354 @@
-- name: Create Android Project with User Code
-  run: |
-    PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-    APP_NAME="${{ steps.decode.outputs.app_name }}"
-    PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+name: System Pro Strict APK Builder
 
-    rm -rf app/src/main/java/*
+on:
+  repository_dispatch:
+    types: [build_apk]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.example.app'
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyDynamicApp'
+      java_code:
+        description: 'Base64 encoded Java code'
+        required: true
+      layout_code:
+        description: 'Base64 encoded Layout code'
+        required: true
+      manifest_code:
+        description: 'Base64 encoded Manifest code'
+        required: true
+      icon:
+        description: 'Base64 encoded Icon (PNG)'
+        required: false
+        default: ''
 
-    mkdir -p app/src/main/java/$PACKAGE_PATH
-    mkdir -p app/src/main/res/layout
-    mkdir -p app/src/main/res/values
-    mkdir -p app/src/main/res/drawable
+permissions:
+  contents: write
+  actions: write
+  statuses: write
 
-    # --- Java: ensure package name is correct ---
-    cp /tmp/MainActivity.java app/src/main/java/$PACKAGE_PATH/MainActivity.java
-    sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
 
-    # --- Layout: clean XML before copying ---
-    # Remove BOM and leading/trailing whitespace
-    if [ -f /tmp/activity_main.xml ]; then
-      # Remove UTF-8 BOM if present
-      sed -i '1s/^\xEF\xBB\xBF//' /tmp/activity_main.xml
-      # Remove leading whitespace
-      sed -i '1s/^[[:space:]]*//' /tmp/activity_main.xml
-      # Ensure file starts with '<' (if not, it's invalid)
-      if ! head -c1 /tmp/activity_main.xml | grep -q '<'; then
-        echo "Error: activity_main.xml does not start with '<'" > error_msg.txt
-        exit 1
-      fi
-      cp /tmp/activity_main.xml app/src/main/res/layout/activity_main.xml
-    else
-      echo "Error: layout file missing" > error_msg.txt
-      exit 1
-    fi
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    # --- Manifest: clean and copy ---
-    if [ -f /tmp/AndroidManifest.xml ]; then
-      sed -i '1s/^\xEF\xBB\xBF//' /tmp/AndroidManifest.xml
-      cp /tmp/AndroidManifest.xml app/src/main/AndroidManifest.xml
-      sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
-      sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
-    else
-      echo "Error: manifest file missing" > error_msg.txt
-      exit 1
-    fi
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    # --- Icon handling (safe) ---
-    if [ -f /tmp/icon.png ]; then
-      cp /tmp/icon.png app/src/main/res/drawable/ic_launcher.png
-    else
-      # Create default vector icon using printf (no here-doc)
-      printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/drawable/ic_launcher.xml
-      printf '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '    android:width="24dp"\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '    android:height="24dp"\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '    android:viewportWidth="24"\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '    android:viewportHeight="24">\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '    <path\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '        android:fillColor="#FF6200EE"\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>\n' >> app/src/main/res/drawable/ic_launcher.xml
-      printf '</vector>\n' >> app/src/main/res/drawable/ic_launcher.xml
-    fi
+      - name: Setup Android SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          mkdir -p $ANDROID_SDK_ROOT
+
+          cd $ANDROID_SDK_ROOT
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+
+          mkdir -p cmdline-tools
+          mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || true
+          rm -rf cmdline-tools_temp
+
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/bin" >> $GITHUB_PATH
+
+      - name: Install Android SDK Components
+        run: |
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin
+          yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager "cmdline-tools;latest" --sdk_root=$ANDROID_HOME
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+
+      - name: Accept Android Licenses
+        run: |
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses || true
+
+      - name: Install Platform Tools
+        run: |
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Decode and Validate Inputs
+        id: decode
+        run: |
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            PACKAGE_NAME='${{ github.event.client_payload.package_name }}'
+            APP_NAME='${{ github.event.client_payload.app_name }}'
+            JAVA_BASE64='${{ github.event.client_payload.java_code }}'
+            LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
+            MANIFEST_BASE64='${{ github.event.client_payload.manifest_code }}'
+            ICON_BASE64='${{ github.event.client_payload.icon }}'
+          else
+            PACKAGE_NAME='${{ github.event.inputs.package_name }}'
+            APP_NAME='${{ github.event.inputs.app_name }}'
+            JAVA_BASE64='${{ github.event.inputs.java_code }}'
+            LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
+            MANIFEST_BASE64='${{ github.event.inputs.manifest_code }}'
+            ICON_BASE64='${{ github.event.inputs.icon }}'
+          fi
+
+          MISSING=""
+          [ -z "$PACKAGE_NAME" ] && MISSING="$MISSING package_name"
+          [ -z "$APP_NAME" ] && MISSING="$MISSING app_name"
+          [ -z "$JAVA_BASE64" ] && MISSING="$MISSING java_code"
+          [ -z "$LAYOUT_BASE64" ] && MISSING="$MISSING layout_code"
+          [ -z "$MANIFEST_BASE64" ] && MISSING="$MISSING manifest_code"
+
+          if [ -n "$MISSING" ]; then
+            echo "❌ ERROR: Missing required input(s):$MISSING" > error_msg.txt
+            cat error_msg.txt
+            exit 1
+          fi
+
+          PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
+          echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
+          # Decode using -n to avoid extra newline
+          echo -n "$JAVA_BASE64" | base64 -d > /tmp/MainActivity.java
+          echo -n "$LAYOUT_BASE64" | base64 -d > /tmp/activity_main.xml
+          echo -n "$MANIFEST_BASE64" | base64 -d > /tmp/AndroidManifest.xml
+          if [ -n "$ICON_BASE64" ]; then
+            echo -n "$ICON_BASE64" | base64 -d > /tmp/icon.png
+          fi
+
+      - name: Create Android Project with User Code
+        run: |
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
+
+          rm -rf app/src/main/java/*
+
+          mkdir -p app/src/main/java/$PACKAGE_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+
+          # Java
+          cp /tmp/MainActivity.java app/src/main/java/$PACKAGE_PATH/MainActivity.java
+          sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
+
+          # Layout: remove BOM and leading whitespace
+          sed -i '1s/^\xEF\xBB\xBF//' /tmp/activity_main.xml
+          sed -i '1s/^[[:space:]]*//' /tmp/activity_main.xml
+          if ! head -c1 /tmp/activity_main.xml | grep -q '<'; then
+            echo "Error: layout file does not start with '<'" > error_msg.txt
+            exit 1
+          fi
+          cp /tmp/activity_main.xml app/src/main/res/layout/activity_main.xml
+
+          # Manifest: clean and copy
+          sed -i '1s/^\xEF\xBB\xBF//' /tmp/AndroidManifest.xml
+          cp /tmp/AndroidManifest.xml app/src/main/AndroidManifest.xml
+          sed -i "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" app/src/main/AndroidManifest.xml
+          sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/" app/src/main/AndroidManifest.xml
+
+          # Icon
+          if [ -f /tmp/icon.png ]; then
+            cp /tmp/icon.png app/src/main/res/drawable/ic_launcher.png
+          else
+            # Default vector icon
+            printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/drawable/ic_launcher.xml
+            printf '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '    android:width="24dp"\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '    android:height="24dp"\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '    android:viewportWidth="24"\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '    android:viewportHeight="24">\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '    <path\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '        android:fillColor="#FF6200EE"\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>\n' >> app/src/main/res/drawable/ic_launcher.xml
+            printf '</vector>\n' >> app/src/main/res/drawable/ic_launcher.xml
+          fi
+
+      - name: Create Gradle Build Files
+        run: |
+          cat > settings.gradle << EOF
+          rootProject.name = "${{ steps.decode.outputs.app_name }}"
+          include ':app'
+          EOF
+
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat > app/build.gradle << EOF
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace '${{ steps.decode.outputs.package_name }}'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "${{ steps.decode.outputs.package_name }}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  debug {
+                      debuggable true
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: Create Resource Files
+        run: |
+          cat > app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryDark">#3700B3</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/res/values/strings.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">${{ steps.decode.outputs.app_name }}</string>
+          </resources>
+          EOF
+
+          cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+          EOF
+
+      - name: Install Gradle
+        run: |
+          GRADLE_VERSION=8.1.1
+          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
+          unzip -q gradle-${GRADLE_VERSION}-bin.zip
+          sudo mv gradle-${GRADLE_VERSION} /opt/gradle
+          echo "/opt/gradle/bin" >> $GITHUB_PATH
+          export PATH=$PATH:/opt/gradle/bin
+          gradle --version
+
+      - name: Build APK
+        run: |
+          gradle clean assembleDebug --stacktrace --no-daemon
+
+      - name: Locate APK
+        id: find-apk
+        run: |
+          APK_PATH=$(find app/build/outputs -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found!" > error_msg.txt
+            exit 1
+          fi
+          echo "APK found at: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.decode.outputs.app_name }}-debug
+          path: ${{ steps.find-apk.outputs.apk_path }}
+          retention-days: 7
+
+      - name: Create Error Log on Failure
+        if: failure()
+        run: |
+          echo "❌ Build failed!" > error_logs.txt
+          echo "Package: ${{ steps.decode.outputs.package_name }}" >> error_logs.txt
+          echo "App: ${{ steps.decode.outputs.app_name }}" >> error_logs.txt
+          if [ -f error_msg.txt ]; then
+            cat error_msg.txt >> error_logs.txt
+          else
+            echo "Check the workflow logs for details." >> error_logs.txt
+          fi
+
+      - name: Upload Error Log Artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error_logs
+          path: error_logs.txt
+          retention-days: 7
+
+      - name: Send Completion Signal
+        if: always()
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          STATUS="${{ job.status }}"
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
+          ERROR_DETAILS=""
+          if [ "$STATUS" == "failure" ] && [ -f error_logs.txt ]; then
+            ERROR_DETAILS=$(cat error_logs.txt | head -c 500 | jq -sR .)
+          fi
+
+          if [ -n "$PAT_TOKEN" ]; then
+            curl -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: Bearer $PAT_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${{ github.repository }}/dispatches \
+              -d '{
+                "event_type": "build_complete",
+                "client_payload": {
+                  "status": "'"$STATUS"'",
+                  "app_name": "'"$APP_NAME"'",
+                  "package_name": "'"$PACKAGE_NAME"'",
+                  "error_details": '"${ERROR_DETAILS:-null}"',
+                  "build_time": "'$(date)'"
+                }
+              }' || echo "Failed to send completion signal"
+          fi
