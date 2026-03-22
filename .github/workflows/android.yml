@@ -14,17 +14,35 @@ on:
         required: true
         default: 'MyDynamicApp'
       java_code:
-        description: 'Base64 encoded Java code'
-        required: true
+        description: 'Base64 encoded Java code (or part1 if split)'
+        required: false
+        default: ''
+      java_code_part2:
+        description: 'Base64 encoded Java code part2 (optional)'
+        required: false
+        default: ''
+      java_code_part3:
+        description: 'Base64 encoded Java code part3 (optional)'
+        required: false
+        default: ''
       layout_code:
-        description: 'Base64 encoded Layout code'
-        required: true
+        description: 'Base64 encoded Layout code (or part1)'
+        required: false
+        default: ''
+      layout_code_part2:
+        description: 'Base64 encoded Layout code part2 (optional)'
+        required: false
+        default: ''
       manifest_code:
         description: 'Base64 encoded AndroidManifest.xml'
         required: false
         default: ''
       icon_base64:
-        description: 'Base64 encoded app icon (PNG)'
+        description: 'Base64 encoded app icon (PNG) (or part1)'
+        required: false
+        default: ''
+      icon_base64_part2:
+        description: 'Base64 encoded app icon part2 (optional)'
         required: false
         default: ''
 
@@ -84,7 +102,7 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      # ---------- Decode User Input ----------
+      # ---------- Decode User Input (with multi-part support) ----------
       - name: Decode Package Info
         id: decode
         run: |
@@ -92,31 +110,68 @@ jobs:
             PACKAGE_NAME='${{ github.event.client_payload.package_name }}'
             APP_NAME='${{ github.event.client_payload.app_name }}'
             JAVA_BASE64='${{ github.event.client_payload.java_code }}'
+            JAVA_BASE64_2='${{ github.event.client_payload.java_code_part2 }}'
+            JAVA_BASE64_3='${{ github.event.client_payload.java_code_part3 }}'
             LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
+            LAYOUT_BASE64_2='${{ github.event.client_payload.layout_code_part2 }}'
             MANIFEST_BASE64='${{ github.event.client_payload.manifest_code }}'
             ICON_BASE64='${{ github.event.client_payload.icon_base64 }}'
+            ICON_BASE64_2='${{ github.event.client_payload.icon_base64_part2 }}'
           else
             PACKAGE_NAME='${{ github.event.inputs.package_name }}'
             APP_NAME='${{ github.event.inputs.app_name }}'
             JAVA_BASE64='${{ github.event.inputs.java_code }}'
+            JAVA_BASE64_2='${{ github.event.inputs.java_code_part2 }}'
+            JAVA_BASE64_3='${{ github.event.inputs.java_code_part3 }}'
             LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
+            LAYOUT_BASE64_2='${{ github.event.inputs.layout_code_part2 }}'
             MANIFEST_BASE64='${{ github.event.inputs.manifest_code }}'
             ICON_BASE64='${{ github.event.inputs.icon_base64 }}'
+            ICON_BASE64_2='${{ github.event.inputs.icon_base64_part2 }}'
           fi
           PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
           echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+
+          # Combine multi-part Java code
           if [ -n "$JAVA_BASE64" ]; then
-            echo "$JAVA_BASE64" | base64 -d > MainActivity.java 2>/dev/null || true
+            echo "$JAVA_BASE64" > java_base64.tmp
           fi
+          if [ -n "$JAVA_BASE64_2" ]; then
+            echo "$JAVA_BASE64_2" >> java_base64.tmp
+          fi
+          if [ -n "$JAVA_BASE64_3" ]; then
+            echo "$JAVA_BASE64_3" >> java_base64.tmp
+          fi
+          if [ -s java_base64.tmp ]; then
+            cat java_base64.tmp | base64 -d > MainActivity.java 2>/dev/null || true
+          fi
+
+          # Combine multi-part Layout
           if [ -n "$LAYOUT_BASE64" ]; then
-            echo "$LAYOUT_BASE64" | base64 -d > activity_main.xml 2>/dev/null || true
+            echo "$LAYOUT_BASE64" > layout_base64.tmp
           fi
+          if [ -n "$LAYOUT_BASE64_2" ]; then
+            echo "$LAYOUT_BASE64_2" >> layout_base64.tmp
+          fi
+          if [ -s layout_base64.tmp ]; then
+            cat layout_base64.tmp | base64 -d > activity_main.xml 2>/dev/null || true
+          fi
+
+          # Manifest (single part only, as it's usually small)
           if [ -n "$MANIFEST_BASE64" ]; then
             echo "$MANIFEST_BASE64" | base64 -d > AndroidManifest.xml 2>/dev/null || true
           fi
+
+          # Combine multi-part Icon
           if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" | base64 -d > app_icon.png 2>/dev/null || true
+            echo "$ICON_BASE64" > icon_base64.tmp
+          fi
+          if [ -n "$ICON_BASE64_2" ]; then
+            echo "$ICON_BASE64_2" >> icon_base64.tmp
+          fi
+          if [ -s icon_base64.tmp ]; then
+            cat icon_base64.tmp | base64 -d > app_icon.png 2>/dev/null || true
             if [ -s app_icon.png ]; then
               echo "icon_provided=true" >> $GITHUB_OUTPUT
             fi
@@ -146,6 +201,7 @@ jobs:
             cp MainActivity.java app/src/main/java/$PACKAGE_PATH/
             sed -i "s/package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
           else
+            # Fallback: simple placeholder
             cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_FALLBACK'
           package PACKAGE_PLACEHOLDER;
           import android.os.Bundle;
@@ -188,18 +244,53 @@ jobs:
           LAYOUT_FALLBACK
           fi
 
-      # ---------- AndroidManifest.xml ----------
+      # ---------- AndroidManifest.xml (with all common permissions) ----------
       - name: Create AndroidManifest.xml
         run: |
           APP_NAME="${{ steps.decode.outputs.app_name }}"
           if [ -s AndroidManifest.xml ]; then
             echo "✅ Using user-provided manifest."
             cp AndroidManifest.xml app/src/main/AndroidManifest.xml
+            # Ensure icon is set to @mipmap/ic_launcher
             sed -i 's|android:icon="@drawable/ic_launcher"|android:icon="@mipmap/ic_launcher"|g' app/src/main/AndroidManifest.xml
           else
             cat > app/src/main/AndroidManifest.xml << MANIFEST_EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <!-- Common permissions for almost all apps -->
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+              <!-- Camera and related -->
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+              <!-- Audio recording -->
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+              <!-- Storage (for photos, videos, etc.) -->
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:maxSdkVersion="33" />
+
+              <!-- Location (GPS) -->
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+              <!-- Torch / flashlight (uses camera permission) -->
+              <!-- Already covered by CAMERA -->
+
+              <!-- Contacts, SMS, Phone (if needed) -->
+              <uses-permission android:name="android.permission.READ_CONTACTS" />
+              <uses-permission android:name="android.permission.READ_SMS" />
+              <uses-permission android:name="android.permission.CALL_PHONE" />
+
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -225,7 +316,7 @@ jobs:
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
-          # Define camera version outside heredoc to avoid empty substitution
+          # CameraX version (needed for camera apps, harmless for others)
           CAMERAX_VERSION="1.4.0"
 
           cat > settings.gradle << EOF
