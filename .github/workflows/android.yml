@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:   # manual run کے لیے
+  workflow_dispatch:
 
 jobs:
   build:
@@ -33,7 +33,7 @@ jobs:
           sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
         done
 
-        # 2. build.gradle میں applicationId (صرف app/build.gradle کو تبدیل کریں)
+        # 2. app/build.gradle میں applicationId (صرف app والی)
         if grep -q "applicationId" app/build.gradle; then
           echo "Updating app/build.gradle"
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
