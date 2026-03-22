@@ -33,7 +33,7 @@ jobs:
           sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
         done
 
-        # 2. app/build.gradle میں applicationId (صرف app والی)
+        # 2. صرف app/build.gradle میں applicationId تبدیل کریں
         if grep -q "applicationId" app/build.gradle; then
           echo "Updating app/build.gradle"
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
