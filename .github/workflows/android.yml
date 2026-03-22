@@ -31,14 +31,14 @@ jobs:
           PKG="${{ steps.pkg.outputs.name }}"
           echo "Using package name: $PKG"
 
-          # 1. تمام AndroidManifest.xml فائلیں
+          # 1. تمام AndroidManifest.xml
           find . -name "AndroidManifest.xml" -type f | while read f; do
             echo "Updating $f"
             sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
             sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
           done
 
-          # 2. تمام build.gradle فائلیں جن میں applicationId ہو
+          # 2. تمام build.gradle جن میں applicationId ہو
           find . -name "build.gradle" -type f | while read f; do
             if grep -q "applicationId" "$f"; then
               echo "Updating $f"
