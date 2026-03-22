@@ -1,4 +1,4 @@
-name: System Pro Master Net Final
+name: System Pro Net Fix
 
 on:
   push:
@@ -19,13 +19,13 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: 100% Net Reconstruction
+    - name: Step 1 - Reconstruct All Files
       run: |
         # فولڈرز کی تیاری
         mkdir -p app/src/main/java/com/systempro/master
         mkdir -p app/src/main/res/layout
 
-        # 1. settings.gradle (سب سے اہم فائل جو پلگ انز ڈھونڈتی ہے)
+        # 1. settings.gradle
         cat <<EOF > settings.gradle
         pluginManagement {
             repositories {
@@ -47,17 +47,17 @@ jobs:
 
         # 2. build.gradle (Root)
         cat <<EOF > build.gradle
-        plugins {
-            id 'com.android.application' version '8.1.1' apply false
+        buildscript {
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
         }
         EOF
 
-        # 3. app/build.gradle
+        # 3. app/build.gradle (Modern Format)
         cat <<EOF > app/build.gradle
         plugins {
             id 'com.android.application'
         }
-
         android {
             namespace 'com.systempro.master'
             compileSdk 34
@@ -71,7 +71,7 @@ jobs:
         }
         EOF
 
-        # 4. مینی فیسٹ اور جاوا
+        # 4. Manifest & Java
         cat <<EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -96,20 +96,19 @@ jobs:
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 TextView tv = new TextView(this);
-                tv.setText("System Pro: Net Setup Complete!");
+                tv.setText("Net Build Fixed: Version 8.1.1 Forced");
                 setContentView(tv);
             }
         }
         EOF
 
-        # 5. پراپرٹیز
         echo "android.suppressUnsupportedCompileSdk=34" > gradle.properties
 
-    - name: Setup Gradle
-      # ہم اسے بتائیں گے کہ پرانے مستحکم ورژن پر ہی رہنا ہے
-      run: gradle wrapper --gradle-version 8.1.1
+    - name: Step 2 - Force Stable Gradle 8.1.1
+      # یہاں ہم 9.4 کو نظر انداز کر کے 8.1.1 ڈاؤن لوڈ کر رہے ہیں
+      uses: gradle/gradle-build-action@v3
+      with:
+        gradle-version: 8.1.1
 
-    - name: Final Build Execution
-      run: |
-        chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
+    - name: Step 3 - Final Build
+      run: gradle assembleDebug --stacktrace
