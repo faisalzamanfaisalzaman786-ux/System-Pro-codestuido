@@ -14,6 +14,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -21,24 +23,25 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Critical File Name Fix & SDK Setup
+    - name: Clean and Fix Project
       run: |
-        # 1. غلط نام والی فائل کو درست کرنا
-        # یہ کمانڈ فائل کے شروع سے غیر قانونی حروف ہٹا دے گی
-        find . -name ":vi*" -type f | while read f; do
+        # 1. پرانی عارضی فائلیں ختم کرنا
+        chmod +x gradlew
+        ./gradlew clean
+
+        # 2. غلط نام والی فائلوں کو درست کرنا (صرف سورس میں)
+        find app/src/main/res -name ":vi*" -type f | while read f; do
           new_name=$(echo "$f" | sed 's/:vi //g')
           mv "$f" "$new_name"
         done
 
-        # 2. SDK 34 کی وارننگ کا حل
-        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
-        
-        # 3. Package Name اپ ڈیٹ
+        # 3. پیکیج نیم صرف سورس فائلوں میں تبدیل کرنا (build فولڈر کو چھوڑ کر)
         PKG="com.example.cameraapp"
-        find . -name "AndroidManifest.xml" -type f -exec sed -i "s/package=\".*\"/package=\"$PKG\"/" {} +
+        find app/src/main -name "AndroidManifest.xml" -type f -exec sed -i "s/package=\".*\"/package=\"$PKG\"/" {} +
+        find app/src/main/java -name "*.java" -type f -exec sed -i "s/^package .*;/package $PKG;/" {} +
 
-    - name: Make gradlew executable
-      run: chmod +x gradlew
+        # 4. SDK وارننگ فکس
+        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
@@ -46,5 +49,5 @@ jobs:
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: Fixed-System-Pro-APK
+        name: System-Pro-Final-APK
         path: app/build/outputs/apk/debug/app-debug.apk
