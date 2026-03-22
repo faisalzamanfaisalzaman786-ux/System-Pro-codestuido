@@ -225,6 +225,8 @@ jobs:
         run: |
           PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
           APP_NAME="${{ steps.decode.outputs.app_name }}"
+          # Define camera version outside heredoc to avoid empty substitution
+          CAMERAX_VERSION="1.4.0"
 
           cat > settings.gradle << EOF
           rootProject.name = "$APP_NAME"
@@ -285,11 +287,10 @@ jobs:
               implementation 'com.google.android.material:material:1.10.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
               // CameraX dependencies (needed for camera apps, harmless for others)
-              def camerax_version = "1.4.0"
-              implementation "androidx.camera:camera-core:${camerax_version}"
-              implementation "androidx.camera:camera-camera2:${camerax_version}"
-              implementation "androidx.camera:camera-lifecycle:${camerax_version}"
-              implementation "androidx.camera:camera-view:${camerax_version}"
+              implementation "androidx.camera:camera-core:${CAMERAX_VERSION}"
+              implementation "androidx.camera:camera-camera2:${CAMERAX_VERSION}"
+              implementation "androidx.camera:camera-lifecycle:${CAMERAX_VERSION}"
+              implementation "androidx.camera:camera-view:${CAMERAX_VERSION}"
           }
           EOF
 
