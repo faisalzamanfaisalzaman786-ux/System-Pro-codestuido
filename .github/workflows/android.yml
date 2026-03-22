@@ -149,70 +149,16 @@ jobs:
             cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_FALLBACK'
           package PACKAGE_PLACEHOLDER;
           import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.EditText;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
-              private EditText etFirst, etSecond;
-              private TextView tvResult;
-              private Button btnAdd, btnSubtract, btnMultiply, btnDivide, btnClear;
-
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-
-                  etFirst = findViewById(R.id.etFirst);
-                  etSecond = findViewById(R.id.etSecond);
-                  tvResult = findViewById(R.id.tvResult);
-                  btnAdd = findViewById(R.id.btnAdd);
-                  btnSubtract = findViewById(R.id.btnSubtract);
-                  btnMultiply = findViewById(R.id.btnMultiply);
-                  btnDivide = findViewById(R.id.btnDivide);
-                  btnClear = findViewById(R.id.btnClear);
-
-                  btnAdd.setOnClickListener(v -> calculate('+'));
-                  btnSubtract.setOnClickListener(v -> calculate('-'));
-                  btnMultiply.setOnClickListener(v -> calculate('*'));
-                  btnDivide.setOnClickListener(v -> calculate('/'));
-                  btnClear.setOnClickListener(v -> {
-                      etFirst.setText("");
-                      etSecond.setText("");
-                      tvResult.setText("Result: ");
-                  });
-              }
-
-              private void calculate(char op) {
-                  String a = etFirst.getText().toString().trim();
-                  String b = etSecond.getText().toString().trim();
-                  if (a.isEmpty() || b.isEmpty()) {
-                      tvResult.setText("Result: Enter both numbers");
-                      return;
-                  }
-                  double x, y, r = 0;
-                  try {
-                      x = Double.parseDouble(a);
-                      y = Double.parseDouble(b);
-                  } catch (NumberFormatException e) {
-                      tvResult.setText("Result: Invalid number");
-                      return;
-                  }
-                  switch (op) {
-                      case '+': r = x + y; break;
-                      case '-': r = x - y; break;
-                      case '*': r = x * y; break;
-                      case '/':
-                          if (y == 0) {
-                              tvResult.setText("Result: Cannot divide by zero");
-                              return;
-                          }
-                          r = x / y;
-                          break;
-                  }
-                  tvResult.setText("Result: " + r);
+                  TextView textView = findViewById(R.id.textView);
+                  textView.setText("Hello! This is a placeholder app. Provide your own Java code and layout.");
               }
           }
           JAVA_FALLBACK
@@ -220,7 +166,7 @@ jobs:
           fi
 
           # Layout
-          if [ -s activity_main.xml ] && grep -q "LinearLayout" activity_main.xml; then
+          if [ -s activity_main.xml ] && grep -q "LinearLayout\|FrameLayout\|ConstraintLayout" activity_main.xml; then
             echo "✅ Using user-provided layout."
             cp activity_main.xml app/src/main/res/layout/
           else
@@ -229,74 +175,15 @@ jobs:
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
+              android:gravity="center"
               android:orientation="vertical"
-              android:padding="20dp"
-              android:gravity="center">
-              <EditText android:id="@+id/etFirst"
-                  android:layout_width="match_parent"
+              android:padding="20dp">
+              <TextView
+                  android:id="@+id/textView"
+                  android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:hint="First number"
-                  android:inputType="numberDecimal"
-                  android:padding="12dp"
-                  android:layout_marginBottom="10dp"/>
-              <EditText android:id="@+id/etSecond"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:hint="Second number"
-                  android:inputType="numberDecimal"
-                  android:padding="12dp"
-                  android:layout_marginBottom="20dp"/>
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:gravity="center"
-                  android:layout_marginBottom="20dp">
-                  <Button android:id="@+id/btnAdd"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="+"
-                      android:textSize="24sp"
-                      android:layout_marginEnd="5dp"/>
-                  <Button android:id="@+id/btnSubtract"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="-"
-                      android:textSize="24sp"
-                      android:layout_marginStart="5dp"
-                      android:layout_marginEnd="5dp"/>
-                  <Button android:id="@+id/btnMultiply"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="×"
-                      android:textSize="24sp"
-                      android:layout_marginStart="5dp"
-                      android:layout_marginEnd="5dp"/>
-                  <Button android:id="@+id/btnDivide"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="÷"
-                      android:textSize="24sp"
-                      android:layout_marginStart="5dp"/>
-              </LinearLayout>
-              <Button android:id="@+id/btnClear"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Clear"
-                  android:textSize="18sp"
-                  android:layout_marginBottom="20dp"/>
-              <TextView android:id="@+id/tvResult"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Result: "
-                  android:textSize="20sp"
-                  android:textStyle="bold"
-                  android:gravity="center"
-                  android:padding="12dp"/>
+                  android:text="Placeholder App"
+                  android:textSize="24sp" />
           </LinearLayout>
           LAYOUT_FALLBACK
           fi
@@ -308,7 +195,6 @@ jobs:
           if [ -s AndroidManifest.xml ]; then
             echo "✅ Using user-provided manifest."
             cp AndroidManifest.xml app/src/main/AndroidManifest.xml
-            # Ensure icon is set to @mipmap/ic_launcher
             sed -i 's|android:icon="@drawable/ic_launcher"|android:icon="@mipmap/ic_launcher"|g' app/src/main/AndroidManifest.xml
           else
             cat > app/src/main/AndroidManifest.xml << MANIFEST_EOF
@@ -398,6 +284,12 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              // CameraX dependencies (needed for camera apps, harmless for others)
+              def camerax_version = "1.4.0"
+              implementation "androidx.camera:camera-core:${camerax_version}"
+              implementation "androidx.camera:camera-camera2:${camerax_version}"
+              implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+              implementation "androidx.camera:camera-view:${camerax_version}"
           }
           EOF
 
@@ -417,7 +309,6 @@ jobs:
           </resources>
           EOF
 
-          # ✅ FIXED: strings.xml now uses the dynamic app_name
           cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -425,7 +316,6 @@ jobs:
           </resources>
           EOF
 
-          # Icon handling: place in all mipmap folders
           if [ -f app_icon.png ] && [ -s app_icon.png ]; then
             echo "✅ Using custom icon from base64"
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
