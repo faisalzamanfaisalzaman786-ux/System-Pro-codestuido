@@ -3,8 +3,6 @@ name: Android CI
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
   repository_dispatch:
     types: [remote-build-trigger]
@@ -23,54 +21,36 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Update package name and fix repositories
+    - name: Optimize for Redmi Note 14 (SDK 34)
       run: |
         PKG="com.example.cameraapp"
-        echo "Using package name: $PKG"
-
-        # 1. AndroidManifest.xml میں package name
-        find . -name "AndroidManifest.xml" -type f | while read f; do
-          echo "Updating $f"
-          sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
-          sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
-        done
-
-        # 2. app/build.gradle میں applicationId (صرف app والی)
-        if grep -q "applicationId" app/build.gradle; then
-          echo "Updating app/build.gradle"
+        
+        # 1. جدید اینڈرائیڈ فونز کے لیے SDK وارننگ ختم کرنا
+        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
+        # بلڈ کی رفتار بڑھانے کے لیے میموری سیٹنگز
+        echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
+        
+        # 2. Package Name اور Authorities درست کرنا (تاکہ انسٹالیشن میں مسئلہ نہ ہو)
+        find . -name "AndroidManifest.xml" -type f -exec sed -i "s/package=\".*\"/package=\"$PKG\"/" {} +
+        
+        if [ -f app/build.gradle ]; then
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
+          # جدید برانڈز کے فونز کے لیے منیمم سپورٹ سیٹ کرنا
+          sed -i "s/minSdk .*/minSdk 24/" app/build.gradle
+          sed -i "s/targetSdk .*/targetSdk 34/" app/build.gradle
         fi
 
-        # 3. app/build.gradle سے repositories بلاک ہٹانا
-        sed -i '/^repositories {/,/^}/d' app/build.gradle
-        sed -i '/^allprojects {/,/^}/d' app/build.gradle
-
-        # 4. Java فائلوں میں package
-        find . -name "*.java" -type f | while read f; do
-          if grep -q "^package .*;" "$f"; then
-            echo "Updating $f"
-            sed -i "s/^package .*;/package $PKG;/" "$f"
-          fi
-        done
-
-    - name: Cache Gradle
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
+        # 3. جاوا فائلز کی درستگی
+        find . -name "*.java" -type f -exec sed -i "s/^package .*;/package $PKG;/" {} +
 
     - name: Make gradlew executable
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleDebug --stacktrace
 
-    - name: Upload Debug APK
+    - name: Upload APK for Redmi 14
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
+        name: Redmi-Note-14-Debug-APK
         path: app/build/outputs/apk/debug/app-debug.apk
