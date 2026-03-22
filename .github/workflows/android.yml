@@ -19,20 +19,40 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Modern Reconstruction (Gradle 9.4 Compatible)
+    - name: 100% Net Reconstruction
       run: |
         # فولڈرز کی تیاری
         mkdir -p app/src/main/java/com/systempro/master
         mkdir -p app/src/main/res/layout
 
-        # 1. جدید build.gradle (Root)
+        # 1. settings.gradle (سب سے اہم فائل جو پلگ انز ڈھونڈتی ہے)
+        cat <<EOF > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "System-Pro-Master"
+        include ':app'
+        EOF
+
+        # 2. build.gradle (Root)
         cat <<EOF > build.gradle
         plugins {
             id 'com.android.application' version '8.1.1' apply false
         }
         EOF
 
-        # 2. جدید app/build.gradle (Plugins DSL Style)
+        # 3. app/build.gradle
         cat <<EOF > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -51,7 +71,7 @@ jobs:
         }
         EOF
 
-        # 3. مینی فیسٹ اور جاوا فائلز
+        # 4. مینی فیسٹ اور جاوا
         cat <<EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -59,7 +79,7 @@ jobs:
                 <activity android:name="com.systempro.master.MainActivity" android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHer" />
+                        <category android:name="android.intent.category.LAUNCHER" />
                     </intent-filter>
                 </activity>
             </application>
@@ -76,18 +96,18 @@ jobs:
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 TextView tv = new TextView(this);
-                tv.setText("Net Build Success: Modern Gradle Style!");
+                tv.setText("System Pro: Net Setup Complete!");
                 setContentView(tv);
             }
         }
         EOF
 
-        # 4. ضروری سیٹنگز
-        echo "include ':app'" > settings.gradle
+        # 5. پراپرٹیز
         echo "android.suppressUnsupportedCompileSdk=34" > gradle.properties
 
     - name: Setup Gradle
-      run: gradle wrapper --gradle-version 8.1.1 # مخصوص ورژن پر لاک کرنا
+      # ہم اسے بتائیں گے کہ پرانے مستحکم ورژن پر ہی رہنا ہے
+      run: gradle wrapper --gradle-version 8.1.1
 
     - name: Final Build Execution
       run: |
