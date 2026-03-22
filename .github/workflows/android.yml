@@ -404,6 +404,8 @@ jobs:
       # ---------- Resource Files ----------
       - name: Create Resource Files
         run: |
+          APP_NAME="${{ steps.decode.outputs.app_name }}"
+
           cat > app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -415,10 +417,11 @@ jobs:
           </resources>
           EOF
 
-          cat > app/src/main/res/values/strings.xml << 'EOF'
+          # ✅ FIXED: strings.xml now uses the dynamic app_name
+          cat > app/src/main/res/values/strings.xml << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">SystemPro</string>
+              <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
 
