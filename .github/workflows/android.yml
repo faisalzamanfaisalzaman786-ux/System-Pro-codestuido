@@ -33,13 +33,13 @@ jobs:
           sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
         done
 
-        # 2. صرف app/build.gradle میں applicationId تبدیل کریں
+        # 2. app/build.gradle میں applicationId (صرف app والی)
         if grep -q "applicationId" app/build.gradle; then
           echo "Updating app/build.gradle"
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
         fi
 
-        # 3. app/build.gradle سے repositories بلاک ہٹانا
+        # 3. app/build.gradle سے repositories بلاک ہٹانا (اگر موجود ہوں)
         sed -i '/^repositories {/,/^}/d' app/build.gradle
         sed -i '/^allprojects {/,/^}/d' app/build.gradle
 
