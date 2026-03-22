@@ -1,501 +1,67 @@
-name: System Pro Production APK Builder
+name: Android CI
 
 on:
-  repository_dispatch:
-    types: [build_apk]
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name (e.g., com.example.app)'
-        required: true
-        default: 'com.example.app'
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'MyDynamicApp'
-      java_code:
-        description: 'Base64 encoded Java code (or part1 if split)'
-        required: false
-        default: ''
-      java_code_part2:
-        description: 'Base64 encoded Java code part2 (optional)'
-        required: false
-        default: ''
-      java_code_part3:
-        description: 'Base64 encoded Java code part3 (optional)'
-        required: false
-        default: ''
-      layout_code:
-        description: 'Base64 encoded Layout code (or part1)'
-        required: false
-        default: ''
-      layout_code_part2:
-        description: 'Base64 encoded Layout code part2 (optional)'
-        required: false
-        default: ''
-      manifest_code:
-        description: 'Base64 encoded AndroidManifest.xml'
-        required: false
-        default: ''
-      icon_base64:
-        description: 'Base64 encoded app icon (PNG) (or part1)'
-        required: false
-        default: ''
-      icon_base64_part2:
-        description: 'Base64 encoded app icon part2 (optional)'
-        required: false
-        default: ''
-
-permissions:
-  contents: write
-  actions: write
-  statuses: write
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
 
-      # ---------- Android SDK Installation ----------
-      - name: Setup Android SDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools
-          mv cmdline-tools_temp/* cmdline-tools/ 2>/dev/null || true
-          rm -rf cmdline-tools_temp
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/bin" >> $GITHUB_PATH
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - name: Install Android SDK Components
-        run: |
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin
-          yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager "cmdline-tools;latest" --sdk_root=$ANDROID_HOME
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: Accept Android Licenses
-        run: |
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses || true
+      # ========== ڈیبگ بلڈ ==========
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-      - name: Install Platform Tools & Build Tools
-        run: |
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Run Tests
+        run: ./gradlew test
 
-      # ---------- Decode User Input (with multi-part support) ----------
-      - name: Decode Package Info
-        id: decode
-        run: |
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            PACKAGE_NAME='${{ github.event.client_payload.package_name }}'
-            APP_NAME='${{ github.event.client_payload.app_name }}'
-            JAVA_BASE64='${{ github.event.client_payload.java_code }}'
-            JAVA_BASE64_2='${{ github.event.client_payload.java_code_part2 }}'
-            JAVA_BASE64_3='${{ github.event.client_payload.java_code_part3 }}'
-            LAYOUT_BASE64='${{ github.event.client_payload.layout_code }}'
-            LAYOUT_BASE64_2='${{ github.event.client_payload.layout_code_part2 }}'
-            MANIFEST_BASE64='${{ github.event.client_payload.manifest_code }}'
-            ICON_BASE64='${{ github.event.client_payload.icon_base64 }}'
-            ICON_BASE64_2='${{ github.event.client_payload.icon_base64_part2 }}'
-          else
-            PACKAGE_NAME='${{ github.event.inputs.package_name }}'
-            APP_NAME='${{ github.event.inputs.app_name }}'
-            JAVA_BASE64='${{ github.event.inputs.java_code }}'
-            JAVA_BASE64_2='${{ github.event.inputs.java_code_part2 }}'
-            JAVA_BASE64_3='${{ github.event.inputs.java_code_part3 }}'
-            LAYOUT_BASE64='${{ github.event.inputs.layout_code }}'
-            LAYOUT_BASE64_2='${{ github.event.inputs.layout_code_part2 }}'
-            MANIFEST_BASE64='${{ github.event.inputs.manifest_code }}'
-            ICON_BASE64='${{ github.event.inputs.icon_base64 }}'
-            ICON_BASE64_2='${{ github.event.inputs.icon_base64_part2 }}'
-          fi
-          PACKAGE_NAME_CLEAN=$(echo "$PACKAGE_NAME" | tr '-' '_')
-          echo "package_name=$PACKAGE_NAME_CLEAN" >> $GITHUB_OUTPUT
-          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
-
-          # Combine multi-part Java code
-          if [ -n "$JAVA_BASE64" ]; then
-            echo "$JAVA_BASE64" > java_base64.tmp
-          fi
-          if [ -n "$JAVA_BASE64_2" ]; then
-            echo "$JAVA_BASE64_2" >> java_base64.tmp
-          fi
-          if [ -n "$JAVA_BASE64_3" ]; then
-            echo "$JAVA_BASE64_3" >> java_base64.tmp
-          fi
-          if [ -s java_base64.tmp ]; then
-            cat java_base64.tmp | base64 -d > MainActivity.java 2>/dev/null || true
-          fi
-
-          # Combine multi-part Layout
-          if [ -n "$LAYOUT_BASE64" ]; then
-            echo "$LAYOUT_BASE64" > layout_base64.tmp
-          fi
-          if [ -n "$LAYOUT_BASE64_2" ]; then
-            echo "$LAYOUT_BASE64_2" >> layout_base64.tmp
-          fi
-          if [ -s layout_base64.tmp ]; then
-            cat layout_base64.tmp | base64 -d > activity_main.xml 2>/dev/null || true
-          fi
-
-          # Manifest (single part only, as it's usually small)
-          if [ -n "$MANIFEST_BASE64" ]; then
-            echo "$MANIFEST_BASE64" | base64 -d > AndroidManifest.xml 2>/dev/null || true
-          fi
-
-          # Combine multi-part Icon
-          if [ -n "$ICON_BASE64" ]; then
-            echo "$ICON_BASE64" > icon_base64.tmp
-          fi
-          if [ -n "$ICON_BASE64_2" ]; then
-            echo "$ICON_BASE64_2" >> icon_base64.tmp
-          fi
-          if [ -s icon_base64.tmp ]; then
-            cat icon_base64.tmp | base64 -d > app_icon.png 2>/dev/null || true
-            if [ -s app_icon.png ]; then
-              echo "icon_provided=true" >> $GITHUB_OUTPUT
-            fi
-          fi
-
-      # ---------- Create Project Structure ----------
-      - name: Create Android Project
-        run: |
-          set -e
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-          PACKAGE_PATH=$(echo $PACKAGE_NAME | tr '.' '/')
-          rm -rf app/src/main/java/*
-          mkdir -p app/src/main/java/$PACKAGE_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p app/src/main/res/drawable
-
-          # Java
-          if [ -s MainActivity.java ] && grep -q "package" MainActivity.java; then
-            echo "✅ Using user-provided Java file."
-            cp MainActivity.java app/src/main/java/$PACKAGE_PATH/
-            sed -i "s/package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          else
-            # Fallback: simple placeholder
-            cat > app/src/main/java/$PACKAGE_PATH/MainActivity.java << 'JAVA_FALLBACK'
-          package PACKAGE_PLACEHOLDER;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-                  TextView textView = findViewById(R.id.textView);
-                  textView.setText("Hello! This is a placeholder app. Provide your own Java code and layout.");
-              }
-          }
-          JAVA_FALLBACK
-            sed -i "s/PACKAGE_PLACEHOLDER/$PACKAGE_NAME/g" app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          fi
-
-          # Layout
-          if [ -s activity_main.xml ] && grep -q "LinearLayout\|FrameLayout\|ConstraintLayout" activity_main.xml; then
-            echo "✅ Using user-provided layout."
-            cp activity_main.xml app/src/main/res/layout/
-          else
-            cat > app/src/main/res/layout/activity_main.xml << 'LAYOUT_FALLBACK'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:gravity="center"
-              android:orientation="vertical"
-              android:padding="20dp">
-              <TextView
-                  android:id="@+id/textView"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Placeholder App"
-                  android:textSize="24sp" />
-          </LinearLayout>
-          LAYOUT_FALLBACK
-          fi
-
-      # ---------- AndroidManifest.xml (with all common permissions) ----------
-      - name: Create AndroidManifest.xml
-        run: |
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-          if [ -s AndroidManifest.xml ]; then
-            echo "✅ Using user-provided manifest."
-            cp AndroidManifest.xml app/src/main/AndroidManifest.xml
-            # Ensure icon is set to @mipmap/ic_launcher
-            sed -i 's|android:icon="@drawable/ic_launcher"|android:icon="@mipmap/ic_launcher"|g' app/src/main/AndroidManifest.xml
-          else
-            cat > app/src/main/AndroidManifest.xml << MANIFEST_EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <!-- Common permissions for almost all apps -->
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-              <!-- Camera and related -->
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-
-              <!-- Audio recording -->
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-              <!-- Storage (for photos, videos, etc.) -->
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:maxSdkVersion="33" />
-
-              <!-- Location (GPS) -->
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-              <!-- Torch / flashlight (uses camera permission) -->
-              <!-- Already covered by CAMERA -->
-
-              <!-- Contacts, SMS, Phone (if needed) -->
-              <uses-permission android:name="android.permission.READ_CONTACTS" />
-              <uses-permission android:name="android.permission.READ_SMS" />
-              <uses-permission android:name="android.permission.CALL_PHONE" />
-
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="APP_NAME_PLACEHOLDER"
-                  android:theme="@style/AppTheme"
-                  android:supportsRtl="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          MANIFEST_EOF
-            sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/AndroidManifest.xml
-          fi
-
-      # ---------- Gradle Files ----------
-      - name: Create Gradle Build Files
-        run: |
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-          # CameraX version (needed for camera apps, harmless for others)
-          CAMERAX_VERSION="1.4.0"
-
-          cat > settings.gradle << EOF
-          rootProject.name = "$APP_NAME"
-          include ':app'
-          EOF
-
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
-
-          cat > app/build.gradle << EOF
-          apply plugin: 'com.android.application'
-
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-
-              defaultConfig {
-                  applicationId "$PACKAGE_NAME"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-                  debug {
-                      debuggable true
-                  }
-              }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              // CameraX dependencies (needed for camera apps, harmless for others)
-              implementation "androidx.camera:camera-core:${CAMERAX_VERSION}"
-              implementation "androidx.camera:camera-camera2:${CAMERAX_VERSION}"
-              implementation "androidx.camera:camera-lifecycle:${CAMERAX_VERSION}"
-              implementation "androidx.camera:camera-view:${CAMERAX_VERSION}"
-          }
-          EOF
-
-      # ---------- Resource Files ----------
-      - name: Create Resource Files
-        run: |
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-
-          cat > app/src/main/res/values/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-                  <item name="colorPrimaryDark">#3700B3</item>
-                  <item name="colorAccent">#03DAC5</item>
-              </style>
-          </resources>
-          EOF
-
-          cat > app/src/main/res/values/strings.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
-
-          if [ -f app_icon.png ] && [ -s app_icon.png ]; then
-            echo "✅ Using custom icon from base64"
-            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp app_icon.png app/src/main/res/mipmap-${density}/ic_launcher.png
-            done
-          else
-            echo "ℹ️ No custom icon provided; using default vector icon."
-            VECTOR_ICON='<?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="24dp"
-              android:height="24dp"
-              android:viewportWidth="24"
-              android:viewportHeight="24">
-              <path
-                  android:fillColor="#FF6200EE"
-                  android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,5c1.66,0 3,1.34 3,3s-1.34,3 -3,3 -3,-1.34 -3,-3 1.34,-3 3,-3zM12,19.2c-2.5,0 -4.71,-1.28 -6,-3.22 0.03,-1.99 4,-3.08 6,-3.08 1.99,0 5.97,1.09 6,3.08 -1.29,1.94 -3.5,3.22 -6,3.22z"/>
-          </vector>'
-            for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              echo "$VECTOR_ICON" > app/src/main/res/mipmap-${density}/ic_launcher.xml
-            done
-          fi
-
-      - name: Create gradle.properties
-        run: |
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
-          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
-          EOF
-
-      # ---------- Install Gradle ----------
-      - name: Install Gradle
-        run: |
-          GRADLE_VERSION=8.1.1
-          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip
-          unzip -q gradle-${GRADLE_VERSION}-bin.zip
-          sudo mv gradle-${GRADLE_VERSION} /opt/gradle
-          echo "/opt/gradle/bin" >> $GITHUB_PATH
-          export PATH=$PATH:/opt/gradle/bin
-          gradle --version
-
-      # ---------- Build APK ----------
-      - name: Build APK
-        run: |
-          gradle clean assembleDebug --stacktrace --no-daemon
-
-      # ---------- Locate and Upload APK ----------
-      - name: Locate APK
-        id: find-apk
-        run: |
-          APK_PATH=$(find app/build/outputs -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "No APK found!"
-            exit 1
-          fi
-          echo "APK found at: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-
-      - name: Upload APK Artifact
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.decode.outputs.app_name }}-debug
-          path: ${{ steps.find-apk.outputs.apk_path }}
-          retention-days: 7
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
 
-      # ---------- Completion Signal ----------
-      - name: Send Repository Dispatch (Completion Signal)
-        if: always()
+      # ========== ریلیز بلڈ (آپشنل، اگر کی اسٹور سیٹ کیا ہو) ==========
+      - name: Decode Keystore
+        if: github.ref == 'refs/heads/main' && secrets.KEYSTORE_BASE64 != ''
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+
+      - name: Build Release APK
+        if: github.ref == 'refs/heads/main' && secrets.KEYSTORE_BASE64 != ''
+        run: ./gradlew assembleRelease
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          STATUS="${{ job.status }}"
-          APP_NAME="${{ steps.decode.outputs.app_name }}"
-          PACKAGE_NAME="${{ steps.decode.outputs.package_name }}"
-          if [ -n "$PAT_TOKEN" ]; then
-            curl -X POST \
-              -H "Accept: application/vnd.github.v3+json" \
-              -H "Authorization: Bearer $PAT_TOKEN" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              https://api.github.com/repos/${{ github.repository }}/dispatches \
-              -d '{
-                "event_type": "build_complete",
-                "client_payload": {
-                  "status": "'"$STATUS"'",
-                  "app_name": "'"$APP_NAME"'",
-                  "package_name": "'"$PACKAGE_NAME"'",
-                  "build_time": "'$(date)'"
-                }
-              }' || echo "Failed to send completion signal"
-          fi
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload Release APK
+        if: github.ref == 'refs/heads/main' && secrets.KEYSTORE_BASE64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/*.apk
