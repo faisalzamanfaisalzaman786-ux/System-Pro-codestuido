@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "System-Pro-codestudio"   // آپ کے پروجیکٹ کا نام
+rootProject.name = "System-Pro-codestudio"
 include ':app'
