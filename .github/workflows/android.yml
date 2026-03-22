@@ -5,9 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # مینوئل ٹرگر کے لیے
   workflow_dispatch:
-  # ایپلیکیشن یا API سے ریموٹ ٹرگر کے لیے
   repository_dispatch:
     types: [remote-build-trigger]
 
@@ -30,27 +28,20 @@ jobs:
         PKG="com.example.cameraapp"
         echo "Using package name: $PKG"
 
-        # 1. AndroidManifest.xml میں package name
         find . -name "AndroidManifest.xml" -type f | while read f; do
-          echo "Updating $f"
           sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
           sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
         done
 
-        # 2. app/build.gradle میں applicationId (صرف app والی)
         if grep -q "applicationId" app/build.gradle; then
-          echo "Updating app/build.gradle"
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
         fi
 
-        # 3. app/build.gradle سے repositories بلاک ہٹانا
         sed -i '/^repositories {/,/^}/d' app/build.gradle
         sed -i '/^allprojects {/,/^}/d' app/build.gradle
 
-        # 4. Java فائلوں میں package درست کرنا
         find . -name "*.java" -type f | while read f; do
           if grep -q "^package .*;" "$f"; then
-            echo "Updating $f"
             sed -i "s/^package .*;/package $PKG;/" "$f"
           fi
         done
@@ -62,8 +53,6 @@ jobs:
           ~/.gradle/caches
           ~/.gradle/wrapper
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
 
     - name: Make gradlew executable
       run: chmod +x gradlew
@@ -75,4 +64,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        path: app/build/outputs/apk/debug/
+        # یہاں تبدیلی کی گئی ہے تاکہ فائل صحیح طرح اپلوڈ ہو
+        path: app/build/outputs/apk/debug/app-debug.apk
