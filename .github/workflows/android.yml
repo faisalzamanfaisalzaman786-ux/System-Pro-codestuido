@@ -1,4 +1,4 @@
-name: System Pro Net Fix
+name: System Pro Master Net Final
 
 on:
   push:
@@ -19,45 +19,30 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Step 1 - Reconstruct All Files
+    - name: Step 1 - Build Native Structure
       run: |
-        # فولڈرز کی تیاری
+        # فولڈرز بنانا
         mkdir -p app/src/main/java/com/systempro/master
         mkdir -p app/src/main/res/layout
 
-        # 1. settings.gradle
+        # تمام ضروری فائلوں کو دوبارہ لکھنا (Overwriting)
         cat <<EOF > settings.gradle
-        pluginManagement {
-            repositories {
-                google()
-                mavenCentral()
-                gradlePluginPortal()
-            }
-        }
-        dependencyResolutionManagement {
-            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
         rootProject.name = "System-Pro-Master"
         include ':app'
         EOF
 
-        # 2. build.gradle (Root)
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
             dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
         }
+        allprojects {
+            repositories { google(); mavenCentral() }
+        }
         EOF
 
-        # 3. app/build.gradle (Modern Format)
         cat <<EOF > app/build.gradle
-        plugins {
-            id 'com.android.application'
-        }
+        plugins { id 'com.android.application' }
         android {
             namespace 'com.systempro.master'
             compileSdk 34
@@ -71,44 +56,17 @@ jobs:
         }
         EOF
 
-        # 4. Manifest & Java
-        cat <<EOF > app/src/main/AndroidManifest.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <application android:label="System Pro Net">
-                <activity android:name="com.systempro.master.MainActivity" android:exported="true">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-            </application>
-        </manifest>
-        EOF
-
-        cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
-        package com.systempro.master;
-        import android.app.Activity;
-        import android.os.Bundle;
-        import android.widget.TextView;
-        public class MainActivity extends Activity {
-            @Override
-            protected void onCreate(Bundle savedInstanceState) {
-                super.onCreate(savedInstanceState);
-                TextView tv = new TextView(this);
-                tv.setText("Net Build Fixed: Version 8.1.1 Forced");
-                setContentView(tv);
-            }
-        }
-        EOF
-
-        echo "android.suppressUnsupportedCompileSdk=34" > gradle.properties
-
-    - name: Step 2 - Force Stable Gradle 8.1.1
-      # یہاں ہم 9.4 کو نظر انداز کر کے 8.1.1 ڈاؤن لوڈ کر رہے ہیں
+    - name: Step 2 - Setup Gradle Environment
       uses: gradle/gradle-build-action@v3
       with:
         gradle-version: 8.1.1
 
-    - name: Step 3 - Final Build
+    - name: Step 3 - Run Build Execution
       run: gradle assembleDebug --stacktrace
+
+    - name: Step 4 - Save and Upload APK
+      # یہ حصہ APK کو ڈاؤن لوڈ کے لیے تیار کرے گا
+      uses: actions/upload-artifact@v4
+      with:
+        name: SystemPro-Master-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
