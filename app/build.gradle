@@ -3,8 +3,8 @@ plugins {
 }
 
 android {
-    namespace 'com.example.cameraapp'   // آپ کی پیکیج کا نام
-    compileSdk 34   // یا جتنا چاہیں
+    namespace 'com.example.cameraapp'
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.example.cameraapp"
@@ -25,5 +25,5 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
-    // دیگر dependencies...
+    // یہاں اپنی باقی dependencies لکھیں
 }
