@@ -28,18 +28,21 @@ jobs:
         PKG="com.example.cameraapp"
         echo "Using package name: $PKG"
 
+        # 1. AndroidManifest.xml میں package name اپ ڈیٹ کرنا
         find . -name "AndroidManifest.xml" -type f | while read f; do
           sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
           sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
         done
 
+        # 2. app/build.gradle میں applicationId اپ ڈیٹ کرنا
         if grep -q "applicationId" app/build.gradle; then
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
         fi
 
-        sed -i '/^repositories {/,/^}/d' app/build.gradle
-        sed -i '/^allprojects {/,/^}/d' app/build.gradle
+        # 3. گریڈل کی وارننگ ختم کرنے کے لیے پراپرٹی شامل کرنا
+        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
 
+        # 4. Java فائلوں میں package درست کرنا
         find . -name "*.java" -type f | while read f; do
           if grep -q "^package .*;" "$f"; then
             sed -i "s/^package .*;/package $PKG;/" "$f"
@@ -58,11 +61,10 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleDebug --stacktrace
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        # یہاں تبدیلی کی گئی ہے تاکہ فائل صحیح طرح اپلوڈ ہو
         path: app/build/outputs/apk/debug/app-debug.apk
