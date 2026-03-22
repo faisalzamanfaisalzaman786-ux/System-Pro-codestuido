@@ -5,6 +5,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-
-rootProject.name = "System-Pro-codestuido"
+rootProject.name = "System-Pro-codestudio"
 include ':app'
