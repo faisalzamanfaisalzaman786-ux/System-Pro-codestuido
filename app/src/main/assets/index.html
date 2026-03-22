@@ -1,87 +1,152 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Salat Clock - System Pro</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Color Calculator</title>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            background: #0f0c29;
-            background: linear-gradient(to right, #24243e, #302b63, #0f0c29);
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: #121212;
+            color: #fff;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            overflow: hidden;
+            padding: 20px;
         }
-        .clock-container {
+        .calculator {
+            background: #1e1e1e;
+            border-radius: 32px;
+            padding: 24px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .title {
             text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 30px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-        #time {
-            font-size: 3rem;
+            font-size: 28px;
             font-weight: bold;
-            margin-bottom: 10px;
-            color: #00d2ff;
+            color: #FFBB86FC;
+            margin-bottom: 24px;
         }
-        .date {
-            font-size: 1.2rem;
+        .input-group {
             margin-bottom: 20px;
-            opacity: 0.8;
         }
-        .prayer-times {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+        input {
+            width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            border: none;
+            border-radius: 24px;
+            background: #2C2C2C;
+            color: white;
+            outline: none;
+            text-align: center;
         }
-        .prayer-card {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 10px;
+        input::placeholder {
+            color: #AAAAAA;
+        }
+        .button-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .button-row button {
+            flex: 1;
+            padding: 16px 0;
+            font-size: 28px;
+            font-weight: bold;
+            border: none;
+            border-radius: 40px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        .button-row button:active {
+            transform: scale(0.96);
+        }
+        .btn-add { background: #4CAF50; }
+        .btn-sub { background: #F44336; }
+        .btn-mul { background: #FF9800; }
+        .btn-div { background: #2196F3; }
+        .btn-clear {
+            width: 100%;
+            background: #9C27B0;
+            padding: 14px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 40px;
+            color: white;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .result {
+            background: #2C2C2C;
+            padding: 16px;
+            border-radius: 24px;
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: #FFBB86FC;
+            word-break: break-word;
         }
     </style>
 </head>
 <body>
-
-    <div class="clock-container">
-        <div id="time">00:00:00</div>
-        <div class="date" id="date">Loading Date...</div>
-        
-        <div class="prayer-times">
-            <div class="prayer-card">
-                <div>Sehri</div>
-                <div id="fajr">--:--</div>
-            </div>
-            <div class="prayer-card">
-                <div>Iftar</div>
-                <div id="maghrib">--:--</div>
-            </div>
+    <div class="calculator">
+        <div class="title">🎨 Color Calculator</div>
+        <div class="input-group">
+            <input type="number" id="first" placeholder="First number">
         </div>
+        <div class="input-group">
+            <input type="number" id="second" placeholder="Second number">
+        </div>
+        <div class="button-row">
+            <button class="btn-add" onclick="calculate('+')">+</button>
+            <button class="btn-sub" onclick="calculate('-')">-</button>
+            <button class="btn-mul" onclick="calculate('*')">×</button>
+            <button class="btn-div" onclick="calculate('/')">÷</button>
+        </div>
+        <button class="btn-clear" onclick="clearAll()">CLEAR</button>
+        <div class="result" id="result">Result: </div>
     </div>
-
     <script>
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString();
-            const dateString = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-            
-            document.getElementById('time').textContent = timeString;
-            document.getElementById('date').textContent = dateString;
+        function calculate(op) {
+            const a = parseFloat(document.getElementById('first').value);
+            const b = parseFloat(document.getElementById('second').value);
+            if (isNaN(a) || isNaN(b)) {
+                document.getElementById('result').innerText = "Result: Enter both numbers";
+                return;
+            }
+            let r;
+            switch(op) {
+                case '+': r = a + b; break;
+                case '-': r = a - b; break;
+                case '*': r = a * b; break;
+                case '/': 
+                    if (b === 0) {
+                        document.getElementById('result').innerText = "Result: Cannot divide by zero";
+                        return;
+                    }
+                    r = a / b;
+                    break;
+                default: return;
+            }
+            document.getElementById('result').innerText = "Result: " + r;
         }
-
-        setInterval(updateClock, 1000);
-        updateClock();
+        function clearAll() {
+            document.getElementById('first').value = '';
+            document.getElementById('second').value = '';
+            document.getElementById('result').innerText = "Result: ";
+        }
     </script>
 </body>
 </html>
