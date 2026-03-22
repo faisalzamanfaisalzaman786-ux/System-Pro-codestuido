@@ -17,46 +17,40 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # پیکج نام سیٹ کریں (سیکرٹ سے یا ڈیفالٹ)
       - name: Set package name
-        id: set_pkg
+        id: pkg
         run: |
           if [ -n "${{ secrets.PACKAGE_NAME }}" ]; then
-            echo "pkg=${{ secrets.PACKAGE_NAME }}" >> $GITHUB_OUTPUT
+            echo "name=${{ secrets.PACKAGE_NAME }}" >> $GITHUB_OUTPUT
           else
-            echo "pkg=com.example.cameraapp" >> $GITHUB_OUTPUT
+            echo "name=com.example.cameraapp" >> $GITHUB_OUTPUT
           fi
 
-      # ڈیبگ: پوری فائل سٹرکچر دکھائیں (تاکہ بعد میں چیک کر سکیں)
-      - name: Show file tree
-        run: find . -type f -not -path "./.git/*" | sort
-
-      # تمام متعلقہ فائلوں میں پیکج نام تبدیل کریں
-      - name: Update package name in all files
+      - name: Update package name in all required files
         run: |
-          PKG="${{ steps.set_pkg.outputs.pkg }}"
-          echo "Updating to package name: $PKG"
+          PKG="${{ steps.pkg.outputs.name }}"
+          echo "Using package name: $PKG"
 
-          # 1. AndroidManifest.xml (کسی بھی جگہ)
-          find . -name "AndroidManifest.xml" -type f | while read manifest; do
-            echo "Updating $manifest"
-            sed -i "s/package=\".*\"/package=\"$PKG\"/" "$manifest"
-            sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$manifest"
+          # 1. تمام AndroidManifest.xml فائلیں
+          find . -name "AndroidManifest.xml" -type f | while read f; do
+            echo "Updating $f"
+            sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
+            sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
           done
 
-          # 2. build.gradle (کسی بھی جگہ، لیکن صرف app/ والے یا روٹ میں)
-          find . -name "build.gradle" -type f | while read gradle; do
-            if grep -q "applicationId" "$gradle"; then
-              echo "Updating $gradle"
-              sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" "$gradle"
+          # 2. تمام build.gradle فائلیں جن میں applicationId ہو
+          find . -name "build.gradle" -type f | while read f; do
+            if grep -q "applicationId" "$f"; then
+              echo "Updating $f"
+              sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" "$f"
             fi
           done
 
-          # 3. تمام .java فائلوں میں پیکیج لائن تبدیل کریں
-          find . -name "*.java" -type f | while read java; do
-            if grep -q "^package .*;" "$java"; then
-              echo "Updating $java"
-              sed -i "s/^package .*;/package $PKG;/" "$java"
+          # 3. تمام Java فائلوں میں package لائن
+          find . -name "*.java" -type f | while read f; do
+            if grep -q "^package .*;" "$f"; then
+              echo "Updating $f"
+              sed -i "s/^package .*;/package $PKG;/" "$f"
             fi
           done
 
