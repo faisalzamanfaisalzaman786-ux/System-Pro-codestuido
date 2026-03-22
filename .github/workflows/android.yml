@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:   # یہ لائن شامل کی گئی ہے تاکہ manual run بھی ہو سکے
 
 jobs:
   build:
@@ -40,7 +41,7 @@ jobs:
           fi
         done
 
-        # 3. *** یہ نیا حصہ ہے: app/build.gradle سے repositories بلاک ہٹانا ***
+        # 3. app/build.gradle سے repositories بلاک ہٹانا (یہ نیا حصہ ہے)
         sed -i '/^repositories {/,/^}/d' app/build.gradle
         sed -i '/^allprojects {/,/^}/d' app/build.gradle
 
