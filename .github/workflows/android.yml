@@ -21,27 +21,21 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Optimize for Redmi Note 14 (SDK 34)
+    - name: Critical File Name Fix & SDK Setup
       run: |
-        PKG="com.example.cameraapp"
-        
-        # 1. جدید اینڈرائیڈ فونز کے لیے SDK وارننگ ختم کرنا
-        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
-        # بلڈ کی رفتار بڑھانے کے لیے میموری سیٹنگز
-        echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
-        
-        # 2. Package Name اور Authorities درست کرنا (تاکہ انسٹالیشن میں مسئلہ نہ ہو)
-        find . -name "AndroidManifest.xml" -type f -exec sed -i "s/package=\".*\"/package=\"$PKG\"/" {} +
-        
-        if [ -f app/build.gradle ]; then
-          sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
-          # جدید برانڈز کے فونز کے لیے منیمم سپورٹ سیٹ کرنا
-          sed -i "s/minSdk .*/minSdk 24/" app/build.gradle
-          sed -i "s/targetSdk .*/targetSdk 34/" app/build.gradle
-        fi
+        # 1. غلط نام والی فائل کو درست کرنا
+        # یہ کمانڈ فائل کے شروع سے غیر قانونی حروف ہٹا دے گی
+        find . -name ":vi*" -type f | while read f; do
+          new_name=$(echo "$f" | sed 's/:vi //g')
+          mv "$f" "$new_name"
+        done
 
-        # 3. جاوا فائلز کی درستگی
-        find . -name "*.java" -type f -exec sed -i "s/^package .*;/package $PKG;/" {} +
+        # 2. SDK 34 کی وارننگ کا حل
+        echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
+        
+        # 3. Package Name اپ ڈیٹ
+        PKG="com.example.cameraapp"
+        find . -name "AndroidManifest.xml" -type f -exec sed -i "s/package=\".*\"/package=\"$PKG\"/" {} +
 
     - name: Make gradlew executable
       run: chmod +x gradlew
@@ -49,8 +43,8 @@ jobs:
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
 
-    - name: Upload APK for Redmi 14
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: Redmi-Note-14-Debug-APK
+        name: Fixed-System-Pro-APK
         path: app/build/outputs/apk/debug/app-debug.apk
