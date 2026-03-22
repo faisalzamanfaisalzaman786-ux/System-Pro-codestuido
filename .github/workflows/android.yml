@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-  # یہ حصہ ایپ سے ٹرگر کرنے کے لیے لازمی ہے
   repository_dispatch:
     types: [remote-build-trigger]
 
