@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  # یہ حصہ ایپ سے ٹرگر کرنے کے لیے لازمی ہے
   repository_dispatch:
     types: [remote-build-trigger]
 
@@ -23,45 +24,11 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Update package name and fix repositories
+    - name: Fix SDK and Build
       run: |
-        PKG="com.example.cameraapp"
-        echo "Using package name: $PKG"
-
-        # 1. AndroidManifest.xml میں package name اپ ڈیٹ کرنا
-        find . -name "AndroidManifest.xml" -type f | while read f; do
-          sed -i "s/package=\".*\"/package=\"$PKG\"/" "$f"
-          sed -i "s/authorities=\".*\.fileprovider\"/authorities=\"$PKG.fileprovider\"/" "$f"
-        done
-
-        # 2. app/build.gradle میں applicationId اپ ڈیٹ کرنا
-        if grep -q "applicationId" app/build.gradle; then
-          sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
-        fi
-
-        # 3. گریڈل کی وارننگ ختم کرنے کے لیے پراپرٹی شامل کرنا
         echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
-
-        # 4. Java فائلوں میں package درست کرنا
-        find . -name "*.java" -type f | while read f; do
-          if grep -q "^package .*;" "$f"; then
-            sed -i "s/^package .*;/package $PKG;/" "$f"
-          fi
-        done
-
-    - name: Cache Gradle
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-
-    - name: Make gradlew executable
-      run: chmod +x gradlew
-
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
