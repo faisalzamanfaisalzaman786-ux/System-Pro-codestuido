@@ -1,4 +1,4 @@
-name: System Pro Master Net Fixed
+name: System Pro Master Net Final
 
 on:
   push:
@@ -19,24 +19,21 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Build Native Structure (Stable Version)
+    - name: Full Reconstruction (Files & Gradle)
       run: |
-        # فولڈرز کی تیاری
+        # 1. فولڈرز کی تیاری
         mkdir -p app/src/main/java/com/systempro/master
         mkdir -p app/src/main/res/layout
 
-        # 1. مستحکم build.gradle (Root)
+        # 2. گریڈل کی بنیادی فائلیں (چونکہ آپ کے پاس اب موجود نہیں ہیں)
         cat <<EOF > build.gradle
         buildscript {
             repositories { google(); mavenCentral() }
             dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
         }
-        allprojects {
-            repositories { google(); mavenCentral() }
-        }
+        allprojects { repositories { google(); mavenCentral() } }
         EOF
 
-        # 2. مستحکم app/build.gradle
         cat <<EOF > app/build.gradle
         apply plugin: 'com.android.application'
         android {
@@ -52,7 +49,10 @@ jobs:
         }
         EOF
 
-        # 3. مینی فیسٹ اور جاوا (وہی جو پہلے تھا)
+        echo "include ':app'" > settings.gradle
+        echo "android.suppressUnsupportedCompileSdk=34" > gradle.properties
+
+        # 3. جاوا اور مینی فیسٹ
         cat <<EOF > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -77,18 +77,17 @@ jobs:
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 TextView tv = new TextView(this);
-                tv.setText("Net Build Successful on Stable Gradle!");
+                tv.setText("Net Build Success: Everything Reconstructed!");
                 setContentView(tv);
             }
         }
         EOF
 
-        # 4. سیٹنگز فائلز
-        echo "include ':app'" > settings.gradle
-        echo "android.suppressUnsupportedCompileSdk=34" > gradle.properties
+    - name: Setup Gradle Executable
+      # یہ کمانڈ فائلیں نہ ہونے کی صورت میں گریڈل کو دوبارہ انسٹال کرے گی
+      run: gradle wrapper
 
-    - name: Build with Stable Gradle
-      # یہاں ہم براہ راست گریڈل 8.1.1 استعمال کریں گے تاکہ ورژن کا مسئلہ نہ ہو
+    - name: Final Build
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleDebug
