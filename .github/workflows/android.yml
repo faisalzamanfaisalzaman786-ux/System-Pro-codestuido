@@ -16,29 +16,34 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Initialize Gradle and Build Folders
+      # گریڈل کو انسٹال کرنا تاکہ ریپر بنایا جا سکے
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Initialize Project Structure
         run: |
-          # 1. پرانی فائلوں کی مکمل صفائی (ہر کمانڈ الگ لائن پر)
+          # مکمل صفائی
           rm -rf app build settings.gradle build.gradle gradlew gradle .gradle
           
-          # 2. ضروری فولڈرز بنانا
+          # فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # 3. گریڈل ریپر جنریٹ کرنا
+          # اب گریڈل انسٹال ہے، تو ریپر بن جائے گا
           gradle wrapper --gradle-version 8.2
 
-          # 4. Strings فائل بنانا
+          # 1. Strings فائل
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro Master</string>
           </resources>' > app/src/main/res/values/strings.xml
 
-          # 5. Vector Drawable Fix
+          # 2. Icon Drawable
           echo '<?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp"
@@ -50,7 +55,7 @@ jobs:
                   android:pathData="M0,0h108v108h-108z" />
           </vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
 
-          # 6. Settings Gradle
+          # 3. Settings Gradle
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -61,12 +66,12 @@ jobs:
           rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
-          # 7. Root build.gradle
+          # 4. Root build.gradle
           echo "plugins {
               id 'com.android.application' version '8.2.2' apply false
           }" > build.gradle
 
-          # 8. App build.gradle
+          # 5. App build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -75,8 +80,8 @@ jobs:
                   applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode 755
-                  versionName '1.0.755'
+                  versionCode 757
+                  versionName '1.0.757'
               }
           }
           dependencies {
@@ -84,7 +89,7 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 9. Android Manifest
+          # 6. Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -95,11 +100,10 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+      - name: Grant Permission and Build
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
