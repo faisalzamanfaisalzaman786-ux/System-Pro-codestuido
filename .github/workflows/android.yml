@@ -1,4 +1,4 @@
-name: System Pro Final Ultimate Force Build
+name: System Pro Master Deployment
 
 on:
   workflow_dispatch:
@@ -16,21 +16,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Total Wipe and Force Reconstruction
+      - name: Force Clean and Professional Structure
         run: |
-          # 1. ہر چیز کو جڑ سے ختم کرنا (Force Delete)
+          # پرانی تمام فائلوں کی صفائی
           rm -rf ./*
-          
-          # 2. اینڈرائیڈ کا مکمل ڈھانچہ بنانا
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/java/com/systempro/master
 
-          # 3. settings.gradle (گریڈل کنفلکٹ کا مکمل حل)
+          # ضروری فولڈرز کی تخلیق
+          mkdir -p app/src/main/java/com/systempro/master
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/values
+
+          # 1. Settings Gradle
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
@@ -39,14 +38,12 @@ jobs:
           include ':app'
           EOF
 
-          # 4. Root build.gradle
+          # 2. Root Build Gradle
           cat <<EOF > build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.0' apply false
-          }
+          plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
 
-          # 5. app/build.gradle (بغیر کسی بیرونی لائبریری کے سادہ اور پاور فل)
+          # 3. App Build Gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -59,24 +56,18 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           EOF
 
-          # 6. AndroidManifest.xml
+          # 4. Android Manifest (App Configuration)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher_repair"
                   android:label="System Pro"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar">
-                  <activity android:name="com.systempro.master.MainActivity" android:exported="true">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -86,45 +77,47 @@ jobs:
           </manifest>
           EOF
 
-          # 7. MainActivity.java (ٹیسٹ کوڈ)
+          # 5. Layout File (UI Design)
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#121212">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="SYSTEM PRO MASTER ENGINE\nREADY FOR ACTION"
+                  android:textColor="#00FF00"
+                  android:textSize="22sp"
+                  android:layout_centerInParent="true"
+                  android:gravity="center" />
+          </RelativeLayout>
+          EOF
+
+          # 6. MainActivity Java (Core Logic)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
-          import android.widget.TextView;
-          import android.view.Gravity;
 
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  TextView tv = new TextView(this);
-                  tv.setText("SYSTEM PRO\nBUILD SUCCESSFUL!");
-                  tv.setTextSize(30);
-                  tv.setGravity(Gravity.CENTER);
-                  setContentView(tv);
+                  setContentView(R.layout.activity_main);
               }
           }
           EOF
 
-          # 8. Vector Icon (Base64 کے متبادل کے طور پر کوڈ بیسڈ امیج)
-          cat <<EOF > app/src/main/res/drawable/ic_launcher_repair.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
-          </vector>
-          EOF
-
-      - name: Force Build Execution
+      - name: Build and Sign APK
         run: |
-          # گریڈل ریپر بنانا اور پرمیشن دینا
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # بلڈ شروع کرنا
           ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Artifact
+      - name: Upload Master APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-Final
+          name: System-Pro-Master-Engine
           path: app/build/outputs/apk/debug/app-debug.apk
