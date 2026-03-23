@@ -16,20 +16,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Master IDE Deployment
+      - name: 🏗️ Final Mega IDE Structure
         run: |
           rm -rf ./*
           mkdir -p app/src/main/java/com/systempro/master
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. Gradle Core (Fixed)
+          # 1. Core Build Setup
           cat <<EOF > settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() }
-          }
           rootProject.name = "System Pro Master"
           include ':app'
           EOF
@@ -48,12 +43,12 @@ jobs:
                   minSdk 21
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0"
+                  versionName "1.1"
               }
           }
           EOF
 
-          # 2. Advanced IDE Layout (With Editor Interface)
+          # 2. Modern IDE Dashboard UI
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -66,48 +61,49 @@ jobs:
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="SYSTEM PRO: EDITOR"
+                  android:text="SYSTEM PRO MASTER"
                   android:textColor="#00FF00"
-                  android:textSize="22sp"
+                  android:textSize="24sp"
                   android:textStyle="bold"
                   android:layout_gravity="center"
                   android:layout_marginBottom="20dp"/>
 
-              <EditText
-                  android:id="@+id/codeEditor"
+              <Button
+                  android:id="@+id/btnNewFile"
+                  android:layout_width="match_parent"
+                  android:layout_height="60dp"
+                  android:text="➕ CREATE NEW PROJECT"
+                  android:backgroundTint="#1E1E1E"
+                  android:textColor="#FFFFFF"
+                  android:layout_marginBottom="10dp"/>
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Your Projects:"
+                  android:textColor="#888888"
+                  android:textSize="14sp"
+                  android:layout_marginBottom="10dp"/>
+
+              <ListView
+                  android:id="@+id/projectList"
                   android:layout_width="match_parent"
                   android:layout_height="0dp"
                   android:layout_weight="1"
-                  android:hint="// Write your code here..."
-                  android:textColorHint="#555555"
-                  android:textColor="#FFFFFF"
-                  android:background="#1E1E1E"
-                  android:gravity="top"
-                  android:padding="10dp"
-                  android:typeface="monospace"
-                  android:textSize="14sp"/>
-
-              <Button
-                  android:id="@+id/btnSave"
-                  android:layout_width="match_parent"
-                  android:layout_height="60dp"
-                  android:text="💾 CREATE &amp; SAVE FILE"
-                  android:backgroundTint="#008577"
-                  android:textColor="#FFFFFF"
-                  android:layout_marginTop="10dp"/>
+                  android:divider="#333333"
+                  android:dividerHeight="1dp"/>
           </LinearLayout>
           EOF
 
-          # 3. MainActivity (Logic to Handle File Creation)
+          # 3. MainActivity (Project Listing Logic)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
-          import android.widget.Button;
-          import android.widget.EditText;
-          import android.widget.Toast;
+          import android.widget.ArrayAdapter;
+          import android.widget.ListView;
           import java.io.File;
-          import java.io.FileOutputStream;
+          import java.util.ArrayList;
 
           public class MainActivity extends Activity {
               @Override
@@ -115,39 +111,34 @@ jobs:
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
 
-                  EditText editor = findViewById(R.id.codeEditor);
-                  Button btnSave = findViewById(R.id.btnSave);
-
-                  btnSave.setOnClickListener(v -> {
-                      String code = editor.getText().toString();
-                      if (code.isEmpty()) {
-                          Toast.makeText(this, "Editor is empty!", Toast.LENGTH_SHORT).show();
-                      } else {
-                          saveCodeToFile(code);
-                      }
-                  });
+                  ListView listView = findViewById(R.id.projectList);
+                  loadProjects(listView);
               }
 
-              private void saveCodeToFile(String content) {
-                  try {
-                      File path = getExternalFilesDir(null);
-                      File file = new File(path, "MyNewProject.java");
-                      FileOutputStream stream = new FileOutputStream(file);
-                      stream.write(content.getBytes());
-                      stream.close();
-                      Toast.makeText(this, "File Created: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
-                  } catch (Exception e) {
-                      Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+              private void loadProjects(ListView listView) {
+                  File path = getExternalFilesDir(null);
+                  File[] files = path.listFiles();
+                  ArrayList<String> fileNames = new ArrayList<>();
+                  
+                  if (files != null) {
+                      for (File file : files) {
+                          fileNames.add("📄 " + file.getName());
+                      }
+                  } else {
+                      fileNames.add("No projects found.");
                   }
+
+                  ArrayAdapter<String> adapter = new ArrayAdapter<>(this, 
+                      android.R.layout.simple_list_view_1, fileNames);
+                  listView.setAdapter(adapter);
               }
           }
           EOF
 
-          # 4. Android Manifest (Added Storage Permission)
+          # 4. Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <application
                   android:allowBackup="true"
                   android:label="System Pro"
@@ -162,7 +153,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: 🚀 Final Master Build
+      - name: 🚀 Master Build #740
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
@@ -171,5 +162,5 @@ jobs:
       - name: 📦 Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Pro-IDE
+          name: System-Pro-Master-Explorer
           path: app/build/outputs/apk/debug/app-debug.apk
