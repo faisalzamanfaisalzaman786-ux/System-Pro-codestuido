@@ -16,18 +16,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Clean and Professional Structure
+      - name: 🏗️ Auto-Construct Project Structure
         run: |
-          # پرانی تمام فائلوں کی صفائی
+          # مکمل صفائی تاکہ کوئی پرانا ایرر نہ رہے
           rm -rf ./*
 
-          # ضروری فولڈرز کی تخلیق
+          # پروفیشنل اینڈرائیڈ فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/systempro/master
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
 
-          # 1. Settings Gradle
+          # 1. Settings Configuration
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -38,12 +38,11 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Root Build Gradle
+          # 2. Build Scripts (Root & App)
           cat <<EOF > build.gradle
           plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
 
-          # 3. App Build Gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -59,7 +58,7 @@ jobs:
           }
           EOF
 
-          # 4. Android Manifest (App Configuration)
+          # 3. Android Manifest (The Heart)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -77,25 +76,34 @@ jobs:
           </manifest>
           EOF
 
-          # 5. Layout File (UI Design)
+          # 4. User Interface (Professional Dark UI)
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:background="#121212">
+              android:orientation="vertical"
+              android:background="#121212"
+              android:padding="20dp"
+              android:gravity="center">
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="SYSTEM PRO MASTER ENGINE\nREADY FOR ACTION"
+                  android:text="SYSTEM PRO MASTER"
                   android:textColor="#00FF00"
-                  android:textSize="22sp"
-                  android:layout_centerInParent="true"
-                  android:gravity="center" />
-          </RelativeLayout>
+                  android:textSize="28sp"
+                  android:textStyle="bold" />
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="IDE Engine Initialized"
+                  android:textColor="#FFFFFF"
+                  android:textSize="16sp"
+                  android:layout_marginTop="10dp" />
+          </LinearLayout>
           EOF
 
-          # 6. MainActivity Java (Core Logic)
+          # 5. Core Java Logic (The Engine)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
@@ -110,14 +118,14 @@ jobs:
           }
           EOF
 
-      - name: Build and Sign APK
+      - name: 🚀 Final Master Build
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
 
-      - name: Upload Master APK
+      - name: 📦 Deliver APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-Engine
+          name: System-Pro-Master-App
           path: app/build/outputs/apk/debug/app-debug.apk
