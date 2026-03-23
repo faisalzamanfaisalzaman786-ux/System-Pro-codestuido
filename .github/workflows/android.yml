@@ -33,26 +33,27 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # 3. سب سے پہلے Settings اور Build فائلیں بنانا (اہم ترتیب)
-          echo "rootProject.name = 'System Pro Master'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
-
+          # 3. Settings فائل بنانا (درست ترتیب کے ساتھ)
+          # 'pluginManagement' کو لازمی طور پر سب سے اوپر ہونا چاہیے
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google(); mavenCentral() }
-          }" >> settings.gradle
+          }
+          rootProject.name = 'System Pro Master'
+          include ':app'" > settings.gradle
 
+          # 4. Root build.gradle بنانا
           echo "plugins {
               id 'com.android.application' version '8.2.2' apply false
           }" > build.gradle
 
-          # 4. اب گریڈل ریپر بنانا (اب یہ فیل نہیں ہوگا)
+          # 5. گریڈل ریپر بنانا
           gradle wrapper --gradle-version 8.2
 
-          # 5. ایپ لیول کی فائلیں بنانا
+          # 6. ایپ لیول کی فائلیں بنانا
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro Master</string>
@@ -66,8 +67,8 @@ jobs:
                   applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode 758
-                  versionName '1.0.758'
+                  versionCode 759
+                  versionName '1.0.759'
               }
           }
           dependencies {
