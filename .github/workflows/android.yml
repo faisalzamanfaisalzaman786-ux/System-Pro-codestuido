@@ -16,18 +16,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Auto-Construct Project Structure
+      - name: 🏗️ Multi-File Automatic Deployment
         run: |
-          # مکمل صفائی تاکہ کوئی پرانا ایرر نہ رہے
+          # پروجیکٹ کو مکمل کلین کرنا
           rm -rf ./*
 
-          # پروفیشنل اینڈرائیڈ فولڈرز کی تخلیق
+          # تمام ضروری فولڈرز کی بیک وقت تخلیق
           mkdir -p app/src/main/java/com/systempro/master
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-          # 1. Settings Configuration
+          # 1. Gradle Settings
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -38,7 +38,7 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Build Scripts (Root & App)
+          # 2. Build Scripts
           cat <<EOF > build.gradle
           plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
@@ -58,14 +58,31 @@ jobs:
           }
           EOF
 
-          # 3. Android Manifest (The Heart)
+          # 3. Resources: Strings & Colors
+          cat <<EOF > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">System Pro</string>
+              <string name="welcome_msg">SYSTEM PRO MASTER ENGINE ACTIVE</string>
+          </resources>
+          EOF
+
+          cat <<EOF > app/src/main/res/values/colors.xml
+          <resources>
+              <color name="black">#FF000000</color>
+              <color name="white">#FFFFFFFF</color>
+              <color name="terminal_green">#00FF00</color>
+              <color name="dark_bg">#121212</color>
+          </resources>
+          EOF
+
+          # 4. Android Manifest (Main Config)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:label="System Pro"
-                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -76,34 +93,27 @@ jobs:
           </manifest>
           EOF
 
-          # 4. User Interface (Professional Dark UI)
+          # 5. Advanced UI Layout
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:background="#121212"
-              android:padding="20dp"
-              android:gravity="center">
+              android:background="#121212">
               <TextView
+                  android:id="@+id/title"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="SYSTEM PRO MASTER"
+                  android:text="@string/welcome_msg"
                   android:textColor="#00FF00"
-                  android:textSize="28sp"
-                  android:textStyle="bold" />
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="IDE Engine Initialized"
-                  android:textColor="#FFFFFF"
-                  android:textSize="16sp"
-                  android:layout_marginTop="10dp" />
-          </LinearLayout>
+                  android:textSize="22sp"
+                  android:textStyle="bold"
+                  android:layout_centerInParent="true"
+                  android:gravity="center" />
+          </RelativeLayout>
           EOF
 
-          # 5. Core Java Logic (The Engine)
+          # 6. MainActivity Java (Central Logic)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
@@ -118,14 +128,14 @@ jobs:
           }
           EOF
 
-      - name: 🚀 Final Master Build
+      - name: 🚀 Execute Master Build
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: 📦 Deliver APK
+      - name: 📦 Final Deliverable
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-App
+          name: System-Pro-Master-Complete
           path: app/build/outputs/apk/debug/app-debug.apk
