@@ -1,17 +1,56 @@
+name: System Pro Final Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
       - name: Initialize Project Structure
         run: |
-          # پرانی فائلوں کی مکمل صفائی
-          rm -rf app settings.gradle build.gradle gradlew
+          # پرانی فائلوں کی مکمل صفائی (درست کمانڈ کے ساتھ)
+          rm -rf app build settings.gradle build.gradle gradlew gradle .gradle
           
+          # فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. Settings File
-          echo "rootProject.name = 'System Pro Master'
+          # 1. Settings File (ترتیب درست کر دی گئی ہے)
+          echo "pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
-          # 2. MainActivity.java (یہ فائل اب ایپ کو چلانے کے قابل بنائے گی)
+          # 2. Root build.gradle
+          echo "plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }" > build.gradle
+
+          # 3. MainActivity.java (تاکہ ایپ لانچ ہو سکے)
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -24,7 +63,7 @@
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 3. layout/activity_main.xml (ایپ کا پہلا ڈیزائن)
+          # 4. activity_main.xml (Layout ڈیزائن)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -32,20 +71,38 @@
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Welcome to System Pro Master!"
+                  android:text="System Pro Master is Ready!"
+                  android:textSize="20sp"
                   android:layout_centerInParent="true" />
           </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-          # 4. AndroidManifest.xml (سب سے اہم حصہ: LAUNCHER شامل کیا گیا)
+          # 5. App level build.gradle
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.system.pro.master'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 762
+                  versionName '1.0.762'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }" > app/build.gradle
+
+          # 6. AndroidManifest.xml (LAUNCHER کیٹیگری شامل ہے)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.system.pro">
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
                   android:label="System Pro Master"
+                  android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  
                   <activity 
                       android:name=".MainActivity"
                       android:exported="true">
@@ -54,8 +111,19 @@
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-                  
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # باقی بلڈ پروسیس (Build.gradle وغیرہ) ویسے ہی رہیں گے
+          # 7. Create Gradle Wrapper
+          gradle wrapper --gradle-version 8.2
+
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Master-APK
+          path: app/build/outputs/apk/debug/*.apk
