@@ -1,16 +1,27 @@
-plugins {
-    id 'com.android.application'
-}
-
 android {
-    namespace 'com.systempro.master'
-    compileSdk 34
-
+    ...
     defaultConfig {
-        applicationId "com.systempro.master"
-        minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        applicationId "com.faisal.systempro" // یہ آپ کا مین پیکج نیم ہے
+        ...
+    }
+
+    // یہ حصہ شامل کریں
+    flavorDimensions "version"
+    productFlavors {
+        app1 {
+            dimension "version"
+            applicationIdSuffix ".one"
+            resValue "string", "app_name", "System Pro 1"
+        }
+        app2 {
+            dimension "version"
+            applicationIdSuffix ".two"
+            resValue "string", "app_name", "System Pro 2"
+        }
+        app3 {
+            dimension "version"
+            applicationIdSuffix ".three"
+            resValue "string", "app_name", "System Pro 3"
+        }
     }
 }
