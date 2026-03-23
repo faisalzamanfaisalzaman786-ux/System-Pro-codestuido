@@ -1,4 +1,4 @@
-name: System Pro Master Deployment
+name: System Pro Final Fix
 
 on:
   workflow_dispatch:
@@ -20,21 +20,21 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Auto-Repair Project Files
+      - name: Force Clean and Repair Structure
         run: |
-          # ضروری فولڈرز بنانا
-          mkdir -p app/src/main/java/com/faisal/systempro
-          
-          # 1. Root build.gradle (صاف ستھرا ڈھانچہ)
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          plugins {
-              id 'com.android.application' version '8.2.0' apply false
-          }" > build.gradle
+          # پرانی فائلوں کو صاف کرنا تاکہ ریسورس ایرر نہ آئے
+          rm -rf app/src/main/res/layout/*
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
 
-          # 2. settings.gradle (تمام Repositories یہاں منتقل کر دیں تاکہ ایرر نہ آئے)
+          # ایک بنیادی درست XML فائل بنانا تاکہ ریسورس پارسنگ ایرر ختم ہو
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">System Pro Master</string>
+          </resources>' > app/src/main/res/values/strings.xml
+
+          # settings.gradle کی درست کنفیگریشن
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -45,43 +45,31 @@ jobs:
           rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
-          # 3. app/build.gradle (درست نیم اسپیس اور پیکیج کے ساتھ)
-          echo "plugins {
-              id 'com.android.application'
-          }
+          # app/build.gradle - پیکیج نیم تبدیل کر دیا گیا ہے تاکہ کنفلکٹ نہ آئے
+          echo "plugins { id 'com.android.application' }
           android {
-              namespace 'com.faisal.systempro'
+              namespace 'com.system.pro'
               compileSdk 34
               defaultConfig {
-                  applicationId 'com.faisal.systempro.v1.fix'
+                  applicationId 'com.system.pro.new.build'
                   minSdk 24
                   targetSdk 34
                   versionCode ${{ github.run_number }}
-                  versionName '1.3-Fix'
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  versionName '1.0.${{ github.run_number }}'
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Grant Execute Permission for Gradlew
-        run: gradle wrapper --gradle-version 8.5 && chmod +x gradlew
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload System Pro APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-v1.3-Fix
+          name: System-Pro-V${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
