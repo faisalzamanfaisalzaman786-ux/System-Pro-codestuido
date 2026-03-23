@@ -1,4 +1,4 @@
-name: System Pro Master Fix
+name: System Pro Master Final Fix
 
 on:
   push:
@@ -21,15 +21,15 @@ jobs:
 
       - name: Initialize Project Structure
         run: |
-          # پرانی فائلوں کی مکمل صفائی
-          rm -rf app build settings.gradle build.gradle
+          # مکمل صفائی تاکہ پرانے ایررز ختم ہوں
+          rm -rf app build settings.gradle build.gradle gradlew .gradle
           
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/assets
 
-          # 1. AndroidManifest (تمام پرمیشنز کے ساتھ)
+          # 1. AndroidManifest (تمام ضروری پرمیشنز کے ساتھ)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -50,7 +50,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 2. MainActivity.java
+          # 2. MainActivity.java (رن ٹائم پرمیشن اور ویب ویو)
           echo "package com.system.pro;
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -67,7 +67,7 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 3. Gradle Config
+          # 3. Gradle Settings
           echo "rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
@@ -81,8 +81,8 @@ jobs:
                   applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode 766
-                  versionName '1.0.766'
+                  versionCode 768
+                  versionName '1.0.768'
               }
           }
           dependencies {
@@ -96,10 +96,12 @@ jobs:
 
       - name: Build APK
         run: |
+          # گریڈل ریپر بنانا اور بلڈ شروع کرنا
+          gradle wrapper
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Master-APK
