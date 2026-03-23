@@ -5,8 +5,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // گریڈل پلگ ان کا نیا ورژن
-        classpath 'com.android.tools.build:gradle:8.2.0'
+        // یہ ورژن Gradle 8.0+ کے لیے بہترین ہے
+        classpath 'com.android.tools.build:gradle:8.1.1'
     }
 }
 
