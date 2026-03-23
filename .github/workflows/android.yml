@@ -1,9 +1,9 @@
-name: System Pro Master Permissions Fix
+name: System Pro Master Fix
 
 on:
-  workflow_dispatch:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,37 +19,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
-
       - name: Initialize Project Structure
         run: |
-          # پرانے ڈیٹا کی مکمل صفائی
-          rm -rf app build settings.gradle build.gradle gradlew
+          # پرانی فائلوں کی مکمل صفائی
+          rm -rf app build settings.gradle build.gradle
           
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/assets
 
-          # 1. Base64 سے ایپ کا آئیکن بنانا
-          echo "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AMXFRow7pZ9VwAAADJJREFUeNpjYBgFo2AUjIJRMApGwSgYBaNgFAy8AAYG6gE9oIDhP8IDBoYRDAYpGAV0AQC9OQH/p4at7wAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
-
-          # 2. AndroidManifest (کیمرہ، مائیک اور سسٹم رائٹنگ پرمیشن کے ساتھ)
+          # 1. AndroidManifest (تمام پرمیشنز کے ساتھ)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:label="System Pro Master"
-                  android:requestLegacyExternalStorage="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -60,45 +50,25 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 3. MainActivity (رن ٹائم پرمیشن لاجک)
+          # 2. MainActivity.java
           echo "package com.system.pro;
-          import android.Manifest;
           import android.os.Bundle;
-          import android.webkit.PermissionRequest;
-          import android.webkit.WebChromeClient;
-          import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.appcompat.app.AppCompatActivity;
-          import androidx.core.app.ActivityCompat;
 
           public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  ActivityCompat.requestPermissions(this, new String[]{
-                      Manifest.permission.CAMERA, 
-                      Manifest.permission.RECORD_AUDIO,
-                      Manifest.permission.WRITE_EXTERNAL_STORAGE
-                  }, 1);
                   WebView webView = new WebView(this);
                   setContentView(webView);
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  webView.setWebChromeClient(new WebChromeClient() {
-                      @Override
-                      public void onPermissionRequest(PermissionRequest request) {
-                          request.grant(request.getResources());
-                      }
-                  });
+                  webView.getSettings().setJavaScriptEnabled(true);
                   webView.loadUrl(\"file:///android_asset/index.html\");
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 4. Gradle Settings
-          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
-          rootProject.name = 'System Pro Master'
+          # 3. Gradle Config
+          echo "rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
           echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
@@ -119,7 +89,10 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }" > app/build.gradle
 
-          gradle wrapper --gradle-version 8.2
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
 
       - name: Build APK
         run: |
@@ -129,5 +102,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Full-Permissions
+          name: System-Pro-Master-APK
           path: app/build/outputs/apk/debug/*.apk
