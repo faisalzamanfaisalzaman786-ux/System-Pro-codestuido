@@ -1,13 +1,11 @@
 plugins {
     id 'com.android.application'
 }
-
 android {
-    namespace 'com.systempro.master'
+    namespace 'com.systempro.calculator'
     compileSdk 34
-
     defaultConfig {
-        applicationId "com.systempro.master"
+        applicationId "com.systempro.calculator"
         minSdk 21
         targetSdk 34
         versionCode 1
