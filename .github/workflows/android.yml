@@ -1,15 +1,16 @@
-name: System Pro Ultimate Repair
+name: System Pro Ultimate Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # آپ اسے بٹن دبا کر خود چلا سکتے ہیں
 
 jobs:
-  repair:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -17,30 +18,63 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Force Create Project Structure
+      - name: Auto-Fix Project Files
         run: |
-          # اگر پروجیکٹ فولڈر نہیں ہے تو بنائیں
+          # فولڈر سٹرکچر بنانا
           mkdir -p app/src/main/java/com/faisal/systempro
-          mkdir -p gradle/wrapper
           
-          # بنیادی گریڈل فائلیں تیار کریں
-          if [ ! -f "build.gradle" ]; then
-            echo "plugins { id 'com.android.application' version '8.2.0' apply false }" > build.gradle
-          fi
-          
-          if [ ! -f "settings.gradle" ]; then
-            echo "rootProject.name = 'System Pro'" > settings.gradle
-            echo "include ':app'" >> settings.gradle
-          fi
+          # Root build.gradle کو درست کرنا
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }" > build.gradle
 
-          # گریڈل ریپر (gradlew) جنریٹ کریں
-          gradle wrapper --gradle-version 8.5
+          # settings.gradle کو درست کرنا
+          echo "rootProject.name = 'System Pro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-      - name: Commit and Push Fixed Files
-        run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add .
-          git commit -m "System Pro: Full Project Structure Restored" || echo "No changes"
-          git push origin main
+          # app/build.gradle کو مکمل درست ڈھانچے کے ساتھ لکھنا
+          echo "plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.faisal.systempro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.faisal.systempro.master'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode $((GITHUB_RUN_NUMBER))
+                  versionName '1.0.\$GITHUB_RUN_NUMBER'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }" > app/build.gradle
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew || gradle wrapper --gradle-version 8.5
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload System Pro APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
