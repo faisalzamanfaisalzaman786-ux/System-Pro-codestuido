@@ -1,14 +1,12 @@
-name: System Pro Master Final Success
+name: System Pro APK Builder
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  repository_dispatch:
+    types: [build_apk]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,111 +17,54 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
-
-      - name: Build Project Structure
+      - name: Install Android SDK Components
         run: |
-          # مکمل صفائی
-          rm -rf app build settings.gradle build.gradle gradlew .gradle
+          echo "y" | sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Prepare Project Structure
+        run: |
+          # پرانی فائلیں صاف کریں تاکہ سائز اور کنفیگریشن درست رہے
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
           
-          mkdir -p app/src/main/java/com/system/pro
+          # پیکیج نیم کے مطابق فولڈر بنانا
+          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/mipmap-xxhdpi
 
-          # آئیکن کی کمی کو پورا کرنے کے لیے ایک خالی فائل بنانا (Fix for Build #769 Error)
-          touch app/src/main/res/mipmap-mdpi/ic_launcher.png
-
-          # 1. Settings Gradle
-          echo "pluginManagement { 
-              repositories { 
-                  google() 
-                  mavenCentral() 
-                  gradlePluginPortal() 
-              } 
-          }
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS) 
-              repositories { 
-                  google() 
-                  mavenCentral() 
-              } 
-          }
-          rootProject.name = 'System Pro Master'
-          include ':app'" > settings.gradle
-
-          # 2. Top-level build.gradle
-          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          # جاوا کوڈ کو ڈی کوڈ کر کے محفوظ کرنا
+          echo "${{ github.event.client_payload.java_code }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
           
-          # 3. App-level build.gradle
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId 'com.system.pro.master'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 770
-                  versionName '1.0.770'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }" > app/build.gradle
+          # لے آؤٹ اور مینی فیسٹ کو محفوظ کرنا
+          echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
+          echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > app/src/main/AndroidManifest.xml
 
-          # 4. AndroidManifest (آئیکن فکس کے ساتھ)
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro Master"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
+          # اگر آئیکن بھیجا گیا ہے تو اسے اپلائی کرنا
+          if [ ! -z "${{ github.event.client_payload.icon_base64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_base64 }}" | base64 --decode > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          fi
 
-          # 5. MainActivity.java
-          echo "package com.system.pro;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import androidx.appcompat.app.AppCompatActivity;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  setContentView(webView);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.loadUrl(\"file:///android_asset/index.html\");
-              }
-          }" > app/src/main/java/com/system/pro/MainActivity.java
-
-          # 6. Default index.html (ایپ خالی نہ لگے)
-          echo "<html><body style='background:black;color:#00FF00;text-align:center;'>
-          <h1>System Pro Master</h1>
-          <p>Build 770 Successful!</p>
-          </body></html>" > app/src/main/assets/index.html
-
-      - name: Final Build
+      - name: Set App Name (Strings.xml)
         run: |
-          gradle wrapper
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          mkdir -p app/src/main/res/values
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
 
-      - name: Upload APK
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V770
-          path: app/build/outputs/apk/debug/*.apk
+          name: ${{ github.event.client_payload.app_name }}-v1.0
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Save Error Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error_logs
+          path: app/build/reports/
