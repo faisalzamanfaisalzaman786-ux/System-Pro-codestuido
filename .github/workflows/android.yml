@@ -1,4 +1,4 @@
-name: System Pro Master Net Final
+name: Build System Pro APK
 
 on:
   push:
@@ -10,63 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
+    - name: set up JDK 17
+      uses: actions/setup-java@v3
       with:
-        distribution: 'zulu'
         java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-    - name: Step 1 - Build Native Structure
-      run: |
-        # فولڈرز بنانا
-        mkdir -p app/src/main/java/com/systempro/master
-        mkdir -p app/src/main/res/layout
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
-        # تمام ضروری فائلوں کو دوبارہ لکھنا (Overwriting)
-        cat <<EOF > settings.gradle
-        rootProject.name = "System-Pro-Master"
-        include ':app'
-        EOF
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
 
-        cat <<EOF > build.gradle
-        buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-        }
-        allprojects {
-            repositories { google(); mavenCentral() }
-        }
-        EOF
-
-        cat <<EOF > app/build.gradle
-        plugins { id 'com.android.application' }
-        android {
-            namespace 'com.systempro.master'
-            compileSdk 34
-            defaultConfig {
-                applicationId "com.systempro.master"
-                minSdk 21
-                targetSdk 34
-                versionCode 1
-                versionName "1.0"
-            }
-        }
-        EOF
-
-    - name: Step 2 - Setup Gradle Environment
-      uses: gradle/gradle-build-action@v3
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
       with:
-        gradle-version: 8.1.1
-
-    - name: Step 3 - Run Build Execution
-      run: gradle assembleDebug --stacktrace
-
-    - name: Step 4 - Save and Upload APK
-      # یہ حصہ APK کو ڈاؤن لوڈ کے لیے تیار کرے گا
-      uses: actions/upload-artifact@v4
-      with:
-        name: SystemPro-Master-APK
+        name: System-Pro-Calculator
         path: app/build/outputs/apk/debug/app-debug.apk
