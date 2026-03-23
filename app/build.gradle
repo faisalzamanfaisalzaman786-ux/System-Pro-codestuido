@@ -3,27 +3,25 @@ plugins {
 }
 
 android {
-    namespace 'com.faisal.systempro'
+    namespace "com.system.pro" // یہ بیس پیکیج ہے، YML اسے خود بدل دے گا
     compileSdk 34
 
     defaultConfig {
-        // پیکج نیم میں معمولی تبدیلی تاکہ 'Conflict' والا مسئلہ نہ آئے
-        applicationId "com.faisal.systempro.master" 
+        applicationId "com.system.pro.builder"
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName "1.2"
+        versionCode 1
+        versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled false // فی الحال اسے false رکھیں تاکہ سائز پورا رہے
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -31,7 +29,12 @@ android {
 }
 
 dependencies {
+    // یہ لائبریریز فائل کا سائز بھی بہتر کریں گی اور فنکشنز بھی
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // اگر آپ کی ایپ کو انٹرنیٹ یا ڈیٹا بیس چاہیے تو یہ بھی کام آئیں گی
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
