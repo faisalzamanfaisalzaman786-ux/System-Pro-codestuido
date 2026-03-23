@@ -1,4 +1,4 @@
-name: System Pro Final Fix
+name: System Pro Master Interface
 
 on:
   workflow_dispatch:
@@ -26,86 +26,51 @@ jobs:
 
       - name: Initialize Project Structure
         run: |
-          # پرانی فائلوں کی مکمل صفائی (درست کمانڈ کے ساتھ)
-          rm -rf app build settings.gradle build.gradle gradlew gradle .gradle
-          
-          # فولڈرز کی تخلیق
+          rm -rf app build settings.gradle build.gradle gradlew
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/assets
 
-          # 1. Settings File (ترتیب درست کر دی گئی ہے)
-          echo "pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = 'System Pro Master'
-          include ':app'" > settings.gradle
+          # 1. Base64 سے ایپ کا آئیکن بنانا
+          # یہاں اپنی Base64 سٹرنگ ڈالیں (موجودہ سٹرنگ ایک نمونہ ہے)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AMXFRow7pZ9VwAAADJJREFUeNpjYBgFo2AUjIJRMApGwSgYBaNgFAy8AAYG6gE9oIDhP8IDBoYRDAYpGAV0AQC9OQH/p4at7wAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
 
-          # 2. Root build.gradle
-          echo "plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }" > build.gradle
+          # 2. HTML فائل (آپ کی ایپ کا انٹرفیس)
+          echo "<!DOCTYPE html><html><body style='text-align:center;padding-top:50px;'>
+                <h1>System Pro Master HTML Interface</h1>
+                <p>Connecting via API...</p>
+                </body></html>" > app/src/main/assets/index.html
 
-          # 3. MainActivity.java (تاکہ ایپ لانچ ہو سکے)
+          # 3. MainActivity.java (WebView سیٹنگز کے ساتھ)
           echo "package com.system.pro;
           import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
           import androidx.appcompat.app.AppCompatActivity;
 
           public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
+                  WebView webView = new WebView(this);
+                  setContentView(webView);
+                  WebSettings webSettings = webView.getSettings();
+                  webSettings.setJavaScriptEnabled(true);
+                  webView.loadUrl(\"file:///android_asset/index.html\");
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 4. activity_main.xml (Layout ڈیزائن)
+          # 4. AndroidManifest.xml (آئیکن اور انٹرنیٹ پرمیشن کے ساتھ)
           echo '<?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="System Pro Master is Ready!"
-                  android:textSize="20sp"
-                  android:layout_centerInParent="true" />
-          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-
-          # 5. App level build.gradle
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId 'com.system.pro.master'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 762
-                  versionName '1.0.762'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }" > app/build.gradle
-
-          # 6. AndroidManifest.xml (LAUNCHER کیٹیگری شامل ہے)
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.system.pro">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <uses-permission android:name="android.permission.INTERNET" />
               <application
                   android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
                   android:label="System Pro Master"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-                  <activity 
-                      android:name=".MainActivity"
-                      android:exported="true">
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -114,10 +79,33 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 7. Create Gradle Wrapper
+          # 5. Gradle Settings
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = 'System Pro Master'
+          include ':app'" > settings.gradle
+
+          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.system.pro.master'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 763
+                  versionName '1.0.763'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }" > app/build.gradle
+
           gradle wrapper --gradle-version 8.2
 
-      - name: Build with Gradle
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -125,5 +113,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-HTML-Interface
           path: app/build/outputs/apk/debug/*.apk
