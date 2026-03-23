@@ -1,4 +1,4 @@
-name: System Pro APK Builder
+name: System Pro Master Build Fix
 
 on:
   repository_dispatch:
@@ -16,55 +16,46 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Install Android SDK Components
-        run: |
-          echo "y" | sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Prepare Project Structure
         run: |
-          # پرانی فائلیں صاف کریں تاکہ سائز اور کنفیگریشن درست رہے
+          # پرانی فائلیں صاف کریں
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           
-          # پیکیج نیم کے مطابق فولڈر بنانا
+          # پیکیج نیم سے پاتھ بنائیں
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-xxhdpi
 
-          # جاوا کوڈ کو ڈی کوڈ کر کے محفوظ کرنا
+          # کوڈ ڈی کوڈ کر کے فائلیں بنائیں
           echo "${{ github.event.client_payload.java_code }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # لے آؤٹ اور مینی فیسٹ کو محفوظ کرنا
           echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > app/src/main/AndroidManifest.xml
 
-          # اگر آئیکن بھیجا گیا ہے تو اسے اپلائی کرنا
+          # آئیکن چیک کریں
           if [ ! -z "${{ github.event.client_payload.icon_base64 }}" ]; then
             echo "${{ github.event.client_payload.icon_base64 }}" | base64 --decode > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
 
-      - name: Set App Name (Strings.xml)
+      - name: Set App Name
         run: |
           mkdir -p app/src/main/res/values
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
 
-      - name: Grant Execute Permission for Gradlew
+      - name: Grant Execute Permission
         run: chmod +x gradlew
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-v1.0
+          name: ${{ github.event.client_payload.app_name }}-Build
           path: app/build/outputs/apk/release/*.apk
-
-      - name: Save Error Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: error_logs
-          path: app/build/reports/
