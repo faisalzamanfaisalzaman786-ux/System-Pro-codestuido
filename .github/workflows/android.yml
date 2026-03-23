@@ -6,8 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout Repository
@@ -20,21 +18,37 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Force Clean and Repair Structure
+      - name: Prepare Project Structure and Fix Resources
         run: |
-          # پرانی فائلوں کو صاف کرنا تاکہ ریسورس ایرر نہ آئے
+          # پرانی فائلوں کی صفائی
           rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/drawable/*
+          
+          # ضروری فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-          # ایک بنیادی درست XML فائل بنانا تاکہ ریسورس پارسنگ ایرر ختم ہو
+          # 1. ایک درست Strings فائل بنانا
           echo '<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">System Pro Master</string>
           </resources>' > app/src/main/res/values/strings.xml
 
-          # settings.gradle کی درست کنفیگریشن
+          # 2. خراب XML فائل کو ٹھیک کرنا (Content not allowed in prolog fix)
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#3DDC84"
+                  android:pathData="M0,0h108v108h-108z" />
+          </vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
+
+          # 3. settings.gradle کی درست کنفیگریشن
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -45,31 +59,37 @@ jobs:
           rootProject.name = 'System Pro Master'
           include ':app'" > settings.gradle
 
-          # app/build.gradle - پیکیج نیم تبدیل کر دیا گیا ہے تاکہ کنفلکٹ نہ آئے
+          # 4. Root build.gradle (صرف پلگ انز کے لیے)
+          echo "plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }" > build.gradle
+
+          # 5. app/build.gradle کی مکمل ترتیب
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
               compileSdk 34
               defaultConfig {
-                  applicationId 'com.system.pro.new.build'
+                  applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode ${{ github.run_number }}
-                  versionName '1.0.${{ github.run_number }}'
+                  versionCode 755
+                  versionName '1.0.755'
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-      - name: Build APK
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew || true
 
-      - name: Upload Final APK
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: System-Pro-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
