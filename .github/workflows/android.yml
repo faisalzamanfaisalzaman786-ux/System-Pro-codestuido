@@ -1,4 +1,4 @@
-name: System Pro Master Final Fix
+name: System Pro Master Super Clean
 
 on:
   repository_dispatch:
@@ -20,36 +20,39 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Prepare Project Structure
+      - name: Force Initialize Project
         run: |
-          # پیکیج نیم سیٹ اپ
+          # اگر کوئی پرانی فائلیں ہیں تو انہیں مکمل ختم کریں
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          
+          # پیکیج کے مطابق نیا اسٹرکچر بنائیں
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/values
 
-          # فائلیں ڈی کوڈ کرنا
+          # کوڈ فائلیں تیار کریں
           echo "${{ github.event.client_payload.java_code }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > app/src/main/AndroidManifest.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
 
-          # آئیکن پروسیسنگ
+          # آئیکن چیک کریں
           if [ ! -z "${{ github.event.client_payload.icon_base64 }}" ]; then
             echo "${{ github.event.client_payload.icon_base64 }}" | base64 --decode > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
 
-      - name: Generate Wrapper (If Missing)
+      - name: Fix Permissions and Build
         run: |
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper
-          fi
+          # اگر gradlew نہیں ہے تو اسے دوبارہ بنائیں
+          gradle wrapper --gradle-version 8.2
           chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Upload APK
+      - name: Upload Professional APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-APK
+          name: ${{ github.event.client_payload.app_name }}-Stable
           path: app/build/outputs/apk/release/*.apk
