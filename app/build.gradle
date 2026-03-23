@@ -1,16 +1,9 @@
-plugins {
-    id 'com.android.application'
-}
-
 android {
     namespace 'com.faisal.systempro'
-    compileSdk 34
-
     defaultConfig {
-        applicationId "com.faisal.systempro"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        // اسے تبدیل کریں، مثلاً 'com.faisal.systempro.plus'
+        applicationId "com.faisal.systempro.new" 
+        versionCode 2
+        versionName "1.1"
     }
 }
