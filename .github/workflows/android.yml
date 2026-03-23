@@ -16,18 +16,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Multi-File Automatic Deployment
+      - name: 🏗️ Advanced IDE Structure Deployment
         run: |
-          # پروجیکٹ کو مکمل کلین کرنا
           rm -rf ./*
-
-          # تمام ضروری فولڈرز کی بیک وقت تخلیق
           mkdir -p app/src/main/java/com/systempro/master
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # 1. Gradle Settings
+          # 1. Settings & Build Scripts (Fixed Repositories)
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -38,7 +35,6 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Build Scripts
           cat <<EOF > build.gradle
           plugins { id 'com.android.application' version '8.2.0' apply false }
           EOF
@@ -58,30 +54,83 @@ jobs:
           }
           EOF
 
-          # 3. Resources: Strings & Colors
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">System Pro</string>
-              <string name="welcome_msg">SYSTEM PRO MASTER ENGINE ACTIVE</string>
-          </resources>
+          # 2. Advanced UI Layout (Dashboard Style)
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:background="#121212"
+              android:padding="16dp">
+              
+              <TextView
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="SYSTEM PRO IDE"
+                  android:textColor="#00FF00"
+                  android:textSize="24sp"
+                  android:textStyle="bold"
+                  android:gravity="center"
+                  android:padding="10dp"/>
+
+              <View
+                  android:layout_width="match_parent"
+                  android:layout_height="1dp"
+                  android:background="#333333"
+                  android:layout_marginBottom="20dp"/>
+
+              <Button
+                  android:layout_width="match_parent"
+                  android:layout_height="60dp"
+                  android:text="📁 OPEN PROJECT"
+                  android:backgroundTint="#1E1E1E"
+                  android:textColor="#FFFFFF"
+                  android:layout_marginBottom="10dp"/>
+
+              <Button
+                  android:layout_width="match_parent"
+                  android:layout_height="60dp"
+                  android:text="📝 NEW FILE"
+                  android:backgroundTint="#1E1E1E"
+                  android:textColor="#FFFFFF"
+                  android:layout_marginBottom="10dp"/>
+
+              <TextView
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Recent Builds: #736 Successful"
+                  android:textColor="#888888"
+                  android:textSize="12sp"
+                  android:layout_marginTop="20dp"
+                  android:gravity="center"/>
+          </LinearLayout>
           EOF
 
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <resources>
-              <color name="black">#FF000000</color>
-              <color name="white">#FFFFFFFF</color>
-              <color name="terminal_green">#00FF00</color>
-              <color name="dark_bg">#121212</color>
-          </resources>
+          # 3. MainActivity Java (Interaction Logic)
+          cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
+          package com.systempro.master;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.Toast;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  // یہاں ہم مستقبل میں بٹن کلکس کی لاجک ڈالیں گے
+              }
+          }
           EOF
 
-          # 4. Android Manifest (Main Config)
+          # 4. Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:label="@string/app_name"
+                  android:label="System Pro"
                   android:theme="@android:style/Theme.Material.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -93,49 +142,14 @@ jobs:
           </manifest>
           EOF
 
-          # 5. Advanced UI Layout
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#121212">
-              <TextView
-                  android:id="@+id/title"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="@string/welcome_msg"
-                  android:textColor="#00FF00"
-                  android:textSize="22sp"
-                  android:textStyle="bold"
-                  android:layout_centerInParent="true"
-                  android:gravity="center" />
-          </RelativeLayout>
-          EOF
-
-          # 6. MainActivity Java (Central Logic)
-          cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
-          package com.systempro.master;
-          import android.app.Activity;
-          import android.os.Bundle;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-
-      - name: 🚀 Execute Master Build
+      - name: 🚀 Master Build Execution
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: 📦 Final Deliverable
+      - name: 📦 Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-Complete
+          name: System-Pro-IDE-Dashboard
           path: app/build/outputs/apk/debug/app-debug.apk
