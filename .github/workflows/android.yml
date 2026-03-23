@@ -1,4 +1,4 @@
-name: System Pro Master Final Fix
+name: System Pro Master Build Fix
 
 on:
   push:
@@ -19,9 +19,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Initialize Project Structure
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Build Project Structure
         run: |
-          # مکمل صفائی تاکہ پرانے ایررز ختم ہوں
+          # مکمل صفائی تاکہ پچھلے ایررز ختم ہوں
           rm -rf app build settings.gradle build.gradle gradlew .gradle
           
           mkdir -p app/src/main/java/com/system/pro
@@ -29,13 +34,50 @@ jobs:
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/assets
 
-          # 1. AndroidManifest (تمام ضروری پرمیشنز کے ساتھ)
+          # 1. Settings Gradle (Google Repository شامل کی گئی ہے)
+          echo "pluginManagement { 
+              repositories { 
+                  google() 
+                  mavenCentral() 
+                  gradlePluginPortal() 
+              } 
+          }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS) 
+              repositories { 
+                  google() 
+                  mavenCentral() 
+              } 
+          }
+          rootProject.name = 'System Pro Master'
+          include ':app'" > settings.gradle
+
+          # 2. Top-level build.gradle
+          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
+          
+          # 3. App-level build.gradle
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.system.pro.master'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 769
+                  versionName '1.0.769'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }" > app/build.gradle
+
+          # 4. AndroidManifest (پرمیشنز کے ساتھ)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -50,7 +92,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 2. MainActivity.java (رن ٹائم پرمیشن اور ویب ویو)
+          # 5. MainActivity.java
           echo "package com.system.pro;
           import android.os.Bundle;
           import android.webkit.WebView;
@@ -67,42 +109,14 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 3. Gradle Settings
-          echo "rootProject.name = 'System Pro Master'
-          include ':app'" > settings.gradle
-
-          echo "plugins { id 'com.android.application' version '8.2.2' apply false }" > build.gradle
-          
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId 'com.system.pro.master'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 768
-                  versionName '1.0.768'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }" > app/build.gradle
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
-
-      - name: Build APK
+      - name: Final Build
         run: |
-          # گریڈل ریپر بنانا اور بلڈ شروع کرنا
           gradle wrapper
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-V769
           path: app/build/outputs/apk/debug/*.apk
