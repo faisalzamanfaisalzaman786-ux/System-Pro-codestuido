@@ -1,11 +1,15 @@
+plugins {
+    id 'com.android.application'
+}
+
 android {
-    ...
+    namespace 'com.faisal.systempro'
+    compileSdk 34
+
     defaultConfig {
-        applicationId "com.faisal.systempro" // آپ کا اصل پیکج نیم
-        
-        // یہ لائن ہر بلڈ کے لیے پیکج نیم میں بلڈ نمبر یا ٹائم اسٹیمپ شامل کر دے گی
-        applicationIdSuffix ".v${String.valueOf(System.currentTimeMillis()).substring(10)}"
-        
+        applicationId "com.faisal.systempro"
+        minSdk 24
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
