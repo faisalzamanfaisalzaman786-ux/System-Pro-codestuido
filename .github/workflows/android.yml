@@ -1,10 +1,10 @@
-name: System Pro Ultimate Repair
+name: System Pro Final Ultimate Force Build
 
 on:
   workflow_dispatch:
 
 jobs:
-  repair-and-build:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -16,37 +16,37 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Total Project Reconstruct
+      - name: Total Wipe and Force Reconstruction
         run: |
-          # تمام پرانے کنفگریشنز کو ختم کرنا
-          rm -rf app/src/main/res app/src/main/java build.gradle settings.gradle app/build.gradle
+          # 1. ہر چیز کو جڑ سے ختم کرنا (Force Delete)
+          rm -rf ./*
           
-          # نیا اسٹرکچر بنانا
+          # 2. اینڈرائیڈ کا مکمل ڈھانچہ بنانا
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/java/com/systempro/master
 
-          # 1. settings.gradle (ایرر کو حل کرنے کے لیے سب سے اہم)
+          # 3. settings.gradle (گریڈل کنفلکٹ کا مکمل حل)
           cat <<EOF > settings.gradle
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
           }
           rootProject.name = "System Pro Master"
           include ':app'
           EOF
 
-          # 2. Root build.gradle (خالی رکھنا ضروری ہے نئے گریڈل میں)
+          # 4. Root build.gradle
           cat <<EOF > build.gradle
           plugins {
               id 'com.android.application' version '8.2.0' apply false
           }
           EOF
 
-          # 3. app/build.gradle
+          # 5. app/build.gradle (بغیر کسی بیرونی لائبریری کے سادہ اور پاور فل)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -59,10 +59,15 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           EOF
 
-          # 4. AndroidManifest.xml
+          # 6. AndroidManifest.xml
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -81,29 +86,45 @@ jobs:
           </manifest>
           EOF
 
-          # 5. MainActivity.java & Layout
+          # 7. MainActivity.java (ٹیسٹ کوڈ)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
+          import android.widget.TextView;
+          import android.view.Gravity;
+
           public class MainActivity extends Activity {
-              protected void onCreate(Bundle s) { super.onCreate(s); setContentView(new android.view.View(this)); }
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  TextView tv = new TextView(this);
+                  tv.setText("SYSTEM PRO\nBUILD SUCCESSFUL!");
+                  tv.setTextSize(30);
+                  tv.setGravity(Gravity.CENTER);
+                  setContentView(tv);
+              }
           }
           EOF
 
+          # 8. Vector Icon (Base64 کے متبادل کے طور پر کوڈ بیسڈ امیج)
           cat <<EOF > app/src/main/res/drawable/ic_launcher_repair.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#008577" android:pathData="M0,0h108v108h-108z" />
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
           </vector>
           EOF
 
-      - name: Build Repaired APK
+      - name: Force Build Execution
         run: |
-          chmod +x gradlew || gradle wrapper --gradle-version 8.2
-          ./gradlew assembleDebug
+          # گریڈل ریپر بنانا اور پرمیشن دینا
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          # بلڈ شروع کرنا
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-Master-Final
           path: app/build/outputs/apk/debug/app-debug.apk
