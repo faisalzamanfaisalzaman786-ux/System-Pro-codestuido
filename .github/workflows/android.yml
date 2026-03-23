@@ -16,19 +16,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ Mega Project Reconstruction
+      - name: 🏗️ Master IDE Deployment
         run: |
-          # مکمل صفائی
           rm -rf ./*
-
-          # پروفیشنل فولڈر اسٹرکچر کی تخلیق
-          mkdir -p app/src/main/java/com/systempro/master/editor
-          mkdir -p app/src/main/java/com/systempro/master/utils
+          mkdir -p app/src/main/java/com/systempro/master
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
 
-          # 1. Gradle Core Config
+          # 1. Gradle Core (Fixed)
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -58,83 +53,104 @@ jobs:
           }
           EOF
 
-          # 2. Advanced IDE Strings & Colors
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">System Pro</string>
-              <string name="btn_new_file">New File</string>
-              <string name="btn_open_project">Open Project</string>
-          </resources>
-          EOF
-
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <resources>
-              <color name="ide_bg">#121212</color>
-              <color name="terminal_green">#00FF00</color>
-              <color name="accent_blue">#2196F3</color>
-          </resources>
-          EOF
-
-          # 3. Professional IDE Dashboard Layout
+          # 2. Advanced IDE Layout (With Editor Interface)
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:background="#121212">
+              android:orientation="vertical"
+              android:background="#121212"
+              android:padding="16dp">
+
               <TextView
-                  android:id="@+id/logo"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="SYSTEM PRO IDE"
+                  android:text="SYSTEM PRO: EDITOR"
                   android:textColor="#00FF00"
-                  android:textSize="26sp"
+                  android:textSize="22sp"
                   android:textStyle="bold"
-                  android:layout_centerHorizontal="true"
-                  android:layout_marginTop="50dp"/>
-              <LinearLayout
+                  android:layout_gravity="center"
+                  android:layout_marginBottom="20dp"/>
+
+              <EditText
+                  android:id="@+id/codeEditor"
                   android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="vertical"
-                  android:layout_centerInParent="true"
-                  android:padding="20dp">
-                  <Button
-                      android:layout_width="match_parent"
-                      android:layout_height="60dp"
-                      android:text="@string/btn_new_file"
-                      android:backgroundTint="#1E1E1E"
-                      android:layout_marginBottom="15dp"/>
-                  <Button
-                      android:layout_width="match_parent"
-                      android:layout_height="60dp"
-                      android:text="@string/btn_open_project"
-                      android:backgroundTint="#1E1E1E"/>
-              </LinearLayout>
-          </RelativeLayout>
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:hint="// Write your code here..."
+                  android:textColorHint="#555555"
+                  android:textColor="#FFFFFF"
+                  android:background="#1E1E1E"
+                  android:gravity="top"
+                  android:padding="10dp"
+                  android:typeface="monospace"
+                  android:textSize="14sp"/>
+
+              <Button
+                  android:id="@+id/btnSave"
+                  android:layout_width="match_parent"
+                  android:layout_height="60dp"
+                  android:text="💾 CREATE &amp; SAVE FILE"
+                  android:backgroundTint="#008577"
+                  android:textColor="#FFFFFF"
+                  android:layout_marginTop="10dp"/>
+          </LinearLayout>
           EOF
 
-          # 4. MainActivity (The Central Hub)
+          # 3. MainActivity (Logic to Handle File Creation)
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.Toast;
+          import java.io.File;
+          import java.io.FileOutputStream;
 
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
+
+                  EditText editor = findViewById(R.id.codeEditor);
+                  Button btnSave = findViewById(R.id.btnSave);
+
+                  btnSave.setOnClickListener(v -> {
+                      String code = editor.getText().toString();
+                      if (code.isEmpty()) {
+                          Toast.makeText(this, "Editor is empty!", Toast.LENGTH_SHORT).show();
+                      } else {
+                          saveCodeToFile(code);
+                      }
+                  });
+              }
+
+              private void saveCodeToFile(String content) {
+                  try {
+                      File path = getExternalFilesDir(null);
+                      File file = new File(path, "MyNewProject.java");
+                      FileOutputStream stream = new FileOutputStream(file);
+                      stream.write(content.getBytes());
+                      stream.close();
+                      Toast.makeText(this, "File Created: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                  } catch (Exception e) {
+                      Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                  }
               }
           }
           EOF
 
-          # 5. Android Manifest
+          # 4. Android Manifest (Added Storage Permission)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <application
                   android:allowBackup="true"
-                  android:label="@string/app_name"
+                  android:label="System Pro"
                   android:theme="@android:style/Theme.Material.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -146,7 +162,7 @@ jobs:
           </manifest>
           EOF
 
-      - name: 🚀 Execute Build #738
+      - name: 🚀 Final Master Build
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
@@ -155,5 +171,5 @@ jobs:
       - name: 📦 Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-Ultimate
+          name: System-Pro-Pro-IDE
           path: app/build/outputs/apk/debug/app-debug.apk
