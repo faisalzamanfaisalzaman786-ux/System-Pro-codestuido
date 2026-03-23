@@ -1,18 +1,16 @@
-name: System Pro Repair Tool
+name: System Pro Ultimate Repair
 
 on:
-  workflow_dispatch: # اسے آپ بٹن دبا کر خود چلائیں گے
+  workflow_dispatch:
 
 jobs:
   repair:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # یہ لائن گٹ ہب کو فائلیں لکھنے کی اجازت دے گی
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -20,16 +18,29 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Missing Gradle Wrapper
+      - name: Force Create Project Structure
         run: |
-          # یہ کمانڈ تمام ضروری فائلیں (gradlew, wrapper folder) خود بنا دے گی
-          gradle wrapper 
+          # اگر پروجیکٹ فولڈر نہیں ہے تو بنائیں
+          mkdir -p app/src/main/java/com/faisal/systempro
+          mkdir -p gradle/wrapper
+          
+          # بنیادی گریڈل فائلیں تیار کریں
+          if [ ! -f "build.gradle" ]; then
+            echo "plugins { id 'com.android.application' version '8.2.0' apply false }" > build.gradle
+          fi
+          
+          if [ ! -f "settings.gradle" ]; then
+            echo "rootProject.name = 'System Pro'" > settings.gradle
+            echo "include ':app'" >> settings.gradle
+          fi
 
-      - name: Commit and Push Changes
+          # گریڈل ریپر (gradlew) جنریٹ کریں
+          gradle wrapper --gradle-version 8.5
+
+      - name: Commit and Push Fixed Files
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add gradlew gradle/
-          # اگر فائلیں پہلے سے ہوں گی تو یہ ایرر نہیں دے گا
-          git commit -m "System Pro: Fixed missing gradle files and folders" || echo "No changes to commit"
+          git add .
+          git commit -m "System Pro: Full Project Structure Restored" || echo "No changes"
           git push origin main
