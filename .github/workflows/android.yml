@@ -1,7 +1,7 @@
-name: System Pro Auto-Package Build
+name: System Pro Single Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # آپ اسے دستی طور پر رن کر سکیں گے
 
 jobs:
   build:
@@ -16,14 +16,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant execute permission
-        run: chmod +x gradlew
+      - name: Grant Permission and Sync
+        run: |
+          # اگر فائل موجود ہے تو پرمیشن دیں، ورنہ ایرر بتائے
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+          else
+            echo "Error: gradlew file not found in root directory!"
+            exit 1
+          fi
 
-      - name: Build APK
+      - name: Build Main APK
+        # یہ کمانڈ صرف ایک مین ڈیبگ APK بنائے گی
         run: ./gradlew assembleDebug
 
-      - name: Upload Artifact
+      - name: Upload Single Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Dynamic-APK
+          name: System-Pro-Master-Build
           path: app/build/outputs/apk/debug/*.apk
