@@ -1,10 +1,10 @@
-name: Final Master Repair & Build
+name: System Pro Ultimate Repair
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  repair-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -16,15 +16,53 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Fix Structure
+      - name: Total Project Reconstruct
         run: |
-          # پرانے کچرے کو صاف کرنا اور نیا اسٹرکچر بنانا
-          rm -rf app/src/main/res app/src/main/java app/src/main/AndroidManifest.xml
+          # تمام پرانے کنفگریشنز کو ختم کرنا
+          rm -rf app/src/main/res app/src/main/java build.gradle settings.gradle app/build.gradle
+          
+          # نیا اسٹرکچر بنانا
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/java/com/systempro/master
 
-          # 1. مینی فیسٹ (Direct Fix)
+          # 1. settings.gradle (ایرر کو حل کرنے کے لیے سب سے اہم)
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "System Pro Master"
+          include ':app'
+          EOF
+
+          # 2. Root build.gradle (خالی رکھنا ضروری ہے نئے گریڈل میں)
+          cat <<EOF > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+          }
+          EOF
+
+          # 3. app/build.gradle
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.master'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.master"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # 4. AndroidManifest.xml
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -43,64 +81,25 @@ jobs:
           </manifest>
           EOF
 
-          # 2. ویکٹر آئیکن
-          cat <<EOF > app/src/main/res/drawable/ic_launcher_repair.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
-          </vector>
-          EOF
-
-          # 3. لی آؤٹ
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent">
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="System Pro Master Fixed!" android:layout_centerInParent="true" />
-          </RelativeLayout>
-          EOF
-
-          # 4. جاوا فائل
+          # 5. MainActivity.java & Layout
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
           public class MainActivity extends Activity {
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
+              protected void onCreate(Bundle s) { super.onCreate(s); setContentView(new android.view.View(this)); }
           }
           EOF
 
-          # 5. بلڈ فائلز (Gradle Fix)
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
+          cat <<EOF > app/src/main/res/drawable/ic_launcher_repair.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#008577" android:pathData="M0,0h108v108h-108z" />
+          </vector>
           EOF
 
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.systempro.master'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.systempro.master"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-      - name: Build APK
+      - name: Build Repaired APK
         run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
+          chmod +x gradlew || gradle wrapper --gradle-version 8.2
           ./gradlew assembleDebug
 
       - name: Upload APK
