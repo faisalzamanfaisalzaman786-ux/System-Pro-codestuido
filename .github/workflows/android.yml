@@ -1,4 +1,4 @@
-name: System Pro Master Build Fix
+name: System Pro Master Final Success
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
 
       - name: Build Project Structure
         run: |
-          # مکمل صفائی تاکہ پچھلے ایررز ختم ہوں
+          # مکمل صفائی
           rm -rf app build settings.gradle build.gradle gradlew .gradle
           
           mkdir -p app/src/main/java/com/system/pro
@@ -34,7 +34,10 @@ jobs:
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/assets
 
-          # 1. Settings Gradle (Google Repository شامل کی گئی ہے)
+          # آئیکن کی کمی کو پورا کرنے کے لیے ایک خالی فائل بنانا (Fix for Build #769 Error)
+          touch app/src/main/res/mipmap-mdpi/ic_launcher.png
+
+          # 1. Settings Gradle
           echo "pluginManagement { 
               repositories { 
                   google() 
@@ -64,20 +67,18 @@ jobs:
                   applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode 769
-                  versionName '1.0.769'
+                  versionCode 770
+                  versionName '1.0.770'
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }" > app/build.gradle
 
-          # 4. AndroidManifest (پرمیشنز کے ساتھ)
+          # 4. AndroidManifest (آئیکن فکس کے ساتھ)
           echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
@@ -109,6 +110,12 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
+          # 6. Default index.html (ایپ خالی نہ لگے)
+          echo "<html><body style='background:black;color:#00FF00;text-align:center;'>
+          <h1>System Pro Master</h1>
+          <p>Build 770 Successful!</p>
+          </body></html>" > app/src/main/assets/index.html
+
       - name: Final Build
         run: |
           gradle wrapper
@@ -118,5 +125,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V769
+          name: System-Pro-V770
           path: app/build/outputs/apk/debug/*.apk
