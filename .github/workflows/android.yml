@@ -1,4 +1,4 @@
-name: Build System Pro APK
+name: Final Master Repair & Build
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -16,41 +15,22 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Repair and Setup Android Structure
+      - name: Force Fix Structure
         run: |
-          # ضروری فولڈرز بنانا
+          # پرانے کچرے کو صاف کرنا اور نیا اسٹرکچر بنانا
+          rm -rf app/src/main/res app/src/main/java app/src/main/AndroidManifest.xml
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/java/com/systempro/master
 
-          # ویکٹر آئیکن فائل بنانا (Repair ic_launcher)
-          cat <<EOF > app/src/main/res/drawable/ic_launcher_foreground.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#008577" android:pathData="M0,0h108v108h-108z" />
-              <path android:fillColor="#FFFFFF" android:pathData="M31,31h46v46h-46z" />
-          </vector>
-          EOF
-
-          # لی آؤٹ فائل بنانا
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent">
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="System Pro Master Active" android:layout_centerInParent="true" />
-          </RelativeLayout>
-          EOF
-
-          # اینڈرائیڈ مینی فیسٹ درست کرنا
+          # 1. مینی فیسٹ (Direct Fix)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher_foreground"
+                  android:icon="@drawable/ic_launcher_repair"
                   android:label="System Pro"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar">
                   <activity android:name="com.systempro.master.MainActivity" android:exported="true">
@@ -63,13 +43,29 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا فائل بنانا
+          # 2. ویکٹر آئیکن
+          cat <<EOF > app/src/main/res/drawable/ic_launcher_repair.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#000000" android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          EOF
+
+          # 3. لی آؤٹ
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="System Pro Master Fixed!" android:layout_centerInParent="true" />
+          </RelativeLayout>
+          EOF
+
+          # 4. جاوا فائل
           cat <<EOF > app/src/main/java/com/systempro/master/MainActivity.java
           package com.systempro.master;
           import android.app.Activity;
           import android.os.Bundle;
           public class MainActivity extends Activity {
-              @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
@@ -77,11 +73,35 @@ jobs:
           }
           EOF
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+          # 5. بلڈ فائلز (Gradle Fix)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.master'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.systempro.master"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
