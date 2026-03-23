@@ -17,61 +17,47 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # گریڈل کو انسٹال کرنا تاکہ ریپر بنایا جا سکے
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v3
+        uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
 
       - name: Initialize Project Structure
         run: |
-          # مکمل صفائی
+          # 1. پرانی فائلوں کی مکمل صفائی
           rm -rf app build settings.gradle build.gradle gradlew gradle .gradle
           
-          # فولڈرز بنانا
+          # 2. فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
-          # اب گریڈل انسٹال ہے، تو ریپر بن جائے گا
-          gradle wrapper --gradle-version 8.2
+          # 3. سب سے پہلے Settings اور Build فائلیں بنانا (اہم ترتیب)
+          echo "rootProject.name = 'System Pro Master'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-          # 1. Strings فائل
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">System Pro Master</string>
-          </resources>' > app/src/main/res/values/strings.xml
-
-          # 2. Icon Drawable
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#3DDC84"
-                  android:pathData="M0,0h108v108h-108z" />
-          </vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
-
-          # 3. Settings Gradle
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google(); mavenCentral() }
-          }
-          rootProject.name = 'System Pro Master'
-          include ':app'" > settings.gradle
+          }" >> settings.gradle
 
-          # 4. Root build.gradle
           echo "plugins {
               id 'com.android.application' version '8.2.2' apply false
           }" > build.gradle
 
-          # 5. App build.gradle
+          # 4. اب گریڈل ریپر بنانا (اب یہ فیل نہیں ہوگا)
+          gradle wrapper --gradle-version 8.2
+
+          # 5. ایپ لیول کی فائلیں بنانا
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">System Pro Master</string>
+          </resources>' > app/src/main/res/values/strings.xml
+
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -80,8 +66,8 @@ jobs:
                   applicationId 'com.system.pro.master'
                   minSdk 24
                   targetSdk 34
-                  versionCode 757
-                  versionName '1.0.757'
+                  versionCode 758
+                  versionName '1.0.758'
               }
           }
           dependencies {
@@ -89,7 +75,6 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 6. Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
