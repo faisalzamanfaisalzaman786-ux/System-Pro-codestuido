@@ -1,7 +1,7 @@
-name: System Pro Ultimate Build
+name: System Pro Master Deployment
 
 on:
-  workflow_dispatch: # آپ اسے بٹن دبا کر خود چلا سکتے ہیں
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,25 +20,32 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Auto-Fix Project Files
+      - name: Auto-Repair Project Files
         run: |
-          # فولڈر سٹرکچر بنانا
+          # ضروری فولڈرز بنانا
           mkdir -p app/src/main/java/com/faisal/systempro
           
-          # Root build.gradle کو درست کرنا
+          # 1. Root build.gradle (صاف ستھرا ڈھانچہ)
           echo "buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
           }" > build.gradle
 
-          # settings.gradle کو درست کرنا
-          echo "rootProject.name = 'System Pro'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          # 2. settings.gradle (تمام Repositories یہاں منتقل کر دیں تاکہ ایرر نہ آئے)
+          echo "pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'System Pro Master'
+          include ':app'" > settings.gradle
 
-          # app/build.gradle کو مکمل درست ڈھانچے کے ساتھ لکھنا
+          # 3. app/build.gradle (درست نیم اسپیس اور پیکیج کے ساتھ)
           echo "plugins {
               id 'com.android.application'
           }
@@ -46,11 +53,11 @@ jobs:
               namespace 'com.faisal.systempro'
               compileSdk 34
               defaultConfig {
-                  applicationId 'com.faisal.systempro.master'
+                  applicationId 'com.faisal.systempro.v1.fix'
                   minSdk 24
                   targetSdk 34
-                  versionCode $((GITHUB_RUN_NUMBER))
-                  versionName '1.0.\$GITHUB_RUN_NUMBER'
+                  versionCode ${{ github.run_number }}
+                  versionName '1.3-Fix'
               }
               buildTypes {
                   release {
@@ -68,7 +75,7 @@ jobs:
           }" > app/build.gradle
 
       - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew || gradle wrapper --gradle-version 8.5
+        run: gradle wrapper --gradle-version 8.5 && chmod +x gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
@@ -76,5 +83,5 @@ jobs:
       - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V${{ github.run_number }}
+          name: System-Pro-v1.3-Fix
           path: app/build/outputs/apk/debug/app-debug.apk
