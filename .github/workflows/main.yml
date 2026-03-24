@@ -1,14 +1,34 @@
 name: Build Android APK
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:          # یہ لائن manual run کا بٹن لائے گی
+  repository_dispatch:
+    types: [build_apk]                     # آپ کی ایپ سے ٹرگر
+  workflow_dispatch:                       # GitHub UI سے دستی طور پر
+    inputs:
+      package_name:
+        description: 'Package name (e.g., com.example.calculator)'
+        required: true
+        default: 'com.example.calculator'
+      app_name:
+        description: 'App name'
+        required: true
+        default: 'Calculator'
+      java_code:
+        description: 'Base64‑encoded Java code (optional)'
+        required: false
+      layout_code:
+        description: 'Base64‑encoded layout XML (optional)'
+        required: false
+      manifest_code:
+        description: 'Base64‑encoded AndroidManifest.xml (optional)'
+        required: false
+      icon_base64:
+        description: 'Base64‑encoded icon image (PNG/JPEG, optional)'
+        required: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,13 +39,237 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.1.1'
+
+      - name: Prepare environment variables
+        id: vars
+        run: |
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "PACKAGE_NAME=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+            echo "JAVA_B64=${{ github.event.client_payload.java_code }}" >> $GITHUB_ENV
+            echo "LAYOUT_B64=${{ github.event.client_payload.layout_code }}" >> $GITHUB_ENV
+            echo "MANIFEST_B64=${{ github.event.client_payload.manifest_code }}" >> $GITHUB_ENV
+            echo "ICON_B64=${{ github.event.client_payload.icon_base64 }}" >> $GITHUB_ENV
+          else
+            echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
+            echo "JAVA_B64=${{ github.event.inputs.java_code }}" >> $GITHUB_ENV
+            echo "LAYOUT_B64=${{ github.event.inputs.layout_code }}" >> $GITHUB_ENV
+            echo "MANIFEST_B64=${{ github.event.inputs.manifest_code }}" >> $GITHUB_ENV
+            echo "ICON_B64=${{ github.event.inputs.icon_base64 }}" >> $GITHUB_ENV
+          fi
+
+      - name: Validate required data
+        run: |
+          if [[ -z "${{ env.PACKAGE_NAME }}" ]]; then
+            echo "❌ Package name missing"
+            exit 1
+          fi
+          if [[ -z "${{ env.APP_NAME }}" ]]; then
+            echo "❌ App name missing"
+            exit 1
+          fi
+
+      - name: Create directory structure
+        run: |
+          PACKAGE_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PACKAGE_PATH"
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+      - name: Write Java source (MainActivity.java)
+        run: |
+          PACKAGE_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
+          if [[ -n "${{ env.JAVA_B64 }}" ]]; then
+            echo "${{ env.JAVA_B64 }}" | base64 -d > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
+            echo "✅ Java file created from payload"
+          else
+            cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
+            package ${{ env.PACKAGE_NAME }};
+            import android.os.Bundle;
+            import android.widget.TextView;
+            import androidx.appcompat.app.AppCompatActivity;
+            public class MainActivity extends AppCompatActivity {
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    setContentView(R.layout.activity_main);
+                    TextView tv = findViewById(R.id.textView);
+                    tv.setText("Hello from ${{ env.APP_NAME }}!");
+                }
+            }
+            EOF
+            echo "⚠️ Using default Java (no payload provided)"
+          fi
+
+      - name: Write layout XML (activity_main.xml)
+        run: |
+          if [[ -n "${{ env.LAYOUT_B64 }}" ]]; then
+            echo "${{ env.LAYOUT_B64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
+            echo "✅ Layout file created from payload"
+          else
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/textView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hello World!"
+                    android:textSize="24sp" />
+            </LinearLayout>
+            EOF
+            echo "⚠️ Using default layout (no payload provided)"
+          fi
+
+      - name: Write AndroidManifest.xml
+        run: |
+          if [[ -n "${{ env.MANIFEST_B64 }}" ]]; then
+            echo "${{ env.MANIFEST_B64 }}" | base64 -d > app/src/main/AndroidManifest.xml
+            echo "✅ Manifest created from payload"
+          else
+            cat > app/src/main/AndroidManifest.xml << 'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="${{ env.PACKAGE_NAME }}">
+                <application
+                    android:allowBackup="true"
+                    android:icon="@mipmap/ic_launcher"
+                    android:label="${{ env.APP_NAME }}"
+                    android:theme="@style/Theme.AppCompat.Light">
+                    <activity
+                        android:name=".MainActivity"
+                        android:exported="true">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            EOF
+            echo "⚠️ Using default manifest (no payload provided)"
+          fi
+
+      - name: Decode and write icon
+        run: |
+          if [[ -n "${{ env.ICON_B64 }}" ]]; then
+            echo "${{ env.ICON_B64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "✅ Icon created from payload"
+          else
+            echo "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAXklEQVRYhe3VMQ6AIAwF0O7/B0MiwCQxwWJLjS0+jksHtKZJkmTZbKTe+zjH0Zpmnfd+nuN4HtN1HXme0XUdwzCgaRo8z1PrnvceY4znPM/z0jRNgGEY0DRNpVKptCsUCoUCIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            echo "⚠️ No icon provided, using default placeholder"
+          fi
+
+      - name: Create strings.xml
+        run: |
+          cat > app/src/main/res/values/strings.xml << 'EOF'
+          <resources>
+              <string name="app_name">${{ env.APP_NAME }}</string>
+          </resources>
+          EOF
+
+      - name: Create Gradle build files
+        run: |
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat > app/build.gradle << 'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace '${{ env.PACKAGE_NAME }}'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '${{ env.PACKAGE_NAME }}'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+          cat > settings.gradle << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'MyApp'
+          include ':app'
+          EOF
+
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.1.1-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          gradle wrapper
+          chmod +x gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
