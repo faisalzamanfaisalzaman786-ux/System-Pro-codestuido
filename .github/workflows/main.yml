@@ -1,4 +1,4 @@
-name: System Pro Ultimate Builder
+name: System Pro Final Force Build
 
 on:
   workflow_dispatch:
@@ -16,22 +16,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Deep Clean and Force Structure
-        # یہ سٹیپ تمام پرانی فائلوں کو مٹا کر نیا اسٹرکچر بنائے گا
+      - name: Force Clean and Reconstruct
+        # یہ سٹیپ پرانی ہر چیز کو جڑ سے ختم کر دے گا
         run: |
-          rm -rf app build.gradle settings.gradle gradlew gradlew.bat gradle
+          rm -rf app build.gradle settings.gradle gradlew gradlew.bat gradle .gradle
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. Root build.gradle
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }" > build.gradle
-          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
-
-          # 2. Settings.gradle
+          # 1. New Settings File
           echo "include ':app'" > settings.gradle
 
-          # 3. App-level build.gradle (Size Optimized)
+          # 2. New Root build.gradle
+          echo "buildscript { 
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects { 
+              repositories { google(); mavenCentral() }
+          }" > build.gradle
+
+          # 3. New App build.gradle (Optimized Size)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.app'
@@ -53,10 +58,9 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
           }" > app/build.gradle
 
-          # 4. Simple Android Manifest
+          # 4. New Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -69,7 +73,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 5. Simple MainActivity.java
+          # 5. New Java File
           echo 'package com.systempro.app;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -83,12 +87,11 @@ jobs:
       - name: Setup Gradle Wrapper
         run: gradle wrapper --gradle-version 8.2
 
-      - name: Build Optimized APK
-        # assembleRelease سے سائز سب سے کم بنتا ہے
+      - name: Build Final APK
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V1
+          name: System-Pro-Success
           path: app/build/outputs/apk/release/*.apk
