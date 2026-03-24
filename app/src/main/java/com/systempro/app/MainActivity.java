@@ -1,9 +1,8 @@
-package com.systempro.master;
-
-import android.app.Activity;
+package com.systempro.app;
 import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
