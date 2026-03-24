@@ -16,17 +16,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Android Structure on the Fly
-        # یہ کمانڈز گٹ ہب کے کمپیوٹر پر تمام ضروری فائلیں خود بنا دیں گی
+      - name: Build Android Structure
         run: |
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-
-          # settings.gradle فائل بنانا
           echo "include ':app'" > settings.gradle
-
-          # بنیادی Manifest فائل بنانا
+          
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -39,7 +35,6 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # بنیادی Java فائل بنانا
           echo 'package com.systempro.app;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -51,11 +46,11 @@ jobs:
           }' > app/src/main/java/com/systempro/app/MainActivity.java
 
       - name: Setup Gradle
-        run: gradle wrapper
+        run: gradle wrapper --gradle-version 8.5
 
-      - name: Build APK (Target size 5-10MB)
-        # یہ کمانڈ اے پی کے بنائے گی
-        run: ./gradlew assembleDebug
+      - name: Build APK (Optimized)
+        # --no-daemon اور دیگر فلیگز بلڈ کو مستحکم بناتے ہیں
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
