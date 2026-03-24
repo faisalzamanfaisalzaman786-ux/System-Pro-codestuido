@@ -2,20 +2,12 @@ name: System Pro Native APK Builder
 
 on:
   workflow_dispatch:
-    inputs:
-      build_variant:
-        description: 'Build Type'
-        required: false
-        default: 'debug'
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
-  build_native_app:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -25,39 +17,21 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+      - name: Install Gradle Wrapper (If missing)
+        # اگر gradlew فائل نہیں ہے، تو یہ اسے بنا دے گا
+        run: |
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
+          fi
+          chmod +x gradlew
 
       - name: Build Debug APK
-        # یہاں ہم 'stacktrace' شامل کر رہے ہیں تاکہ اگر غلطی ہو تو وجہ پتہ چلے
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Generate Build Logs
-        if: always()
-        run: |
-          mkdir -p build_logs
-          echo "Build Date: $(date)" > build_logs/status.txt
-          # اگر فولڈر موجود ہے تو لاگ بناؤ، ورنہ میسج لکھ دو
-          if [ -d "app/build/outputs/apk/" ]; then
-            ls -R app/build/outputs/apk/ >> build_logs/status.txt
-          else
-            echo "APK Directory not found. Gradle build might have skipped APK generation." >> build_logs/status.txt
-          fi
-
-      - name: Upload APK Artifact
-        # یہ صرف تب چلے گا اگر APK فائل واقعی بنی ہو
-        if: success()
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: System-Pro-App
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
-
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Build-Logs
-          path: build_logs/
+          if-no-files-found: error
