@@ -1,53 +1,36 @@
-name: Android Build & Artifact
+name: System Debug and Environment Logger
 
 on:
-  workflow_dispatch:          # دستی طور پر UI یا API سے ٹرگر کریں
-    inputs:
-      build_type:
-        description: 'Build type (debug/release)'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-  # اگر آپ کسٹم ایونٹ سے بھی ٹرگر کرنا چاہیں تو repository_dispatch بھی شامل کریں
-  repository_dispatch:
-    types: [build-android]   # یہ ایونٹ ٹائپ آپ API کال میں بھیج سکتے ہیں
+  workflow_dispatch: # یہ لائن آپ کو مینوئلی بٹن دبا کر ورک فلو چلانے کی اجازت دیتی ہے
 
 jobs:
-  build:
+  build_logs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: latest
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
+      - name: Set up Environment Information
         run: |
-          if [ "${{ github.event.inputs.build_type }}" == "release" ] || [ "${{ github.event.action }}" == "build-android" ]; then
-            ./gradlew assembleRelease
-          else
-            ./gradlew assembleDebug
-          fi
+          mkdir -p debug_info
+          echo "--- System Information ---" > debug_info/system_logs.txt
+          uname -a >> debug_info/system_logs.txt
+          
+          echo -e "\n--- Installed Software Versions ---" >> debug_info/system_logs.txt
+          java -version 2>> debug_info/system_logs.txt
+          node -v | sed 's/^/Node.js: /' >> debug_info/system_logs.txt
+          python3 --version >> debug_info/system_logs.txt
+          git --version >> debug_info/system_logs.txt
+          
+          echo -e "\n--- Environment Variables ---" >> debug_info/system_logs.txt
+          printenv | grep -E "GITHUB_|RUNNER_" >> debug_info/system_logs.txt
+          
+          echo -e "\n--- Directory Structure ---" >> debug_info/system_logs.txt
+          ls -R >> debug_info/system_logs.txt
 
-      - name: Upload APK artifact
+      - name: Upload Logs as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-app
-          path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: error
+          name: system-debug-logs
+          path: debug_info/system_logs.txt
