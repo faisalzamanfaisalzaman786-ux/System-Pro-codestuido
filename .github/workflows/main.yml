@@ -1,36 +1,48 @@
-name: System Debug and Environment Logger
+name: System Pro Manual Logger
 
 on:
-  workflow_dispatch: # یہ لائن آپ کو مینوئلی بٹن دبا کر ورک فلو چلانے کی اجازت دیتی ہے
+  # مینوئلی بٹن کے ذریعے چلانے کے لیے
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: 'Log detail level'
+        required: true
+        default: 'full'
+  
+  # فائل پش کرتے ہی چیک کرنے کے لیے (عارضی طور پر)
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
-  build_logs:
+  debug_and_setup:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Environment Information
+      - name: Create System Info Log
         run: |
-          mkdir -p debug_info
-          echo "--- System Information ---" > debug_info/system_logs.txt
-          uname -a >> debug_info/system_logs.txt
-          
-          echo -e "\n--- Installed Software Versions ---" >> debug_info/system_logs.txt
-          java -version 2>> debug_info/system_logs.txt
-          node -v | sed 's/^/Node.js: /' >> debug_info/system_logs.txt
-          python3 --version >> debug_info/system_logs.txt
-          git --version >> debug_info/system_logs.txt
-          
-          echo -e "\n--- Environment Variables ---" >> debug_info/system_logs.txt
-          printenv | grep -E "GITHUB_|RUNNER_" >> debug_info/system_logs.txt
-          
-          echo -e "\n--- Directory Structure ---" >> debug_info/system_logs.txt
-          ls -R >> debug_info/system_logs.txt
+          mkdir -p logs
+          {
+            echo "--- Workflow Triggered Manually ---"
+            echo "Date: $(date)"
+            echo "Runner OS: ${{ runner.os }}"
+            echo "--- System Details ---"
+            uname -a
+            echo "--- Java Version ---"
+            java -version
+            echo "--- Android SDK Info ---"
+            echo "ANDROID_HOME: $ANDROID_HOME"
+            echo "--- Directory Structure ---"
+            ls -R
+          } > logs/full_system_report.txt
 
-      - name: Upload Logs as Artifact
+      - name: Upload Report
         uses: actions/upload-artifact@v4
         with:
-          name: system-debug-logs
-          path: debug_info/system_logs.txt
+          name: Native-Build-Report
+          path: logs/full_system_report.txt
+          retention-days: 1
