@@ -1,26 +1,10 @@
-plugins {
-    id 'com.android.application'
-}
-
 android {
-    namespace 'com.systempro.app'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.systempro.app"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }
-
+    // ... باقی کوڈ
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true      // فالتو کوڈ ہٹاتا ہے
+            shrinkResources true    // غیر استعمال شدہ تصاویر نکالتا ہے
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
     }
 }
