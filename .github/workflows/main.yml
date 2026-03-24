@@ -12,8 +12,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -22,16 +20,19 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
+      - name: Check Files (Debug)
+        run: ls -R # یہ کمانڈ لاگز میں دکھائے گی کہ فائلیں کہاں ہیں
+
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build with Gradle
+        # ہم نے یہاں --stacktrace شامل کیا ہے تاکہ اگر کوئی غلطی ہو تو تفصیلی رپورٹ ملے
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          # ہم پورے آؤٹ پٹ فولڈر میں APK تلاش کریں گے تاکہ لوکیشن کا مسئلہ ختم ہو جائے
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: "**/*.apk" # تمام فولڈرز میں کسی بھی APK کو تلاش کرو
           if-no-files-found: error
