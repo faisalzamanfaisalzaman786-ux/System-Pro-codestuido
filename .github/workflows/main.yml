@@ -2,8 +2,8 @@ name: Build Android APK
 
 on:
   repository_dispatch:
-    types: [build_apk]                     # آپ کی ایپ سے ٹرگر
-  workflow_dispatch:                       # GitHub UI سے دستی طور پر
+    types: [build_apk]
+  workflow_dispatch:
     inputs:
       package_name:
         description: 'Package name (e.g., com.example.calculator)'
@@ -14,16 +14,16 @@ on:
         required: true
         default: 'Calculator'
       java_code:
-        description: 'Base64‑encoded Java code (optional)'
+        description: 'Base64‑encoded Java code'
         required: false
       layout_code:
-        description: 'Base64‑encoded layout XML (optional)'
+        description: 'Base64‑encoded layout XML'
         required: false
       manifest_code:
-        description: 'Base64‑encoded AndroidManifest.xml (optional)'
+        description: 'Base64‑encoded AndroidManifest.xml'
         required: false
       icon_base64:
-        description: 'Base64‑encoded icon image (PNG/JPEG, optional)'
+        description: 'Base64‑encoded icon image'
         required: false
 
 jobs:
@@ -93,21 +93,20 @@ jobs:
             echo "${{ env.JAVA_B64 }}" | base64 -d > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
             echo "✅ Java file created from payload"
           else
-            cat > "app/src/main/java/$PACKAGE_PATH/MainActivity.java" << 'EOF'
-            package ${{ env.PACKAGE_NAME }};
-            import android.os.Bundle;
-            import android.widget.TextView;
-            import androidx.appcompat.app.AppCompatActivity;
-            public class MainActivity extends AppCompatActivity {
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(R.layout.activity_main);
-                    TextView tv = findViewById(R.id.textView);
-                    tv.setText("Hello from ${{ env.APP_NAME }}!");
-                }
-            }
-            EOF
+            # Default Java code (as a single line to avoid heredoc)
+            echo 'package ${{ env.PACKAGE_NAME }};
+    import android.os.Bundle;
+    import android.widget.TextView;
+    import androidx.appcompat.app.AppCompatActivity;
+    public class MainActivity extends AppCompatActivity {
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_main);
+            TextView tv = findViewById(R.id.textView);
+            tv.setText("Hello from ${{ env.APP_NAME }}!");
+        }
+    }' > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
             echo "⚠️ Using default Java (no payload provided)"
           fi
 
@@ -117,21 +116,20 @@ jobs:
             echo "${{ env.LAYOUT_B64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
             echo "✅ Layout file created from payload"
           else
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical">
-                <TextView
-                    android:id="@+id/textView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Hello World!"
-                    android:textSize="24sp" />
-            </LinearLayout>
-            EOF
+            # Default layout as a single string
+            echo '<?xml version="1.0" encoding="utf-8"?>
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hello World!"
+            android:textSize="24sp" />
+    </LinearLayout>' > app/src/main/res/layout/activity_main.xml
             echo "⚠️ Using default layout (no payload provided)"
           fi
 
@@ -141,26 +139,24 @@ jobs:
             echo "${{ env.MANIFEST_B64 }}" | base64 -d > app/src/main/AndroidManifest.xml
             echo "✅ Manifest created from payload"
           else
-            cat > app/src/main/AndroidManifest.xml << 'EOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="${{ env.PACKAGE_NAME }}">
-                <application
-                    android:allowBackup="true"
-                    android:icon="@mipmap/ic_launcher"
-                    android:label="${{ env.APP_NAME }}"
-                    android:theme="@style/Theme.AppCompat.Light">
-                    <activity
-                        android:name=".MainActivity"
-                        android:exported="true">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
+            echo '<?xml version="1.0" encoding="utf-8"?>
+    <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+        package="${{ env.PACKAGE_NAME }}">
+        <application
+            android:allowBackup="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="${{ env.APP_NAME }}"
+            android:theme="@style/Theme.AppCompat.Light">
+            <activity
+                android:name=".MainActivity"
+                android:exported="true">
+                <intent-filter>
+                    <action android:name="android.intent.action.MAIN" />
+                    <category android:name="android.intent.category.LAUNCHER" />
+                </intent-filter>
+            </activity>
+        </application>
+    </manifest>' > app/src/main/AndroidManifest.xml
             echo "⚠️ Using default manifest (no payload provided)"
           fi
 
@@ -174,6 +170,7 @@ jobs:
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             echo "✅ Icon created from payload"
           else
+            # Default gray square icon (base64)
             echo "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAXklEQVRYhe3VMQ6AIAwF0O7/B0MiwCQxwWJLjS0+jksHtKZJkmTZbKTe+zjH0Zpmnfd+nuN4HtN1HXme0XUdwzCgaRo8z1PrnvceY4znPM/z0jRNgGEY0DRNpVKptCsUCoUCIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -184,15 +181,14 @@ jobs:
 
       - name: Create strings.xml
         run: |
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-          <resources>
-              <string name="app_name">${{ env.APP_NAME }}</string>
-          </resources>
-          EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>
+    <resources>
+        <string name="app_name">${{ env.APP_NAME }}</string>
+    </resources>' > app/src/main/res/values/strings.xml
 
       - name: Create Gradle build files
         run: |
-          cat > build.gradle << 'EOF'
+          cat > build.gradle << 'EOFGRADLE'
           buildscript {
               repositories {
                   google()
@@ -208,9 +204,9 @@ jobs:
                   mavenCentral()
               }
           }
-          EOF
+          EOFGRADLE
 
-          cat > app/build.gradle << 'EOF'
+          cat > app/build.gradle << 'EOFGRADLE'
           plugins {
               id 'com.android.application'
           }
@@ -233,9 +229,9 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
-          EOF
+          EOFGRADLE
 
-          cat > settings.gradle << 'EOF'
+          cat > settings.gradle << 'EOFGRADLE'
           pluginManagement {
               repositories {
                   google()
@@ -252,16 +248,16 @@ jobs:
           }
           rootProject.name = 'MyApp'
           include ':app'
-          EOF
+          EOFGRADLE
 
           mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOFGRADLE'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.1.1-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          EOF
+          EOFGRADLE
 
           gradle wrapper
           chmod +x gradlew
