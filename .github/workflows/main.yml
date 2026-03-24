@@ -1,4 +1,4 @@
-name: System Pro Auto Structure Builder
+name: System Pro Final Fix
 
 on:
   workflow_dispatch:
@@ -16,20 +16,53 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Android Structure
+      - name: Clean and Rebuild Structure
         run: |
+          # پرانے تمام تضادات ختم کرنا
+          rm -rf app settings.gradle build.gradle
           mkdir -p app/src/main/java/com/systempro/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+
+          # 1. Project-level build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }" > build.gradle
+          echo "allprojects { repositories { google(); mavenCentral() } }" >> build.gradle
+
+          # 2. Settings.gradle
           echo "include ':app'" > settings.gradle
-          
+
+          # 3. App-level build.gradle (Size Optimization Included)
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.systempro.app'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled true
+                      shrinkResources true
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }" > app/build.gradle
+
+          # 4. Basic Manifest & Java
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <category android:name="android.intent.category.LAUNCHer" />
                       </intent-filter>
                   </activity>
               </application>
@@ -45,15 +78,13 @@ jobs:
               }
           }' > app/src/main/java/com/systempro/app/MainActivity.java
 
-      - name: Setup Gradle
-        run: gradle wrapper --gradle-version 8.5
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.2
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Build APK (Optimized)
-        # --no-daemon اور دیگر فلیگز بلڈ کو مستحکم بناتے ہیں
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Upload System Pro APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
-          path: app/build/outputs/apk/debug/*.apk
+          name: System-Pro-V1
+          path: app/build/outputs/apk/release/*.apk
