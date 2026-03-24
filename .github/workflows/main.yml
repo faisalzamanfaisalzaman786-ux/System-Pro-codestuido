@@ -1,9 +1,19 @@
-name: Build Android APK
+name: Android Build & Artifact
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:          # دستی طور پر UI یا API سے ٹرگر کریں
+    inputs:
+      build_type:
+        description: 'Build type (debug/release)'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+  # اگر آپ کسٹم ایونٹ سے بھی ٹرگر کرنا چاہیں تو repository_dispatch بھی شامل کریں
+  repository_dispatch:
+    types: [build-android]   # یہ ایونٹ ٹائپ آپ API کال میں بھیج سکتے ہیں
 
 jobs:
   build:
@@ -18,21 +28,26 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Check Files (Debug)
-        run: ls -R # یہ کمانڈ لاگز میں دکھائے گی کہ فائلیں کہاں ہیں
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: latest
 
-      - name: Grant execute permission
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        # ہم نے یہاں --stacktrace شامل کیا ہے تاکہ اگر کوئی غلطی ہو تو تفصیلی رپورٹ ملے
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" == "release" ] || [ "${{ github.event.action }}" == "build-android" ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: "**/*.apk" # تمام فولڈرز میں کسی بھی APK کو تلاش کرو
+          name: android-app
+          path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error
