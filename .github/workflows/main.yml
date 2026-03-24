@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Package name (e.g., com.example.calculator)'
+        description: 'Package name'
         required: true
         default: 'com.example.calculator'
       app_name:
@@ -45,7 +45,6 @@ jobs:
           gradle-version: '8.1.1'
 
       - name: Prepare environment variables
-        id: vars
         run: |
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
             echo "PACKAGE_NAME=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
@@ -93,7 +92,6 @@ jobs:
             echo "${{ env.JAVA_B64 }}" | base64 -d > "app/src/main/java/$PACKAGE_PATH/MainActivity.java"
             echo "✅ Java file created from payload"
           else
-            # Default Java code (as a single line to avoid heredoc)
             echo 'package ${{ env.PACKAGE_NAME }};
     import android.os.Bundle;
     import android.widget.TextView;
@@ -116,7 +114,6 @@ jobs:
             echo "${{ env.LAYOUT_B64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
             echo "✅ Layout file created from payload"
           else
-            # Default layout as a single string
             echo '<?xml version="1.0" encoding="utf-8"?>
     <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
         android:layout_width="match_parent"
@@ -170,7 +167,6 @@ jobs:
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             echo "✅ Icon created from payload"
           else
-            # Default gray square icon (base64)
             echo "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAXklEQVRYhe3VMQ6AIAwF0O7/B0MiwCQxwWJLjS0+jksHtKZJkmTZbKTe+zjH0Zpmnfd+nuN4HtN1HXme0XUdwzCgaRo8z1PrnvceY4znPM/z0jRNgGEY0DRNpVKptCsUCoUCIQAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
