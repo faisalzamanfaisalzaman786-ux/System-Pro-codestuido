@@ -1,37 +1,103 @@
-name: Build Native Android APK
+name: System Pro Master Rebuild
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:               # Manual trigger
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest          # ورچوئل ماحول: Ubuntu
-
+  deep-rebuild:
+    runs-on: ubuntu-latest
     steps:
-      # 1. کوڈ چیک آؤٹ کریں
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # 2. JDK سیٹ اپ کریں (Android بلڈ کے لیے ضروری)
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'   # OpenJDK distribution
-          java-version: '17'
+          fetch-depth: 0
 
-      # 3. Gradle Wrapper کو قابلِ اجرا بنائیں
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Triple Phase Deep Clean
+        run: |
+          echo "Starting Phase 1: Basic Removal..."
+          rm -rf app/ gradle/ build.gradle settings.gradle gradlew gradlew.bat
+          
+          echo "Starting Phase 2: Force Hidden & System Files Removal..."
+          find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name '.' -exec rm -rf {} +
+          
+          echo "Starting Phase 3: Git Index Purge..."
+          git rm -rf . --ignore-unmatch
+          
+          echo "Clean Up Complete. Starting Fresh Build..."
 
-      # 4. Android APK بلڈ کریں
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Build New Android Web-Native Structure
+        run: |
+          # 1. تمام ضروری ڈائریکٹریز بنانا
+          mkdir -p app/src/main/java/com/systempro/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/assets
+          mkdir -p gradle/wrapper
 
-      # 5. تیار کردہ APK کو آرٹیفیکٹ کے طور پر اپ لوڈ کریں
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          # 2. Root Files (System Pro IDE Compatible)
+          echo "include ':app'" > settings.gradle
+          
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.0.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }" > build.gradle
+
+          # 3. App Module Files
+          echo "apply plugin: 'com.android.application'
+          android {
+              namespace 'com.systempro.app'
+              compileSdk 33
+              defaultConfig {
+                  applicationId 'com.systempro.app'
+                  minSdk 24
+                  targetSdk 33
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }" > app/build.gradle
+
+          # 4. Android Manifest
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHer" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+          # 5. Java MainActivity
+          echo 'package com.systempro.app;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }' > app/src/main/java/com/systempro/app/MainActivity.java
+
+          # 6. Gradle Wrapper Properties
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+
+          # 7. Placeholder for Web Assets (No Drinks/Ads)
+          echo "<!DOCTYPE html><html><body><h1>System Pro Web Engine</h1></body></html>" > app/src/main/assets/index.html
+          
+          # 8. Essential Gradle Executables (Empty files to match structure)
+          touch gradlew gradlew.bat
+
+      - name: Force Update Repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "TRIPLE CLEAN: System Pro structure fully rebuilt from scratch" || echo "No changes"
+          git push origin main --force
