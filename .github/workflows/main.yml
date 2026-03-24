@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:          # یہ لائن manual run کا بٹن لائے گی
 
 jobs:
   build:
