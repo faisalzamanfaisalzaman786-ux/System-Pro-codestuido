@@ -1,48 +1,39 @@
-name: System Pro Manual Logger
+name: System Pro Native APK Builder
 
 on:
-  # مینوئلی بٹن کے ذریعے چلانے کے لیے
+  # مینوئلی اور API (ایپ) سے ٹریگر کرنے کے لیے
   workflow_dispatch:
     inputs:
-      log_level:
-        description: 'Log detail level'
+      build_type:
+        description: 'Build Type (debug/release)'
         required: true
-        default: 'full'
-  
-  # فائل پش کرتے ہی چیک کرنے کے لیے (عارضی طور پر)
-  push:
-    branches:
-      - main
-      - master
+        default: 'debug'
 
 jobs:
-  debug_and_setup:
+  build:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create System Info Log
-        run: |
-          mkdir -p logs
-          {
-            echo "--- Workflow Triggered Manually ---"
-            echo "Date: $(date)"
-            echo "Runner OS: ${{ runner.os }}"
-            echo "--- System Details ---"
-            uname -a
-            echo "--- Java Version ---"
-            java -version
-            echo "--- Android SDK Info ---"
-            echo "ANDROID_HOME: $ANDROID_HOME"
-            echo "--- Directory Structure ---"
-            ls -R
-          } > logs/full_system_report.txt
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Upload Report
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        # یہ کمانڈ نیٹو ایپ کا APK تیار کرے گی
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Native-Build-Report
-          path: logs/full_system_report.txt
-          retention-days: 1
+          name: System-Pro-Native-App
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 5
