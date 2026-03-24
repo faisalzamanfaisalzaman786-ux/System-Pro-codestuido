@@ -1,4 +1,4 @@
-name: System Pro Master Super Clean
+name: Build APK from Dispatch
 
 on:
   repository_dispatch:
@@ -7,52 +7,176 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: 'zulu'
+          java-version: '11'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 30
+          build-tools: 30.0.3
 
-      - name: Force Initialize Project
+      - name: Decode payload data
+        id: decode
         run: |
-          # اگر کوئی پرانی فائلیں ہیں تو انہیں مکمل ختم کریں
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          
-          # پیکیج کے مطابق نیا اسٹرکچر بنائیں
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/values
+          # Save payload to environment variables
+          echo "PACKAGE_NAME=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
 
-          # کوڈ فائلیں تیار کریں
-          echo "${{ github.event.client_payload.java_code }}" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java
-          echo "${{ github.event.client_payload.layout_code }}" | base64 --decode > app/src/main/res/layout/activity_main.xml
-          echo "${{ github.event.client_payload.manifest_code }}" | base64 --decode > app/src/main/AndroidManifest.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
+          # Decode Java code
+          echo "${{ github.event.client_payload.java_code }}" | base64 -d > MainActivity.java.tmp
+          # Decode Layout XML
+          echo "${{ github.event.client_payload.layout_code }}" | base64 -d > activity_main.xml.tmp
+          # Decode Manifest
+          echo "${{ github.event.client_payload.manifest_code }}" | base64 -d > AndroidManifest.xml.tmp
 
-          # آئیکن چیک کریں
-          if [ ! -z "${{ github.event.client_payload.icon_base64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_base64 }}" | base64 --decode > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          # Decode icon if provided
+          if [ -n "${{ github.event.client_payload.icon_base64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_base64 }}" | base64 -d > icon.png.tmp
           fi
 
-      - name: Fix Permissions and Build
+      - name: Setup Android project structure
         run: |
-          # اگر gradlew نہیں ہے تو اسے دوبارہ بنائیں
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          # Create directory structure
+          mkdir -p app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
 
-      - name: Upload Professional APK
-        uses: actions/upload-artifact@v4
+          # Move decoded files into place
+          mv MainActivity.java.tmp app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java
+          mv activity_main.xml.tmp app/src/main/res/layout/activity_main.xml
+          mv AndroidManifest.xml.tmp app/src/main/AndroidManifest.xml
+
+          # Handle icon: copy to all densities
+          if [ -f icon.png.tmp ]; then
+            cp icon.png.tmp app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp icon.png.tmp app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp icon.png.tmp app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp icon.png.tmp app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp icon.png.tmp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            # If no icon provided, create a dummy placeholder (optional)
+            echo "No icon provided, using default."
+          fi
+
+      - name: Create build.gradle
+        run: |
+          cat > app/build.gradle <<EOF
+          apply plugin: 'com.android.application'
+
+          android {
+              compileSdk 30
+              defaultConfig {
+                  applicationId "$PACKAGE_NAME"
+                  minSdk 21
+                  targetSdk 30
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  debug {
+                      debuggable true
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.3.1'
+              implementation 'com.google.android.material:material:1.4.0'
+          }
+          EOF
+
+      - name: Create settings.gradle
+        run: |
+          cat > settings.gradle <<EOF
+          include ':app'
+          EOF
+
+      - name: Create top-level build.gradle
+        run: |
+          cat > build.gradle <<EOF
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.0.4'
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+      - name: Create gradle wrapper
+        run: |
+          # Download Gradle wrapper if not present
+          if [ ! -f gradlew ]; then
+            curl -L https://services.gradle.org/distributions/gradle-7.2-bin.zip -o gradle.zip
+            unzip gradle.zip
+            mv gradle-7.2 gradle-dist
+            cp gradle-dist/lib/gradle-wrapper.jar gradle/wrapper/
+            cp gradle-dist/bin/gradle gradle/wrapper/gradle-wrapper.jar
+            cat > gradlew <<'EOF'
+            #!/bin/sh
+            exec java -classpath "gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "\$@"
+            EOF
+            chmod +x gradlew
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build APK
+        id: build
+        continue-on-error: true
+        run: |
+          ./gradlew assembleDebug
+        env:
+          PACKAGE_NAME: ${{ env.PACKAGE_NAME }}
+
+      - name: Upload APK artifact if build succeeded
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ github.event.client_payload.app_name }}-Stable
-          path: app/build/outputs/apk/release/*.apk
+          name: app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload error logs if build failed
+        if: steps.build.outcome == 'failure'
+        run: |
+          mkdir -p error_logs
+          ./gradlew build --stacktrace > error_logs/build.log 2>&1 || true
+          # Also capture any other logs
+          find . -name "*.log" -exec cp {} error_logs/ \;
+          zip -r error_logs.zip error_logs/
+        continue-on-error: true
+
+      - name: Upload error logs artifact
+        if: steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v3
+        with:
+          name: error_logs
+          path: error_logs.zip
+
+      - name: Cleanup temporary files
+        if: always()
+        run: |
+          rm -f *.tmp
