@@ -1,15 +1,12 @@
 name: System Pro Native APK Builder
 
 on:
-  # یہ حصہ آپ کی ایپ اور گٹ ہب ویب سائٹ دونوں سے مینوئل ٹرگر کی اجازت دیتا ہے
   workflow_dispatch:
     inputs:
       build_variant:
         description: 'Build Type'
         required: false
         default: 'debug'
-
-  # کوڈ پش ہونے پر خودکار چیکنگ کے لیے
   push:
     branches:
       - main
@@ -30,30 +27,33 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        # یہ کمانڈ آپ کے فراہم کردہ سٹرکچر کے مطابق APK تیار کرے گی
-        run: ./gradlew assembleDebug
+        # یہاں ہم 'stacktrace' شامل کر رہے ہیں تاکہ اگر غلطی ہو تو وجہ پتہ چلے
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Generate Build Logs
         if: always()
         run: |
           mkdir -p build_logs
           echo "Build Date: $(date)" > build_logs/status.txt
-          echo "Runner: ${{ runner.os }}" >> build_logs/status.txt
-          ls -R app/build/outputs/apk/ >> build_logs/status.txt
+          # اگر فولڈر موجود ہے تو لاگ بناؤ، ورنہ میسج لکھ دو
+          if [ -d "app/build/outputs/apk/" ]; then
+            ls -R app/build/outputs/apk/ >> build_logs/status.txt
+          else
+            echo "APK Directory not found. Gradle build might have skipped APK generation." >> build_logs/status.txt
+          fi
 
       - name: Upload APK Artifact
+        # یہ صرف تب چلے گا اگر APK فائل واقعی بنی ہو
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Release
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload Build Logs
         if: always()
