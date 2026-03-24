@@ -17,21 +17,28 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Install Gradle Wrapper (If missing)
-        # اگر gradlew فائل نہیں ہے، تو یہ اسے بنا دے گا
+      - name: Validate Gradle Structure
+        # یہ کمانڈ چیک کرے گی کہ آیا ضروری فائلیں موجود ہیں
         run: |
+          if [ ! -f "settings.gradle" ]; then
+            echo "rootProject.name = 'SystemPro'" > settings.gradle
+          fi
           if [ ! -f "gradlew" ]; then
             gradle wrapper
           fi
           chmod +x gradlew
 
       - name: Build Debug APK
+        # یہاں ہم 'continue-on-error' نہیں کر رہے تاکہ ہمیں اصل وجہ پتہ چلے
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-App
-          path: app/build/outputs/apk/debug/*.apk
+          # ہم پورے آؤٹ پٹ فولڈر کو سرچ کریں گے تاکہ راستہ غلط نہ ہو
+          path: "**/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
