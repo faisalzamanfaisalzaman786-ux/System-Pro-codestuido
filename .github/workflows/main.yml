@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # دستی طور پر رن کرنے کا آپشن
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # تمام ہسٹری نکالنے کے لیے تاکہ کوئی کنفلکٹ نہ آئے
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -22,10 +22,8 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Deep Clean Build Data
-        run: |
-          chmod +x gradlew
-          ./gradlew clean # پرانے بلڈ ڈیٹا کی مکمل صفائی
+      - name: Grant execute permission
+        run: chmod +x gradlew
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
@@ -34,5 +32,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error # اگر APK نہ بنے تو ایرر دکھائے
+          # ہم پورے آؤٹ پٹ فولڈر میں APK تلاش کریں گے تاکہ لوکیشن کا مسئلہ ختم ہو جائے
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
