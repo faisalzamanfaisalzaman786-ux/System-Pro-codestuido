@@ -1,16 +1,22 @@
 name: System Pro Native APK Builder
 
 on:
-  # مینوئلی اور API (ایپ) سے ٹریگر کرنے کے لیے
+  # یہ حصہ آپ کی ایپ اور گٹ ہب ویب سائٹ دونوں سے مینوئل ٹرگر کی اجازت دیتا ہے
   workflow_dispatch:
     inputs:
-      build_type:
-        description: 'Build Type (debug/release)'
-        required: true
+      build_variant:
+        description: 'Build Type'
+        required: false
         default: 'debug'
 
+  # کوڈ پش ہونے پر خودکار چیکنگ کے لیے
+  push:
+    branches:
+      - main
+      - master
+
 jobs:
-  build:
+  build_native_app:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,16 +30,34 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        # یہ کمانڈ نیٹو ایپ کا APK تیار کرے گی
+      - name: Build Debug APK
+        # یہ کمانڈ آپ کے فراہم کردہ سٹرکچر کے مطابق APK تیار کرے گی
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Generate Build Logs
+        if: always()
+        run: |
+          mkdir -p build_logs
+          echo "Build Date: $(date)" > build_logs/status.txt
+          echo "Runner: ${{ runner.os }}" >> build_logs/status.txt
+          ls -R app/build/outputs/apk/ >> build_logs/status.txt
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Native-App
+          name: System-Pro-Release
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 5
+          retention-days: 7
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-Logs
+          path: build_logs/
