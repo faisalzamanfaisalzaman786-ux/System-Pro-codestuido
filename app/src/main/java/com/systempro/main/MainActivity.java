@@ -9,7 +9,7 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         TextView tv = new TextView(this);
-        tv.setText("System Pro Native\nBuild Successful! ✅");
+        tv.setText("System Pro Native\nSuccess! ✅");
         tv.setTextSize(30);
         tv.setTextColor(Color.GREEN);
         tv.setGravity(Gravity.CENTER);
