@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -19,13 +18,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # گریڈل کو بائی پاس کرنے کے لیے براہ راست اینڈرائیڈ بلڈ ایکشن کا استعمال
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build with Gradle
-        # ہم 'gradle wrapper' کے بجائے براہ راست 'gradle' کمانڈ استعمال کریں گے
-        run: gradle assembleDebug --stacktrace
+      - name: Build with Gradle Wrapper
+        # یہاں ہم './gradlew' استعمال کریں گے تاکہ ہمارا فکس ورژن چلے
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
