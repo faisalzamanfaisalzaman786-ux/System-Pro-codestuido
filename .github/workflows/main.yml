@@ -1,27 +1,97 @@
-name: System Pro Android Builder
+name: Setup Pure Native Structure
+
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch: # اس سے ہم API کے ذریعے بلڈ شروع کر سکتے ہیں
+  workflow_dispatch: # اسے آپ مینوئلی 'Actions' ٹیب سے چلائیں گے
 
 jobs:
-  build:
+  initialize_native_project:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-      
-      - name: Build APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          fetch-depth: 0
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-App
-          path: app/build/outputs/apk/debug/*.apk
+      - name: Triple Clean & Directory Setup
+        run: |
+          # 1. پرانی تمام فائلوں کا خاتمہ
+          git config --global user.name "System Pro Master"
+          git config --global user.email "systempro@dev.local"
+          rm -rf *
+          
+          # 2. نیٹو اینڈرائیڈ کے لیے سٹینڈرڈ فولڈرز بنانا
+          # ہم 'com.systempro.nativeapp' پیکیج نیم استعمال کر رہے ہیں
+          mkdir -p app/src/main/java/com/systempro/nativeapp
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p gradle/wrapper
+
+      - name: Generate Essential Native Files
+        run: |
+          # 1. Settings Gradle (Project Name)
+          echo "rootProject.name = 'SystemProNative'
+          include ':app'" > settings.gradle
+
+          # 2. Root build.gradle (Build Tools Version)
+          echo "buildscript { 
+              repositories { google(); mavenCentral() } 
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } 
+          }
+          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+
+          # 3. App-level build.gradle (Pure Native Configuration)
+          echo "plugins { id 'com.android.application' }
+          android {
+              namespace 'com.systempro.nativeapp'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.systempro.nativeapp'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }" > app/build.gradle
+
+          # 4. Basic Native Strings
+          echo '<resources>
+              <string name="app_name">System Pro Native</string>
+          </resources>' > app/src/main/res/values/strings.xml
+
+          # 5. Native Android Manifest (Permissions ready for Deep Access)
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application 
+                  android:allowBackup="true" 
+                  android:label="@string/app_name" 
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+      - name: Install Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.1
+
+      - name: Force Push New Structure
+        run: |
+          git add .
+          git commit -m "Triple Clean: Pure Native Structure Standing"
+          git branch -M main
+          git push origin main --force
