@@ -10,27 +10,23 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Triple Clean & Setup Native Structure
+      - name: Create Native Android Structure
         run: |
-          # 1. ہر چیز کا صفایا (Total Wipe)
-          rm -rf *
-          
-          # 2. نیٹو فولڈرز بنانا
+          # 1. فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/systempro/main
+          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # 3. بلڈ فائلز لکھنا (Direct Generation)
+          # 2. بلڈ فائلز (Gradle) کی تیاری
           echo "include ':app'" > settings.gradle
 
-          # Root build.gradle (8.1.0 کے ساتھ مستحکم ورژن)
           echo "buildscript { 
               repositories { google(); mavenCentral() } 
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } 
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
           }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
-          # App build.gradle (Pure Native)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.main'
@@ -46,7 +42,20 @@ jobs:
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }" > app/build.gradle
 
-          # MainActivity.java (Native Code)
+          # 3. مینی فیسٹ (Manifest)
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+          # 4. نیٹو جاوا کوڈ (MainActivity)
           echo "package com.systempro.main;
           import android.app.Activity;
           import android.os.Bundle;
@@ -67,43 +76,31 @@ jobs:
               }
           }" > app/src/main/java/com/systempro/main/MainActivity.java
 
-          # AndroidManifest.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
-
-      - name: Set up JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Fix Wrapper & Build
+      - name: Force Generate Wrapper & Push
         run: |
-          # یہاں ہم سسٹم کے گریڈل کو بائی پاس کریں گے
-          gradle wrapper --gradle-version 8.1 --distribution-type bin
-          chmod +x gradlew
+          # گریڈل ورژن فکس کرنا
+          gradle wrapper --gradle-version 8.4
           
-          # اب سسٹم کو اپڈیٹ کر کے بلڈ کریں گے
+          # تبدیلیاں محفوظ کرنا
           git config --global user.name "System Pro Master"
           git config --global user.email "master@systempro.local"
           git add .
-          git commit -m "Triple Clean: Native Structure Fixed"
+          git commit -m "One-Shot Rebuild: Native Structure Stand"
           git push origin main --force
-          
-          # فائنل بلڈ (بغیر کسی ڈیمن کے)
+
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Finished APK
+      - name: Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Native-App
+          name: System-Pro-App
           path: app/build/outputs/apk/debug/*.apk
