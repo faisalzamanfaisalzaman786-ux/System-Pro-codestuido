@@ -12,13 +12,19 @@ jobs:
 
       - name: Create Native Android Structure
         run: |
-          # 1. فولڈرز کی تخلیق
+          # 1. ہر چیز دوبارہ صاف کریں
+          rm -rf *
+          
+          # 2. فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/systempro/main
-          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # 2. بلڈ فائلز (Gradle) کی تیاری
+          # 3. اینڈرائیڈ کے لیے ضروری پراپرٹیز (یہ ایرر ختم کرے گی)
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
+          # 4. بلڈ فائلز (جدید اور مستحکم ورژن)
           echo "include ':app'" > settings.gradle
 
           echo "buildscript { 
@@ -38,11 +44,32 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }" > app/build.gradle
 
-          # 3. مینی فیسٹ (Manifest)
+          # 5. سادہ نیٹو جاوا کوڈ
+          echo "package com.systempro.main;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import android.view.Gravity;
+          import android.graphics.Color;
+
+          public class MainActivity extends Activity {
+              @Override protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  TextView tv = new TextView(this);
+                  tv.setText(\"System Pro Native\nSuccess! ✅\");
+                  tv.setTextSize(30);
+                  tv.setTextColor(Color.GREEN);
+                  tv.setGravity(Gravity.CENTER);
+                  tv.setBackgroundColor(Color.BLACK);
+                  setContentView(tv);
+              }
+          }" > app/src/main/java/com/systempro/main/MainActivity.java
+
+          # 6. مینی فیسٹ
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
@@ -55,51 +82,27 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 4. نیٹو جاوا کوڈ (MainActivity)
-          echo "package com.systempro.main;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          import android.view.Gravity;
-          import android.graphics.Color;
-
-          public class MainActivity extends Activity {
-              @Override protected void onCreate(Bundle saved) {
-                  super.onCreate(saved);
-                  TextView tv = new TextView(this);
-                  tv.setText(\"System Pro Native\nBuild Successful! ✅\");
-                  tv.setTextSize(30);
-                  tv.setTextColor(Color.GREEN);
-                  tv.setGravity(Gravity.CENTER);
-                  tv.setBackgroundColor(Color.BLACK);
-                  setContentView(tv);
-              }
-          }" > app/src/main/java/com/systempro/main/MainActivity.java
-
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Generate Wrapper & Push
+      - name: Generate Wrapper & Build
         run: |
-          # گریڈل ورژن فکس کرنا
           gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
           
-          # تبدیلیاں محفوظ کرنا
           git config --global user.name "System Pro Master"
           git config --global user.email "master@systempro.local"
           git add .
-          git commit -m "One-Shot Rebuild: Native Structure Stand"
+          git commit -m "One-Shot Fix: AndroidX Enabled"
           git push origin main --force
-
-      - name: Build Debug APK
-        run: |
-          chmod +x gradlew
+          
+          # فائنل بلڈ
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Final APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-App
