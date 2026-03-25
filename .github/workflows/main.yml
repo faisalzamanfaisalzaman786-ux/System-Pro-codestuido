@@ -1,7 +1,7 @@
 name: Setup Pure Native Structure
 
 on:
-  workflow_dispatch: # اسے آپ مینوئلی 'Actions' ٹیب سے چلائیں گے
+  workflow_dispatch:
 
 jobs:
   initialize_native_project:
@@ -9,38 +9,29 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Triple Clean & Directory Setup
+      - name: Clean and Build Folders
         run: |
-          # 1. پرانی تمام فائلوں کا خاتمہ
           git config --global user.name "System Pro Master"
           git config --global user.email "systempro@dev.local"
+          # سب کچھ صاف کریں
           rm -rf *
-          
-          # 2. نیٹو اینڈرائیڈ کے لیے سٹینڈرڈ فولڈرز بنانا
-          # ہم 'com.systempro.nativeapp' پیکیج نیم استعمال کر رہے ہیں
+          # ضروری فولڈرز بنائیں
           mkdir -p app/src/main/java/com/systempro/nativeapp
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p gradle/wrapper
 
-      - name: Generate Essential Native Files
+      - name: Create Structure Files
         run: |
-          # 1. Settings Gradle (Project Name)
-          echo "rootProject.name = 'SystemProNative'
-          include ':app'" > settings.gradle
+          # 1. Settings
+          echo "include ':app'" > settings.gradle
 
-          # 2. Root build.gradle (Build Tools Version)
-          echo "buildscript { 
-              repositories { google(); mavenCentral() } 
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } 
-          }
+          # 2. Project build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() } 
+          dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
-          # 3. App-level build.gradle (Pure Native Configuration)
+          # 3. App build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.nativeapp'
@@ -52,31 +43,15 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
           }" > app/build.gradle
 
-          # 4. Basic Native Strings
-          echo '<resources>
-              <string name="app_name">System Pro Native</string>
-          </resources>' > app/src/main/res/values/strings.xml
-
-          # 5. Native Android Manifest (Permissions ready for Deep Access)
+          # 4. Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application 
-                  android:allowBackup="true" 
-                  android:label="@string/app_name" 
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+              <application android:label="System Pro Native">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -86,12 +61,12 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Install Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.1
+          # 5. Basic Strings
+          echo '<resources><string name="app_name">System Pro Native</string></resources>' > app/src/main/res/values/strings.xml
 
-      - name: Force Push New Structure
+      - name: Push to Main
         run: |
           git add .
-          git commit -m "Triple Clean: Pure Native Structure Standing"
+          git commit -m "Triple Clean: Direct Structure Setup"
           git branch -M main
           git push origin main --force
