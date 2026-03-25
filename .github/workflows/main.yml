@@ -1,99 +1,27 @@
-name: System Pro Master Build
-
+name: System Pro Android Builder
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # اس سے ہم API کے ذریعے بلڈ شروع کر سکتے ہیں
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Absolute Clean and Build
+      
+      - name: Build APK
         run: |
-          # مکمل صفائی تاکہ کوئی پرانا ورژن ٹکرائے نہ
-          rm -rf app build.gradle settings.gradle gradlew gradlew.bat gradle .gradle
-          
-          mkdir -p app/src/main/java/com/systempro/app
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-          # 1. Settings File
-          echo "include ':app'" > settings.gradle
-
-          # 2. Build Script (Fixed for Gradle 8.0+)
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }" > build.gradle
-
-          # 3. App Level (Size Optimized 5-10MB)
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace 'com.systempro.app'
-              compileSdk 34
-              defaultConfig {
-                  applicationId 'com.systempro.app'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled true
-                      shrinkResources true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
-                  }
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }" > app/build.gradle
-
-          # 4. Android Manifest
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
-
-          # 5. MainActivity Code
-          echo 'package com.systempro.app;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-              }
-          }' > app/src/main/java/com/systempro/app/MainActivity.java
-
-      - name: Setup Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.1
-
-      - name: Build Final APK
-        # یہاں ہم وارننگ موڈ کو 'none' کر رہے ہیں تاکہ بلڈ رکے نہیں
-        run: ./gradlew assembleRelease --no-daemon --warning-mode none
-
-      - name: Upload Result
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V1-Success
-          path: app/build/outputs/apk/release/*.apk
+          name: System-Pro-App
+          path: app/build/outputs/apk/debug/*.apk
