@@ -1,7 +1,7 @@
 name: System Pro Mega Reset
 
 on:
-  workflow_dispatch: # صرف ایک کلک پر سب کچھ ٹھیک کرنے کے لیے
+  workflow_dispatch:
 
 jobs:
   total_rebuild:
@@ -10,31 +10,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Triple Clean & Setup
+      - name: Triple Clean & Modern Setup
         run: |
           git config --global user.name "System Pro Master"
           git config --global user.email "master@systempro.local"
           
-          # 1. سب کچھ صاف (Purge)
+          # 1. مکمل صفائی (Force Purge)
           rm -rf *
           
-          # 2. نیٹو فولڈر سٹرکچر بنانا
+          # 2. جدید فولڈر اسٹرکچر (Package: com.systempro.main)
           mkdir -p app/src/main/java/com/systempro/main
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # 3. تمام ضروری فائلیں خود جنریٹ کرنا (Automatic Coding)
-          
-          # Settings
+          # 3. جدید گریڈل فائلز (Version 8.4 استعمال کریں گے جو 9.4 کے ساتھ مطابقت رکھتا ہے)
           echo "include ':app'" > settings.gradle
 
-          # Root build.gradle
-          echo "buildscript { repositories { google(); mavenCentral() } 
-          dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }
+          echo "buildscript { 
+              repositories { google(); mavenCentral() } 
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
+          }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
-          # App build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.main'
@@ -50,27 +48,31 @@ jobs:
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }" > app/build.gradle
 
-          # MainActivity.java (Native Code)
+          # 4. پیور نیٹو جاوا کوڈ (بغیر کسی ویب کی آمیزش کے)
           echo "package com.systempro.main;
           import android.app.Activity;
           import android.os.Bundle;
           import android.widget.TextView;
           import android.view.Gravity;
+          import android.graphics.Color;
+
           public class MainActivity extends Activity {
               @Override protected void onCreate(Bundle saved) {
                   super.onCreate(saved);
                   TextView tv = new TextView(this);
-                  tv.setText(\"System Pro Native App\\nSuccessfully Built!\");
-                  tv.setTextSize(24);
+                  tv.setText(\"System Pro Native\\nBuild Successful! ✅\");
+                  tv.setTextSize(30);
+                  tv.setTextColor(Color.GREEN);
                   tv.setGravity(Gravity.CENTER);
+                  tv.setBackgroundColor(Color.BLACK);
                   setContentView(tv);
               }
           }" > app/src/main/java/com/systempro/main/MainActivity.java
 
-          # AndroidManifest.xml
+          # 5. جدید اینڈرائیڈ مینی فیسٹ
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault">
+              <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -80,22 +82,19 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Force Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.2
+      - name: Force Wrapper Update
+        run: gradle wrapper --gradle-version 8.4 # یہ ورژن فکس کرے گا
 
-      - name: Push Clean Structure
+      - name: Final Push & Build
         run: |
           git add .
-          git commit -m "Mega Reset: Pure Native Structure Standing"
+          git commit -m "Mega Reset: Native Structure Stand"
           git push origin main --force
-
-      - name: Build APK Immediately
-        run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-App
+          name: System-Pro-Native-APK
           path: app/build/outputs/apk/debug/*.apk
