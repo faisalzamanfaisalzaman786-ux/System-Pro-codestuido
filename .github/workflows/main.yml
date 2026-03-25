@@ -1,4 +1,4 @@
-name: System Pro Auto Builder
+name: System Pro Calculator Final Fix
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_app:
+  total_rebuild:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -18,23 +18,26 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Prepare Android Environment
+      - name: Initialize Android Environment
         run: |
-          # ضروری فائلیں بنانا اگر موجود نہ ہوں
+          # ضروری پراپرٹیز سیٹ کرنا
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # گریڈل ریپر سیٹ کرنا
+          # گریڈل ریپر بنانا
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
 
-      - name: Build Debug APK
+      - name: Clean and Build APK
         run: |
-          # یہ کمانڈ آپ کے فولڈرز (app/src/main/...) سے کوڈ اٹھا کر بلڈ کرے گی
+          # پرانے بلڈ کو مکمل ختم کرنا (سب سے اہم سٹیپ)
+          ./gradlew clean
+          
+          # اب آپ کے نئے کوڈ (Java/XML) کے ساتھ بلڈ کرنا
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload System Pro APK
+      - name: Upload System Pro Calc
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-Calculator-V2
           path: app/build/outputs/apk/debug/*.apk
