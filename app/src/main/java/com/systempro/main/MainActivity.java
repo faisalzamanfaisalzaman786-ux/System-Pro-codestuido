@@ -1,5 +1,4 @@
 package com.systempro.main;
-package com.systempro.main;
 
 import android.app.Activity;
 import android.os.Bundle;
