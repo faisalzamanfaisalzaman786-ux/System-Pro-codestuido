@@ -7,29 +7,25 @@ jobs:
   total_rebuild:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Triple Clean & Modern Setup
+      - name: Triple Clean & Setup Native Structure
         run: |
-          git config --global user.name "System Pro Master"
-          git config --global user.email "master@systempro.local"
-          
-          # 1. مکمل صفائی (Force Purge)
+          # 1. مکمل صفائی (Force Wipe)
           rm -rf *
           
-          # 2. جدید فولڈر اسٹرکچر (Package: com.systempro.main)
+          # 2. نیٹو فولڈرز کی تخلیق
           mkdir -p app/src/main/java/com/systempro/main
-          mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # 3. جدید گریڈل فائلز (Version 8.4 استعمال کریں گے جو 9.4 کے ساتھ مطابقت رکھتا ہے)
+          # 3. تمام ضروری فائلیں (Direct Write)
           echo "include ':app'" > settings.gradle
 
           echo "buildscript { 
               repositories { google(); mavenCentral() } 
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } 
           }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
@@ -48,7 +44,7 @@ jobs:
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }" > app/build.gradle
 
-          # 4. پیور نیٹو جاوا کوڈ (بغیر کسی ویب کی آمیزش کے)
+          # پیور نیٹو جاوا کوڈ
           echo "package com.systempro.main;
           import android.app.Activity;
           import android.os.Bundle;
@@ -69,7 +65,7 @@ jobs:
               }
           }" > app/src/main/java/com/systempro/main/MainActivity.java
 
-          # 5. جدید اینڈرائیڈ مینی فیسٹ
+          # اینڈرائیڈ مینی فیسٹ
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
@@ -82,13 +78,22 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Force Wrapper Update
-        run: gradle wrapper --gradle-version 8.4 # یہ ورژن فکس کرے گا
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Final Push & Build
+      - name: Force Fix Gradle Version
+        # یہاں ہم ورژن 8.1 فکس کر رہے ہیں تاکہ سسٹم کا 9.4 مداخلت نہ کرے
+        run: gradle wrapper --gradle-version 8.1
+
+      - name: Build & Push
         run: |
+          git config --global user.name "System Pro Master"
+          git config --global user.email "master@systempro.local"
           git add .
-          git commit -m "Mega Reset: Native Structure Stand"
+          git commit -m "Triple Clean: New Native Structure Stand"
           git push origin main --force
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
