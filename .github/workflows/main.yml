@@ -12,23 +12,25 @@ jobs:
 
       - name: Triple Clean & Setup Native Structure
         run: |
-          # 1. مکمل صفائی (Force Wipe)
+          # 1. ہر چیز کا صفایا (Total Wipe)
           rm -rf *
           
-          # 2. نیٹو فولڈرز کی تخلیق
+          # 2. نیٹو فولڈرز بنانا
           mkdir -p app/src/main/java/com/systempro/main
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # 3. تمام ضروری فائلیں (Direct Write)
+          # 3. بلڈ فائلز لکھنا (Direct Generation)
           echo "include ':app'" > settings.gradle
 
+          # Root build.gradle (8.1.0 کے ساتھ مستحکم ورژن)
           echo "buildscript { 
               repositories { google(); mavenCentral() } 
               dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } 
           }
           allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
+          # App build.gradle (Pure Native)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.systempro.main'
@@ -44,7 +46,7 @@ jobs:
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }" > app/build.gradle
 
-          # پیور نیٹو جاوا کوڈ
+          # MainActivity.java (Native Code)
           echo "package com.systempro.main;
           import android.app.Activity;
           import android.os.Bundle;
@@ -56,7 +58,7 @@ jobs:
               @Override protected void onCreate(Bundle saved) {
                   super.onCreate(saved);
                   TextView tv = new TextView(this);
-                  tv.setText(\"System Pro Native\\nBuild Successful! ✅\");
+                  tv.setText(\"System Pro Native\nBuild Successful! ✅\");
                   tv.setTextSize(30);
                   tv.setTextColor(Color.GREEN);
                   tv.setGravity(Gravity.CENTER);
@@ -65,7 +67,7 @@ jobs:
               }
           }" > app/src/main/java/com/systempro/main/MainActivity.java
 
-          # اینڈرائیڈ مینی فیسٹ
+          # AndroidManifest.xml
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
@@ -78,28 +80,30 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-      - name: Setup JDK 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Fix Gradle Version
-        # یہاں ہم ورژن 8.1 فکس کر رہے ہیں تاکہ سسٹم کا 9.4 مداخلت نہ کرے
-        run: gradle wrapper --gradle-version 8.1
-
-      - name: Build & Push
+      - name: Force Fix Wrapper & Build
         run: |
+          # یہاں ہم سسٹم کے گریڈل کو بائی پاس کریں گے
+          gradle wrapper --gradle-version 8.1 --distribution-type bin
+          chmod +x gradlew
+          
+          # اب سسٹم کو اپڈیٹ کر کے بلڈ کریں گے
           git config --global user.name "System Pro Master"
           git config --global user.email "master@systempro.local"
           git add .
-          git commit -m "Triple Clean: New Native Structure Stand"
+          git commit -m "Triple Clean: Native Structure Fixed"
           git push origin main --force
-          chmod +x gradlew
+          
+          # فائنل بلڈ (بغیر کسی ڈیمن کے)
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Native-APK
+          name: System-Pro-Native-App
           path: app/build/outputs/apk/debug/*.apk
