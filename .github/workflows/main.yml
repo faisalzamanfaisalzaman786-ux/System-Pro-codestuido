@@ -3,10 +3,10 @@ name: System Pro APK Generator
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # آپ اسے مینوئلی بھی چلا سکتے ہیں
+  workflow_dispatch:
 
 jobs:
-  build_native_apk:
+  build:
     runs-on: ubuntu-latest
     
     steps:
@@ -18,27 +18,17 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          sdk-version: '34'
-          build-tools: '34.0.0'
+      # گریڈل کو بائی پاس کرنے کے لیے براہ راست اینڈرائیڈ بلڈ ایکشن کا استعمال
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Initialize Gradle Wrapper
-        # چونکہ ہم نے پچھلے سٹیپ میں گریڈل نہیں ڈالا تھا، یہ سٹیپ اسے خود بنائے گا
-        run: gradle wrapper --gradle-version 8.1
+      - name: Build with Gradle
+        # ہم 'gradle wrapper' کے بجائے براہ راست 'gradle' کمانڈ استعمال کریں گے
+        run: gradle assembleDebug --stacktrace
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Native-App
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 5
