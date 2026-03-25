@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:gravity="center"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="System Pro Calculator"
+        android:textColor="#00FF00"
+        android:textSize="24sp"
+        android:layout_marginBottom="30dp" />
+
+    <EditText
+        android:id="@+id/num1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter First Number"
+        android:textColorHint="#555555"
+        android:textColor="#FFFFFF"
+        android:inputType="numberDecimal"
+        android:backgroundTint="#00FF00" />
+
+    <EditText
+        android:id="@+id/num2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter Second Number"
+        android:textColorHint="#555555"
+        android:textColor="#FFFFFF"
+        android:inputType="numberDecimal"
+        android:backgroundTint="#00FF00"
+        android:layout_marginTop="10dp" />
+
+    <Button
+        android:id="@+id/addBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ADD (+)"
+        android:layout_marginTop="20dp"
+        android:backgroundTint="#222222"
+        android:textColor="#00FF00" />
+
+    <TextView
+        android:id="@+id/result"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Result: 0"
+        android:textColor="#FFFFFF"
+        android:textSize="30sp"
+        android:layout_marginTop="40dp" />
+
+</LinearLayout>
