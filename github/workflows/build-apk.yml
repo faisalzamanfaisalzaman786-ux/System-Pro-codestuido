@@ -1,0 +1,41 @@
+name: Build APK from Cordova Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App name (optional, for display)'
+        required: false
+        type: string
+  push:
+    branches:
+      - apk-build-input
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code (apk-build-input branch)
+        uses: actions/checkout@v4
+        with:
+          ref: apk-build-input
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Add Android platform
+        run: cordova platform add android
+
+      - name: Build Debug APK
+        run: cordova build android --no-telemetry
+
+      - name: Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
