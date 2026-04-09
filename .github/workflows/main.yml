@@ -1,62 +1,27 @@
-name: System Pro Ultimate Force Build
-
+name: Build APK from Input
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Name of the App'
+        required: true
+        default: 'APKForgeApp'
 
 jobs:
-  build_app:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # This matches the branch name your JS script pushes to
+          ref: apk-build-input
 
-      - name: Force Update Files from User Input
-        run: |
-          # 1. پرانے تمام کوڈ کو مٹانا (تاکہ پرانی اسکرین نہ آئے)
-          rm -rf app/src/main/java/com/systempro/main/MainActivity.java
-          rm -rf app/src/main/res/layout/activity_main.xml
-          mkdir -p app/src/main/java/com/systempro/main
-          mkdir -p app/src/main/res/layout
-
-          # 2. یہاں اپنا کیلکولیٹر کا کوڈ "Inject" کریں (یہ پرانی اسکرین کو ختم کر دے گا)
-          # آپ کا جاوا کوڈ
-          cat <<EOF > app/src/main/java/com/systempro/main/MainActivity.java
-          package com.systempro.main;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.view.View;
-          import android.widget.Button;
-          import android.widget.EditText;
-          import android.widget.TextView;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle saved) {
-                  super.onCreate(saved);
-                  setContentView(R.layout.activity_main);
-                  final EditText n1 = findViewById(R.id.num1);
-                  final EditText n2 = findViewById(R.id.num2);
-                  final TextView res = findViewById(R.id.result);
-                  findViewById(R.id.addBtn).setOnClickListener(v -> {
-                      double sum = Double.parseDouble(n1.getText().toString()) + Double.parseDouble(n2.getText().toString());
-                      res.setText("Result: " + sum);
-                  });
-              }
-          }
-          EOF
-
-          # آپ کا XML ڈیزائن
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:orientation="vertical" android:background="#000000" android:padding="20dp" android:gravity="center">
-              <EditText android:id="@+id/num1" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Number 1" android:textColor="#FFFFFF" android:inputType="numberDecimal" />
-              <EditText android:id="@+id/num2" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Number 2" android:textColor="#FFFFFF" android:inputType="numberDecimal" />
-              <Button android:id="@+id/addBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="ADD" android:backgroundTint="#00FF00" />
-              <TextView android:id="@+id/result" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#00FF00" android:textSize="30sp" />
-          </LinearLayout>
-          EOF
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -64,16 +29,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Final Wipe & Build
-        run: |
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+      - name: Install Cordova
+        run: npm install -g cordova
 
-      - name: Upload New APK
+      - name: Prepare Cordova Project
+        run: |
+          # Ensure platforms directory exists
+          cordova platform add android
+          
+          # Fix for Gradle permissions if necessary
+          chmod +x platforms/android/gradlew
+
+      - name: Build Android APK
+        run: cordova build android --release --no-telemetry
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-New-Calc
-          path: app/build/outputs/apk/debug/*.apk
+          name: ${{ github.event.inputs.app_name }}-release
+          path: platforms/android/app/build/outputs/apk/release/*.apk
