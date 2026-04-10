@@ -1,17 +1,25 @@
-name: Build APK
+name: Build APK from Input
+
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Name of the app'
+        required: false
+        default: 'MyWebApp'
   push:
-    branches: [ apk-build-input ]
+    branches:
+      - apk-build-input
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: apk-build-input
+          # This ensures it pulls the code pushed by your UI
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'apk-build-input' || github.ref }}
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -19,22 +27,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Build Android
+      - name: Build
         run: |
-          # Create project structure if it doesn't exist
+          npm install -g cordova
           cordova platform add android
-          cordova build android --no-telemetry --debug
+          cordova build android --no-telemetry
 
-      - name: Upload APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Forge-Build
+          name: ${{ github.event.inputs.app_name || 'app' }}-debug
           path: platforms/android/app/build/outputs/apk/debug/*.apk
