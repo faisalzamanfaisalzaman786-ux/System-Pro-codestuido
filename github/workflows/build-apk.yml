@@ -1,41 +1,58 @@
-name: Build APK from Cordova Project
+name: Build APK
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'App name (optional, for display)'
+        description: 'Name of the app being built'
         required: false
-        type: string
+        default: 'APKForgeApp'
   push:
     branches:
       - apk-build-input
 
 jobs:
-  build-apk:
+  build:
+    name: Build Android Bundle
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code (apk-build-input branch)
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: apk-build-input
 
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
-      - name: Install Cordova
-        run: npm install -g cordova
+      - name: Install Cordova and Dependencies
+        run: |
+          npm install -g cordova
+          # If package.json exists in the root, install dependencies
+          if [ -f "package.json" ]; then npm install; fi
 
-      - name: Add Android platform
-        run: cordova platform add android
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Build Debug APK
-        run: cordova build android --no-telemetry
+      - name: Build Android Platform
+        run: |
+          cordova platform add android
+          cordova prepare android
 
-      - name: Upload APK as Artifact
+      - name: Generate Debug APK
+        run: cordova build android --debug --no-telemetry
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: ${{ github.event.inputs.app_name || 'app' }}-debug-apk
           path: platforms/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 5
