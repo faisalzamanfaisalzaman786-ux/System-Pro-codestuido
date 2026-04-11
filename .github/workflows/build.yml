@@ -1,55 +1,47 @@
-name: Build APK
+name: System Pro Universal Strong Builder
+
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - apk-build-input
+    branches: [ main, apk-build-input ]
+  repository_dispatch:
+    types: [build-zip-project]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: apk-build-input
-          fetch-depth: 0
+          fetch-depth: 0 # چیک آؤٹ فیل ہونے سے بچنے کے لیے
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Fix Directory Structure
+      - name: Initialize App Structure
         run: |
-          # اگر آپ کی ایپ صرف index.html پش کر رہی ہے تو یہ کمانڈز ضروری ڈھانچہ خود بنائیں گی
-          if [ ! -f "config.xml" ]; then
-            echo "Creating missing config.xml..."
-            printf "<?xml version='1.0' encoding='utf-8'?><widget id='com.system.pro.app' version='1.0.0'><name>SystemPro</name><content src='index.html' /><access origin='*' /></widget>" > config.xml
-          fi
-          
-          if [ ! -d "www" ]; then
-            mkdir www
-            [ -f "index.html" ] && mv index.html www/
+          # اگر ایپ فولڈر نہیں ہے تو اسے بنانا
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/assets/www
+
+          # اگر انڈیکس فائل روٹ پر ہے تو اسے صحیح جگہ منتقل کرنا
+          if [ -f "index.html" ]; then
+            mv index.html app/src/main/assets/www/
           fi
 
-      - name: Build Android APK
+      - name: Build with Gradle
         run: |
-          # اینڈرائیڈ پلیٹ فارم شامل کرنا اور بلڈ کرنا
-          cordova platform add android --no-telemetry
-          cordova build android --debug --no-telemetry
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Forge-Output
-          path: platforms/android/app/build/outputs/apk/debug/*.apk
+          name: System-Pro-Build
+          path: app/build/outputs/apk/debug/*.apk
