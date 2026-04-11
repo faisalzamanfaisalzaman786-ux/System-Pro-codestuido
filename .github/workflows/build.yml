@@ -1,46 +1,24 @@
-name: System Pro Universal Strong Builder
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-on:
-  push:
-    branches: [ main, apk-build-input ]
-  workflow_dispatch:
+    <uses-permission android:name="android.permission.INTERNET" />
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
 
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Fix Project Structure and Manifest
-        run: |
-          # ضروری فولڈرز بنانا
-          mkdir -p app/src/main/assets/www
-          
-          # مینی فیسٹ سے پرانا پیکیج نیم ختم کرنا (ایرر 422 اور مینی فیسٹ فیل سے بچنے کے لیے)
-          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
-          
-          # اگر HTML فائل روٹ پر ہے تو اسے صحیح جگہ منتقل کرنا
-          if [ -f "index.html" ]; then
-            mv index.html app/src/main/assets/www/
-          fi
-
-      - name: Build with Gradle
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Final-Build
-          path: app/build/outputs/apk/debug/*.apk
+</manifest>
