@@ -1,93 +1,50 @@
-name: System Pro Ultimate Force Build
+name: Build APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - apk-build-input
 
 jobs:
-  build_app:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          # یہ وہی برانچ استعمال کرے گا جہاں آپ کی ایپ فائلیں پش کر رہی ہے
+          ref: apk-build-input
 
-      - name: Create Directory Structure
-        run: |
-          # ضروری فولڈرز کی تیاری
-          mkdir -p app/src/main/java/com/systempro/main
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/values
-
-      - name: Generate Essential Resources
-        run: |
-          # ڈیفالٹ آئیکنز بنانا تاکہ AAPT ایرر نہ آئے
-          curl -Lo app/src/main/res/mipmap-mdpi/ic_launcher.png https://raw.githubusercontent.com/faisalzamanfaisalzaman786-ux/System-Pro-v2/main/app/src/main/res/mipmap-hdpi/ic_launcher.png || touch app/src/main/res/mipmap-mdpi/ic_launcher.png
-          cp app/src/main/res/mipmap-mdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-
-          # Strings اور Styles بنانا
-          printf "<resources><string name=\"app_name\">System Pro</string></resources>" > app/src/main/res/values/strings.xml
-          printf "<resources><style name=\"Theme.SystemPro\" parent=\"android:Theme.Material.Light.NoActionBar\" /></resources>" > app/src/main/res/values/styles.xml
-
-      - name: Inject Full AndroidManifest
-        run: |
-          # مکمل مینی فیسٹ فائل بنانا
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:label="@string/app_name"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity
-                      android:name="com.systempro.main.MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: Force Update Java Code
-        run: |
-          cat <<EOF > app/src/main/java/com/systempro/main/MainActivity.java
-          package com.systempro.main;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.widget.LinearLayout;
-          import android.widget.TextView;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle saved) {
-                  super.onCreate(saved);
-                  TextView tv = new TextView(this);
-                  tv.setText("System Pro Build Successful!");
-                  setContentView(tv);
-              }
-          }
-          EOF
-
-      - name: Set up JDK 17
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Build APK with Gradle
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Prepare Cordova Project
         run: |
-          echo "android.useAndroidX=true" > gradle.properties
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # اگر پروجیکٹ فولڈر کے اندر ہے تو وہاں جائیں، ورنہ روٹ پر چلائیں
+          # ہم فرض کر رہے ہیں کہ فائلیں روٹ (root) پر پش ہو رہی ہیں
+          cordova platform add android --no-telemetry
+          
+      - name: Build Android APK
+        run: |
+          # اینڈرائیڈ بلڈ شروع کریں
+          cordova build android --debug --no-telemetry
 
-      - name: Upload Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: APK-Forge-Build
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 5
