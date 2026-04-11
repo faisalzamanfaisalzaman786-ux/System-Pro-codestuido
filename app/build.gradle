@@ -3,6 +3,7 @@ plugins {
 }
 
 android {
+    // پیکیج نیم یہاں ہونا لازمی ہے کیونکہ مینی فیسٹ سے یہ سپورٹ ختم ہو چکی ہے
     namespace 'com.systempro.main'
     compileSdk 34
 
@@ -12,21 +13,36 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            // پروفیشنل ایپس کے لیے اسے true رکھنا بہتر ہے، لیکن فی الحال آپ کے مطابق false ہے
             minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     
     compileOptions {
+        // Java 17 گریڈل 8.x کے لیے ضروری ہے
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        // اگر آپ WebView یا XML لے آؤٹ استعمال کر رہے ہیں تو یہ مددگار ہے
+        viewBinding true
     }
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
+    // جدید اور مستحکم (Stable) ورژنز
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // اگر آپ HTML UI استعمال کر رہے ہیں تو WebView کے لیے یہ شامل کریں
+    implementation 'androidx.webkit:webkit:1.11.0'
 }
