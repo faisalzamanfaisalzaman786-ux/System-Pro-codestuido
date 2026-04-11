@@ -1,37 +1,22 @@
 name: Build APK
-
 on:
   workflow_dispatch:
   push:
-    branches:
-      - apk-build-input     # ✅ correct branch name (no asterisk)
-
+    branches: [ apk-build-input ]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: apk-build-input   # ✅ exact branch name
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          ref: apk-build-input
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Add Android platform
-        run: cordova platform add android
-
-      - name: Build APK
-        run: cordova build android --no-telemetry
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - run: npm install -g cordova
+      - run: cordova platform add android
+      - run: cordova build android --no-telemetry
+      - uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: platforms/android/app/build/outputs/apk/debug/*.apk
