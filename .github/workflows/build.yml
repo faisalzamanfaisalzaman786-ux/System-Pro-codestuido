@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - apk-build-input  # یقینی بنائیں کہ یہ برانچ ریپوزٹری میں موجود ہے
+      - apk-build-input
 
 jobs:
   build:
@@ -29,14 +29,27 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Prepare and Build
+      - name: Fix Directory Structure
         run: |
-          # اگر آپ کی فائلیں کسی مخصوص فولڈر میں ہیں تو 'cd folder_name' استعمال کریں
+          # اگر آپ کی ایپ صرف index.html پش کر رہی ہے تو یہ کمانڈز ضروری ڈھانچہ خود بنائیں گی
+          if [ ! -f "config.xml" ]; then
+            echo "Creating missing config.xml..."
+            printf "<?xml version='1.0' encoding='utf-8'?><widget id='com.system.pro.app' version='1.0.0'><name>SystemPro</name><content src='index.html' /><access origin='*' /></widget>" > config.xml
+          fi
+          
+          if [ ! -d "www" ]; then
+            mkdir www
+            [ -f "index.html" ] && mv index.html www/
+          fi
+
+      - name: Build Android APK
+        run: |
+          # اینڈرائیڈ پلیٹ فارم شامل کرنا اور بلڈ کرنا
           cordova platform add android --no-telemetry
           cordova build android --debug --no-telemetry
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: App-Debug-APK
+          name: APK-Forge-Output
           path: platforms/android/app/build/outputs/apk/debug/*.apk
