@@ -14,11 +14,13 @@ jobs:
 
       - name: Create Directory Structure
         run: |
+          # فولڈرز کی تیاری
           mkdir -p app/src/main/java/com/systempro/main
           mkdir -p app/src/main/res/layout
 
-      - name: Force Update Files
+      - name: Force Update Java & XML
         run: |
+          # MainActivity.java کی تخلیق
           cat <<EOF > app/src/main/java/com/systempro/main/MainActivity.java
           package com.systempro.main;
           import android.app.Activity;
@@ -31,11 +33,68 @@ jobs:
               @Override
               protected void onCreate(Bundle saved) {
                   super.onCreate(saved);
-                  setContentView(R.id.num1); // Ensure this matches layout ID or layout file
-                  // Your logic here
+                  setContentView(R.layout.activity_main);
+                  final EditText n1 = findViewById(R.id.num1);
+                  final EditText n2 = findViewById(R.id.num2);
+                  final TextView res = findViewById(R.id.result);
+                  findViewById(R.id.addBtn).setOnClickListener(v -> {
+                      try {
+                          double sum = Double.parseDouble(n1.getText().toString()) + Double.parseDouble(n2.getText().toString());
+                          res.setText("Result: " + sum);
+                      } catch (Exception e) {
+                          res.setText("Invalid Input");
+                      }
+                  });
               }
           }
           EOF
+
+          # activity_main.xml کی تخلیق
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:background="#000000"
+              android:padding="20dp"
+              android:gravity="center">
+              <EditText android:id="@+id/num1"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="Number 1"
+                  android:textColorHint="#888888"
+                  android:textColor="#FFFFFF"
+                  android:inputType="numberDecimal" />
+              <EditText android:id="@+id/num2"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="Number 2"
+                  android:textColorHint="#888888"
+                  android:textColor="#FFFFFF"
+                  android:inputType="numberDecimal" />
+              <Button android:id="@+id/addBtn"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="ADD"
+                  android:backgroundTint="#00FF00" />
+              <TextView android:id="@+id/result"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="0"
+                  android:textColor="#00FF00"
+                  android:textSize="30sp" />
+          </LinearLayout>
+          EOF
+
+      - name: Fix AndroidManifest Package Issue
+        run: |
+          # مینی فیسٹ سے پیکیج ایٹریبیوٹ ختم کرنا تاکہ بلڈ فیل نہ ہو
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            sed -i 's/package="[^"]*"//g' "$MANIFEST_PATH"
+            echo "Manifest package fixed."
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -44,8 +103,16 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Build APK
+      - name: Build APK with Gradle
         run: |
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
           chmod +x gradlew
-          ./gradlew assembleDebug
-  
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Ultimate-APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 5
