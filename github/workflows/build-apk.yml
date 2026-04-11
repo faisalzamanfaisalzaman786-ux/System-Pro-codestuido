@@ -9,16 +9,18 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # تمام ہسٹری حاصل کرنے کے لیے تاکہ چیک آؤٹ فیل نہ ہو
 
-      - name: Force Update Files from User Input
+      - name: Create Directory Structure
         run: |
-          # 1. پرانے کوڈ کی صفائی
-          rm -rf app/src/main/java/com/systempro/main/MainActivity.java
-          rm -rf app/src/main/res/layout/activity_main.xml
+          # فولڈرز بنائیں اگر پہلے سے موجود نہیں ہیں
           mkdir -p app/src/main/java/com/systempro/main
           mkdir -p app/src/main/res/layout
 
-          # 2. جاوا کوڈ کی انجکشن (MainActivity.java)
+      - name: Force Update Files (Java & XML)
+        run: |
+          # 1. جاوا کوڈ کی انجکشن (MainActivity.java)
           cat <<EOF > app/src/main/java/com/systempro/main/MainActivity.java
           package com.systempro.main;
           import android.app.Activity;
@@ -48,7 +50,7 @@ jobs:
           }
           EOF
 
-          # 3. XML ڈیزائن کی انجکشن (activity_main.xml)
+          # 2. XML ڈیزائن کی انجکشن (activity_main.xml)
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -93,20 +95,15 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Final Wipe & Build
+      - name: Build with Gradle
         run: |
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          # بلڈ شروع کرنے سے پہلے پرمیشن دینا
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload New APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Ultimate-Build
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 5
+          name: SystemPro-Ultimate-APK
+          path: app/build/outputs/apk/debug/*.apk
