@@ -1,21 +1,19 @@
 name: Build APK
-
 on:
   workflow_dispatch:
   push:
     branches:
-      - apk-build-input
+      - apk-build-input  # یقینی بنائیں کہ یہ برانچ ریپوزٹری میں موجود ہے
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          # یہ وہی برانچ استعمال کرے گا جہاں آپ کی ایپ فائلیں پش کر رہی ہے
           ref: apk-build-input
+          fetch-depth: 0
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
@@ -31,20 +29,14 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Prepare Cordova Project
+      - name: Prepare and Build
         run: |
-          # اگر پروجیکٹ فولڈر کے اندر ہے تو وہاں جائیں، ورنہ روٹ پر چلائیں
-          # ہم فرض کر رہے ہیں کہ فائلیں روٹ (root) پر پش ہو رہی ہیں
+          # اگر آپ کی فائلیں کسی مخصوص فولڈر میں ہیں تو 'cd folder_name' استعمال کریں
           cordova platform add android --no-telemetry
-          
-      - name: Build Android APK
-        run: |
-          # اینڈرائیڈ بلڈ شروع کریں
           cordova build android --debug --no-telemetry
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Forge-Build
+          name: App-Debug-APK
           path: platforms/android/app/build/outputs/apk/debug/*.apk
-          retention-days: 5
