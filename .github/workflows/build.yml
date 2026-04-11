@@ -1,21 +1,30 @@
-name: System Pro Universal Strong Builder
+name: System Pro Ultimate Force Build
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
-job
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temu
-      - name: Prepare Assets
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Sync HTML UI
         run: |
           mkdir -p app/src/main/assets/www
+          # اگر HTML کوڈ روٹ پر پش ہوتا ہے تو اسے صحیح جگہ کاپی کرنا
           if [ -f "index.html" ]; then
             cp index.html app/src/main/assets/www/
           fi
@@ -23,7 +32,11 @@ job
       - name: Grant Execute Permission
         run: chmod +x gradlew
 
-      - name: Build wit
+      - name: Build Android APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
+          name: System-Pro-App-Final
           path: app/build/outputs/apk/debug/*.apk
