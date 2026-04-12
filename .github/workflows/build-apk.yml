@@ -1,8 +1,8 @@
 name: Build APK
 on:
-  workflow_dispatch:
+  workflow_dispatch: # یہ UI سے چلانے کے لیے ضروری ہے
   push:
-    branches: [ apk-build-input ] # UI اسی برانچ پر فائلیں بھیج رہا ہے
+    branches: [ main, apk-build-input ] # دونوں برانچز کو سپورٹ کرے گا
 
 jobs:
   build:
@@ -10,8 +10,7 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          ref: apk-build-input # اس برانچ کا کوڈ اٹھائیں جو UI نے بنائی ہے
+        # ہم نے یہاں سے 'ref' والی لائن ہٹا دی ہے تاکہ یہ خود بخود صحیح برانچ ڈھونڈ لے
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,9 +28,14 @@ jobs:
 
       - name: Build Cordova Project
         run: |
-          # چونکہ UI فائلیں روٹ (Root) پر بھیج رہا ہے، اس لیے ہم براہ راست بلڈ کریں گے
-          cordova platform add android
-          cordova build android --no-telemetry --debug
+          # اگر config.xml موجود ہے تو ہی بلڈ چلے گا
+          if [ -f "config.xml" ]; then
+            cordova platform add android
+            cordova build android --no-telemetry --debug
+          else
+            echo "Error: config.xml not found! Your UI might not have pushed the files correctly."
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
