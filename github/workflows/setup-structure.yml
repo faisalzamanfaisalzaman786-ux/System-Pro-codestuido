@@ -1,41 +1,35 @@
-name: Setup Fiscal Structure
+name: System Pro Dispatch Fixer
 on:
-  workflow_dispatch: # اسے آپ مینوئل مینو سے چلا سکتے ہیں
+  workflow_dispatch: # یہ بٹن کو ایکٹیویٹ کرے گا
+  push:
+    branches: [ main, apk-build-input ] # کسی بھی پش پر چلے گا
 
 jobs:
-  initialize:
+  fix-and-dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create Directory Structure
+      - name: Create Missing Fiscal Folders
         run: |
-          # ضروری فولڈرز بنانا
+          # وہ تمام فولڈرز بنانا جو تصویر میں تجویز کیے گئے ہیں
           mkdir -p .github/workflows
           mkdir -p backend
           mkdir -p public
           mkdir -p uploads
           mkdir -p www
+          touch www/.gitkeep # خالی فولڈر کو محفوظ رکھنے کے لیے
 
-          # بنیادی فائلیں بنانا اگر موجود نہ ہوں
-          if [ ! -f "public/index.html" ]; then
-            echo "<!DOCTYPE html><html><body><h1>System Pro Public</h1></body></html>" > public/index.html
-          fi
-          
-          if [ ! -f "README.md" ]; then
-            echo "# System-Pro-codestuido" > README.md
-          fi
+      - name: Verify Root Files
+        run: |
+          # چیک کرنا کہ کیا config.xml روٹ پر آ سکتی ہے
+          ls -R
 
-          # پیکیج فائل بنانا
-          if [ ! -f "package.json" ]; then
-            echo '{"name": "system-pro", "version": "1.0.0", "dependencies": {}}' > package.json
-          fi
-
-      - name: Commit and Push Structure
+      - name: Finalize Structure
         run: |
           git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.name "System-Pro-Bot"
           git add .
-          git commit -m "Initialize fiscal repository structure" || echo "No changes to commit"
+          git commit -m "Fix: Folders created to enable dispatch" || echo "No changes"
           git push origin main
