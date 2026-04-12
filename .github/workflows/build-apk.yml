@@ -1,50 +1,69 @@
-name: System Pro APK Forge Engine
+name: Build APK (APK Forge v6)
 
 on:
-  # یہ بیک اینڈ سے آنے والی 'repository_dispatch' ریکویسٹ کو سنتا ہے
-  repository_dispatch:
-    types: [build-apk]
-  # یہ مخصوص برانچ پر پش ہونے پر بھی چل سکتا ہے
   push:
     branches:
-      - 'apk-build-input'
+      - apk-build-input  # آپ کا UI اسی برانچ پر پش کرتا ہے
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: ☕ Set up JDK 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: 📦 Install Cordova & Dependencies
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova Project
         run: |
-          npm install -g cordova
-          npm install
+          # موجودہ فائلوں کو محفوظ جگہ منتقل کریں (کیونکہ cordova create خالی فولڈر مانگتا ہے)
+          mkdir temp_files
+          mv * temp_files/ 2>/dev/null || true
+          
+          # نیا پروجیکٹ بنائیں
+          cordova create build_dir com.systempro.forge "SystemProApp"
+          
+          # فائلیں واپس اپنی جگہ سیٹ کریں
+          cp -r temp_files/www/* build_dir/www/
+          cp temp_files/config.xml build_dir/config.xml
+          
+          cd build_dir
+          cordova platform add android
+          
+          # اگر کوئی پلگ انز کی ضرورت ہو تو یہاں شامل کریں
+          # cordova plugin add cordova-plugin-whitelist
 
-      - name: 🏗️ Add Android Platform
-        run: cordova platform add android@12.0.0
-
-      - name: 🚀 Build Android APK (Release)
-        run: cordova build android --release --verbose
-
-      - name: 📋 Organize Artifacts
+      - name: Build Android APK
         run: |
-          mkdir -p build-output
-          cp platforms/android/app/build/outputs/apk/release/*.apk build-output/system-pro-app.apk
+          cd build_dir
+          cordova build android --release -- --packageType=apk
 
-      - name: 📤 Upload APK to GitHub
+      - name: Sign APK (Optional - Debug APK by default)
+        run: |
+          # یہاں آپ اپنا کی اسٹور لاجک شامل کر سکتے ہیں
+          # فی الحال ہم صرف ان سائنڈ ڈیبگ اے پی کے حاصل کریں گے
+          echo "APK build finished successfully"
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-App' }}
-          path: build-output/system-pro-app.apk
-          retention-days: 7
+          name: APK-Forge-Build
+          path: build_dir/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 5
+
+      - name: Notify Success
+        run: echo "Build version v6 is ready for download from the Artifacts section."
