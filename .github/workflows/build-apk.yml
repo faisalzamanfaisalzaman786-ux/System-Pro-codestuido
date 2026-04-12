@@ -1,0 +1,77 @@
+name: Build APK from Cordova
+
+on:
+  # جب بھی apk-build-input برانچ پر پش ہو
+  push:
+    branches:
+      - apk-build-input
+  # یا手动dispatch (UI کی درخواست پر)
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyWebApp'
+      package_name:
+        description: 'Package ID'
+        required: true
+        default: 'com.mycompany.myapp'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova project
+        run: |
+          # اگر workflow_dispatch سے inputs آئے تو انہیں استعمال کریں، ورنہ فائلوں سے پڑھیں
+          if [ -n "${{ github.event.inputs.app_name }}" ]; then
+            APP_NAME="${{ github.event.inputs.app_name }}"
+            PKG_NAME="${{ github.event.inputs.package_name }}"
+          else
+            # ورنہ config.xml سے پڑھیں
+            APP_NAME=$(grep -oP '(?<=<name>).*?(?=</name>)' config.xml || echo "MyApp")
+            PKG_NAME=$(grep -oP '(?<=id=").*?(?=")' config.xml || echo "com.example.app")
+          fi
+          cordova create app "$PKG_NAME" "$APP_NAME"
+          cd app
+          cordova platform add android
+
+      - name: Copy HTML files to Cordova www
+        run: |
+          # پوری ریپو کے مواد کو www میں کاپی کریں (config.xml اور package.json کو چھوڑ کر)
+          rsync -av --exclude='app' --exclude='.git' --exclude='.github' ./ ./app/www/
+          # یقینی بنائیں کہ index.html موجود ہے
+          ls -la ./app/www/
+
+      - name: Build Android APK (debug)
+        run: |
+          cd app
+          cordova build android --debug -- --packageType=apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/platforms/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      - name: Get APK path for output
+        id: apk_path
+        run: |
+          APK_FILE=$(ls app/platforms/android/app/build/outputs/apk/debug/*.apk | head -n 1)
+          echo "apk_file=$APK_FILE" >> $GITHUB_OUTPUT
+
+      - name: Output download URL (for debugging)
+        run: |
+          echo "APK built successfully. Artifact can be downloaded from GitHub Actions run."
