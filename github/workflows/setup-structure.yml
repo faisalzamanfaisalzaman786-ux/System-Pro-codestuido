@@ -1,0 +1,41 @@
+name: Setup Fiscal Structure
+on:
+  workflow_dispatch: # اسے آپ مینوئل مینو سے چلا سکتے ہیں
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Directory Structure
+        run: |
+          # ضروری فولڈرز بنانا
+          mkdir -p .github/workflows
+          mkdir -p backend
+          mkdir -p public
+          mkdir -p uploads
+          mkdir -p www
+
+          # بنیادی فائلیں بنانا اگر موجود نہ ہوں
+          if [ ! -f "public/index.html" ]; then
+            echo "<!DOCTYPE html><html><body><h1>System Pro Public</h1></body></html>" > public/index.html
+          fi
+          
+          if [ ! -f "README.md" ]; then
+            echo "# System-Pro-codestuido" > README.md
+          fi
+
+          # پیکیج فائل بنانا
+          if [ ! -f "package.json" ]; then
+            echo '{"name": "system-pro", "version": "1.0.0", "dependencies": {}}' > package.json
+          fi
+
+      - name: Commit and Push Structure
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Initialize fiscal repository structure" || echo "No changes to commit"
+          git push origin main
