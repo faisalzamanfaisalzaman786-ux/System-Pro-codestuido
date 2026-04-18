@@ -1,69 +1,47 @@
-name: Build APK (APK Forge v6)
+name: Flutter Build APK
 
 on:
   push:
     branches:
-      - apk-build-input  # آپ کا UI اسی برانچ پر پش کرتا ہے
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          node-version: '20'
+          flutter-version: '3.x' # Uses the latest stable 3.x version
+          channel: 'stable'
 
-      - name: Install Cordova
-        run: npm install -g cordova
+      - name: Get dependencies
+        run: flutter pub get
 
-      - name: Create Cordova Project
-        run: |
-          # موجودہ فائلوں کو محفوظ جگہ منتقل کریں (کیونکہ cordova create خالی فولڈر مانگتا ہے)
-          mkdir temp_files
-          mv * temp_files/ 2>/dev/null || true
-          
-          # نیا پروجیکٹ بنائیں
-          cordova create build_dir com.systempro.forge "SystemProApp"
-          
-          # فائلیں واپس اپنی جگہ سیٹ کریں
-          cp -r temp_files/www/* build_dir/www/
-          cp temp_files/config.xml build_dir/config.xml
-          
-          cd build_dir
-          cordova platform add android
-          
-          # اگر کوئی پلگ انز کی ضرورت ہو تو یہاں شامل کریں
-          # cordova plugin add cordova-plugin-whitelist
+      - name: Check formatting
+        run: flutter format --set-exit-if-changed .
 
-      - name: Build Android APK
-        run: |
-          cd build_dir
-          cordova build android --release -- --packageType=apk
+      - name: Run tests
+        run: flutter test
 
-      - name: Sign APK (Optional - Debug APK by default)
-        run: |
-          # یہاں آپ اپنا کی اسٹور لاجک شامل کر سکتے ہیں
-          # فی الحال ہم صرف ان سائنڈ ڈیبگ اے پی کے حاصل کریں گے
-          echo "APK build finished successfully"
+      - name: Build APK
+        run: flutter build apk --release
 
-      - name: Upload APK Artifact
+      - name: Upload APK Result
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Forge-Build
-          path: build_dir/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 5
-
-      - name: Notify Success
-        run: echo "Build version v6 is ready for download from the Artifacts section."
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
