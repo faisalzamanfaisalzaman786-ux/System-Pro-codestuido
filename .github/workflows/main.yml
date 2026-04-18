@@ -1,4 +1,4 @@
-name: Build System Pro APK
+name: Build System Pro V9
 on:
   push:
     branches: [ "main" ]
@@ -16,13 +16,18 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+
+      - name: Force Clean & Repair
+        run: |
+          flutter clean
+          rm -rf pubspec.lock
+          flutter pub get
+
+      - name: Build V9 Release APK
+        run: flutter build apk --release --no-pub
       
-      # یہ ہر پرانی فائل اور کچرا صاف کر دے گا
-      - run: flutter clean
-      - run: flutter pub get
-      - run: flutter build apk --release
-      
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: release-apk
+          name: System-Pro-V9-APK
           path: build/app/outputs/flutter-apk/app-release.apk
