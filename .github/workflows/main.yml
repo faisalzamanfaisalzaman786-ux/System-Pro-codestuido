@@ -17,7 +17,7 @@ jobs:
         with:
           channel: 'stable'
       
-      # یہ کمانڈ ہر بار پرانی فائلوں کا کچرا صاف کر دے گی
+      # یہ ہر پرانی فائل اور کچرا صاف کر دے گا
       - run: flutter clean
       - run: flutter pub get
       - run: flutter build apk --release
