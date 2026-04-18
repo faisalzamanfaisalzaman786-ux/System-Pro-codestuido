@@ -1,9 +1,10 @@
-name: System Pro Build
+name: Build System Pro APK
 
 on:
   push:
+    branches: [ "main" ] # جب آپ کوڈ مین برانچ پر پش کریں گے
+  pull_request:
     branches: [ "main" ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -16,22 +17,25 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.19.0' # آپ اپنے فلٹر ورژن کے مطابق اسے بدل سکتے ہیں
           channel: 'stable'
 
+      - name: Install dependencies
+        # اگر آپ کا پروجیکٹ کسی فولڈر میں ہے تو یہاں 'working-directory' شامل کریں
+        run: flutter pub get
+
       - name: Build APK
-        run: |
-          # اگر آپ کا پروجیکٹ کسی فولڈر میں ہے تو یہاں 'cd folder_name' لکھیں
-          flutter pub get
-          flutter build apk --release
+        # اگر ایرر برقرار رہے تو یہاں اپنے فولڈر کا راستہ دیں، مثلاً: working-directory: ./my_app
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: system-pro-apk
+          name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
