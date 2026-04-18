@@ -1,10 +1,7 @@
 name: Setup Structure and Build
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_dispatch: # یہ بٹن سے ٹرگر کرنے کے لیے ضروری ہے
 
 jobs:
   create_and_build:
@@ -13,32 +10,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Create Flutter Structure if missing
+      - name: Create Structure
         run: |
+          # پیکیج نیم صرف lowercase اور underscore میں ہونا چاہیے
           if [ ! -f "pubspec.yaml" ]; then
-            echo "Creating basic Flutter structure with valid name..."
-            # پراجیکٹ کا نام چھوٹے حروف میں دینا ضروری ہے
             flutter create --project-name system_pro_codestuido .
-          else
-            echo "Project structure already exists."
           fi
 
-      - name: Get Dependencies
-        run: flutter pub get
-
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          flutter pub get
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
