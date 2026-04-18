@@ -24,12 +24,12 @@ jobs:
         with:
           channel: 'stable'
 
-      # اب فلٹر انسٹال ہو چکا ہے، اب سٹرکچر بنائیں
       - name: Create Flutter Structure if missing
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             echo "Creating basic Flutter structure..."
-            flutter create . --force
+            # ہم نے یہاں سے --force ہٹا دیا ہے تاکہ ایرر نہ آئے
+            flutter create .
           else
             echo "Project structure already exists."
           fi
