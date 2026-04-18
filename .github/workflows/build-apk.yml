@@ -1,23 +1,24 @@
-name: System Pro Flutter Build
+name: Setup Structure and Build
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch: # تاکہ آپ خود بھی بٹن دبا کر بلڈ شروع کر سکیں
 
 jobs:
-  cleanup_and_build:
+  create_structure_and_build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Clean Old Files
+      - name: Create Flutter Structure if missing
         run: |
-          # یہ کمانڈ پچھلے کسی بھی عارضی بلڈ ڈیٹا کو صاف کرے گی
-          rm -rf build/
-          
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "Creating basic Flutter structure..."
+            flutter create . --force
+          fi
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -27,17 +28,16 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
           channel: 'stable'
 
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Build Release APK
+      - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release-APK
+          name: System-Pro-APK
           path: build/app/outputs/flutter-apk/app-release.apk
