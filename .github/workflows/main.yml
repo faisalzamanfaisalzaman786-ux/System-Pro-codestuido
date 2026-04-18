@@ -1,41 +1,29 @@
-name: Build System Pro APK
+name: build_system_pro_apk
+description: A powerful build system automation tool for Android APKs.
+publish_to: 'none'
+version: 1.0.0+1
 
-on:
-  push:
-    branches: [ "main" ] # جب آپ کوڈ مین برانچ پر پش کریں گے
-  pull_request:
-    branches: [ "main" ]
+environment:
+  sdk: ">=3.0.0 <4.0.0"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+flutter:
+  uses-material-design: true
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.0' # آپ اپنے فلٹر ورژن کے مطابق اسے بدل سکتے ہیں
-          channel: 'stable'
+  assets:
+    - assets/images/
+    - assets/icons/
 
-      - name: Install dependencies
-        # اگر آپ کا پروجیکٹ کسی فولڈر میں ہے تو یہاں 'working-directory' شامل کریں
-        run: flutter pub get
-
-      - name: Build APK
-        # اگر ایرر برقرار رہے تو یہاں اپنے فولڈر کا راستہ دیں، مثلاً: working-directory: ./my_app
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+  fonts:
+    - family: CustomFont
+      fonts:
+        - asset: assets/fonts/CustomFont-Regular.ttf 
