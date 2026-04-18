@@ -1,4 +1,4 @@
-package com.system.pro.v9; // یہ پیکیج نیم آپ کے مینی فیسٹ سے میچ کرنا چاہیے
+package com.example.system_pro;
 
 import io.flutter.embedding.android.FlutterActivity;
 
