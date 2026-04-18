@@ -1,4 +1,4 @@
-name: Build System Pro V9
+name: Build System Pro
 on:
   push:
     branches: [ "main" ]
@@ -17,7 +17,7 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Deep Clean and Fix
+      - name: Extreme Clean
         run: |
           rm -rf android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
           flutter clean
@@ -27,8 +27,8 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
       
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V9-Final
+          name: System-Pro-Release
           path: build/app/outputs/flutter-apk/app-release.apk
