@@ -1,12 +1,12 @@
 android {
-    namespace "com.example.system_pro"
-    compileSdk 34
+    namespace "com.system.pro.v9"
+    compileSdkVersion 34
 
     defaultConfig {
-        applicationId "com.example.system_pro"
-        minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        applicationId "com.system.pro.v9"
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode 9
+        versionName "9.0.0"
     }
 }
