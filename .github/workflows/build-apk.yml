@@ -4,20 +4,14 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  create_structure_and_build:
+  create_and_build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Create Flutter Structure if missing
-        run: |
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "Creating basic Flutter structure..."
-            flutter create . --force
-          fi
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -29,6 +23,16 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+
+      # اب فلٹر انسٹال ہو چکا ہے، اب سٹرکچر بنائیں
+      - name: Create Flutter Structure if missing
+        run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "Creating basic Flutter structure..."
+            flutter create . --force
+          else
+            echo "Project structure already exists."
+          fi
 
       - name: Get Dependencies
         run: flutter pub get
