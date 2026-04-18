@@ -1,8 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.system.pro.v9">
-
-    <application
-        android:label="System Pro V9"
+    package="com.example.system_pro"> <application
+        android:label="System Pro"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
@@ -28,5 +26,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
     </application>
 </manifest>
