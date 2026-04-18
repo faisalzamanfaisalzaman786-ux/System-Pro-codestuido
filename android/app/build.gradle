@@ -1,13 +1,28 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
 android {
     namespace "com.example.system_pro"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.example.system_pro"
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion flutter.targetSdkVersion
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
     }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug // فی الحال ٹیسٹنگ کے لیے
+        }
+    }
+}
+
+flutter {
+    source '../..'
 }
