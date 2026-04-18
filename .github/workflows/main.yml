@@ -3,6 +3,7 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,8 +16,12 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+      
+      # یہ کمانڈ ہر بار پرانی فائلوں کا کچرا صاف کر دے گی
+      - run: flutter clean
       - run: flutter pub get
       - run: flutter build apk --release
+      
       - uses: actions/upload-artifact@v4
         with:
           name: release-apk
