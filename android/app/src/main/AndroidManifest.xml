@@ -1,0 +1,6 @@
+<activity
+    android:name=".MainActivity"
+    ...> <meta-data
+        android:name="flutterEmbedding"
+        android:value="2" />
+</activity>
