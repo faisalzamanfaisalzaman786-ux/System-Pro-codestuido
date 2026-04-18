@@ -27,9 +27,9 @@ jobs:
       - name: Create Flutter Structure if missing
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "Creating basic Flutter structure..."
-            # ہم نے یہاں سے --force ہٹا دیا ہے تاکہ ایرر نہ آئے
-            flutter create .
+            echo "Creating basic Flutter structure with valid name..."
+            # پراجیکٹ کا نام چھوٹے حروف میں دینا ضروری ہے
+            flutter create --project-name system_pro_codestuido .
           else
             echo "Project structure already exists."
           fi
