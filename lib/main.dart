@@ -1,209 +1,123 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 void main() {
-  runApp(const CalculatorApp());
+  runApp(const DigitalClockApp());
 }
 
-class CalculatorApp extends StatelessWidget {
-  const CalculatorApp({super.key});
+class DigitalClockApp extends StatelessWidget {
+  const DigitalClockApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'System Pro Calculator',
+      title: 'Digital Clock',
       theme: ThemeData.dark().copyWith(
-        primaryColor: Colors.black,
         scaffoldBackgroundColor: Colors.black,
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            foregroundColor: Colors.white,
-            backgroundColor: Colors.grey[850],
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
+        primaryColor: Colors.cyan,
       ),
-      home: const CalculatorScreen(),
+      home: const ClockScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class CalculatorScreen extends StatefulWidget {
-  const CalculatorScreen({super.key});
+class ClockScreen extends StatefulWidget {
+  const ClockScreen({super.key});
 
   @override
-  State<CalculatorScreen> createState() => _CalculatorScreenState();
+  State<ClockScreen> createState() => _ClockScreenState();
 }
 
-class _CalculatorScreenState extends State<CalculatorScreen> {
-  String _display = '0';
-  String _currentInput = '';
-  String _operator = '';
-  double _firstOperand = 0.0;
-  bool _waitingForOperand = false;
+class _ClockScreenState extends State<ClockScreen> {
+  late Timer _timer;
+  DateTime _currentTime = DateTime.now();
 
-  void _buttonPressed(String value) {
-    setState(() {
-      if (value == 'C') {
-        _clearAll();
-      } else if (value == '⌫') {
-        _deleteLast();
-      } else if (value == '=') {
-        _evaluate();
-      } else if (value == '+' || value == '-' || value == '×' || value == '÷') {
-        _setOperator(value);
-      } else {
-        _inputDigit(value);
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {  // ✅ Prevents crash after dispose
+        setState(() {
+          _currentTime = DateTime.now();
+        });
       }
     });
   }
 
-  void _clearAll() {
-    _display = '0';
-    _currentInput = '';
-    _operator = '';
-    _firstOperand = 0.0;
-    _waitingForOperand = false;
-  }
-
-  void _deleteLast() {
-    if (_currentInput.isNotEmpty) {
-      _currentInput = _currentInput.substring(0, _currentInput.length - 1);
-      _display = _currentInput.isEmpty ? '0' : _currentInput;
-    } else if (!_waitingForOperand && _display != '0') {
-      _currentInput = _display.substring(0, _display.length - 1);
-      _display = _currentInput.isEmpty ? '0' : _currentInput;
-    }
-  }
-
-  void _inputDigit(String digit) {
-    if (_waitingForOperand) {
-      _currentInput = digit;
-      _waitingForOperand = false;
-    } else {
-      _currentInput = (_currentInput == '0') ? digit : _currentInput + digit;
-    }
-    _display = _currentInput;
-  }
-
-  void _setOperator(String op) {
-    if (_currentInput.isNotEmpty) {
-      _firstOperand = double.parse(_currentInput);
-      _operator = op;
-      _waitingForOperand = true;
-    } else if (_operator.isNotEmpty && !_waitingForOperand) {
-      _operator = op;
-    }
-  }
-
-  void _evaluate() {
-    if (_operator.isEmpty || _currentInput.isEmpty) return;
-
-    double secondOperand = double.parse(_currentInput);
-    double result = 0.0;
-
-    switch (_operator) {
-      case '+':
-        result = _firstOperand + secondOperand;
-        break;
-      case '-':
-        result = _firstOperand - secondOperand;
-        break;
-      case '×':
-        result = _firstOperand * secondOperand;
-        break;
-      case '÷':
-        if (secondOperand != 0) {
-          result = _firstOperand / secondOperand;
-        } else {
-          _display = 'Error';
-          _clearAll();
-          return;
-        }
-        break;
-    }
-
-    String resultStr = result.toString();
-    if (resultStr.contains('.') && resultStr.endsWith('0')) {
-      resultStr = resultStr.substring(0, resultStr.length - 2);
-    }
-    _display = resultStr;
-    _currentInput = resultStr;
-    _firstOperand = result;
-    _operator = '';
-    _waitingForOperand = true;
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    String timeString = _currentTime.toLocal().toString().split(' ')[1].substring(0, 8);
+    String dateString = '${_currentTime.day.toString().padLeft(2, '0')}/${_currentTime.month.toString().padLeft(2, '0')}/${_currentTime.year}';
+    String weekday = _getWeekday(_currentTime.weekday);
+
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-                child: Text(
-                  _display,
-                  style: const TextStyle(
-                    fontSize: 56,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(40),
+                border: Border.all(color: Colors.cyanAccent, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyanAccent.withOpacity(0.3),
+                    blurRadius: 20,
+                    spreadRadius: 5,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ],
               ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildButtonRow(['C', '⌫', '÷']),
-                    _buildButtonRow(['7', '8', '9', '×']),
-                    _buildButtonRow(['4', '5', '6', '-']),
-                    _buildButtonRow(['1', '2', '3', '+']),
-                    _buildButtonRow(['0', '00', '.', '=']),
+              child: Text(
+                timeString,
+                style: const TextStyle(
+                  fontSize: 70,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                  color: Colors.cyanAccent,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 15,
+                      color: Colors.cyanAccent,
+                      offset: Offset(0, 0),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 30),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Text(
+                '$dateString  •  $weekday',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white70,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildButtonRow(List<String> buttons) {
-    return Expanded(
-      child: Row(
-        children: buttons.map((btn) {
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(6.0),
-              child: ElevatedButton(
-                onPressed: () => _buttonPressed(btn),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: btn == 'C' || btn == '⌫' ? Colors.redAccent :
-                                   btn == '=' ? Colors.green :
-                                   btn == '+' || btn == '-' || btn == '×' || btn == '÷' ? Colors.orange : Colors.grey[850],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.all(20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  btn,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
+  String _getWeekday(int weekday) {
+    const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    return weekdays[weekday - 1];
   }
 }
