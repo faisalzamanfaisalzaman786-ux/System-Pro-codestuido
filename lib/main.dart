@@ -1,87 +1,209 @@
-name: Build System Pro (Dynamic)
+import 'package:flutter/material.dart';
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Display Name'
-        required: false
-        default: 'System Pro'
-      package_name:
-        description: 'Android Package Name'
-        required: false
-        default: 'com.system.pro'
-      app_icon_base64:
-        description: 'Base64 icon (optional)'
-        required: false
-        default: ''
+void main() {
+  runApp(const CalculatorApp());
+}
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.10.0'
-      - name: Fix pubspec name
-        run: sed -i 's/name: System-Pro-codestuido/name: system_pro_codestuido/' pubspec.yaml
-      - name: Set app name
-        run: |
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          [ -z "$APP_NAME" ] && APP_NAME="System Pro"
-          sed -i 's/android:label=".*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
-      - name: Change package name
-        run: |
-          NEW_PKG="${{ github.event.inputs.package_name }}"
-          [ -z "$NEW_PKG" ] && NEW_PKG="com.system.pro"
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" android/app/build.gradle
-          sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/" android/app/src/main/AndroidManifest.xml
-      - name: Create icons from base64 (if provided)
-        if: github.event.inputs.app_icon_base64 != ''
-        run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > /tmp/icon.png
-          for size in 48 72 96 144 192; do
-            density="mdpi"
-            [ $size -eq 72 ] && density="hdpi"
-            [ $size -eq 96 ] && density="xhdpi"
-            [ $size -eq 144 ] && density="xxhdpi"
-            [ $size -eq 192 ] && density="xxxhdpi"
-            mkdir -p android/app/src/main/res/mipmap-$density
-            convert /tmp/icon.png -resize ${size}x${size} android/app/src/main/res/mipmap-$density/ic_launcher.png
-          done
-      - name: Create dummy icons (if no base64)
-        if: github.event.inputs.app_icon_base64 == ''
-        run: |
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p android/app/src/main/res/mipmap-$density
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > android/app/src/main/res/mipmap-$density/ic_launcher.png
-          done
-      - name: Create styles.xml
-        run: |
-          mkdir -p android/app/src/main/res/values
-          cat > android/app/src/main/res/values/styles.xml <<EOF
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-              </style>
-          </resources>
-          EOF
-      - name: Get dependencies
-        run: flutter pub get
-      - name: Build APK
-        run: flutter build apk --release
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-${{ github.run_number }}.apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+class CalculatorApp extends StatelessWidget {
+  const CalculatorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'System Pro Calculator',
+      theme: ThemeData.dark().copyWith(
+        primaryColor: Colors.black,
+        scaffoldBackgroundColor: Colors.black,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Colors.grey[850],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      home: const CalculatorScreen(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class CalculatorScreen extends StatefulWidget {
+  const CalculatorScreen({super.key});
+
+  @override
+  State<CalculatorScreen> createState() => _CalculatorScreenState();
+}
+
+class _CalculatorScreenState extends State<CalculatorScreen> {
+  String _display = '0';
+  String _currentInput = '';
+  String _operator = '';
+  double _firstOperand = 0.0;
+  bool _waitingForOperand = false;
+
+  void _buttonPressed(String value) {
+    setState(() {
+      if (value == 'C') {
+        _clearAll();
+      } else if (value == '⌫') {
+        _deleteLast();
+      } else if (value == '=') {
+        _evaluate();
+      } else if (value == '+' || value == '-' || value == '×' || value == '÷') {
+        _setOperator(value);
+      } else {
+        _inputDigit(value);
+      }
+    });
+  }
+
+  void _clearAll() {
+    _display = '0';
+    _currentInput = '';
+    _operator = '';
+    _firstOperand = 0.0;
+    _waitingForOperand = false;
+  }
+
+  void _deleteLast() {
+    if (_currentInput.isNotEmpty) {
+      _currentInput = _currentInput.substring(0, _currentInput.length - 1);
+      _display = _currentInput.isEmpty ? '0' : _currentInput;
+    } else if (!_waitingForOperand && _display != '0') {
+      _currentInput = _display.substring(0, _display.length - 1);
+      _display = _currentInput.isEmpty ? '0' : _currentInput;
+    }
+  }
+
+  void _inputDigit(String digit) {
+    if (_waitingForOperand) {
+      _currentInput = digit;
+      _waitingForOperand = false;
+    } else {
+      _currentInput = (_currentInput == '0') ? digit : _currentInput + digit;
+    }
+    _display = _currentInput;
+  }
+
+  void _setOperator(String op) {
+    if (_currentInput.isNotEmpty) {
+      _firstOperand = double.parse(_currentInput);
+      _operator = op;
+      _waitingForOperand = true;
+    } else if (_operator.isNotEmpty && !_waitingForOperand) {
+      _operator = op;
+    }
+  }
+
+  void _evaluate() {
+    if (_operator.isEmpty || _currentInput.isEmpty) return;
+
+    double secondOperand = double.parse(_currentInput);
+    double result = 0.0;
+
+    switch (_operator) {
+      case '+':
+        result = _firstOperand + secondOperand;
+        break;
+      case '-':
+        result = _firstOperand - secondOperand;
+        break;
+      case '×':
+        result = _firstOperand * secondOperand;
+        break;
+      case '÷':
+        if (secondOperand != 0) {
+          result = _firstOperand / secondOperand;
+        } else {
+          _display = 'Error';
+          _clearAll();
+          return;
+        }
+        break;
+    }
+
+    String resultStr = result.toString();
+    if (resultStr.contains('.') && resultStr.endsWith('0')) {
+      resultStr = resultStr.substring(0, resultStr.length - 2);
+    }
+    _display = resultStr;
+    _currentInput = resultStr;
+    _firstOperand = result;
+    _operator = '';
+    _waitingForOperand = true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                child: Text(
+                  _display,
+                  style: const TextStyle(
+                    fontSize: 56,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildButtonRow(['C', '⌫', '÷']),
+                    _buildButtonRow(['7', '8', '9', '×']),
+                    _buildButtonRow(['4', '5', '6', '-']),
+                    _buildButtonRow(['1', '2', '3', '+']),
+                    _buildButtonRow(['0', '00', '.', '=']),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildButtonRow(List<String> buttons) {
+    return Expanded(
+      child: Row(
+        children: buttons.map((btn) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(6.0),
+              child: ElevatedButton(
+                onPressed: () => _buttonPressed(btn),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: btn == 'C' || btn == '⌫' ? Colors.redAccent :
+                                   btn == '=' ? Colors.green :
+                                   btn == '+' || btn == '-' || btn == '×' || btn == '÷' ? Colors.orange : Colors.grey[850],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  btn,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
