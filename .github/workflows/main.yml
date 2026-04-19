@@ -19,21 +19,13 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.10.0' # Dart 3.0 سپورٹ کے لیے ضروری ہے
+          flutter-version: '3.10.0'
           channel: 'stable'
 
-      - name: Extreme Clean & Fix
+      - name: Repair and Build
         run: |
-          # پرانی کنفیگریشنز کو صاف کرنا
-          flutter clean
-          rm -f pubspec.lock
+          # پراجیکٹ کے اندر جا کر ڈیپینڈنسیز سیٹ کرنا
           flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release --no-pub
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          
+          # اینڈرائیڈ بلڈ رن کرنا
+          flutter build apk --release
