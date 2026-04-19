@@ -17,18 +17,13 @@ List<CameraDescription> cameras = [];
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request permissions
   final allGranted = await _requestAllPermissions();
   if (!allGranted) {
     print('Some permissions denied. App may not work correctly.');
   }
 
-  // Initialize background service
   await _initBackgroundService();
-
-  // Get cameras
   cameras = await availableCameras();
-
   runApp(const MyApp());
 }
 
@@ -44,7 +39,6 @@ Future<bool> _requestAllPermissions() async {
 
   bool allGranted = statuses.values.every((status) => status.isGranted);
   if (!allGranted) {
-    // Show explanation if needed
     for (var entry in statuses.entries) {
       if (entry.value.isPermanentlyDenied) {
         openAppSettings();
@@ -58,7 +52,6 @@ Future<bool> _requestAllPermissions() async {
 Future<void> _initBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // Android notification channel
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'system_pro_channel',
     'System Pro Service',
@@ -113,7 +106,6 @@ void onStart(ServiceInstance service) async {
     });
   }
 
-  // Listen for stop signal
   service.on('stop').listen((event) {
     timer?.cancel();
     service.stopSelf();
@@ -226,7 +218,6 @@ class _CameraHomePageState extends State<CameraHomePage> {
         (await getTemporaryDirectory()).path,
         'compressed_${DateTime.now()}.mp4',
       );
-      // Scale to 854x480, H.264, CRF 28, ultrafast preset
       final command = '-i "${_lastVideo!.path}" -vf "scale=854:480" -c:v libx264 -crf 28 -preset ultrafast "$outputPath"';
       final session = await FFmpegKit.execute(command);
       final returnCode = await session.getReturnCode();
