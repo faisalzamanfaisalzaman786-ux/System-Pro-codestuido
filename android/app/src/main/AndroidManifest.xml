@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.yourapp">
+    package="com.system.pro">
     
     <application
-        android:label="Your App Name"
+        android:label="System Pro"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
