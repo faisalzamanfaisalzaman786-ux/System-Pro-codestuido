@@ -26,7 +26,6 @@ apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    // جدید ترین SDK (Android 14 / API 35)
     compileSdk 35
 
     compileOptions {
@@ -43,11 +42,8 @@ android {
     }
 
     defaultConfig {
-        // پیکیج کا نام Manifest کے مطابق کریں
         applicationId "com.system.pro"
-        // کم سے کم SDK (کیمرہ پلگ ان کے لیے 21 ضروری ہے)
         minSdk 21
-        // ہدف SDK جدید ترین
         targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
@@ -55,7 +51,6 @@ android {
 
     buildTypes {
         release {
-            // پروڈکشن کے لیے اپنی signing key ضرور لگائیں
             signingConfig signingConfigs.debug
         }
     }
