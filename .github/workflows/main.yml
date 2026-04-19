@@ -1,4 +1,4 @@
-name: Build Flutter APK
+name: Build Flutter APK (Full Update)
 
 on:
   workflow_dispatch:
@@ -20,7 +20,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -28,8 +29,10 @@ jobs:
           flutter-version: '3.22.0'
           channel: 'stable'
 
-      - name: Create Flutter project
+      - name: Create fresh Flutter project
         run: |
+          # Ensure clean directory (remove old android/ios folders if exist)
+          rm -rf android ios linux macos web windows
           flutter create --org ${PACKAGE_NAME%.*} --project-name ${APP_NAME// /_} --platforms android .
         env:
           APP_NAME: ${{ github.event.inputs.app_name }}
@@ -43,34 +46,45 @@ jobs:
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
           echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon.png
-          # Convert to Android adaptive icon (optional)
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          # Use ImageMagick to resize (install if needed)
+          # Install ImageMagick for resizing
           sudo apt update && sudo apt install -y imagemagick
-          convert app_icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          # Create all required mipmap folders
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p android/app/src/main/res/mipmap-${density}
+          done
+          # Generate icons for each density
           convert app_icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert app_icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert app_icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert app_icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert app_icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          # Also copy for round icon
-          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          # Copy for round icons
           cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-      - name: Update package name and app name
+      - name: Update package name and app label
         run: |
-          # Change package name in android/app/build.gradle
+          # Update applicationId in build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
-          # Change app name in AndroidManifest.xml (optional)
-          sed -i "s/<application .*/<application android:label=\"${{ github.event.inputs.app_name }}\" /" android/app/src/main/AndroidManifest.xml
+          # Update app name in AndroidManifest.xml
+          sed -i 's/<application[^>]*/<application android:label="${{ github.event.inputs.app_name }}" /' android/app/src/main/AndroidManifest.xml
 
-      - name: Build APK
+      - name: Ensure MainActivity exists (safety check)
+        run: |
+          if [ ! -f android/app/src/main/kotlin/com/example/*/MainActivity.kt ] && [ ! -f android/app/src/main/java/com/example/*/MainActivity.java ]; then
+            echo "MainActivity missing, creating default..."
+            mkdir -p android/app/src/main/kotlin/$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
+            cat > android/app/src/main/kotlin/$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')/MainActivity.kt <<EOF
+            package ${{ github.event.inputs.package_name }}
+            import io.flutter.embedding.android.FlutterActivity
+            class MainActivity: FlutterActivity()
+            EOF
+          fi
+
+      - name: Build APK (release)
         run: flutter build apk --release
 
       - name: Upload APK artifact
