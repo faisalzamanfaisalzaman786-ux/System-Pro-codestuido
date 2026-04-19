@@ -25,22 +25,43 @@ jobs:
           flutter-version: '3.10.0'
           channel: 'stable'
 
-      - name: Cache Flutter dependencies
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.pub-cache
-            build/
-          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-
-
-      - name: 🔧 Repair Android structure (auto-create missing resources)
+      - name: 🔧 Fix package name in pubspec.yaml
         run: |
-          # This command regenerates the entire android folder with proper v2 embedding,
-          # including ic_launcher icons, styles, and correct package name.
-          # Your existing Dart code (lib/) will remain untouched.
-          flutter create --platforms=android .
+          # Replace hyphens with underscores in package name
+          sed -i 's/name: System-Pro-codestuido/name: system_pro_codestuido/' pubspec.yaml
+
+      - name: 🔧 Create missing Android resources (ic_launcher + styles)
+        run: |
+          # Create res directories if not exist
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          mkdir -p android/app/src/main/res/values
+
+          # Create a dummy ic_launcher.png (1x1 transparent pixel) using base64
+          # This is a valid 1x1 PNG (base64)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Create styles.xml with LaunchTheme
+          cat > android/app/src/main/res/values/styles.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+              </style>
+          </resources>
+          EOF
+
+          # Ensure AndroidManifest.xml uses correct package name and resources
+          sed -i 's/package="com.example.system_pro"/package="com.system.pro"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/package="com.example.yourapp"/package="com.system.pro"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/applicationId "com.example.system_pro"/applicationId "com.system.pro"/' android/app/build.gradle
 
       - name: Get dependencies
         run: flutter pub get
@@ -48,7 +69,7 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release.apk
