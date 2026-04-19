@@ -10,10 +10,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- ==================== سٹوریج کی اجازتیں ==================== -->
-    <!-- Android 12 اور پرانے کے لیے -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <!-- Android 13 اور نئے کے لیے -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
@@ -47,7 +45,7 @@
             </intent-filter>
         </activity>
 
-        <!-- فارگراؤنڈ سروس کا اعلان (مثال کے طور پر) -->
+        <!-- فارگراؤنڈ سروس کا اعلان -->
         <service
             android:name="com.system.pro.ForegroundService"
             android:exported="false"
