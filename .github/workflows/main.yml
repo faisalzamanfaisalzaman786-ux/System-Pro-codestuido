@@ -1,117 +1,80 @@
-name: Build System Pro (Dynamic)
+name: Build Flutter APK
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
     inputs:
       app_name:
         description: 'App Display Name'
-        required: false
-        default: 'Digital Counter'
+        required: true
       package_name:
-        description: 'Android Package Name (e.g., com.system.pro)'
-        required: false
-        default: 'com.system.pro'
+        description: 'Package Name (e.g., com.system.pro)'
+        required: true
       app_icon_base64:
-        description: 'Base64 encoded PNG icon (max 512x512)'
+        description: 'Base64 of icon image (PNG)'
         required: false
-        default: ''
       dart_code_base64:
-        description: 'Base64 encoded Dart code for lib/main.dart'
-        required: false
-        default: ''
+        description: 'Base64 of main.dart'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Flutter 3.10.0
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.10.0'
+          flutter-version: '3.22.0'
           channel: 'stable'
 
-      - name: Fix pubspec package name (replace hyphens)
+      - name: Create Flutter project
         run: |
-          sed -i 's/name: System-Pro-codestuido/name: system_pro_codestuido/' pubspec.yaml
+          flutter create --org ${PACKAGE_NAME%.*} --project-name ${APP_NAME// /_} --platforms android .
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name }}
+          PACKAGE_NAME: ${{ github.event.inputs.package_name }}
 
-      - name: Write Dart code from base64 (if provided)
-        if: ${{ github.event.inputs.dart_code_base64 != '' }}
+      - name: Decode and write main.dart
         run: |
-          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
+          echo '${{ github.event.inputs.dart_code_base64 }}' | base64 -d > lib/main.dart
 
-      - name: Set app display name and Android package name
-        run: |
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          [ -z "$APP_NAME" ] && APP_NAME="Digital Counter"
-          NEW_PKG="${{ github.event.inputs.package_name }}"
-          [ -z "$NEW_PKG" ] && NEW_PKG="com.system.pro"
-          
-          # Update AndroidManifest.xml label and package
-          sed -i 's/android:label=".*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
-          sed -i "s/package=\".*\"/package=\"$NEW_PKG\"/" android/app/src/main/AndroidManifest.xml
-          
-          # Update build.gradle applicationId
-          sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" android/app/build.gradle
-
-      - name: Create dummy app icons (if no custom icon provided)
-        if: ${{ github.event.inputs.app_icon_base64 == '' }}
-        run: |
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p android/app/src/main/res/mipmap-$density
-            # 1x1 transparent PNG base64
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > android/app/src/main/res/mipmap-$density/ic_launcher.png
-          done
-
-      - name: Create custom icon from base64 (if provided)
+      - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > /tmp/icon.png
-          for size in 48 72 96 144 192; do
-            case $size in
-              48) density=mdpi ;;
-              72) density=hdpi ;;
-              96) density=xhdpi ;;
-              144) density=xxhdpi ;;
-              192) density=xxxhdpi ;;
-            esac
-            mkdir -p android/app/src/main/res/mipmap-$density
-            convert /tmp/icon.png -resize ${size}x${size} android/app/src/main/res/mipmap-$density/ic_launcher.png
-          done
+          echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon.png
+          # Convert to Android adaptive icon (optional)
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          # Use ImageMagick to resize (install if needed)
+          sudo apt update && sudo apt install -y imagemagick
+          convert app_icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert app_icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert app_icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert app_icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert app_icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # Also copy for round icon
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-      - name: Create styles.xml (if missing)
+      - name: Update package name and app name
         run: |
-          mkdir -p android/app/src/main/res/values
-          if [ ! -f android/app/src/main/res/values/styles.xml ]; then
-            cat > android/app/src/main/res/values/styles.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-              </style>
-          </resources>
-          EOF
-          fi
+          # Change package name in android/app/build.gradle
+          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
+          # Change app name in AndroidManifest.xml (optional)
+          sed -i "s/<application .*/<application android:label=\"${{ github.event.inputs.app_name }}\" /" android/app/src/main/AndroidManifest.xml
 
-      - name: Get Flutter dependencies
-        run: flutter pub get
-
-      - name: Build release APK
+      - name: Build APK
         run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ github.run_number }}.apk
+          name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
