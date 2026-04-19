@@ -1,8 +1,52 @@
 name: system_pro
+description: "A professional camera app with video processing, screen sharing, and background services."
+publish_to: 'none'
+version: 1.0.0+1
+
 environment:
   sdk: '>=3.0.0 <4.0.0'
+
 dependencies:
   flutter:
     sdk: flutter
+
+  # ==================== کیمرہ اور میڈیا ====================
+  camera: ^0.11.3               # کیمرہ کنٹرول
+  path_provider: ^2.1.5         # ڈائریکٹری راستے
+  path: ^1.9.0                  # فائل پاتھ ہینڈلنگ
+  image_picker: ^1.1.2          # گیلری سے میڈیا چننے کے لیے
+  video_player: ^2.9.3          # ویڈیو چلانے کے لیے
+  file_picker: ^8.1.7           # فائل سلیکٹ کرنے کے لیے
+
+  # ==================== ویڈیو پروسیسنگ ====================
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3   # مکمل ویڈیو ایڈیٹنگ (ٹرم، کمپریس، مرج)
+  # متبادل: video_compress: ^3.1.2     # صرف کمپریشن کے لیے ہلکا پیکج
+
+  # ==================== سکرین شیئرنگ (WebRTC) ====================
+  flutter_webrtc: ^0.12.0       # WebRTC بنیاد
+  livekit_client: ^2.3.0        # لیوکیٹ سرور کے ساتھ سکرین شیئرنگ (آسان)
+
+  # ==================== اجازتیں (Permissions) ====================
+  permission_handler: ^12.0.1   # رن ٹائم پر اجازتیں مانگنا
+
+  # ==================== بیک گراؤنڈ سروسز ====================
+  flutter_background_service: ^5.1.0    # بیک گراؤنڈ میں ڈارٹ کوڈ چلانا
+  flutter_local_notifications: ^18.0.1  # بیک گراؤنڈ سروس کے لیے نوٹیفکیشن
+  workmanager: ^0.5.2                  # شیڈولڈ بیک گراؤنڈ کام
+
+  # ==================== دیگر مفید پیکجز ====================
+  device_info_plus: ^11.3.0     # ڈیوائس کی معلومات
+  shared_preferences: ^2.5.2    # چھوٹی سیٹنگز محفوظ کرنا
+  dio: ^5.7.0                   # نیٹ ورک درخواستیں (اپ لوڈ/ڈاؤن لوڈ)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0         # کوڈ کے معیار کے لیے
+
 flutter:
   uses-material-design: true
+
+  # اگر آپ کو مقامی تصاویر یا فونٹ استعمال کرنے ہوں تو یہاں شامل کریں
+  # assets:
+  #   - assets/images/
