@@ -17,8 +17,8 @@ on:
         description: 'Base64 icon (optional)'
         required: false
         default: ''
-      dart_code:
-        description: 'Dart code for lib/main.dart'
+      dart_code_base64:
+        description: 'Base64 encoded Dart code for lib/main.dart'
         required: false
         default: ''
 
@@ -27,8 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -44,21 +42,16 @@ jobs:
       - name: Fix pubspec name
         run: sed -i 's/name: System-Pro-codestuido/name: system_pro_codestuido/' pubspec.yaml
 
-      - name: Write Dart code from payload
-        if: github.event.inputs.dart_code != ''
+      - name: Write Dart code from base64
+        if: github.event.inputs.dart_code_base64 != ''
         run: |
-          echo '${{ github.event.inputs.dart_code }}' > lib/main.dart
-          # اگر کوڈ میں ' (اپاسٹروفی) ہو تو اسے صحیح طرح سے ڈالنا ہوگا
-          # بہتر ہے کہ آپ base64 میں بھیجیں لیکن سادہ صورت میں یہ کام کرے گا
+          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Set app name
+      - name: Set app name and package
         run: |
           APP_NAME="${{ github.event.inputs.app_name }}"
           [ -z "$APP_NAME" ] && APP_NAME="Digital Counter"
           sed -i 's/android:label=".*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
-
-      - name: Change package name
-        run: |
           NEW_PKG="${{ github.event.inputs.package_name }}"
           [ -z "$NEW_PKG" ] && NEW_PKG="com.system.pro"
           sed -i "s/applicationId \".*\"/applicationId \"$NEW_PKG\"/" android/app/build.gradle
