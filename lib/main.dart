@@ -17,44 +17,55 @@ List<CameraDescription> cameras = [];
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request all necessary permissions
-  await _requestPermissions();
+  // Request permissions
+  final allGranted = await _requestAllPermissions();
+  if (!allGranted) {
+    print('Some permissions denied. App may not work correctly.');
+  }
 
   // Initialize background service
   await _initBackgroundService();
 
-  // Get available cameras
+  // Get cameras
   cameras = await availableCameras();
 
   runApp(const MyApp());
 }
 
-Future<void> _requestPermissions() async {
-  final permissions = [
+Future<bool> _requestAllPermissions() async {
+  Map<Permission, PermissionStatus> statuses = await [
     Permission.camera,
     Permission.microphone,
     Permission.storage,
     Permission.photos,
     Permission.videos,
     Permission.notification,
-  ];
-  Map<Permission, PermissionStatus> statuses = await permissions.request();
-  // Optionally check if all granted
-  if (statuses[Permission.camera] != PermissionStatus.granted) {
-    print('Camera permission denied');
+  ].request();
+
+  bool allGranted = statuses.values.every((status) => status.isGranted);
+  if (!allGranted) {
+    // Show explanation if needed
+    for (var entry in statuses.entries) {
+      if (entry.value.isPermanentlyDenied) {
+        openAppSettings();
+        return false;
+      }
+    }
   }
+  return allGranted;
 }
 
 Future<void> _initBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // Setup notifications for Android
+  // Android notification channel
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'system_pro_channel',
     'System Pro Service',
     description: 'Required for background tasks like uploads or recording.',
     importance: Importance.high,
   );
+
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   await flutterLocalNotificationsPlugin.initialize(
     const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
@@ -84,22 +95,28 @@ Future<void> _initBackgroundService() async {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
+  Timer? timer;
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
     service.setNotificationContent(
       title: 'System Pro',
       content: 'Background service is active',
     );
+
+    timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (service.isForegroundService()) {
+        service.setNotificationContent(
+          title: 'System Pro',
+          content: 'Service running since ${DateTime.now()}',
+        );
+      }
+    });
   }
 
-  // Periodic task (every 30 seconds)
-  Timer.periodic(const Duration(seconds: 30), (timer) async {
-    if (service is AndroidServiceInstance) {
-      service.setNotificationContent(
-        title: 'System Pro',
-        content: 'Service running since ${DateTime.now()}',
-      );
-    }
+  // Listen for stop signal
+  service.on('stop').listen((event) {
+    timer?.cancel();
+    service.stopSelf();
   });
 }
 
@@ -132,24 +149,32 @@ class _CameraHomePageState extends State<CameraHomePage> {
   Future<void>? _initializeFuture;
   bool _isRecording = false;
   File? _lastVideo;
-  File? _lastImage;
   VideoPlayerController? _videoController;
   bool _isCompressing = false;
-  double _compressionProgress = 0.0; // placeholder, FFmpegKit doesn't provide progress easily
+  bool _backgroundServiceRunning = false;
 
   @override
   void initState() {
     super.initState();
-    if (cameras.isNotEmpty) {
-      _cameraController = CameraController(
-        cameras.firstWhere(
-          (cam) => cam.lensDirection == CameraLensDirection.back,
-          orElse: () => cameras.first,
-        ),
-        ResolutionPreset.high,
-      );
-      _initializeFuture = _cameraController!.initialize();
-    }
+    _initCamera();
+    _checkBackgroundServiceStatus();
+  }
+
+  Future<void> _initCamera() async {
+    if (cameras.isEmpty) return;
+    final camera = cameras.firstWhere(
+      (cam) => cam.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras.first,
+    );
+    _cameraController = CameraController(camera, ResolutionPreset.high);
+    _initializeFuture = _cameraController!.initialize();
+    setState(() {});
+  }
+
+  Future<void> _checkBackgroundServiceStatus() async {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    setState(() => _backgroundServiceRunning = isRunning);
   }
 
   @override
@@ -159,47 +184,22 @@ class _CameraHomePageState extends State<CameraHomePage> {
     super.dispose();
   }
 
-  Future<void> _takePicture() async {
-    try {
-      await _initializeFuture;
-      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-      final XFile file = await _cameraController!.takePicture();
-      final directory = await getTemporaryDirectory();
-      final savedPath = path.join(directory.path, '${DateTime.now()}.jpg');
-      await File(file.path).copy(savedPath);
-      setState(() {
-        _lastImage = File(savedPath);
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo saved!')),
-        );
-      }
-    } catch (e) {
-      print('Error taking picture: $e');
-    }
-  }
-
   Future<void> _startVideoRecording() async {
     try {
       await _initializeFuture;
-      if (_cameraController != null && !_isRecording && _cameraController!.value.isInitialized) {
+      if (_cameraController != null && !_isRecording) {
         await _cameraController!.startVideoRecording();
         setState(() => _isRecording = true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Recording started...')),
-          );
-        }
+        _showSnackBar('Recording started...');
       }
     } catch (e) {
-      print('Error starting recording: $e');
+      _showSnackBar('Error starting recording: $e');
     }
   }
 
   Future<void> _stopVideoRecording() async {
     try {
-      if (_cameraController != null && _isRecording && _cameraController!.value.isRecordingVideo) {
+      if (_cameraController != null && _isRecording) {
         final XFile file = await _cameraController!.stopVideoRecording();
         final directory = await getTemporaryDirectory();
         final savedPath = path.join(directory.path, '${DateTime.now()}.mp4');
@@ -211,14 +211,10 @@ class _CameraHomePageState extends State<CameraHomePage> {
           _videoController = VideoPlayerController.file(savedFile)
             ..initialize().then((_) => setState(() {}));
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Video saved: ${savedFile.path.split('/').last}')),
-          );
-        }
+        _showSnackBar('Video saved to ${savedFile.path}');
       }
     } catch (e) {
-      print('Error stopping recording: $e');
+      _showSnackBar('Error stopping recording: $e');
     }
   }
 
@@ -230,7 +226,7 @@ class _CameraHomePageState extends State<CameraHomePage> {
         (await getTemporaryDirectory()).path,
         'compressed_${DateTime.now()}.mp4',
       );
-      // FFmpeg command: scale to 854x480, libx264 with CRF 28, ultrafast preset
+      // Scale to 854x480, H.264, CRF 28, ultrafast preset
       final command = '-i "${_lastVideo!.path}" -vf "scale=854:480" -c:v libx264 -crf 28 -preset ultrafast "$outputPath"';
       final session = await FFmpegKit.execute(command);
       final returnCode = await session.getReturnCode();
@@ -241,31 +237,39 @@ class _CameraHomePageState extends State<CameraHomePage> {
           _videoController = VideoPlayerController.file(_lastVideo!)
             ..initialize().then((_) => setState(() {}));
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video compressed successfully!')),
-          );
-        }
+        _showSnackBar('Video compressed successfully!');
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Compression failed')),
-          );
-        }
+        _showSnackBar('Compression failed. Return code: $returnCode');
       }
     } catch (e) {
-      print('Compression error: $e');
+      _showSnackBar('Compression error: $e');
     } finally {
       setState(() => _isCompressing = false);
     }
   }
 
-  void _shareScreen() {
-    // Placeholder: Replace with actual WebRTC screen sharing implementation.
-    // You can integrate livekit_client or flutter_webrtc here.
+  Future<void> _toggleBackgroundService() async {
+    final service = FlutterBackgroundService();
+    if (_backgroundServiceRunning) {
+      service.invoke('stop');
+      _showSnackBar('Stopping background service...');
+      await Future.delayed(const Duration(seconds: 1));
+    } else {
+      await service.startService();
+      _showSnackBar('Starting background service...');
+    }
+    await _checkBackgroundServiceStatus();
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Screen sharing demo - integrate WebRTC')),
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
+  }
+
+  void _shareScreenPlaceholder() {
+    _showSnackBar('Screen sharing is not implemented in this demo. Add your WebRTC logic.');
   }
 
   @override
@@ -274,7 +278,6 @@ class _CameraHomePageState extends State<CameraHomePage> {
       appBar: AppBar(title: const Text('System Pro'), centerTitle: true),
       body: Column(
         children: [
-          // Camera preview
           Expanded(
             flex: 3,
             child: FutureBuilder<void>(
@@ -286,106 +289,79 @@ class _CameraHomePageState extends State<CameraHomePage> {
                   return CameraPreview(_cameraController!);
                 } else if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
+                } else if (cameras.isEmpty) {
+                  return const Center(child: Text('No camera found'));
                 }
                 return const Center(child: CircularProgressIndicator());
               },
             ),
           ),
-          // Controls and preview area
           Expanded(
-            flex: 2,
-            child: SingleChildScrollView(
+            flex: 1,
+            child: Padding(
               padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  // Action buttons row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      FloatingActionButton(
-                        heroTag: 'photo',
-                        onPressed: _takePicture,
-                        child: const Icon(Icons.camera_alt),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        FloatingActionButton(
+                          heroTag: 'record',
+                          onPressed: _isRecording ? _stopVideoRecording : _startVideoRecording,
+                          backgroundColor: _isRecording ? Colors.red : Colors.blue,
+                          child: Icon(_isRecording ? Icons.stop : Icons.videocam),
+                        ),
+                        FloatingActionButton(
+                          heroTag: 'screen',
+                          onPressed: _shareScreenPlaceholder,
+                          child: const Icon(Icons.screen_share),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_lastVideo != null) ...[
+                      const Text('Last recorded video:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      AspectRatio(
+                        aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
+                        child: _videoController != null && _videoController!.value.isInitialized
+                            ? VideoPlayer(_videoController!)
+                            : const Center(child: Text('Loading preview...')),
                       ),
-                      FloatingActionButton(
-                        heroTag: 'record',
-                        onPressed: _isRecording ? _stopVideoRecording : _startVideoRecording,
-                        child: Icon(_isRecording ? Icons.stop : Icons.videocam),
-                      ),
-                      FloatingActionButton(
-                        heroTag: 'screen',
-                        onPressed: _shareScreen,
-                        child: const Icon(Icons.screen_share),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(_videoController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow),
+                            onPressed: () {
+                              if (_videoController!.value.isPlaying) {
+                                _videoController!.pause();
+                              } else {
+                                _videoController!.play();
+                              }
+                              setState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: _isCompressing ? null : _compressVideo,
+                            icon: const Icon(Icons.compress),
+                            label: Text(_isCompressing ? 'Compressing...' : 'Compress Video'),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Last image preview
-                  if (_lastImage != null)
-                    Column(
-                      children: [
-                        const Text('Last photo:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Image.file(_lastImage!, height: 100),
-                      ],
-                    ),
-                  // Last video preview and controls
-                  if (_lastVideo != null) ...[
-                    const SizedBox(height: 12),
-                    const Text('Last recorded video:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    AspectRatio(
-                      aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
-                      child: _videoController != null && _videoController!.value.isInitialized
-                          ? VideoPlayer(_videoController!)
-                          : const Center(child: Text('No preview')),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          icon: Icon(_videoController?.value.isPlaying == true ? Icons.pause : Icons.play_arrow),
-                          onPressed: () {
-                            if (_videoController!.value.isPlaying) {
-                              _videoController!.pause();
-                            } else {
-                              _videoController!.play();
-                            }
-                            setState(() {});
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        ElevatedButton.icon(
-                          onPressed: _isCompressing ? null : _compressVideo,
-                          icon: const Icon(Icons.compress),
-                          label: Text(_isCompressing ? 'Compressing...' : 'Compress Video'),
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: _toggleBackgroundService,
+                      icon: Icon(_backgroundServiceRunning ? Icons.stop : Icons.play_arrow),
+                      label: Text(_backgroundServiceRunning ? 'Stop Background Service' : 'Start Background Service'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _backgroundServiceRunning ? Colors.red : Colors.green,
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  // Background service toggle
-                  ElevatedButton(
-                    onPressed: () async {
-                      final service = FlutterBackgroundService();
-                      final isRunning = await service.isRunning();
-                      if (isRunning) {
-                        service.invoke('stop');
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Background service stopped')),
-                          );
-                        }
-                      } else {
-                        service.startService();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Background service started')),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Toggle Background Service'),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
