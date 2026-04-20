@@ -4,7 +4,6 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  # livekit_client ^2.7.0 کے لیے Dart 3.6.0 ضروری ہے
   sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
@@ -49,7 +48,6 @@ dependencies:
   web_socket_channel: ^3.0.1
 
   # ========== Real‑time Communication ==========
-  # ان دونوں کا ورژن ہم آہنگ کر دیا گیا ہے
   flutter_webrtc: ^0.12.3
   livekit_client: ^2.7.0
 
@@ -73,9 +71,10 @@ dev_dependencies:
   json_serializable: ^6.8.0
   hive_generator: ^2.0.1
 
-# یہ حصہ 'path' پیکج کے ورژن کنفلکٹ کو ختم کرنے کے لیے ضروری ہے
+# یہاں ہم نے تمام متنازعہ ورژنز کو زبردستی فلوٹر کے مطابق کر دیا ہے
 dependency_overrides:
   path: 1.9.0
+  meta: 1.15.0
 
 flutter:
   uses-material-design: true
