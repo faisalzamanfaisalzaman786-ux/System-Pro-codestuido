@@ -45,9 +45,8 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Force Dependency Resolution
+      - name: Fix pubspec.yaml (Version Matching)
         run: |
-          # پہلے ہم pubspec.yaml میں براہ راست وہ ورژنز لکھیں گے جو کنفلکٹ کر رہے ہیں
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
           description: "Universal App"
@@ -67,7 +66,8 @@ jobs:
             video_player: ^2.9.2
             ffmpeg_kit_flutter_full_gpl: ^6.0.3
             image_picker: ^1.1.2
-            flutter_webrtc: ^0.12.3
+            # Updated version to match livekit_client requirements
+            flutter_webrtc: ^1.2.1
             livekit_client: ^2.5.3
             dio: ^5.7.0
             shared_preferences: ^2.3.3
@@ -80,6 +80,8 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            # Adding override for extra safety
+            flutter_webrtc: 1.2.1
           flutter:
             uses-material-design: true
           EOF
@@ -136,4 +138,4 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✅ BUILD FINISHED SUCCESSFULLY"
+          echo "✅ BUILD FINISHED"
