@@ -1,124 +1,47 @@
-name: Build Flutter APK (Full Update)
+name: system_pro
+description: "Professional camera & background service app"
+publish_to: 'none'
+version: 1.0.0+1
 
-on:
-  workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'App Display Name'
-        required: true
-      package_name:
-        description: 'Package Name (e.g., com.system.pro)'
-        required: true
-      app_icon_base64:
-        description: 'Base64 of icon image (PNG/JPG)'
-        required: false
-      dart_code_base64:
-        description: 'Base64 of main.dart'
-        required: true
-      pubspec_base64:
-        description: 'Base64 of pubspec.yaml'
-        required: false
+environment:
+  sdk: '>=3.0.0 <4.0.0'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+dependencies:
+  flutter:
+    sdk: flutter
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
-          cache: true
+  # Camera & multimedia
+  camera: ^0.10.6
+  image_picker: ^1.2.1
+  video_player: ^2.11.1
+  file_picker: ^10.3.10
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3
 
-      - name: Sanitize App Name
-        id: sanitize
-        run: |
-          SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
-          echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
+  # Background services & notifications
+  flutter_background_service: ^5.1.0
+  flutter_local_notifications: ^17.2.3
+  workmanager: ^0.5.2
 
-      - name: Create Flutter project
-        run: |
-          rm -rf .[^.]* *
-          flutter create --org $(echo ${{ github.event.inputs.package_name }} | rev | cut -d'.' -f2- | rev) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
+  # Permissions & device info
+  permission_handler: ^11.3.0
+  device_info_plus: ^13.0.0
 
-      - name: Decode and write main.dart
-        run: |
-          mkdir -p lib
-          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
+  # Storage & paths
+  path_provider: ^2.1.5
+  shared_preferences: ^2.5.5
+  sqflite: ^2.4.2
 
-      - name: Write pubspec.yaml
-        run: |
-          if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
-            echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
-          else
-            echo 'name: system_pro' > pubspec.yaml
-            echo 'description: "Professional Generated App"' >> pubspec.yaml
-            echo 'publish_to: none' >> pubspec.yaml
-            echo 'version: 1.0.0+1' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'environment:' >> pubspec.yaml
-            echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'dependencies:' >> pubspec.yaml
-            echo '  flutter:' >> pubspec.yaml
-            echo '    sdk: flutter' >> pubspec.yaml
-            echo '  camera: ^0.10.6' >> pubspec.yaml
-            echo '  permission_handler: ^11.3.0' >> pubspec.yaml
-            echo '  path_provider: ^2.1.5' >> pubspec.yaml
-            echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
-            echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
-            echo '  workmanager: ^0.5.2' >> pubspec.yaml
-            echo '  video_player: ^2.11.1' >> pubspec.yaml
-            echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'dev_dependencies:' >> pubspec.yaml
-            echo '  flutter_test:' >> pubspec.yaml
-            echo '    sdk: flutter' >> pubspec.yaml
-            echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'flutter:' >> pubspec.yaml
-            echo '  uses-material-design: true' >> pubspec.yaml
-          fi
+  # Networking & real‑time communication
+  dio: ^5.8.0+1
+  flutter_webrtc: ^1.4.1
+  livekit_client: ^2.7.0
 
-      - name: Decode and set app icon
-        if: ${{ github.event.inputs.app_icon_base64 != '' }}
-        run: |
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon_raw
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          convert app_icon_raw -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert app_icon_raw -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert app_icon_raw -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert app_icon_raw -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert app_icon_raw -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+  # (path is NOT listed – SDK provides it)
 
-      - name: Update package name and app label
-        run: |
-          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
-          sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
 
-      - name: Clean and get dependencies
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+flutter:
+  uses-material-design: true
