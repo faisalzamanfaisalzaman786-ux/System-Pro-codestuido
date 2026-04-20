@@ -1,13 +1,16 @@
 buildscript {
-    ext.kotlin_version = '1.7.10'
+    ext.kotlin_version = '1.9.22' // Android 12+ کے لیے ضروری ہے
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.0'
+        // Gradle 8.2.1 جدید ترین فیچرز اور Android 12+ کی سیکیورٹی کے لیے
+        classpath 'com.android.tools.build:gradle:8.2.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        // اگر آپ Firebase استعمال کرتے ہیں تو اسے ان کمنٹ کریں
+        // classpath 'com.google.gms:google-services:4.4.0'
     }
 }
 
