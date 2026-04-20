@@ -54,36 +54,34 @@ jobs:
           if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
             echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
           else
-            cat > pubspec.yaml << "EOF"
-name: system_pro
-description: "Professional Generated App"
-publish_to: none
-version: 1.0.0+1
-
-environment:
-  sdk: ">=3.0.0 <4.0.0"
-
-dependencies:
-  flutter:
-    sdk: flutter
-  camera: ^0.10.6
-  permission_handler: ^11.3.0
-  path_provider: ^2.1.5
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^17.2.3
-  workmanager: ^0.5.2
-  video_player: ^2.11.1
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
-  path: ^1.9.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-flutter:
-  uses-material-design: true
-EOF
+            echo 'name: system_pro' > pubspec.yaml
+            echo 'description: "Professional Generated App"' >> pubspec.yaml
+            echo 'publish_to: none' >> pubspec.yaml
+            echo 'version: 1.0.0+1' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'environment:' >> pubspec.yaml
+            echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'dependencies:' >> pubspec.yaml
+            echo '  flutter:' >> pubspec.yaml
+            echo '    sdk: flutter' >> pubspec.yaml
+            echo '  camera: ^0.10.6' >> pubspec.yaml
+            echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+            echo '  path_provider: ^2.1.5' >> pubspec.yaml
+            echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
+            echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+            echo '  workmanager: ^0.5.2' >> pubspec.yaml
+            echo '  video_player: ^2.11.1' >> pubspec.yaml
+            echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
+            echo '  path: ^1.9.1' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'dev_dependencies:' >> pubspec.yaml
+            echo '  flutter_test:' >> pubspec.yaml
+            echo '    sdk: flutter' >> pubspec.yaml
+            echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'flutter:' >> pubspec.yaml
+            echo '  uses-material-design: true' >> pubspec.yaml
           fi
 
       - name: Decode and set app icon
