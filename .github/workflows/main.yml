@@ -54,7 +54,7 @@ jobs:
           if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
             echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
           else
-            cat > pubspec.yaml << 'EOF'
+            cat > pubspec.yaml << "EOF"
 name: system_pro
 description: "Professional Generated App"
 publish_to: none
