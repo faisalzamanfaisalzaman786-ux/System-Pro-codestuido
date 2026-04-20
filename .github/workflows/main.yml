@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (with exact versions and overrides)
+      - name: Write pubspec.yaml (pinned versions)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -84,6 +84,9 @@ jobs:
           echo 'dependency_overrides:' >> pubspec.yaml
           echo '  path: 1.9.0' >> pubspec.yaml
           echo '  livekit_client: 2.3.0' >> pubspec.yaml
+
+      - name: Verify pubspec.yaml content
+        run: cat pubspec.yaml
 
       - name: Write AndroidManifest.xml
         run: |
