@@ -22,10 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: Setup Flutter (latest stable with Dart 3.6+)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
 
       - name: Sanitize App Name
@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (no heredoc)
+      - name: Write pubspec.yaml (compatible with Dart 3.6+)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -52,40 +52,36 @@ jobs:
           echo 'version: 1.0.0+1' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'environment:' >> pubspec.yaml
-          echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+          echo '  sdk: ">=3.6.0 <4.0.0"' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'dependencies:' >> pubspec.yaml
           echo '  flutter:' >> pubspec.yaml
           echo '    sdk: flutter' >> pubspec.yaml
-          echo '  camera: ^0.10.6' >> pubspec.yaml
-          echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+          echo '  camera: ^0.11.0' >> pubspec.yaml
+          echo '  permission_handler: ^12.0.1' >> pubspec.yaml
           echo '  path_provider: ^2.1.5' >> pubspec.yaml
           echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
-          echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+          echo '  flutter_local_notifications: ^18.0.1' >> pubspec.yaml
           echo '  workmanager: ^0.5.2' >> pubspec.yaml
           echo '  video_player: ^2.11.1' >> pubspec.yaml
           echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
           echo '  image_picker: ^1.2.1' >> pubspec.yaml
           echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
-          echo '  livekit_client: 2.3.0' >> pubspec.yaml
+          echo '  livekit_client: ^2.7.0' >> pubspec.yaml
           echo '  dio: ^5.8.0+1' >> pubspec.yaml
           echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
-          echo '  sqflite: ^2.2.8+1' >> pubspec.yaml
-          echo '  device_info_plus: ^9.1.2' >> pubspec.yaml
+          echo '  sqflite: ^2.4.2' >> pubspec.yaml
+          echo '  device_info_plus: ^13.0.0' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'dev_dependencies:' >> pubspec.yaml
           echo '  flutter_test:' >> pubspec.yaml
           echo '    sdk: flutter' >> pubspec.yaml
-          echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+          echo '  flutter_lints: ^5.0.0' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'flutter:' >> pubspec.yaml
           echo '  uses-material-design: true' >> pubspec.yaml
-          echo '' >> pubspec.yaml
-          echo 'dependency_overrides:' >> pubspec.yaml
-          echo '  path: 1.9.0' >> pubspec.yaml
-          echo '  livekit_client: 2.3.0' >> pubspec.yaml
 
-      - name: Write AndroidManifest.xml (no heredoc)
+      - name: Write AndroidManifest.xml
         run: |
           mkdir -p android/app/src/main
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
@@ -116,7 +112,7 @@ jobs:
           echo '    </application>' >> android/app/src/main/AndroidManifest.xml
           echo '</manifest>' >> android/app/src/main/AndroidManifest.xml
 
-      - name: Write file_paths.xml
+      - name: Create file_paths.xml
         run: |
           mkdir -p android/app/src/main/res/xml
           echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/file_paths.xml
@@ -147,106 +143,14 @@ jobs:
         run: |
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
 
-      - name: Build APK (may fail)
-        id: build
-        continue-on-error: true
+      - name: Build APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK on success
-        if: steps.build.outcome == 'success'
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Save build logs on failure
-        if: steps.build.outcome == 'failure'
-        run: |
-          mkdir -p build_logs
-          flutter pub get --verbose 2>&1 | tee build_logs/pub_get.log
-          flutter build apk --release --verbose 2>&1 | tee build_logs/build.log
-          echo "BUILD_FAILED" > build_logs/status.txt
-
-      - name: Upload logs artifact
-        if: steps.build.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build_logs/
-
-  # 🤖 FREE AI BOT: Creates an issue with fix suggestion when build fails
-  ai-diagnostic:
-    runs-on: ubuntu-latest
-    needs: build
-    if: always() && needs.build.result == 'failure'
-    permissions:
-      issues: write
-      contents: read
-    steps:
-      - name: Download build logs
-        uses: actions/download-artifact@v4
-        with:
-          name: build-logs
-          path: build_logs/
-        continue-on-error: true
-
-      - name: Extract error summary
-        id: error_summary
-        run: |
-          ERROR_TEXT=""
-          if [ -f build_logs/pub_get.log ]; then
-            ERROR_TEXT=$(grep -E "(Error|error|FAILED|fatal|Because|depends on)" build_logs/pub_get.log | head -30 || echo "Unknown error")
-          elif [ -f build_logs/build.log ]; then
-            ERROR_TEXT=$(grep -E "(Error|error|FAILED|fatal|Because|depends on)" build_logs/build.log | head -30 || echo "Unknown error")
-          else
-            ERROR_TEXT="Build failed but no logs available"
-          fi
-          echo "error_text<<EOF" >> $GITHUB_OUTPUT
-          echo "$ERROR_TEXT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Issue with AI suggestion
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const errorLog = `${{ steps.error_summary.outputs.error_text }}`;
-            const issueBody = `
-            ## 🤖 AI Build Diagnostic Report
-            
-            The Flutter build failed. Below is the error summary extracted from the logs.
-            
-            ### 📋 Error Logs
-            \`\`\`
-            ${errorLog}
-            \`\`\`
-            
-            ### 🔧 Suggested Fix (based on known issues)
-            The error shows a version conflict between \`livekit_client\` and \`path\`.
-            
-            **Solution:** Add these lines to your \`pubspec.yaml\`:
-            \`\`\`yaml
-            dependency_overrides:
-              path: 1.9.0
-              livekit_client: 2.3.0
-            \`\`\`
-            
-            Also ensure \`livekit_client\` is pinned to \`2.3.0\` in dependencies.
-            
-            ### 📝 Next Steps
-            1. Apply the above changes to \`pubspec.yaml\`
-            2. Commit and push
-            3. Re-run this workflow
-            
-            *This issue was automatically created by the AI Diagnostic Bot.*
-            `;
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `🤖 AI: Build failure - dependency conflict detected (${new Date().toISOString().slice(0,16)})`,
-              body: issueBody,
-              labels: ['ai-diagnostic', 'build-failure']
-            });
