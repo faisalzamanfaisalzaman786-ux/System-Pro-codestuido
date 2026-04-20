@@ -37,26 +37,52 @@ jobs:
       - name: Sanitize App Name
         id: sanitize
         run: |
-          # نام کو مکمل صاف کریں تاکہ پروجیکٹ کریشن میں مسئلہ نہ ہو
           S_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${S_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Clean Flutter Project
         run: |
-          # پرانی تمام فائلیں صاف کریں
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
-          # نیا پروجیکٹ بنائیں
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
-          # چیک کریں کہ فائل بنی ہے یا نہیں
-          ls -R
 
-      - name: Add Dependencies
+      - name: Force Dependency Resolution
         run: |
-          flutter pub add camera:^0.11.0+2 permission_handler:^11.3.1 path_provider:^2.1.4 \
-          flutter_background_service:^5.1.0 flutter_local_notifications:^17.2.3 \
-          workmanager:^0.5.2 video_player:^2.9.2 ffmpeg_kit_flutter_full_gpl:^6.0.3 \
-          image_picker:^1.1.2 flutter_webrtc:^0.12.3 livekit_client:^2.5.3 dio:^5.7.0 \
-          shared_preferences:^2.3.3 sqflite:^2.3.3+1 device_info_plus:^11.1.0
+          # پہلے ہم pubspec.yaml میں براہ راست وہ ورژنز لکھیں گے جو کنفلکٹ کر رہے ہیں
+          cat <<EOF > pubspec.yaml
+          name: ${{ steps.sanitize.outputs.sanitized_name }}
+          description: "Universal App"
+          publish_to: none
+          version: 1.0.0+1
+          environment:
+            sdk: ">=3.6.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+            camera: ^0.11.0+2
+            permission_handler: ^11.3.1
+            path_provider: ^2.1.4
+            flutter_background_service: ^5.1.0
+            flutter_local_notifications: ^17.2.3
+            workmanager: ^0.5.2
+            video_player: ^2.9.2
+            ffmpeg_kit_flutter_full_gpl: ^6.0.3
+            image_picker: ^1.1.2
+            flutter_webrtc: ^0.12.3
+            livekit_client: ^2.5.3
+            dio: ^5.7.0
+            shared_preferences: ^2.3.3
+            sqflite: ^2.3.3+1
+            device_info_plus: ^11.1.0
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^5.0.0
+          dependency_overrides:
+            path: 1.9.0
+            meta: 1.15.0
+          flutter:
+            uses-material-design: true
+          EOF
 
       - name: Write main.dart
         run: |
@@ -64,13 +90,12 @@ jobs:
 
       - name: Update Android Configuration
         run: |
-          # SDK اور Namespace کی سیٹنگز
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
-      - name: Write AndroidManifest.xml (Fixed)
+      - name: Write AndroidManifest.xml
         run: |
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -99,6 +124,7 @@ jobs:
 
       - name: Build APK
         run: |
+          flutter pub get
           flutter build apk --release
 
       - name: Upload APK
@@ -110,5 +136,4 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✨ BUILD FINISHED"
-          echo "Time: $(date)"
+          echo "✅ BUILD FINISHED SUCCESSFULLY"
