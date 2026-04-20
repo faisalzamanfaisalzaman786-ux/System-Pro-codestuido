@@ -52,10 +52,11 @@ jobs:
 
       - name: Write pubspec.yaml
         run: |
+          rm -f pubspec.yaml
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "Universal App"
-          publish_to: none
+          description: "A new Flutter project."
+          publish_to: "none"
           version: 1.0.0+1
           environment:
             sdk: ">=3.6.0 <4.0.0"
@@ -123,8 +124,8 @@ jobs:
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          # Namespace کو ایک الگ طریقے سے انجیکٹ کرنا تاکہ ایرر نہ آئے
-          sed -i "s/defaultConfig {/namespace '${{ github.event.inputs.package_name }}'\n    defaultConfig {/" android/app/build.gradle
+          # Namespace fix for Gradle 8
+          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
           
       - name: Set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
@@ -157,5 +158,5 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✅ Process Finished"
+          echo "✅ Build Process Finished"
           flutter clean || true
