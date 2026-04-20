@@ -37,40 +37,41 @@ jobs:
       - name: Sanitize App Name
         id: sanitize
         run: |
-          SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
-          echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
+          # نام کو مکمل صاف کریں تاکہ پروجیکٹ کریشن میں مسئلہ نہ ہو
+          S_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
+          echo "sanitized_name=${S_NAME}" >> $GITHUB_OUTPUT
 
-      - name: Create Flutter project
+      - name: Create Clean Flutter Project
         run: |
-          rm -rf android ios
+          # پرانی تمام فائلیں صاف کریں
+          find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
+          # نیا پروجیکٹ بنائیں
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
+          # چیک کریں کہ فائل بنی ہے یا نہیں
+          ls -R
 
-      - name: Write main.dart
+      - name: Add Dependencies
         run: |
-          mkdir -p lib
-          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
-
-      - name: Add Dependencies (Safe Mode)
-        run: |
-          # دستی فائل لکھنے کے بجائے فلٹر کی کمانڈز استعمال کریں تاکہ YAML خراب نہ ہو
           flutter pub add camera:^0.11.0+2 permission_handler:^11.3.1 path_provider:^2.1.4 \
           flutter_background_service:^5.1.0 flutter_local_notifications:^17.2.3 \
           workmanager:^0.5.2 video_player:^2.9.2 ffmpeg_kit_flutter_full_gpl:^6.0.3 \
           image_picker:^1.1.2 flutter_webrtc:^0.12.3 livekit_client:^2.5.3 dio:^5.7.0 \
           shared_preferences:^2.3.3 sqflite:^2.3.3+1 device_info_plus:^11.1.0
 
-      - name: Fix Dependency Overrides
+      - name: Write main.dart
         run: |
-          # صرف مخصوص کنفلکٹس کو آخر میں پیچ کریں
-          cat <<EOF >> pubspec.yaml
-          dependency_overrides:
-            path: 1.9.0
-            meta: 1.15.0
-          EOF
+          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write AndroidManifest.xml
+      - name: Update Android Configuration
         run: |
-          mkdir -p android/app/src/main
+          # SDK اور Namespace کی سیٹنگز
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
+          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
+          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+
+      - name: Write AndroidManifest.xml (Fixed)
+        run: |
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${{ github.event.inputs.package_name }}">
@@ -79,7 +80,6 @@ jobs:
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application
                   android:label="${{ github.event.inputs.app_name }}"
                   android:icon="@mipmap/ic_launcher">
@@ -97,13 +97,6 @@ jobs:
           </manifest>
           EOF
 
-      - name: Update Android Config
-        run: |
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
-          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
-          
       - name: Build APK
         run: |
           flutter build apk --release
@@ -117,5 +110,5 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✅ BUILD COMPLETED SUCCESSFULLY"
-          flutter clean || true
+          echo "✨ BUILD FINISHED"
+          echo "Time: $(date)"
