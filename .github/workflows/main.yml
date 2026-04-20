@@ -10,13 +10,13 @@ on:
         description: 'Package Name (e.g., com.system.pro)'
         required: true
       app_icon_base64:
-        description: 'Base64 of icon image (PNG)'
+        description: 'Base64 of icon image (PNG/JPG)'
         required: false
       dart_code_base64:
         description: 'Base64 of main.dart'
         required: true
       pubspec_base64:
-        description: 'Base64 of pubspec.yaml'
+        description: 'Base64 of pubspec.yaml (optional)'
         required: false
 
 jobs:
@@ -36,13 +36,13 @@ jobs:
       - name: Sanitize App Name
         id: sanitize
         run: |
-          # Creates a valid flutter project name (lowercase, underscores only)
+          # ایونٹ ان پٹ سے ایپ کا نام لے کر اسے فلٹر کے لیے محفوظ بنانا
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Flutter project
         run: |
-          # Clean existing files to prevent conflicts
+          # پرانی فائلوں کو صاف کرنا تاکہ نیا پراجیکٹ بن سکے
           rm -rf .[^.]* *
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | rev | cut -d'.' -f2- | rev) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
@@ -57,8 +57,8 @@ jobs:
             echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
           else
             cat > pubspec.yaml << 'EOF'
-name: system_pro
-description: "Professional camera application"
+name: ${{ steps.sanitize.outputs.sanitized_name }}
+description: "SYSTEM PRO V9.0 Generated App"
 publish_to: 'none'
 version: 1.0.0+1
 environment:
@@ -84,24 +84,24 @@ EOF
       - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
-          echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon.png
+          # بیس 64 سے آئیکن امیج بنانا
+          echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon_raw
           sudo apt update && sudo apt install -y imagemagick
           
-          # Define icon sizes
+          # اینڈرائیڈ کے مختلف سائز کے آئیکنز تیار کرنا
           declare -A sizes=( ["mdpi"]="48x48" ["hdpi"]="72x72" ["xhdpi"]="96x96" ["xxhdpi"]="144x144" ["xxxhdpi"]="192x192" )
           
           for density in "${!sizes[@]}"; do
             path="android/app/src/main/res/mipmap-${density}"
             mkdir -p "$path"
-            convert app_icon.png -resize "${sizes[$density]}" "${path}/ic_launcher.png"
+            convert app_icon_raw -resize "${sizes[$density]}" "${path}/ic_launcher.png"
             cp "${path}/ic_launcher.png" "${path}/ic_launcher_round.png"
           done
 
       - name: Update package name and app label
         run: |
-          # Update Application ID in build.gradle
+          # اینڈرائیڈ کی فائلوں میں پیکیج کا نام اور ایپ کا نام تبدیل کرنا
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
-          # Update App Display Name in AndroidManifest
           sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
 
       - name: Flutter build
@@ -112,5 +112,5 @@ EOF
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-release
+          name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
