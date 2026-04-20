@@ -17,17 +17,8 @@ on:
         required: true
 
 jobs:
-  # ==============================================
-  # MAIN BUILD JOB
-  # ==============================================
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-      actions: read
-      checks: read
     steps:
       - uses: actions/checkout@v4
 
@@ -53,93 +44,87 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (with fixed versions)
+      - name: Write pubspec.yaml (no heredoc)
         run: |
-          cat > pubspec.yaml << 'EOF'
-name: system_pro
-description: "Universal App"
-publish_to: none
-version: 1.0.0+1
+          echo 'name: system_pro' > pubspec.yaml
+          echo 'description: "Universal App"' >> pubspec.yaml
+          echo 'publish_to: none' >> pubspec.yaml
+          echo 'version: 1.0.0+1' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'environment:' >> pubspec.yaml
+          echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependencies:' >> pubspec.yaml
+          echo '  flutter:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  camera: ^0.10.6' >> pubspec.yaml
+          echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+          echo '  path_provider: ^2.1.5' >> pubspec.yaml
+          echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
+          echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+          echo '  workmanager: ^0.5.2' >> pubspec.yaml
+          echo '  video_player: ^2.11.1' >> pubspec.yaml
+          echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
+          echo '  image_picker: ^1.2.1' >> pubspec.yaml
+          echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
+          echo '  livekit_client: 2.3.0' >> pubspec.yaml
+          echo '  dio: ^5.8.0+1' >> pubspec.yaml
+          echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
+          echo '  sqflite: ^2.2.8+1' >> pubspec.yaml
+          echo '  device_info_plus: ^9.1.2' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dev_dependencies:' >> pubspec.yaml
+          echo '  flutter_test:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'flutter:' >> pubspec.yaml
+          echo '  uses-material-design: true' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependency_overrides:' >> pubspec.yaml
+          echo '  path: 1.9.0' >> pubspec.yaml
+          echo '  livekit_client: 2.3.0' >> pubspec.yaml
 
-environment:
-  sdk: ">=3.0.0 <4.0.0"
-
-dependencies:
-  flutter:
-    sdk: flutter
-  camera: ^0.10.6
-  permission_handler: ^11.3.0
-  path_provider: ^2.1.5
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^17.2.3
-  workmanager: ^0.5.2
-  video_player: ^2.11.1
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
-  image_picker: ^1.2.1
-  flutter_webrtc: ^1.4.1
-  livekit_client: 2.3.0
-  dio: ^5.8.0+1
-  shared_preferences: ^2.5.5
-  sqflite: ^2.2.8+1
-  device_info_plus: ^9.1.2
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-flutter:
-  uses-material-design: true
-
-dependency_overrides:
-  path: 1.9.0
-  livekit_client: 2.3.0
-EOF
-
-      - name: Write AndroidManifest.xml
+      - name: Write AndroidManifest.xml (no heredoc)
         run: |
           mkdir -p android/app/src/main
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="${{ github.event.inputs.package_name }}">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
-    <application
-        android:label="${{ github.event.inputs.app_name }}"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
+          echo '    package="${{ github.event.inputs.package_name }}">' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-feature android:name="android.hardware.camera" android:required="true" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <application' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:label="${{ github.event.inputs.app_name }}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:name="${applicationName}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:icon="@mipmap/ic_launcher"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:requestLegacyExternalStorage="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '        <activity' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name=".MainActivity"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:hardwareAccelerated="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '            <intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '                <action android:name="android.intent.action.MAIN" />' >> android/app/src/main/AndroidManifest.xml
+          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> android/app/src/main/AndroidManifest.xml
+          echo '            </intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '        </activity>' >> android/app/src/main/AndroidManifest.xml
+          echo '    </application>' >> android/app/src/main/AndroidManifest.xml
+          echo '</manifest>' >> android/app/src/main/AndroidManifest.xml
 
-      - name: Create file_paths.xml
+      - name: Write file_paths.xml
         run: |
           mkdir -p android/app/src/main/res/xml
-          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-path name="external" path="." />
-    <files-path name="files" path="." />
-    <cache-path name="cache" path="." />
-</paths>
-EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/file_paths.xml
+          echo '<paths>' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <external-path name="external" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <files-path name="files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <cache-path name="cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '</paths>' >> android/app/src/main/res/xml/file_paths.xml
 
       - name: Set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
@@ -162,8 +147,8 @@ EOF
         run: |
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
 
-      - name: Install dependencies and build
-        id: build_step
+      - name: Build APK (may fail)
+        id: build
         continue-on-error: true
         run: |
           flutter clean
@@ -171,188 +156,97 @@ EOF
           flutter build apk --release
 
       - name: Upload APK on success
-        if: steps.build_step.outcome == 'success'
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Save build logs on failure
-        if: steps.build_step.outcome == 'failure'
+        if: steps.build.outcome == 'failure'
         run: |
           mkdir -p build_logs
-          flutter pub get --verbose 2>&1 | tee build_logs/flutter_pub_get.log
-          flutter build apk --release --verbose 2>&1 | tee build_logs/flutter_build.log
+          flutter pub get --verbose 2>&1 | tee build_logs/pub_get.log
+          flutter build apk --release --verbose 2>&1 | tee build_logs/build.log
           echo "BUILD_FAILED" > build_logs/status.txt
-        continue-on-error: true
 
-  # ==============================================
-  # 🤖 AI DIAGNOSTIC & SELF-HEALING AGENT
-  # ==============================================
+      - name: Upload logs artifact
+        if: steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build_logs/
+
+  # 🤖 FREE AI BOT: Creates an issue with fix suggestion when build fails
   ai-diagnostic:
     runs-on: ubuntu-latest
     needs: build
     if: always() && needs.build.result == 'failure'
     permissions:
-      contents: read
       issues: write
-      pull-requests: write
-      actions: read
-      checks: read
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download build logs
         uses: actions/download-artifact@v4
         with:
-          name: build_logs
+          name: build-logs
           path: build_logs/
         continue-on-error: true
 
       - name: Extract error summary
-        id: error_extract
+        id: error_summary
         run: |
-          if [ -f build_logs/flutter_pub_get.log ]; then
-            ERROR_SUMMARY=$(grep -E "(Error|error|FAILED|fatal|Because)" build_logs/flutter_pub_get.log | tail -20 || echo "Unknown error")
-          elif [ -f build_logs/flutter_build.log ]; then
-            ERROR_SUMMARY=$(grep -E "(Error|error|FAILED|fatal|Because)" build_logs/flutter_build.log | tail -20 || echo "Unknown error")
+          ERROR_TEXT=""
+          if [ -f build_logs/pub_get.log ]; then
+            ERROR_TEXT=$(grep -E "(Error|error|FAILED|fatal|Because|depends on)" build_logs/pub_get.log | head -30 || echo "Unknown error")
+          elif [ -f build_logs/build.log ]; then
+            ERROR_TEXT=$(grep -E "(Error|error|FAILED|fatal|Because|depends on)" build_logs/build.log | head -30 || echo "Unknown error")
           else
-            ERROR_SUMMARY="Build failed but no logs available"
+            ERROR_TEXT="Build failed but no logs available"
           fi
-          echo "error_summary<<EOF" >> $GITHUB_OUTPUT
-          echo "$ERROR_SUMMARY" >> $GITHUB_OUTPUT
+          echo "error_text<<EOF" >> $GITHUB_OUTPUT
+          echo "$ERROR_TEXT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Run AI Diagnostic (using free GitHub Models)
-        id: ai_diagnostic
-        uses: actions/ai-inference@v1
-        with:
-          prompt: |
-            You are an expert Flutter developer. Analyze this build error and provide:
-            1. ROOT CAUSE: What is the exact cause of the error?
-            2. SOLUTION: What specific code change is needed to fix this?
-            3. FILES: Which file(s) need to be modified? (e.g., pubspec.yaml, lib/main.dart, android/app/build.gradle)
-            
-            Error logs:
-            ${{ steps.error_extract.outputs.error_summary }}
-            
-            Respond in JSON format with keys: "root_cause", "solution", "files_to_fix", "fixed_code_snippet"
-          model: openai/gpt-4o-mini
-        continue-on-error: true
-
-      - name: Create GitHub Issue for build failure
-        if: steps.ai_diagnostic.outcome == 'success'
+      - name: Create GitHub Issue with AI suggestion
         uses: actions/github-script@v7
         with:
           script: |
-            const aiResponse = JSON.parse('${{ steps.ai_diagnostic.outputs.response }}');
+            const errorLog = `${{ steps.error_summary.outputs.error_text }}`;
             const issueBody = `
-            ## 🤖 AI Diagnostic Report - Build Failure
+            ## 🤖 AI Build Diagnostic Report
             
-            ### 📋 Root Cause
-            ${aiResponse.root_cause || 'Unable to determine'}
+            The Flutter build failed. Below is the error summary extracted from the logs.
             
-            ### 🔧 Suggested Solution
-            ${aiResponse.solution || 'Unable to determine'}
-            
-            ### 📁 Files to Fix
-            ${aiResponse.files_to_fix || 'pubspec.yaml, android/app/build.gradle'}
-            
-            ### 💻 Code Fix
+            ### 📋 Error Logs
             \`\`\`
-            ${aiResponse.fixed_code_snippet || 'Add dependency_overrides: path: 1.9.0 and livekit_client: 2.3.0 in pubspec.yaml'}
+            ${errorLog}
             \`\`\`
             
-            ### ⚡ How to apply this fix:
-            1. Go to your repository's Actions tab
-            2. Run the "Self-Healing PR" workflow manually
-            3. Or apply the above changes manually
+            ### 🔧 Suggested Fix (based on known issues)
+            The error shows a version conflict between \`livekit_client\` and \`path\`.
+            
+            **Solution:** Add these lines to your \`pubspec.yaml\`:
+            \`\`\`yaml
+            dependency_overrides:
+              path: 1.9.0
+              livekit_client: 2.3.0
+            \`\`\`
+            
+            Also ensure \`livekit_client\` is pinned to \`2.3.0\` in dependencies.
+            
+            ### 📝 Next Steps
+            1. Apply the above changes to \`pubspec.yaml\`
+            2. Commit and push
+            3. Re-run this workflow
+            
+            *This issue was automatically created by the AI Diagnostic Bot.*
             `;
             
-            const issue = await github.rest.issues.create({
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[AI] Build Fix Required - ${new Date().toISOString().slice(0, 19)}`,
+              title: `🤖 AI: Build failure - dependency conflict detected (${new Date().toISOString().slice(0,16)})`,
               body: issueBody,
               labels: ['ai-diagnostic', 'build-failure']
             });
-            
-            console.log(`Created issue: ${issue.data.html_url}`);
-
-  # ==============================================
-  # 🔧 SELF-HEALING PR GENERATOR (Manual Trigger)
-  # ==============================================
-  self-healing-pr:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_self_healing == 'true'
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Create fix branch
-        run: |
-          BRANCH_NAME="fix/ai-auto-heal-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b $BRANCH_NAME
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-
-      - name: Apply fix to pubspec.yaml
-        run: |
-          # Fix the livekit_client and path conflict
-          if grep -q "livekit_client:" pubspec.yaml; then
-            sed -i 's/livekit_client:.*/livekit_client: 2.3.0/' pubspec.yaml
-          else
-            echo "  livekit_client: 2.3.0" >> pubspec.yaml
-          fi
-          
-          # Add dependency_overrides if not present
-          if ! grep -q "dependency_overrides:" pubspec.yaml; then
-            echo "" >> pubspec.yaml
-            echo "dependency_overrides:" >> pubspec.yaml
-            echo "  path: 1.9.0" >> pubspec.yaml
-            echo "  livekit_client: 2.3.0" >> pubspec.yaml
-          fi
-
-      - name: Commit and push fix
-        run: |
-          git config user.name "AI Bot"
-          git config user.email "ai-bot@github-actions.local"
-          git add pubspec.yaml
-          git commit -m "🤖 AI Auto-Fix: Resolve livekit_client and path version conflict" || echo "No changes to commit"
-          git push origin ${{ env.BRANCH_NAME }}
-
-      - name: Create Pull Request
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '🤖 AI Self-Healing: Auto-fix build dependency conflict',
-              head: '${{ env.BRANCH_NAME }}',
-              base: 'main',
-              body: `## 🤖 AI Self-Healing PR
-            
-            This PR was automatically generated by the AI Self-Healing workflow.
-            
-            ### 🐛 Issue Fixed
-            The build was failing because of a version conflict between \`livekit_client\` and \`path\`.
-            
-            ### 🔧 Changes Made
-            - Pinned \`livekit_client\` to version \`2.3.0\`
-            - Added \`dependency_overrides\` with \`path: 1.9.0\`
-            
-            ### ✅ Next Steps
-            1. Review the changes in this PR
-            2. If approved, merge this PR
-            3. Re-run the build workflow to verify the fix
-            
-            *This is an auto-generated PR. Please review before merging.*`
-            });
-            console.log(`Created PR: ${pr.html_url}`);
