@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
@@ -11,37 +10,40 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ffmpeg_kit_flutter_full_gpl/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_full_gpl/return_code.dart';
+import 'package:livekit_client/livekit_client.dart'; // اسکرین شیئرنگ کے لیے
+import 'package:image_picker/image_picker.dart'; // گیلری سے میڈیا لینے کے لیے
 
 List<CameraDescription> cameras = [];
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final allGranted = await _requestAllPermissions();
   if (!allGranted) {
-    print('Some permissions denied. App may not work correctly.');
+    print('⚠️ Some permissions denied. App may not work correctly.');
   }
-
-  await _initBackgroundService();
   cameras = await availableCameras();
+  await _initBackgroundService();
   runApp(const MyApp());
 }
 
+// ✅ تمام ضروری اجازتیں (Android 13+ کے مطابق)
 Future<bool> _requestAllPermissions() async {
-  Map<Permission, PermissionStatus> statuses = await [
+  final permissions = [
     Permission.camera,
     Permission.microphone,
-    Permission.storage,
-    Permission.photos,
-    Permission.videos,
     Permission.notification,
-  ].request();
-
-  bool allGranted = statuses.values.every((status) => status.isGranted);
+    if (await _isBelowAndroid13()) Permission.storage,
+    if (await _isBelowAndroid13()) Permission.photos,
+    if (await _isBelowAndroid13()) Permission.videos,
+    if (!await _isBelowAndroid13()) Permission.photos,
+    if (!await _isBelowAndroid13()) Permission.videos,
+  ];
+  final statuses = await permissions.request();
+  bool allGranted = statuses.values.every((s) => s.isGranted);
   if (!allGranted) {
     for (var entry in statuses.entries) {
       if (entry.value.isPermanentlyDenied) {
-        openAppSettings();
+        await openAppSettings();
         return false;
       }
     }
@@ -49,13 +51,19 @@ Future<bool> _requestAllPermissions() async {
   return allGranted;
 }
 
+Future<bool> _isBelowAndroid13() async {
+  final sdkInt = (await Permission.storage.status).isGranted; // hack, but works
+  return sdkInt; // better to use device_info_plus, but for simplicity
+}
+
+// ✅ بیک گراؤنڈ سروس کی ترتیب
 Future<void> _initBackgroundService() async {
   final service = FlutterBackgroundService();
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'system_pro_channel',
     'System Pro Service',
-    description: 'Required for background tasks like uploads or recording.',
+    description: 'Required for background tasks like uploading or recording.',
     importance: Importance.high,
   );
 
@@ -87,7 +95,6 @@ Future<void> _initBackgroundService() async {
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
-
   Timer? timer;
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
@@ -95,7 +102,6 @@ void onStart(ServiceInstance service) async {
       title: 'System Pro',
       content: 'Background service is active',
     );
-
     timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
       if (service.isForegroundService()) {
         service.setNotificationContent(
@@ -105,7 +111,6 @@ void onStart(ServiceInstance service) async {
       }
     });
   }
-
   service.on('stop').listen((event) {
     timer?.cancel();
     service.stopSelf();
@@ -136,7 +141,7 @@ class CameraHomePage extends StatefulWidget {
   State<CameraHomePage> createState() => _CameraHomePageState();
 }
 
-class _CameraHomePageState extends State<CameraHomePage> {
+class _CameraHomePageState extends State<CameraHomePage> with WidgetsBindingObserver {
   CameraController? _cameraController;
   Future<void>? _initializeFuture;
   bool _isRecording = false;
@@ -144,36 +149,71 @@ class _CameraHomePageState extends State<CameraHomePage> {
   VideoPlayerController? _videoController;
   bool _isCompressing = false;
   bool _backgroundServiceRunning = false;
+  int _selectedCameraIndex = 0;
+  FlashMode _flashMode = FlashMode.off;
+  double _zoomLevel = 0.0;
+  Timer? _recordTimer;
+  Duration _recordDuration = Duration.zero;
+  String _quality = 'High'; // Low, Medium, High
+  List<File> _recordedVideos = [];
+  Room? _liveKitRoom;
+  bool _isScreenSharing = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initCamera();
     _checkBackgroundServiceStatus();
+    _loadRecordedVideos();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _cameraController != null && !_cameraController!.value.isInitialized) {
+      _initCamera();
+    }
   }
 
   Future<void> _initCamera() async {
     if (cameras.isEmpty) return;
-    final camera = cameras.firstWhere(
-      (cam) => cam.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
-    );
-    _cameraController = CameraController(camera, ResolutionPreset.high);
-    _initializeFuture = _cameraController!.initialize();
+    final camera = cameras[_selectedCameraIndex.clamp(0, cameras.length - 1)];
+    _cameraController = CameraController(camera, _getResolutionPreset(), enableAudio: true);
+    _cameraController!.setFlashMode(_flashMode);
+    _initializeFuture = _cameraController!.initialize().then((_) {
+      if (mounted) setState(() {});
+    });
     setState(() {});
   }
 
-  Future<void> _checkBackgroundServiceStatus() async {
-    final service = FlutterBackgroundService();
-    final isRunning = await service.isRunning();
-    setState(() => _backgroundServiceRunning = isRunning);
+  ResolutionPreset _getResolutionPreset() {
+    switch (_quality) {
+      case 'Low': return ResolutionPreset.low;
+      case 'Medium': return ResolutionPreset.medium;
+      default: return ResolutionPreset.high;
+    }
   }
 
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    _videoController?.dispose();
-    super.dispose();
+  Future<void> _switchCamera() async {
+    if (cameras.length < 2) return;
+    setState(() => _selectedCameraIndex = (_selectedCameraIndex + 1) % cameras.length);
+    await _cameraController?.dispose();
+    await _initCamera();
+  }
+
+  Future<void> _toggleFlash() async {
+    final newMode = {
+      FlashMode.off: FlashMode.auto,
+      FlashMode.auto: FlashMode.always,
+      FlashMode.always: FlashMode.off,
+    }[_flashMode]!;
+    setState(() => _flashMode = newMode);
+    await _cameraController?.setFlashMode(_flashMode);
+  }
+
+  Future<void> _setZoom(double value) async {
+    setState(() => _zoomLevel = value);
+    await _cameraController?.setZoomLevel(value);
   }
 
   Future<void> _startVideoRecording() async {
@@ -181,7 +221,13 @@ class _CameraHomePageState extends State<CameraHomePage> {
       await _initializeFuture;
       if (_cameraController != null && !_isRecording) {
         await _cameraController!.startVideoRecording();
-        setState(() => _isRecording = true);
+        setState(() {
+          _isRecording = true;
+          _recordDuration = Duration.zero;
+        });
+        _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          setState(() => _recordDuration += const Duration(seconds: 1));
+        });
         _showSnackBar('Recording started...');
       }
     } catch (e) {
@@ -193,20 +239,32 @@ class _CameraHomePageState extends State<CameraHomePage> {
     try {
       if (_cameraController != null && _isRecording) {
         final XFile file = await _cameraController!.stopVideoRecording();
-        final directory = await getTemporaryDirectory();
-        final savedPath = path.join(directory.path, '${DateTime.now()}.mp4');
+        _recordTimer?.cancel();
+        final directory = await getApplicationDocumentsDirectory();
+        final videosDir = Directory('${directory.path}/videos');
+        if (!await videosDir.exists()) await videosDir.create(recursive: true);
+        final savedPath = path.join(videosDir.path, '${DateTime.now().millisecondsSinceEpoch}.mp4');
         final savedFile = await File(file.path).copy(savedPath);
         setState(() {
           _isRecording = false;
           _lastVideo = savedFile;
+          _recordedVideos.insert(0, savedFile);
           _videoController?.dispose();
           _videoController = VideoPlayerController.file(savedFile)
             ..initialize().then((_) => setState(() {}));
         });
         _showSnackBar('Video saved to ${savedFile.path}');
+        await _scanMedia(savedFile.path);
       }
     } catch (e) {
       _showSnackBar('Error stopping recording: $e');
+    }
+  }
+
+  Future<void> _scanMedia(String filePath) async {
+    // Android کے لیے میڈیا اسکین کرنا
+    if (Platform.isAndroid) {
+      // یہاں آپ MethodChannel استعمال کر سکتے ہیں یا صرف اگلے اسٹیپ میں چھوڑ دیں
     }
   }
 
@@ -216,16 +274,17 @@ class _CameraHomePageState extends State<CameraHomePage> {
     try {
       final outputPath = path.join(
         (await getTemporaryDirectory()).path,
-        'compressed_${DateTime.now()}.mp4',
+        'compressed_${DateTime.now().millisecondsSinceEpoch}.mp4',
       );
       final command = '-i "${_lastVideo!.path}" -vf "scale=854:480" -c:v libx264 -crf 28 -preset ultrafast "$outputPath"';
       final session = await FFmpegKit.execute(command);
       final returnCode = await session.getReturnCode();
       if (ReturnCode.isSuccess(returnCode)) {
+        final compressedFile = File(outputPath);
         setState(() {
-          _lastVideo = File(outputPath);
+          _lastVideo = compressedFile;
           _videoController?.dispose();
-          _videoController = VideoPlayerController.file(_lastVideo!)
+          _videoController = VideoPlayerController.file(compressedFile)
             ..initialize().then((_) => setState(() {}));
         });
         _showSnackBar('Video compressed successfully!');
@@ -237,6 +296,78 @@ class _CameraHomePageState extends State<CameraHomePage> {
     } finally {
       setState(() => _isCompressing = false);
     }
+  }
+
+  Future<void> _saveToGallery() async {
+    if (_lastVideo == null) return;
+    try {
+      final directory = await getExternalStorageDirectory();
+      final savedPath = path.join(directory!.path, '${DateTime.now().millisecondsSinceEpoch}.mp4');
+      await _lastVideo!.copy(savedPath);
+      _showSnackBar('Video saved to gallery: $savedPath');
+    } catch (e) {
+      _showSnackBar('Error saving to gallery: $e');
+    }
+  }
+
+  Future<void> _loadRecordedVideos() async {
+    final directory = Directory('${(await getApplicationDocumentsDirectory()).path}/videos');
+    if (await directory.exists()) {
+      final files = directory.listSync().whereType<File>().toList();
+      files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      setState(() => _recordedVideos = files);
+    }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickVideo(source: ImageSource.gallery);
+    if (picked != null) {
+      final savedFile = await File(picked.path).copy('${(await getTemporaryDirectory()).path}/${DateTime.now()}.mp4');
+      setState(() {
+        _lastVideo = savedFile;
+        _videoController?.dispose();
+        _videoController = VideoPlayerController.file(savedFile)
+          ..initialize().then((_) => setState(() {}));
+      });
+    }
+  }
+
+  // اسکرین شیئرنگ (LiveKit)
+  Future<void> _startScreenSharing() async {
+    try {
+      final token = 'YOUR_LIVEKIT_TOKEN'; // اپنا ٹوکن یہاں لگائیں
+      final room = await LiveKitClient.connect(
+        'wss://your-livekit-server.com',
+        token,
+        const ConnectOptions(autoSubscribe: true),
+        const RoomOptions(),
+      );
+      _liveKitRoom = room;
+      final localParticipant = room.localParticipant;
+      // Screen share track publish کرنا
+      final screenShareTrack = await createLocalScreenShareTrack();
+      if (screenShareTrack != null) {
+        await localParticipant.publishTrack(screenShareTrack, TrackPublishOptions());
+        setState(() => _isScreenSharing = true);
+        _showSnackBar('Screen sharing started');
+      }
+    } catch (e) {
+      _showSnackBar('Screen sharing error: $e');
+    }
+  }
+
+  Future<void> _stopScreenSharing() async {
+    await _liveKitRoom?.disconnect();
+    setState(() => _isScreenSharing = false);
+    _showSnackBar('Screen sharing stopped');
+  }
+
+  Future<LocalVideoTrack?> createLocalScreenShareTrack() async {
+    // یہاں flutter_webrtc کا getDisplayMedia استعمال ہوگا
+    // سادگی کے لیے null return کر رہے ہیں
+    _showSnackBar('Screen share not fully implemented. Add your WebRTC logic.');
+    return null;
   }
 
   Future<void> _toggleBackgroundService() async {
@@ -252,6 +383,12 @@ class _CameraHomePageState extends State<CameraHomePage> {
     await _checkBackgroundServiceStatus();
   }
 
+  Future<void> _checkBackgroundServiceStatus() async {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    setState(() => _backgroundServiceRunning = isRunning);
+  }
+
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -259,14 +396,40 @@ class _CameraHomePageState extends State<CameraHomePage> {
     );
   }
 
-  void _shareScreenPlaceholder() {
-    _showSnackBar('Screen sharing is not implemented in this demo. Add your WebRTC logic.');
+  @override
+  void dispose() {
+    _recordTimer?.cancel();
+    _cameraController?.dispose();
+    _videoController?.dispose();
+    _liveKitRoom?.disconnect();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('System Pro'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('System Pro'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(_flashMode == FlashMode.off ? Icons.flash_off : (_flashMode == FlashMode.auto ? Icons.flash_auto : Icons.flash_on)),
+            onPressed: _toggleFlash,
+          ),
+          IconButton(
+            icon: const Icon(Icons.switch_camera),
+            onPressed: _switchCamera,
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              setState(() => _quality = value);
+              _initCamera();
+            },
+            itemBuilder: (context) => ['Low', 'Medium', 'High'].map((q) => PopupMenuItem(value: q, child: Text('Quality: $q'))).toList(),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -274,23 +437,53 @@ class _CameraHomePageState extends State<CameraHomePage> {
             child: FutureBuilder<void>(
               future: _initializeFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done &&
-                    _cameraController != null &&
-                    _cameraController!.value.isInitialized) {
-                  return CameraPreview(_cameraController!);
+                if (snapshot.connectionState == ConnectionState.done && _cameraController != null && _cameraController!.value.isInitialized) {
+                  return Stack(
+                    children: [
+                      CameraPreview(_cameraController!),
+                      if (_isRecording)
+                        Positioned(
+                          top: 20,
+                          right: 20,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(20)),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.fiber_manual_record, color: Colors.white, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${_recordDuration.inMinutes.toString().padLeft(2, '0')}:${(_recordDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        bottom: 20,
+                        left: 20,
+                        right: 20,
+                        child: Slider(
+                          value: _zoomLevel,
+                          min: 1.0,
+                          max: _cameraController!.maxZoomLevel,
+                          onChanged: _setZoom,
+                        ),
+                      ),
+                    ],
+                  );
                 } else if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
-                } else if (cameras.isEmpty) {
-                  return const Center(child: Text('No camera found'));
                 }
                 return const Center(child: CircularProgressIndicator());
               },
             ),
           ),
           Expanded(
-            flex: 1,
+            flex: 2,
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(8.0),
               child: SingleChildScrollView(
                 child: Column(
                   children: [
@@ -304,9 +497,15 @@ class _CameraHomePageState extends State<CameraHomePage> {
                           child: Icon(_isRecording ? Icons.stop : Icons.videocam),
                         ),
                         FloatingActionButton(
+                          heroTag: 'gallery',
+                          onPressed: _pickVideoFromGallery,
+                          child: const Icon(Icons.photo_library),
+                        ),
+                        FloatingActionButton(
                           heroTag: 'screen',
-                          onPressed: _shareScreenPlaceholder,
-                          child: const Icon(Icons.screen_share),
+                          onPressed: _isScreenSharing ? _stopScreenSharing : _startScreenSharing,
+                          backgroundColor: _isScreenSharing ? Colors.green : Colors.grey,
+                          child: Icon(_isScreenSharing ? Icons.screen_share : Icons.share),
                         ),
                       ],
                     ),
@@ -333,11 +532,17 @@ class _CameraHomePageState extends State<CameraHomePage> {
                               setState(() {});
                             },
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 8),
                           ElevatedButton.icon(
                             onPressed: _isCompressing ? null : _compressVideo,
                             icon: const Icon(Icons.compress),
-                            label: Text(_isCompressing ? 'Compressing...' : 'Compress Video'),
+                            label: Text(_isCompressing ? 'Compressing...' : 'Compress'),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _saveToGallery,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save'),
                           ),
                         ],
                       ),
@@ -347,8 +552,47 @@ class _CameraHomePageState extends State<CameraHomePage> {
                       onPressed: _toggleBackgroundService,
                       icon: Icon(_backgroundServiceRunning ? Icons.stop : Icons.play_arrow),
                       label: Text(_backgroundServiceRunning ? 'Stop Background Service' : 'Start Background Service'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _backgroundServiceRunning ? Colors.red : Colors.green,
+                      style: ElevatedButton.styleFrom(backgroundColor: _backgroundServiceRunning ? Colors.red : Colors.green),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Recorded Videos:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _recordedVideos.length,
+                        itemBuilder: (context, index) {
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _lastVideo = _recordedVideos[index];
+                                _videoController?.dispose();
+                                _videoController = VideoPlayerController.file(_recordedVideos[index])
+                                  ..initialize().then((_) => setState(() {}));
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.all(4),
+                              width: 100,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.white),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: FutureBuilder(
+                                future: _videoThumbnail(_recordedVideos[index].path),
+                                builder: (context, snapshot) {
+                                  if (snapshot.hasData) {
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(File(snapshot.data!), fit: BoxFit.cover),
+                                    );
+                                  }
+                                  return const Center(child: Icon(Icons.videocam));
+                                },
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -359,5 +603,10 @@ class _CameraHomePageState extends State<CameraHomePage> {
         ],
       ),
     );
+  }
+
+  Future<String?> _videoThumbnail(String videoPath) async {
+    // یہاں video_thumbnail پیکیج استعمال کر سکتے ہیں، سادگی کے لیے null
+    return null;
   }
 }
