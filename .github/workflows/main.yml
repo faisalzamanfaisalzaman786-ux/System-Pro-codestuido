@@ -46,7 +46,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (no heredoc – safe)
+      - name: Write pubspec.yaml (echo only)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal Flutter App"' >> pubspec.yaml
@@ -83,80 +83,77 @@ jobs:
           echo 'flutter:' >> pubspec.yaml
           echo '  uses-material-design: true' >> pubspec.yaml
 
-      - name: Write AndroidManifest.xml (safe heredoc)
+      - name: Write AndroidManifest.xml (echo only, no heredoc)
         run: |
           mkdir -p android/app/src/main
-          cat > android/app/src/main/AndroidManifest.xml << "EOF"
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="${{ github.event.inputs.package_name }}">
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
-
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
-
-    <application
-        android:label="${{ github.event.inputs.app_name }}"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true"
-        android:usesCleartextTraffic="true"
-        android:largeHeap="true">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <service
-            android:name="com.workmanager.BackgroundService"
-            android:exported="false"
-            android:foregroundServiceType="camera|microphone|dataSync" />
-        <service
-            android:name="flutter_local_notifications.ForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-    </application>
-</manifest>
-EOF
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
+          echo '    xmlns:tools="http://schemas.android.com/tools"' >> android/app/src/main/AndroidManifest.xml
+          echo '    package="${{ github.event.inputs.package_name }}">' >> android/app/src/main/AndroidManifest.xml
+          echo '' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />' >> android/app/src/main/AndroidManifest.xml
+          echo '' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-feature android:name="android.hardware.camera" android:required="true" />' >> android/app/src/main/AndroidManifest.xml
+          echo '' >> android/app/src/main/AndroidManifest.xml
+          echo '    <application' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:label="${{ github.event.inputs.app_name }}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:name="${applicationName}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:icon="@mipmap/ic_launcher"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:requestLegacyExternalStorage="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:usesCleartextTraffic="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:largeHeap="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '' >> android/app/src/main/AndroidManifest.xml
+          echo '        <activity' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name=".MainActivity"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:hardwareAccelerated="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:windowSoftInputMode="adjustResize">' >> android/app/src/main/AndroidManifest.xml
+          echo '            <intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '                <action android:name="android.intent.action.MAIN" />' >> android/app/src/main/AndroidManifest.xml
+          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> android/app/src/main/AndroidManifest.xml
+          echo '            </intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '        </activity>' >> android/app/src/main/AndroidManifest.xml
+          echo '' >> android/app/src/main/AndroidManifest.xml
+          echo '        <service' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name="com.workmanager.BackgroundService"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="false"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:foregroundServiceType="camera|microphone|dataSync" />' >> android/app/src/main/AndroidManifest.xml
+          echo '        <service' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name="flutter_local_notifications.ForegroundService"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="false"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:foregroundServiceType="dataSync" />' >> android/app/src/main/AndroidManifest.xml
+          echo '        <provider' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name="androidx.core.content.FileProvider"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:authorities="${applicationId}.fileprovider"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="false"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:grantUriPermissions="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '            <meta-data' >> android/app/src/main/AndroidManifest.xml
+          echo '                android:name="android.support.FILE_PROVIDER_PATHS"' >> android/app/src/main/AndroidManifest.xml
+          echo '                android:resource="@xml/file_paths" />' >> android/app/src/main/AndroidManifest.xml
+          echo '        </provider>' >> android/app/src/main/AndroidManifest.xml
+          echo '    </application>' >> android/app/src/main/AndroidManifest.xml
+          echo '</manifest>' >> android/app/src/main/AndroidManifest.xml
 
       - name: Create file_paths.xml
         run: |
           mkdir -p android/app/src/main/res/xml
-          cat > android/app/src/main/res/xml/file_paths.xml << "EOF"
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-path name="external" path="." />
-    <files-path name="files" path="." />
-    <cache-path name="cache" path="." />
-</paths>
-EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/file_paths.xml
+          echo '<paths>' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <external-path name="external" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <files-path name="files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <cache-path name="cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '</paths>' >> android/app/src/main/res/xml/file_paths.xml
 
       - name: Decode and set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
