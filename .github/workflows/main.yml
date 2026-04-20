@@ -44,80 +44,76 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml with exact versions and override
+      - name: Write pubspec.yaml (no heredoc)
         run: |
-          cat > pubspec.yaml << 'EOF'
-name: system_pro
-description: "Universal App"
-publish_to: none
-version: 1.0.0+1
+          echo 'name: system_pro' > pubspec.yaml
+          echo 'description: "Universal App"' >> pubspec.yaml
+          echo 'publish_to: none' >> pubspec.yaml
+          echo 'version: 1.0.0+1' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'environment:' >> pubspec.yaml
+          echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependencies:' >> pubspec.yaml
+          echo '  flutter:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  camera: ^0.10.6' >> pubspec.yaml
+          echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+          echo '  path_provider: ^2.1.5' >> pubspec.yaml
+          echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
+          echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+          echo '  workmanager: ^0.5.2' >> pubspec.yaml
+          echo '  video_player: ^2.11.1' >> pubspec.yaml
+          echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
+          echo '  image_picker: ^1.2.1' >> pubspec.yaml
+          echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
+          echo '  livekit_client: 2.3.0' >> pubspec.yaml
+          echo '  dio: ^5.8.0+1' >> pubspec.yaml
+          echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
+          echo '  sqflite: ^2.2.8+1' >> pubspec.yaml
+          echo '  device_info_plus: ^9.1.2' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dev_dependencies:' >> pubspec.yaml
+          echo '  flutter_test:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'flutter:' >> pubspec.yaml
+          echo '  uses-material-design: true' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependency_overrides:' >> pubspec.yaml
+          echo '  livekit_client: 2.3.0' >> pubspec.yaml
 
-environment:
-  sdk: ">=3.0.0 <4.0.0"
-
-dependencies:
-  flutter:
-    sdk: flutter
-  camera: ^0.10.6
-  permission_handler: ^11.3.0
-  path_provider: ^2.1.5
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^17.2.3
-  workmanager: ^0.5.2
-  video_player: ^2.11.1
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
-  image_picker: ^1.2.1
-  flutter_webrtc: ^1.4.1
-  livekit_client: 2.3.0
-  dio: ^5.8.0+1
-  shared_preferences: ^2.5.5
-  sqflite: ^2.2.8+1
-  device_info_plus: ^9.1.2
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-flutter:
-  uses-material-design: true
-
-dependency_overrides:
-  livekit_client: 2.3.0
-EOF
-
-      - name: Write AndroidManifest.xml
+      - name: Write AndroidManifest.xml (no heredoc)
         run: |
           mkdir -p android/app/src/main
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="${{ github.event.inputs.package_name }}">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
-    <application
-        android:label="${{ github.event.inputs.app_name }}"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
+          echo '    package="${{ github.event.inputs.package_name }}">' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.CAMERA" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.RECORD_AUDIO" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <uses-feature android:name="android.hardware.camera" android:required="true" />' >> android/app/src/main/AndroidManifest.xml
+          echo '    <application' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:label="${{ github.event.inputs.app_name }}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:name="${applicationName}"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:icon="@mipmap/ic_launcher"' >> android/app/src/main/AndroidManifest.xml
+          echo '        android:requestLegacyExternalStorage="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '        <activity' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:name=".MainActivity"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:exported="true"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"' >> android/app/src/main/AndroidManifest.xml
+          echo '            android:hardwareAccelerated="true">' >> android/app/src/main/AndroidManifest.xml
+          echo '            <intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '                <action android:name="android.intent.action.MAIN" />' >> android/app/src/main/AndroidManifest.xml
+          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> android/app/src/main/AndroidManifest.xml
+          echo '            </intent-filter>' >> android/app/src/main/AndroidManifest.xml
+          echo '        </activity>' >> android/app/src/main/AndroidManifest.xml
+          echo '    </application>' >> android/app/src/main/AndroidManifest.xml
+          echo '</manifest>' >> android/app/src/main/AndroidManifest.xml
 
       - name: Set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
