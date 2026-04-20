@@ -36,7 +36,6 @@ jobs:
         run: |
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
-          echo "Sanitized project name: ${SANITIZED_NAME}"
 
       - name: Create Flutter project
         run: |
@@ -64,22 +63,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  flutter_riverpod: ^3.3.1
-  go_router: ^17.1.0
   camera: ^0.12.0+1
-  image_picker: ^1.2.1
-  video_player: ^2.11.1
-  file_picker: ^10.3.10
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
-  dio: ^5.8.0+1
-  flutter_webrtc: ^1.4.1
-  livekit_client: ^2.7.0
   permission_handler: ^12.0.1
-  device_info_plus: ^13.0.0
   path_provider: ^2.1.5
-  shared_preferences: ^2.5.5
-  sqflite: ^2.4.2
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^17.2.3
   workmanager: ^0.5.2
