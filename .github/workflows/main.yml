@@ -46,141 +46,117 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Use Universal pubspec.yaml (path removed)
+      - name: Write pubspec.yaml (line by line)
         run: |
-          cat > pubspec.yaml << 'EOF'
-name: system_pro
-description: "Universal Flutter App"
-publish_to: none
-version: 1.0.0+1
+          echo 'name: system_pro' > pubspec.yaml
+          echo 'description: "Universal Flutter App"' >> pubspec.yaml
+          echo 'publish_to: none' >> pubspec.yaml
+          echo 'version: 1.0.0+1' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'environment:' >> pubspec.yaml
+          echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependencies:' >> pubspec.yaml
+          echo '  flutter:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  camera: ^0.10.6' >> pubspec.yaml
+          echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+          echo '  path_provider: ^2.1.5' >> pubspec.yaml
+          echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
+          echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+          echo '  workmanager: ^0.5.2' >> pubspec.yaml
+          echo '  video_player: ^2.11.1' >> pubspec.yaml
+          echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
+          echo '  image_picker: ^1.2.1' >> pubspec.yaml
+          echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
+          echo '  livekit_client: ^2.7.0' >> pubspec.yaml
+          echo '  dio: ^5.8.0+1' >> pubspec.yaml
+          echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
+          echo '  sqflite: ^2.4.2' >> pubspec.yaml
+          echo '  device_info_plus: ^13.0.0' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dev_dependencies:' >> pubspec.yaml
+          echo '  flutter_test:' >> pubspec.yaml
+          echo '    sdk: flutter' >> pubspec.yaml
+          echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'flutter:' >> pubspec.yaml
+          echo '  uses-material-design: true' >> pubspec.yaml
 
-environment:
-  sdk: ">=3.0.0 <4.0.0"
-
-dependencies:
-  flutter:
-    sdk: flutter
-  camera: ^0.10.6
-  permission_handler: ^11.3.0
-  path_provider: ^2.1.5
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^17.2.3
-  workmanager: ^0.5.2
-  video_player: ^2.11.1
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
-  image_picker: ^1.2.1
-  flutter_webrtc: ^1.4.1
-  livekit_client: ^2.7.0
-  dio: ^5.8.0+1
-  shared_preferences: ^2.5.5
-  sqflite: ^2.4.2
-  device_info_plus: ^13.0.0
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-flutter:
-  uses-material-design: true
-EOF
-
-      - name: Use Universal AndroidManifest.xml (All permissions included)
+      - name: Write AndroidManifest.xml (line by line)
         run: |
-          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="${{ github.event.inputs.package_name }}">
+          mkdir -p android/app/src/main
+          cat > android/app/src/main/AndroidManifest.xml << "EOF"
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools"
+              package="${{ github.event.inputs.package_name }}">
+          
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+              <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
+          
+              <uses-feature android:name="android.hardware.camera" android:required="true" />
+          
+              <application
+                  android:label="${{ github.event.inputs.app_name }}"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:requestLegacyExternalStorage="true"
+                  android:usesCleartextTraffic="true"
+                  android:largeHeap="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+          
+                  <service
+                      android:name="com.workmanager.BackgroundService"
+                      android:exported="false"
+                      android:foregroundServiceType="camera|microphone|dataSync" />
+                  <service
+                      android:name="flutter_local_notifications.ForegroundService"
+                      android:exported="false"
+                      android:foregroundServiceType="dataSync" />
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths" />
+                  </provider>
+              </application>
+          </manifest>
+          EOF
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-
-    <uses-feature android:name="android.hardware.camera" android:required="true" />
-    <uses-feature android:name="android.hardware.microphone" android:required="true" />
-
-    <application
-        android:label="${{ github.event.inputs.app_name }}"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true"
-        android:preserveLegacyExternalStorage="true"
-        android:allowBackup="true"
-        android:supportsRtl="true"
-        android:theme="@style/LaunchTheme"
-        android:usesCleartextTraffic="true"
-        android:largeHeap="true"
-        android:resizeableActivity="true">
-
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <service
-            android:name="com.workmanager.BackgroundService"
-            android:exported="false"
-            android:foregroundServiceType="camera|microphone|dataSync|mediaProcessing" />
-        <service
-            android:name="flutter_local_notifications.ForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <provider
-            android:name="androidx.work.impl.WorkManagerInitializer"
-            android:authorities="${applicationId}.workmanager-init"
-            android:exported="false"
-            tools:node="remove" />
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-    </application>
-</manifest>
-EOF
-
-      - name: Create file_paths.xml for FileProvider
+      - name: Create file_paths.xml
         run: |
           mkdir -p android/app/src/main/res/xml
-          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-path name="external" path="." />
-    <external-files-path name="external_files" path="." />
-    <cache-path name="cache" path="." />
-    <files-path name="files" path="." />
-</paths>
-EOF
+          cat > android/app/src/main/res/xml/file_paths.xml << "EOF"
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <external-path name="external" path="." />
+              <files-path name="files" path="." />
+              <cache-path name="cache" path="." />
+          </paths>
+          EOF
 
       - name: Decode and set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
@@ -198,6 +174,10 @@ EOF
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
           done
+
+      - name: Update package name in build.gradle
+        run: |
+          sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
 
       - name: Clean and get dependencies
         run: |
