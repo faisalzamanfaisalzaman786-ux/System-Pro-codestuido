@@ -66,7 +66,7 @@ jobs:
             echo '  flutter:' >> pubspec.yaml
             echo '    sdk: flutter' >> pubspec.yaml
             echo '  camera: ^0.12.0+1' >> pubspec.yaml
-            echo '  permission_handler: ^12.0.1' >> pubspec.yaml
+            echo '  permission_handler: ^11.3.0' >> pubspec.yaml
             echo '  path_provider: ^2.1.5' >> pubspec.yaml
             echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
             echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
@@ -107,10 +107,13 @@ jobs:
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
           sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Flutter build
+      - name: Clean and get dependencies
         run: |
+          flutter clean
           flutter pub get
-          flutter build apk --release
+
+      - name: Build APK
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
