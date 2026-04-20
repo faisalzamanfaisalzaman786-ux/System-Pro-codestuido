@@ -22,7 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # اینڈرائیڈ 12+ اور گریڈل 8 کے لیے جاوا 17 لازمی ہے
       - name: Setup Java 17
         uses: actions/setup-java@v3
         with:
@@ -127,12 +126,9 @@ jobs:
 
       - name: Update Android SDK and Gradle Configuration
         run: |
-          # SDK ورژن کو 34 پر سیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
-          # Java 17 مطابقت
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          # Namespace شامل کرنا (نئے گریڈل کے لیے ضروری ہے)
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
           
       - name: Set app icon (if provided)
@@ -163,3 +159,17 @@ jobs:
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # ========== Cleaning Stamp Step ==========
+      - name: Cleaning Stamp & Workspace Cleanup
+        if: always()
+        run: |
+          echo "===================================================="
+          echo "✅ BUILD FINISHED AT: $(date)"
+          echo "🚀 APP NAME: ${{ github.event.inputs.app_name }}"
+          echo "📦 PACKAGE: ${{ github.event.inputs.package_name }}"
+          echo "🧹 Cleaning up temporary build files..."
+          flutter clean
+          rm -rf build/
+          echo "✨ Workspace is clean. Stamp added successfully."
+          echo "===================================================="
