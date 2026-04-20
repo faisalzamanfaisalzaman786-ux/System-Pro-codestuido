@@ -22,10 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: Setup Flutter (latest stable with Dart 3.6+)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.27.0'
           channel: 'stable'
 
       - name: Sanitize App Name
@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (with exact livekit_client)
+      - name: Write pubspec.yaml (compatible with new SDK)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -52,37 +52,34 @@ jobs:
           echo 'version: 1.0.0+1' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'environment:' >> pubspec.yaml
-          echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+          echo '  sdk: ">=3.6.0 <4.0.0"' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'dependencies:' >> pubspec.yaml
           echo '  flutter:' >> pubspec.yaml
           echo '    sdk: flutter' >> pubspec.yaml
-          echo '  camera: ^0.10.6' >> pubspec.yaml
-          echo '  permission_handler: ^11.3.0' >> pubspec.yaml
+          echo '  camera: ^0.11.0' >> pubspec.yaml
+          echo '  permission_handler: ^12.0.1' >> pubspec.yaml
           echo '  path_provider: ^2.1.5' >> pubspec.yaml
           echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
-          echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+          echo '  flutter_local_notifications: ^18.0.1' >> pubspec.yaml
           echo '  workmanager: ^0.5.2' >> pubspec.yaml
           echo '  video_player: ^2.11.1' >> pubspec.yaml
           echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
           echo '  image_picker: ^1.2.1' >> pubspec.yaml
           echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
-          echo '  livekit_client: 2.3.0' >> pubspec.yaml
+          echo '  livekit_client: ^2.7.0' >> pubspec.yaml
           echo '  dio: ^5.8.0+1' >> pubspec.yaml
           echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
-          echo '  sqflite: ^2.2.8+1' >> pubspec.yaml
-          echo '  device_info_plus: ^9.1.2' >> pubspec.yaml
+          echo '  sqflite: ^2.4.2' >> pubspec.yaml
+          echo '  device_info_plus: ^13.0.0' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'dev_dependencies:' >> pubspec.yaml
           echo '  flutter_test:' >> pubspec.yaml
           echo '    sdk: flutter' >> pubspec.yaml
-          echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+          echo '  flutter_lints: ^5.0.0' >> pubspec.yaml
           echo '' >> pubspec.yaml
           echo 'flutter:' >> pubspec.yaml
           echo '  uses-material-design: true' >> pubspec.yaml
-          echo '' >> pubspec.yaml
-          echo 'dependency_overrides:' >> pubspec.yaml
-          echo '  livekit_client: 2.3.0' >> pubspec.yaml
 
       - name: Write AndroidManifest.xml
         run: |
