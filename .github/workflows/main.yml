@@ -51,18 +51,14 @@ jobs:
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
       - name: Write pubspec.yaml
-        env:
-          APP_NAME_KEY: ${{ steps.sanitize.outputs.sanitized_name }}
         run: |
           cat <<EOF > pubspec.yaml
-          name: $APP_NAME_KEY
+          name: ${{ steps.sanitize.outputs.sanitized_name }}
           description: "Universal App"
           publish_to: none
           version: 1.0.0+1
-
           environment:
             sdk: ">=3.6.0 <4.0.0"
-
           dependencies:
             flutter:
               sdk: flutter
@@ -81,16 +77,13 @@ jobs:
             shared_preferences: ^2.3.3
             sqflite: ^2.3.3+1
             device_info_plus: ^11.1.0
-
           dev_dependencies:
             flutter_test:
               sdk: flutter
             flutter_lints: ^5.0.0
-
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-
           flutter:
             uses-material-design: true
           EOF
@@ -125,12 +118,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: Update Android SDK and Gradle Configuration
+      - name: Update Android Config
         run: |
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+          # Namespace کو ایک الگ طریقے سے انجیکٹ کرنا تاکہ ایرر نہ آئے
+          sed -i "s/defaultConfig {/namespace '${{ github.event.inputs.package_name }}'\n    defaultConfig {/" android/app/build.gradle
           
       - name: Set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
@@ -151,7 +145,6 @@ jobs:
 
       - name: Build APK
         run: |
-          flutter clean
           flutter pub get
           flutter build apk --release
 
@@ -164,5 +157,5 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✅ BUILD COMPLETED"
-          flutter clean || echo "Clean skipped"
+          echo "✅ Process Finished"
+          flutter clean || true
