@@ -1,59 +1,136 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.system.pro">
 
     <!-- ==================== بنیادی اجازتیں ==================== -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- ==================== کیمرہ اور مائیکروفون ==================== -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- ==================== سٹوریج کی اجازتیں ==================== -->
+    <!-- ==================== سٹوریج کی اجازتیں (Android 13-14) ==================== -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <!-- ==================== نوٹیفکیشن (بیک گراؤنڈ سروس کے لیے) ==================== -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- ==================== فارگراؤنڈ سروس کی اجازتیں ==================== -->
+    <!-- ==================== فارگراؤنڈ سروس کی اجازتیں (Android 14+) ==================== -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
-    <!-- ==================== ہارڈویئر کی خصوصیات ==================== -->
+    <!-- ==================== اسکرین ریکارڈنگ / پروجیکشن ==================== -->
+    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
+
+    <!-- ==================== بیک گراؤنڈ کارکردگی ==================== -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- ==================== ہارڈویئر فیچرز ==================== -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
 
+    <!-- ==================== ایپلیکیشن ==================== -->
     <application
         android:label="System Pro"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:theme="@style/LaunchTheme"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="31">
 
+        <!-- Flutter Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/LaunchTheme">
-            
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- فارگراؤنڈ سروس کا اعلان -->
+        <!-- فارگراؤنڈ سروسز (بیک گراؤنڈ سروس کے لیے) -->
         <service
-            android:name="com.system.pro.ForegroundService"
+            android:name="com.workmanager.BackgroundService"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone|mediaProjection" />
+            android:foregroundServiceType="camera|microphone|dataSync" />
 
-        <!-- Flutter V2 embedding -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+        <service
+            android:name="flutter_local_notifications.ForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- WorkManager Initializer -->
+        <provider
+            android:name="androidx.work.impl.WorkManagerInitializer"
+            android:authorities="${applicationId}.workmanager-init"
+            android:exported="false"
+            tools:node="remove" />
+
+        <!-- File Provider (اگر آپ فائلیں شیئر کرتے ہیں) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- فلٹر کے لیے queries -->
+        <queries>
+            <intent>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="http" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="https" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.PICK" />
+                <data android:mimeType="image/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.PICK" />
+                <data android:mimeType="video/*" />
+            </intent>
+        </queries>
+
     </application>
+
 </manifest>
