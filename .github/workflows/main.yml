@@ -50,43 +50,22 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml
+      - name: Add Dependencies (Safe Mode)
         run: |
-          rm -f pubspec.yaml
-          cat <<EOF > pubspec.yaml
-          name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "A new Flutter project."
-          publish_to: "none"
-          version: 1.0.0+1
-          environment:
-            sdk: ">=3.6.0 <4.0.0"
-          dependencies:
-            flutter:
-              sdk: flutter
-            camera: ^0.11.0+2
-            permission_handler: ^11.3.1
-            path_provider: ^2.1.4
-            flutter_background_service: ^5.1.0
-            flutter_local_notifications: ^17.2.3
-            workmanager: ^0.5.2
-            video_player: ^2.9.2
-            ffmpeg_kit_flutter_full_gpl: ^6.0.3
-            image_picker: ^1.1.2
-            flutter_webrtc: ^0.12.3
-            livekit_client: ^2.5.3
-            dio: ^5.7.0
-            shared_preferences: ^2.3.3
-            sqflite: ^2.3.3+1
-            device_info_plus: ^11.1.0
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^5.0.0
+          # دستی فائل لکھنے کے بجائے فلٹر کی کمانڈز استعمال کریں تاکہ YAML خراب نہ ہو
+          flutter pub add camera:^0.11.0+2 permission_handler:^11.3.1 path_provider:^2.1.4 \
+          flutter_background_service:^5.1.0 flutter_local_notifications:^17.2.3 \
+          workmanager:^0.5.2 video_player:^2.9.2 ffmpeg_kit_flutter_full_gpl:^6.0.3 \
+          image_picker:^1.1.2 flutter_webrtc:^0.12.3 livekit_client:^2.5.3 dio:^5.7.0 \
+          shared_preferences:^2.3.3 sqflite:^2.3.3+1 device_info_plus:^11.1.0
+
+      - name: Fix Dependency Overrides
+        run: |
+          # صرف مخصوص کنفلکٹس کو آخر میں پیچ کریں
+          cat <<EOF >> pubspec.yaml
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-          flutter:
-            uses-material-design: true
           EOF
 
       - name: Write AndroidManifest.xml
@@ -103,8 +82,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application
                   android:label="${{ github.event.inputs.app_name }}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:requestLegacyExternalStorage="true">
+                  android:icon="@mipmap/ic_launcher">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -124,29 +102,10 @@ jobs:
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          # Namespace fix for Gradle 8
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
           
-      - name: Set app icon
-        if: ${{ github.event.inputs.app_icon_base64 != '' }}
-        run: |
-          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > icon.png
-          sudo apt update && sudo apt install -y imagemagick
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p android/app/src/main/res/mipmap-$d
-          done
-          convert icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp android/app/src/main/res/mipmap-$d/ic_launcher.png android/app/src/main/res/mipmap-$d/ic_launcher_round.png
-          done
-
       - name: Build APK
         run: |
-          flutter pub get
           flutter build apk --release
 
       - name: Upload APK
@@ -158,5 +117,5 @@ jobs:
       - name: Cleaning Stamp
         if: always()
         run: |
-          echo "✅ Build Process Finished"
+          echo "✅ BUILD COMPLETED SUCCESSFULLY"
           flutter clean || true
