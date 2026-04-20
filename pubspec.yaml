@@ -11,35 +11,35 @@ dependencies:
     sdk: flutter
 
   # --- User Interface & Core Functionality ---
-  flutter_riverpod: ^3.3.1        # Modern state management
-  go_router: ^17.1.0              # Declarative and safe routing
+  flutter_riverpod: ^3.3.1
+  go_router: ^17.1.0
 
   # --- Camera & Multimedia ---
-  camera: ^1.0.3                  # Camera control
-  image_picker: ^1.2.1            # Pick images/videos from gallery or camera
-  video_player: ^2.11.0           # Inline video playback
-  file_picker: ^10.3.10           # Pick any file from device
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3 # Video processing/editing
+  camera: ^0.12.0+1          # ✅ درست ورژن
+  image_picker: ^1.2.1
+  video_player: ^2.11.1       # ✅ تازہ ترین ورژن
+  file_picker: ^10.3.10
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3
 
   # --- Networking & Real-Time Communication ---
-  dio: ^5.8.0+1                   # Powerful HTTP client
-  flutter_webrtc: ^1.4.1          # WebRTC for real‑time communication
-  livekit_client: ^2.7.0          # LiveKit real‑time video/audio
+  dio: ^5.8.0+1
+  flutter_webrtc: ^1.4.1
+  livekit_client: ^2.7.0
 
   # --- Permissions & Device Info ---
-  permission_handler: ^12.0.1     # Cross‑platform permissions
-  device_info_plus: ^13.0.0       # Detailed device information
-  path_provider: ^2.1.5           # Access to directory paths
-  path: ^1.9.0                    # Path operations
+  permission_handler: ^12.0.1
+  device_info_plus: ^13.0.0
+  path_provider: ^2.1.5
+  path: ^1.9.1               # ✅ تازہ ترین ورژن
 
   # --- Local Storage ---
-  shared_preferences: ^2.5.4      # Key‑value persistent storage
-  sqflite: ^2.4.2                 # Local SQLite database
+  shared_preferences: ^2.5.5  # ✅ تازہ ترین ورژن
+  sqflite: ^2.4.2
 
   # --- Background Services ---
-  flutter_background_service: ^5.1.0    # Run Dart code in background
-  flutter_local_notifications: ^21.0.0  # Show local notifications
-  workmanager: ^0.9.0+3                # Periodic background tasks
+  flutter_background_service: ^5.1.0
+  flutter_local_notifications: ^21.0.0
+  workmanager: ^0.9.0+3
 
 dev_dependencies:
   flutter_test:
