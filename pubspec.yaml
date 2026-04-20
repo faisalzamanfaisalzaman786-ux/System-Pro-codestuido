@@ -15,9 +15,9 @@ dependencies:
   go_router: ^17.1.0
 
   # --- Camera & Multimedia ---
-  camera: ^0.12.0+1          # ✅ درست ورژن
+  camera: ^0.12.0+1
   image_picker: ^1.2.1
-  video_player: ^2.11.1       # ✅ تازہ ترین ورژن
+  video_player: ^2.11.1
   file_picker: ^10.3.10
   ffmpeg_kit_flutter_full_gpl: ^6.0.3
 
@@ -30,10 +30,10 @@ dependencies:
   permission_handler: ^12.0.1
   device_info_plus: ^13.0.0
   path_provider: ^2.1.5
-  path: ^1.9.1               # ✅ تازہ ترین ورژن
+  path: ^1.9.1
 
   # --- Local Storage ---
-  shared_preferences: ^2.5.5  # ✅ تازہ ترین ورژن
+  shared_preferences: ^2.5.5
   sqflite: ^2.4.2
 
   # --- Background Services ---
@@ -44,7 +44,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^4.0.0    # ✅ ورژن ڈاؤن گریڈ کیا گیا
 
 flutter:
   uses-material-design: true
