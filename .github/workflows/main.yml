@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (no heredoc, plain echo)
+      - name: Write pubspec.yaml (with exact livekit_client)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -84,7 +84,7 @@ jobs:
           echo 'dependency_overrides:' >> pubspec.yaml
           echo '  livekit_client: 2.3.0' >> pubspec.yaml
 
-      - name: Write AndroidManifest.xml (no heredoc)
+      - name: Write AndroidManifest.xml
         run: |
           mkdir -p android/app/src/main
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
