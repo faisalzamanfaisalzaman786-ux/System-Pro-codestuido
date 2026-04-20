@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (no heredoc)
+      - name: Write pubspec.yaml (exact versions)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -67,7 +67,7 @@ jobs:
           echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
           echo '  image_picker: ^1.2.1' >> pubspec.yaml
           echo '  flutter_webrtc: ^1.4.1' >> pubspec.yaml
-          echo '  livekit_client: ^2.3.0' >> pubspec.yaml
+          echo '  livekit_client: 2.3.0' >> pubspec.yaml
           echo '  dio: ^5.8.0+1' >> pubspec.yaml
           echo '  shared_preferences: ^2.5.5' >> pubspec.yaml
           echo '  sqflite: ^2.2.8+1' >> pubspec.yaml
@@ -81,7 +81,7 @@ jobs:
           echo 'flutter:' >> pubspec.yaml
           echo '  uses-material-design: true' >> pubspec.yaml
 
-      - name: Write AndroidManifest.xml (no heredoc)
+      - name: Write AndroidManifest.xml
         run: |
           mkdir -p android/app/src/main
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' > android/app/src/main/AndroidManifest.xml
