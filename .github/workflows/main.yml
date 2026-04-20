@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # اینڈرائیڈ 12+ اور نئے گریڈل کے لیے جاوا 17 لازمی ہے
+      # اینڈرائیڈ 12+ اور گریڈل 8 کے لیے جاوا 17 لازمی ہے
       - name: Setup Java 17
         uses: actions/setup-java@v3
         with:
@@ -65,7 +65,6 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            # اینڈرائیڈ 12+ سپورٹڈ ورژنز
             camera: ^0.11.0+2
             permission_handler: ^11.3.1
             path_provider: ^2.1.4
@@ -76,7 +75,7 @@ jobs:
             ffmpeg_kit_flutter_full_gpl: ^6.0.3
             image_picker: ^1.1.2
             flutter_webrtc: ^0.12.3
-            livekit_client: ^2.12.1
+            livekit_client: ^2.5.3
             dio: ^5.7.0
             shared_preferences: ^2.3.3
             sqflite: ^2.3.3+1
@@ -95,7 +94,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Write AndroidManifest.xml (Android 12+ Fixed)
+      - name: Write AndroidManifest.xml (Android 12+ Optimized)
         run: |
           mkdir -p android/app/src/main
           cat <<EOF > android/app/src/main/AndroidManifest.xml
@@ -126,13 +125,15 @@ jobs:
           </manifest>
           EOF
 
-      - name: Update Android SDK and Gradle Versions
+      - name: Update Android SDK and Gradle Configuration
         run: |
-          # Compile اور Target SDK کو 34 پر سیٹ کریں
+          # SDK ورژن کو 34 پر سیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
-          # Java 17 compatibility
+          # Java 17 مطابقت
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
+          # Namespace شامل کرنا (نئے گریڈل کے لیے ضروری ہے)
+          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
           
       - name: Set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
