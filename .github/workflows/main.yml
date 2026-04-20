@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Flutter (latest stable with Dart 3.6+)
+      - name: Setup Flutter (latest stable)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
@@ -44,7 +44,7 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (compatible with new SDK)
+      - name: Write pubspec.yaml (with path override)
         run: |
           echo 'name: system_pro' > pubspec.yaml
           echo 'description: "Universal App"' >> pubspec.yaml
@@ -80,6 +80,9 @@ jobs:
           echo '' >> pubspec.yaml
           echo 'flutter:' >> pubspec.yaml
           echo '  uses-material-design: true' >> pubspec.yaml
+          echo '' >> pubspec.yaml
+          echo 'dependency_overrides:' >> pubspec.yaml
+          echo '  path: 1.9.0' >> pubspec.yaml
 
       - name: Write AndroidManifest.xml
         run: |
