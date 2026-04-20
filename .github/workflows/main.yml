@@ -52,7 +52,7 @@ jobs:
 
       - name: Write pubspec.yaml
         run: |
-          cat <<EOF > pubspec.yaml
+          cat <<'EOF' > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
           description: "Universal App"
           publish_to: none
@@ -160,7 +160,6 @@ jobs:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # ========== Cleaning Stamp Step ==========
       - name: Cleaning Stamp & Workspace Cleanup
         if: always()
         run: |
@@ -169,7 +168,7 @@ jobs:
           echo "🚀 APP NAME: ${{ github.event.inputs.app_name }}"
           echo "📦 PACKAGE: ${{ github.event.inputs.package_name }}"
           echo "🧹 Cleaning up temporary build files..."
-          flutter clean
-          rm -rf build/
+          # Error handling: skip flutter clean if directory was already destroyed
+          flutter clean || echo "Flutter clean skipped"
           echo "✨ Workspace is clean. Stamp added successfully."
           echo "===================================================="
