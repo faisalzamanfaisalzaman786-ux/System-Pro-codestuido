@@ -10,33 +10,22 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # --- User Interface & Core Functionality ---
   flutter_riverpod: ^3.3.1
   go_router: ^17.1.0
-
-  # --- Camera & Multimedia ---
   camera: ^0.12.0+1
   image_picker: ^1.2.1
   video_player: ^2.11.1
   file_picker: ^10.3.10
   ffmpeg_kit_flutter_full_gpl: ^6.0.3
-
-  # --- Networking & Real-Time Communication ---
   dio: ^5.8.0+1
   flutter_webrtc: ^1.4.1
   livekit_client: ^2.7.0
-
-  # --- Permissions & Device Info ---
   permission_handler: ^12.0.1
   device_info_plus: ^13.0.0
   path_provider: ^2.1.5
-  path: ^1.9.1
-
-  # --- Local Storage ---
+  # path: ^1.9.1  # ⚠️ اس لائن کو ڈیلیٹ یا کمنٹ کر دیں
   shared_preferences: ^2.5.5
   sqflite: ^2.4.2
-
-  # --- Background Services ---
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^21.0.0
   workmanager: ^0.9.0+3
@@ -44,7 +33,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0    # ✅ ورژن ڈاؤن گریڈ کیا گیا
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
