@@ -16,7 +16,7 @@ on:
         description: 'Base64 of main.dart'
         required: true
       pubspec_base64:
-        description: 'Base64 of pubspec.yaml (optional, if not provided default will be used)'
+        description: 'Base64 of pubspec.yaml (optional)'
         required: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
           flutter-version: '3.22.0'
           channel: 'stable'
 
-      - name: Sanitize App Name for Flutter project
+      - name: Sanitize App Name
         id: sanitize
         run: |
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
@@ -47,27 +47,66 @@ jobs:
         run: |
           echo '${{ github.event.inputs.dart_code_base64 }}' | base64 -d > lib/main.dart
 
-      - name: Decode and write pubspec.yaml (if provided)
-        if: ${{ github.event.inputs.pubspec_base64 != '' }}
+      - name: Write pubspec.yaml (default if not provided)
         run: |
-          echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
+          if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
+            echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
+          else
+            cat > pubspec.yaml << 'EOF'
+name: system_pro
+description: "Professional camera app"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_riverpod: ^3.3.1
+  go_router: ^17.1.0
+  camera: ^0.12.0+1
+  image_picker: ^1.2.1
+  video_player: ^2.11.1
+  file_picker: ^10.3.10
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3
+  dio: ^5.8.0+1
+  flutter_webrtc: ^1.4.1
+  livekit_client: ^2.7.0
+  permission_handler: ^12.0.1
+  device_info_plus: ^13.0.0
+  path_provider: ^2.1.5
+  shared_preferences: ^2.5.5
+  sqflite: ^2.4.2
+  flutter_background_service: ^5.1.0
+  flutter_local_notifications: ^17.2.3
+  workmanager: ^0.5.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+EOF
+          fi
 
       - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
           echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon.png
           sudo apt update && sudo apt install -y imagemagick
-          
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-${density}
           done
-          
           convert app_icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert app_icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert app_icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert app_icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert app_icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
           for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
           done
