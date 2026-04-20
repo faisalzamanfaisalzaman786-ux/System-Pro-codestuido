@@ -16,8 +16,8 @@ on:
         description: 'Base64 of main.dart'
         required: true
       pubspec_base64:
-        description: 'Base64 of pubspec.yaml'
-        required: false
+        description: 'Base64 of pubspec.yaml (REQUIRED)'
+        required: true
 
 jobs:
   build:
@@ -49,41 +49,11 @@ jobs:
           mkdir -p lib
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml
+      - name: Decode and write pubspec.yaml
         run: |
-          if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
-            echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
-          else
-            echo 'name: system_pro' > pubspec.yaml
-            echo 'description: "Professional Generated App"' >> pubspec.yaml
-            echo 'publish_to: none' >> pubspec.yaml
-            echo 'version: 1.0.0+1' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'environment:' >> pubspec.yaml
-            echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'dependencies:' >> pubspec.yaml
-            echo '  flutter:' >> pubspec.yaml
-            echo '    sdk: flutter' >> pubspec.yaml
-            echo '  camera: ^0.10.6' >> pubspec.yaml
-            echo '  permission_handler: ^11.3.0' >> pubspec.yaml
-            echo '  path_provider: ^2.1.5' >> pubspec.yaml
-            echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
-            echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
-            echo '  workmanager: ^0.5.2' >> pubspec.yaml
-            echo '  video_player: ^2.11.1' >> pubspec.yaml
-            echo '  ffmpeg_kit_flutter_full_gpl: ^6.0.3' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'dev_dependencies:' >> pubspec.yaml
-            echo '  flutter_test:' >> pubspec.yaml
-            echo '    sdk: flutter' >> pubspec.yaml
-            echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
-            echo '' >> pubspec.yaml
-            echo 'flutter:' >> pubspec.yaml
-            echo '  uses-material-design: true' >> pubspec.yaml
-          fi
+          echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
 
-      - name: Decode and set app icon
+      - name: Decode and set app icon (if provided)
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
           echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon_raw
