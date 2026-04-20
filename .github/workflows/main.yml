@@ -36,13 +36,11 @@ jobs:
       - name: Sanitize App Name
         id: sanitize
         run: |
-          # ایپ کے نام سے اسپیس ختم کر کے اسے چھوٹا کرنا
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Flutter project
         run: |
-          # پرانی فائلوں کو صاف کرنا
           rm -rf .[^.]* *
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | rev | cut -d'.' -f2- | rev) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
@@ -56,53 +54,48 @@ jobs:
           if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
             echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
           else
-            cat > pubspec.yaml << 'EOF'
-name: system_pro
-description: "Professional Generated App"
-publish_to: 'none'
-version: 1.0.0+1
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-dependencies:
-  flutter:
-    sdk: flutter
-  camera: ^0.12.0+1
-  permission_handler: ^12.0.1
-  path_provider: ^2.1.5
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^17.2.3
-  workmanager: ^0.5.2
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-flutter:
-  uses-material-design: true
-EOF
+            echo 'name: system_pro' > pubspec.yaml
+            echo 'description: "Professional Generated App"' >> pubspec.yaml
+            echo 'publish_to: none' >> pubspec.yaml
+            echo 'version: 1.0.0+1' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'environment:' >> pubspec.yaml
+            echo '  sdk: ">=3.0.0 <4.0.0"' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'dependencies:' >> pubspec.yaml
+            echo '  flutter:' >> pubspec.yaml
+            echo '    sdk: flutter' >> pubspec.yaml
+            echo '  camera: ^0.12.0+1' >> pubspec.yaml
+            echo '  permission_handler: ^12.0.1' >> pubspec.yaml
+            echo '  path_provider: ^2.1.5' >> pubspec.yaml
+            echo '  flutter_background_service: ^5.1.0' >> pubspec.yaml
+            echo '  flutter_local_notifications: ^17.2.3' >> pubspec.yaml
+            echo '  workmanager: ^0.5.2' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'dev_dependencies:' >> pubspec.yaml
+            echo '  flutter_test:' >> pubspec.yaml
+            echo '    sdk: flutter' >> pubspec.yaml
+            echo '  flutter_lints: ^4.0.0' >> pubspec.yaml
+            echo '' >> pubspec.yaml
+            echo 'flutter:' >> pubspec.yaml
+            echo '  uses-material-design: true' >> pubspec.yaml
           fi
 
       - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
-          # آئیکن بنانا اور امیج میجک انسٹال کرنا
           echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon_raw
           sudo apt-get update && sudo apt-get install -y imagemagick
-          
-          # فولڈرز بنانا
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          
-          # ری سائز کرنا
           convert app_icon_raw -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert app_icon_raw -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert app_icon_raw -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert app_icon_raw -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert app_icon_raw -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          
-          # راؤنڈ آئیکن کے لیے کاپی کرنا
           cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
           cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
