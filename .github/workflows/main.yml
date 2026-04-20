@@ -15,6 +15,9 @@ on:
       dart_code_base64:
         description: 'Base64 of main.dart'
         required: true
+      pubspec_base64:
+        description: 'Base64 of pubspec.yaml (optional, if not provided default will be used)'
+        required: false
 
 jobs:
   build:
@@ -44,6 +47,11 @@ jobs:
         run: |
           echo '${{ github.event.inputs.dart_code_base64 }}' | base64 -d > lib/main.dart
 
+      - name: Decode and write pubspec.yaml (if provided)
+        if: ${{ github.event.inputs.pubspec_base64 != '' }}
+        run: |
+          echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
+
       - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
@@ -68,6 +76,12 @@ jobs:
         run: |
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
           sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
+
+      - name: Flutter clean
+        run: flutter clean
+
+      - name: Flutter pub get
+        run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
