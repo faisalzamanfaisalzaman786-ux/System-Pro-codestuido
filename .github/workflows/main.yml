@@ -16,66 +16,66 @@ on:
         description: 'Base64 of main.dart'
         required: true
       pubspec_base64:
-        description: 'Base64 of pubspec.yaml (optional)'
+        description: 'Base64 of pubspec.yaml'
         required: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
+          cache: true
 
       - name: Sanitize App Name
         id: sanitize
         run: |
+          # Creates a valid flutter project name (lowercase, underscores only)
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Flutter project
         run: |
-          rm -rf android ios
-          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
+          # Clean existing files to prevent conflicts
+          rm -rf .[^.]* *
+          flutter create --org $(echo ${{ github.event.inputs.package_name }} | rev | cut -d'.' -f2- | rev) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
       - name: Decode and write main.dart
         run: |
+          mkdir -p lib
           echo '${{ github.event.inputs.dart_code_base64 }}' | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (default if not provided)
+      - name: Write pubspec.yaml
         run: |
           if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
             echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
           else
             cat > pubspec.yaml << 'EOF'
 name: system_pro
-description: "Professional camera app"
+description: "Professional camera application"
 publish_to: 'none'
 version: 1.0.0+1
-
 environment:
   sdk: '>=3.0.0 <4.0.0'
-
 dependencies:
   flutter:
     sdk: flutter
-
   camera: ^0.12.0+1
   permission_handler: ^12.0.1
   path_provider: ^2.1.5
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^17.2.3
   workmanager: ^0.5.2
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
-
 flutter:
   uses-material-design: true
 EOF
@@ -86,34 +86,31 @@ EOF
         run: |
           echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon.png
           sudo apt update && sudo apt install -y imagemagick
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p android/app/src/main/res/mipmap-${density}
-          done
-          convert app_icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert app_icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert app_icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert app_icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert app_icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
+          
+          # Define icon sizes
+          declare -A sizes=( ["mdpi"]="48x48" ["hdpi"]="72x72" ["xhdpi"]="96x96" ["xxhdpi"]="144x144" ["xxxhdpi"]="192x192" )
+          
+          for density in "${!sizes[@]}"; do
+            path="android/app/src/main/res/mipmap-${density}"
+            mkdir -p "$path"
+            convert app_icon.png -resize "${sizes[$density]}" "${path}/ic_launcher.png"
+            cp "${path}/ic_launcher.png" "${path}/ic_launcher_round.png"
           done
 
       - name: Update package name and app label
         run: |
+          # Update Application ID in build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
+          # Update App Display Name in AndroidManifest
           sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Flutter clean
-        run: flutter clean
-
-      - name: Flutter pub get
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Flutter build
+        run: |
+          flutter pub get
+          flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: ${{ steps.sanitize.outputs.sanitized_name }}-release
           path: build/app/outputs/flutter-apk/app-release.apk
