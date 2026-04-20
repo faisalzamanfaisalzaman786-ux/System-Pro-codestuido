@@ -51,9 +51,11 @@ jobs:
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
       - name: Write pubspec.yaml
+        env:
+          APP_NAME_KEY: ${{ steps.sanitize.outputs.sanitized_name }}
         run: |
-          cat <<'EOF' > pubspec.yaml
-          name: ${{ steps.sanitize.outputs.sanitized_name }}
+          cat <<EOF > pubspec.yaml
+          name: $APP_NAME_KEY
           description: "Universal App"
           publish_to: none
           version: 1.0.0+1
@@ -93,7 +95,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Write AndroidManifest.xml (Android 12+ Optimized)
+      - name: Write AndroidManifest.xml
         run: |
           mkdir -p android/app/src/main
           cat <<EOF > android/app/src/main/AndroidManifest.xml
@@ -105,7 +107,6 @@ jobs:
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              
               <application
                   android:label="${{ github.event.inputs.app_name }}"
                   android:icon="@mipmap/ic_launcher"
@@ -131,7 +132,7 @@ jobs:
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
           
-      - name: Set app icon (if provided)
+      - name: Set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
           echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > icon.png
@@ -160,15 +161,8 @@ jobs:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Cleaning Stamp & Workspace Cleanup
+      - name: Cleaning Stamp
         if: always()
         run: |
-          echo "===================================================="
-          echo "✅ BUILD FINISHED AT: $(date)"
-          echo "🚀 APP NAME: ${{ github.event.inputs.app_name }}"
-          echo "📦 PACKAGE: ${{ github.event.inputs.package_name }}"
-          echo "🧹 Cleaning up temporary build files..."
-          # Error handling: skip flutter clean if directory was already destroyed
-          flutter clean || echo "Flutter clean skipped"
-          echo "✨ Workspace is clean. Stamp added successfully."
-          echo "===================================================="
+          echo "✅ BUILD COMPLETED"
+          flutter clean || echo "Clean skipped"
