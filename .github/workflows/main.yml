@@ -36,29 +36,27 @@ jobs:
       - name: Sanitize App Name
         id: sanitize
         run: |
-          # ایونٹ ان پٹ سے ایپ کا نام لے کر اسے فلٹر کے لیے محفوظ بنانا
           SANITIZED_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Flutter project
         run: |
-          # پرانی فائلوں کو صاف کرنا تاکہ نیا پراجیکٹ بن سکے
           rm -rf .[^.]* *
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | rev | cut -d'.' -f2- | rev) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
       - name: Decode and write main.dart
         run: |
           mkdir -p lib
-          echo '${{ github.event.inputs.dart_code_base64 }}' | base64 -d > lib/main.dart
+          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
       - name: Write pubspec.yaml
         run: |
           if [ -n "${{ github.event.inputs.pubspec_base64 }}" ]; then
-            echo '${{ github.event.inputs.pubspec_base64 }}' | base64 -d > pubspec.yaml
+            echo "${{ github.event.inputs.pubspec_base64 }}" | base64 -d > pubspec.yaml
           else
             cat > pubspec.yaml << 'EOF'
-name: ${{ steps.sanitize.outputs.sanitized_name }}
-description: "SYSTEM PRO V9.0 Generated App"
+name: system_pro
+description: "Generated App"
 publish_to: 'none'
 version: 1.0.0+1
 environment:
@@ -84,23 +82,26 @@ EOF
       - name: Decode and set app icon
         if: ${{ github.event.inputs.app_icon_base64 != '' }}
         run: |
-          # بیس 64 سے آئیکن امیج بنانا
-          echo '${{ github.event.inputs.app_icon_base64 }}' | base64 -d > app_icon_raw
-          sudo apt update && sudo apt install -y imagemagick
-          
-          # اینڈرائیڈ کے مختلف سائز کے آئیکنز تیار کرنا
-          declare -A sizes=( ["mdpi"]="48x48" ["hdpi"]="72x72" ["xhdpi"]="96x96" ["xxhdpi"]="144x144" ["xxxhdpi"]="192x192" )
-          
-          for density in "${!sizes[@]}"; do
-            path="android/app/src/main/res/mipmap-${density}"
-            mkdir -p "$path"
-            convert app_icon_raw -resize "${sizes[$density]}" "${path}/ic_launcher.png"
-            cp "${path}/ic_launcher.png" "${path}/ic_launcher_round.png"
-          done
+          echo "${{ github.event.inputs.app_icon_base64 }}" | base64 -d > app_icon_raw
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          convert app_icon_raw -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert app_icon_raw -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert app_icon_raw -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert app_icon_raw -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert app_icon_raw -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp android/app/src/main/res/mipmap-mdpi/ic_launcher.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xhdpi/ic_launcher.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
       - name: Update package name and app label
         run: |
-          # اینڈرائیڈ کی فائلوں میں پیکیج کا نام اور ایپ کا نام تبدیل کرنا
           sed -i "s/applicationId \".*\"/applicationId \"${{ github.event.inputs.package_name }}\"/" android/app/build.gradle
           sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name }}"/' android/app/src/main/AndroidManifest.xml
 
