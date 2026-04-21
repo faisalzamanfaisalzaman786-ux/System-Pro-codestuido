@@ -8,7 +8,6 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        // Firebase کے لیے اسے ان کمنٹ رہنے دیں
         classpath 'com.google.gms:google-services:4.3.15'
     }
 }
@@ -20,10 +19,17 @@ allprojects {
         maven { url "https://jitpack.io" }
     }
 
-    // FFmpeg ورژن کا مسئلہ حل کرنے کے لیے یہ حصہ شامل کیا گیا ہے
+    // یہ حصہ ہر اسٹرکچر کو مجبور کرے گا کہ وہ غلط ورژن کو چھوڑ کر درست ورژن اٹھائے
     configurations.all {
         resolutionStrategy {
             force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+            
+            // اگر کسی پلگ ان کے اندر '6.0-2' ہارڈ کوڈڈ ہے، تو یہ اسے بدل دے گا
+            eachDependency { DependencyResolveDetails details ->
+                if (details.requested.group == 'com.arthenica' && details.requested.name.contains('ffmpeg-kit')) {
+                    details.useVersion "6.0"
+                }
+            }
         }
     }
 }
@@ -31,7 +37,15 @@ allprojects {
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+    
+    // تمام سب-پروجیکٹس کی کنفیگریشن میں بھی ورژن فورس کریں
+    project.configurations.all {
+        resolutionStrategy {
+            force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+        }
+    }
 }
+
 subprojects {
     project.evaluationDependsOn(':app')
 }
