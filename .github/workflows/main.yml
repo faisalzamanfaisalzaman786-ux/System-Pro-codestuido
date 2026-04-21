@@ -28,7 +28,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter (Latest Stable)
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
@@ -45,11 +45,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Final Dependency Alignment
+      - name: Final Dependency Solver
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "System Pro Master Build"
+          description: "System Pro Build Engine"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -66,9 +66,9 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم نے ورژن 1.4.2 پر لاک کیا ہے جو SDK 36 کے لیے ضروری ہے
+            # یہاں ہم نے ورژن 1.4.2 پر لاک کیا ہے
             flutter_webrtc: 1.4.2
-            livekit_client: 2.7.1
+            livekit_client: any
             dio: any
             shared_preferences: any
             sqflite: any
@@ -81,12 +81,11 @@ jobs:
             path: 1.9.0
             meta: 1.15.0
             flutter_webrtc: 1.4.2
-            livekit_client: 2.7.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Root Build.gradle
+      - name: Patch Android Repositories
         run: |
           cat <<EOF > android/build.gradle
           buildscript {
@@ -118,7 +117,7 @@ jobs:
           }
           EOF
 
-      - name: Setup MainActivity (Java)
+      - name: Force v2 Embedding Migration
         run: |
           PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           rm -rf android/app/src/main/kotlin
@@ -131,9 +130,8 @@ jobs:
           }
           EOF
 
-      - name: Upgrade to Latest Android SDK 36
+      - name: Update Android Gradle Settings (SDK 36)
         run: |
-          # compileSdk اور targetSdk کو 36 پر سیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
@@ -177,19 +175,19 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build Final APK
+      - name: Build APK
         run: |
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-Latest-SDK
+          name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Status Report
+      - name: ✅ Clean Stamp
         if: always()
         run: |
-          echo "Build finished using Latest Android SDK 36 and Flutter 3.27.0"
+          echo "System Pro: Version conflict resolved by dynamic scaling for LiveKit."
           flutter clean || true
