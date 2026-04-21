@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Force Fix)
+name: Build Flutter APK (Final Clean Fix)
 
 on:
   workflow_dispatch:
@@ -77,9 +77,8 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ The "Nuclear" Resolution Strategy
+      - name: 🛠️ The Forced Resolution Strategy (Clean)
         run: |
-          # ہم اینڈرائیڈ کی مین بلڈ فائل میں جا کر ورژن کو جڑ سے بدل رہے ہیں
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -97,7 +96,6 @@ jobs:
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
               }
-              # یہ حصہ کسی بھی غلط ورژن کو زبردستی ٹھیک کرے گا
               configurations.all {
                   resolutionStrategy.eachDependency { details ->
                       if (details.requested.group == 'com.arthenica') {
