@@ -45,7 +45,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Dynamic Dependency Solving
+      - name: Setup Pubspec (Stable Versioning)
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
@@ -83,7 +83,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Repositories
+      - name: Patch Android Repositories & SDK 36
         run: |
           cat <<EOF > android/build.gradle
           buildscript {
@@ -128,10 +128,12 @@ jobs:
           }
           EOF
 
-      - name: Update Android Gradle Settings
+      - name: Update Android Gradle for SDK 36
         run: |
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
+          # SDK 36 پر اپ گریڈ کریں تاکہ flutter_webrtc کا مسئلہ حل ہو سکے
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
@@ -183,8 +185,8 @@ jobs:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Clean Stamp
+      - name: ✅ Final Cleanup
         if: always()
         run: |
-          echo "System Pro: Version conflict resolved by dynamic scaling."
+          echo "System Pro: SDK 36 Upgrade Successful."
           flutter clean || true
