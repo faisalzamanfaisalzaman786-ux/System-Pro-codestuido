@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec
+      - name: Write Pubspec (Safe & Stable)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,7 +59,8 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            ffmpeg_kit_flutter_full_gpl: 6.0.3
+            # ہم نے 'full_gpl' کو 'min_gpl' سے بدل دیا ہے تاکہ ورژن کا مسئلہ مستقل حل ہو جائے
+            ffmpeg_kit_flutter_min_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -70,36 +71,43 @@ jobs:
           dev_dependencies:
             flutter_test:
               sdk: flutter
+          dependency_overrides:
+            # کسی بھی ورژن کے ٹکراؤ کو روکنے کے لیے
+            meta: 1.15.0
+            path: 1.9.0
           flutter:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Clean Build Fix
+      - name: 🛠️ Setup Repositories & Pro Fix
         run: |
           flutter pub get
 
-          # Project Level Gradle (صفائی کے ساتھ ریپوزٹریز سیٹ کرنا)
+          # Project Level Gradle (ریپوزٹریز کا حتمی سیٹ اپ)
           cat <<EOF > android/build.gradle
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
               }
           }
           allprojects {
-              repositories {
+              repositories { 
                   google()
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
               }
+              configurations.all {
+                  resolutionStrategy {
+                      // اگر گریڈل پھر بھی 6.0-2 ڈھونڈے، تو اسے 6.0.3 پر فورس کریں
+                      force 'com.arthenica:ffmpeg-kit-min-gpl:6.0.3'
+                  }
+              }
           }
           EOF
 
-          # App Level Gradle (کوئی پیچیدہ سیٹنگ نہیں، صرف بنیادی ضرورت)
+          # App Level Gradle (SDK 35)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -127,11 +135,10 @@ jobs:
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
-              implementation "androidx.multidex:multidex:2.0.1"
           }
           EOF
 
-          # تمام ڈیپینڈنسیز کو SDK 35 پر لاک کرنا (تاکہ نوٹیفکیشن اور ورک مینیجر کا مسئلہ نہ آئے)
+          # پلگ انز کے لیے SDK 35 کو فورس کرنا
           echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
