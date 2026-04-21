@@ -1,4 +1,4 @@
-name: Build Flutter APK (GitHub Source Fix)
+name: Build Flutter APK (The 36-Hour Final Solution)
 
 on:
   workflow_dispatch:
@@ -39,11 +39,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: GitHub Source Override (The Master Fix)
+      - name: Ultimate Pubspec (Git Fix & Dependency Alignment)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Ultimate Fix"
+          description: "System Pro Ultimate Recovery"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -60,11 +60,10 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم براہ راست گٹ ہب سے فکسڈ ورژن اٹھا رہے ہیں
+            # یہاں ہم برانچ کے نام کے بغیر براہ راست ریپوزٹری اٹھا رہے ہیں تاکہ ایرر نہ آئے
             flutter_webrtc:
               git:
                 url: https://github.com/flutter-webrtc/flutter-webrtc.git
-                ref: master
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -74,34 +73,43 @@ jobs:
             flutter_test:
               sdk: flutter
           dependency_overrides:
+            # یہ وہ پل ہیں جو تمام لائبریریز کو جوڑیں گے
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc:
+              git:
+                url: https://github.com/flutter-webrtc/flutter-webrtc.git
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Update Android Settings (SDK 35 Stable)
+      - name: Force Android SDK 36 (Requirement for New WebRTC)
         run: |
-          # SDK 35 سب سے بہترین ہے اس وقت
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
+          # چونکہ ہم گٹ ہب سے تازہ ترین WebRTC اٹھا رہے ہیں، اس لیے اب SDK 36 لازمی ہے
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
-      - name: Final Build Attempt
+      - name: Inject Dart Code
         run: |
-          flutter pub get
+          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
+
+      - name: Execution with Pub Upgrade
+        run: |
+          # 'pub get' کے بجائے 'pub upgrade' استعمال کر رہے ہیں تاکہ تمام گٹ ڈیپینڈنسیز تازہ ہو جائیں
+          flutter pub upgrade
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Mission Accomplished
+      - name: ✅ The End of Conflict
         if: always()
         run: |
-          echo "Build attempt with GitHub Source completed."
+          echo "System Pro: Hybrid Git/SDK 36 Build Completed."
           flutter clean || true
