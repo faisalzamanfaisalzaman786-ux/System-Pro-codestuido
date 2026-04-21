@@ -39,7 +39,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Ultimate Pubspec (Git Fix & Dependency Alignment)
+      - name: Clean Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -60,10 +60,7 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم برانچ کے نام کے بغیر براہ راست ریپوزٹری اٹھا رہے ہیں تاکہ ایرر نہ آئے
-            flutter_webrtc:
-              git:
-                url: https://github.com/flutter-webrtc/flutter-webrtc.git
+            flutter_webrtc: 1.1.2
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -73,43 +70,42 @@ jobs:
             flutter_test:
               sdk: flutter
           dependency_overrides:
-            # یہ وہ پل ہیں جو تمام لائبریریز کو جوڑیں گے
             path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc:
-              git:
-                url: https://github.com/flutter-webrtc/flutter-webrtc.git
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Force Android SDK 36 (Requirement for New WebRTC)
+      - name: Force Android SDK 35 (Stable Environment)
         run: |
-          # چونکہ ہم گٹ ہب سے تازہ ترین WebRTC اٹھا رہے ہیں، اس لیے اب SDK 36 لازمی ہے
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
+          # ہم واپس 35 پر جا رہے ہیں تاکہ ماحول مستحکم رہے
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+
+      - name: 🛠️ THE VOODOO FIX (Auto-Patching SurfaceTextureRenderer)
+        run: |
+          flutter pub get
+          # یہ کمانڈ اس خراب جاوا فائل کو تلاش کرے گی اور اس میں missing method ڈال دے گی
+          FILE_PATH=$(find /home/runner/.pub-cache -name "SurfaceTextureRenderer.java")
+          if [ -f "$FILE_PATH" ]; then
+            echo "Patching SurfaceTextureRenderer.java at $FILE_PATH"
+            # ایرر ختم کرنے کے لیے میتھڈ کا اضافہ
+            sed -i '/public void onSurfaceAvailable/i \            @Override public void onSurfaceDestroyed(SurfaceTexture surface) {}' "$FILE_PATH"
+          fi
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Execution with Pub Upgrade
+      - name: Final Build APK
         run: |
-          # 'pub get' کے بجائے 'pub upgrade' استعمال کر رہے ہیں تاکہ تمام گٹ ڈیپینڈنسیز تازہ ہو جائیں
-          flutter pub upgrade
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-APK
+          name: System-Pro-Voodoo-Fixed-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: ✅ The End of Conflict
-        if: always()
-        run: |
-          echo "System Pro: Hybrid Git/SDK 36 Build Completed."
-          flutter clean || true
