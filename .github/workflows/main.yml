@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Stable Replacement)
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,8 +59,7 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # ہم نے پیکیج کو 'https' ورژن میں بدل دیا ہے جو کہ بلڈ کے وقت سب سے کم مسائل پیدا کرتا ہے
-            ffmpeg_kit_flutter_https_gpl: 6.0.3
+            ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -78,7 +77,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Ultimate Fix
+      - name: 🛠️ Setup Repositories & Nuclear Version Fix
         run: |
           flutter pub get
 
@@ -95,20 +94,20 @@ jobs:
               repositories { 
                   google()
                   mavenCentral()
-                  maven { url 'https://www.jitpack.io' }
-                  // آر تھینیکا کی اپنی مخصوص ریپوزٹری کو شامل کرنا
-                  maven { url "https://maven.google.com" }
+                  maven { url 'https://jitpack.io' }
               }
+              // یہ جادوئی حصہ ہے: یہ ہر اس لائبریری کو ٹھیک کرے گا جو 6.0-2 ڈھونڈ رہی ہے
               configurations.all {
-                  resolutionStrategy {
-                      // ہم ورژن کو فورس کرنے کے بجائے صرف ڈیفالٹ پر بھروسہ کریں گے
-                      // لیکن اگر مسئلہ ہوا تو گریڈل کو ریپوزٹریز سے مدد ملے گی
+                  resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                      if (details.requested.group == 'com.arthenica' && details.requested.version == '6.0-2') {
+                          details.useVersion '6.0' // اسے مستحکم ورژن پر موڑ دیں
+                      }
                   }
               }
           }
           EOF
 
-          # App Level Gradle (Fresh Rewrite for SDK 35)
+          # App Level Gradle (SDK 35)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -143,7 +142,7 @@ jobs:
           }
           EOF
 
-          # سب پروجیکٹس کے لیے SDK 35 لازمی کرنا
+          # پلگ انز کے لیے SDK 35 کو فورس کرنا
           echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
@@ -155,5 +154,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
