@@ -1,4 +1,4 @@
-name: Build Flutter APK (The 36-Hour Final Solution)
+name: Build Flutter APK (Final SDK 36 Update)
 
 on:
   workflow_dispatch:
@@ -34,65 +34,77 @@ jobs:
           flutter-version: '3.27.0'
           channel: 'stable'
 
-      - name: Create Project
+      - name: Sanitize App Name
+        id: sanitize
+        run: |
+          S_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
+          echo "sanitized_name=${S_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Clean Project
         run: |
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
-          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
+          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Clean Pubspec
+      - name: Write Updated pubspec.yaml
         run: |
           cat <<EOF > pubspec.yaml
-          name: system_pro_app
-          description: "System Pro Ultimate Recovery"
+          name: ${{ steps.sanitize.outputs.sanitized_name }}
+          description: "Universal App Build"
           publish_to: none
           version: 1.0.0+1
+
           environment:
             sdk: ">=3.6.0 <4.0.0"
+
           dependencies:
             flutter:
               sdk: flutter
-            camera: any
-            permission_handler: any
-            path_provider: any
-            flutter_background_service: any
-            flutter_local_notifications: any
-            workmanager: any
-            video_player: any
-            ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
-            image_picker: any
-            flutter_webrtc: 1.1.2
-            livekit_client: any
-            dio: any
-            shared_preferences: any
-            sqflite: any
-            device_info_plus: any
+            camera: ^0.11.0+2
+            permission_handler: ^11.3.1
+            path_provider: ^2.1.4
+            flutter_background_service: ^5.1.0
+            flutter_local_notifications: ^17.2.3
+            workmanager: ^0.5.2
+            video_player: ^2.9.2
+            ffmpeg_kit_flutter_full_gpl: ^6.0.3
+            image_picker: ^1.1.2
+            flutter_webrtc: ^1.1.2
+            livekit_client: ^2.5.3
+            dio: ^5.7.0
+            shared_preferences: ^2.3.3
+            sqflite: ^2.3.3+1
+            device_info_plus: ^11.1.0
+
           dev_dependencies:
             flutter_test:
               sdk: flutter
+            flutter_lints: ^5.0.0
+
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 1.1.2
+
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Force Android SDK 35 (Stable Environment)
+      - name: Update Android Configuration (SDK 36)
         run: |
-          # ہم واپس 35 پر جا رہے ہیں تاکہ ماحول مستحکم رہے
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
+          # SDK 36 کے لیے گریڈل سیٹنگز
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
-      - name: 🛠️ THE VOODOO FIX (Auto-Patching SurfaceTextureRenderer)
+      - name: 🛠️ Auto-Patch WebRTC Conflict
         run: |
           flutter pub get
-          # یہ کمانڈ اس خراب جاوا فائل کو تلاش کرے گی اور اس میں missing method ڈال دے گی
+          # اگر ورژن بد لنے کے بعد بھی پرانا ایرر آئے تو یہ پیچ اسے ٹھیک کر دے گا
           FILE_PATH=$(find /home/runner/.pub-cache -name "SurfaceTextureRenderer.java")
           if [ -f "$FILE_PATH" ]; then
             echo "Patching SurfaceTextureRenderer.java at $FILE_PATH"
-            # ایرر ختم کرنے کے لیے میتھڈ کا اضافہ
             sed -i '/public void onSurfaceAvailable/i \            @Override public void onSurfaceDestroyed(SurfaceTexture surface) {}' "$FILE_PATH"
           fi
 
@@ -100,12 +112,18 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build APK
+      - name: Build Release APK
         run: |
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Voodoo-Fixed-APK
+          name: ${{ steps.sanitize.outputs.sanitized_name }}-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: ✅ Clean Up
+        if: always()
+        run: |
+          echo "System Pro: Final Optimized Build Completed."
+          flutter clean || true
