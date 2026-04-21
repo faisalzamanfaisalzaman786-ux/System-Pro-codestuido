@@ -1,4 +1,4 @@
-name: Build Flutter APK (Version 1.1.1 Fix)
+name: Build Flutter APK (Version Range Fix)
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Stable Versions)
+      - name: Write Pubspec (Flexible Range)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -60,8 +60,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہ ورژن فلٹر 3.27 کے ساتھ مستحکم ہے
-            flutter_webrtc: 1.1.1
+            # یہاں ہم نے رینج دی ہے تاکہ فلٹر خود بہترین ورژن تلاش کرے
+            flutter_webrtc: '>=1.1.0 <1.2.0'
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -73,31 +73,30 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc: 1.1.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Force Fix Android Configuration
+      - name: Fix Android SDK Configuration
         run: |
-          # گریڈل فائل کو درست طریقے سے اپ ڈیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
-          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build APK
+      - name: Clean & Build
         run: |
+          # پچھلی تمام خراب ڈیپینڈنسیز کو صاف کریں
+          flutter pub cache clean -f
           flutter pub get
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-APK
           path: build/app/outputs/flutter-apk/app-release.apk
