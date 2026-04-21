@@ -1,4 +1,4 @@
-name: Build Flutter APK (FFmpeg & WebRTC Success)
+name: Build Flutter APK (FFmpeg Final Fix)
 
 on:
   workflow_dispatch:
@@ -34,16 +34,16 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
 
-      - name: Create Project
+      - name: Create Clean Project
         run: |
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Stable Dependencies)
+      - name: Write Pubspec (Safe FFmpeg Version)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Success Build"
+          description: "System Pro Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -58,8 +58,8 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # FFmpeg کا مستحکم ورژن جو Maven پر موجود ہے
-            ffmpeg_kit_flutter_full_gpl: ^6.0.3
+            # FFmpeg کا وہ ورژن جو سب سے زیادہ مستحکم اور دستیاب ہے
+            ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.12+hotfix.1
             livekit_client: any
@@ -78,12 +78,41 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Force Fix Android Configuration (SDK 35)
+      - name: Deep Fix Gradle Repositories
         run: |
-          # گریڈل میں ریپوزٹریز کو ٹھیک کرنا تاکہ FFmpeg مل سکے
-          sed -i "s/google()/google()\n        mavenCentral()/" android/build.gradle
-          
-          # SDK 35 سیٹ کرنا
+          # اینڈرائیڈ کی مین گریڈل فائل میں ریپوزٹریز کو زبردستی اپ ڈیٹ کرنا
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url 'https://jitpack.io' }
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+      - name: Update App Configuration (SDK 35)
+        run: |
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
@@ -93,11 +122,9 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build Execution
+      - name: Final Build APK
         run: |
           flutter pub get
-          flutter clean
-          # بلڈ کے دوران تمام لائبریریز کو زبردستی ڈاؤن لوڈ کرنا
           flutter build apk --release
 
       - name: Upload APK
