@@ -42,27 +42,10 @@ jobs:
 
       - name: Create Clean Flutter Project
         run: |
-          # پرانی تمام فائلز مٹا کر نیا پروجیکٹ بنانا تاکہ کوئی کنفیوژن نہ رہے
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Force v2 Embedding Migration
-        run: |
-          # v1 embedding ایرر کو ختم کرنے کے لیے کوٹلن اور پرانی جاوا فائلز کا صفایا
-          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          rm -rf android/app/src/main/kotlin
-          rm -rf android/app/src/main/java/*
-          
-          # جدید MainActivity.java بنانا (Modern v2 Style)
-          mkdir -p android/app/src/main/java/$PACKAGE_PATH
-          cat <<EOF > android/app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          package ${{ github.event.inputs.package_name }};
-          import io.flutter.embedding.android.FlutterActivity;
-          public class MainActivity extends FlutterActivity {
-          }
-          EOF
-
-      - name: Resolve Dependency Conflicts (pubspec.yaml)
+      - name: Final Version Sync (pubspec.yaml)
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
@@ -83,7 +66,8 @@ jobs:
             video_player: ^2.9.2
             ffmpeg_kit_flutter_full_gpl: ^6.0.3
             image_picker: ^1.1.2
-            flutter_webrtc: ^1.2.1
+            # تازہ ترین ورژن جو فلٹر 3.27 کے ساتھ کام کرتا ہے
+            flutter_webrtc: ^0.12.3
             livekit_client: ^2.5.3
             dio: ^5.7.0
             shared_preferences: ^2.3.3
@@ -96,20 +80,34 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc: 1.2.1
+            # ہم زبردستی ورژن کو ہم آہنگ کر رہے ہیں
+            flutter_webrtc: 0.12.3
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Update Android Configuration
+      - name: Migrate to v2 Embedding
         run: |
-          # SDK 34 اور Namespace کی سیٹنگز
+          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
+          rm -rf android/app/src/main/kotlin
+          rm -rf android/app/src/main/java/*
+          mkdir -p android/app/src/main/java/$PACKAGE_PATH
+          cat <<EOF > android/app/src/main/java/$PACKAGE_PATH/MainActivity.java
+          package ${{ github.event.inputs.package_name }};
+          import io.flutter.embedding.android.FlutterActivity;
+          public class MainActivity extends FlutterActivity {
+          }
+          EOF
+
+      - name: Update Android Build Configuration
+        run: |
+          # SDK 34 استعمال کریں کیونکہ 36 ابھی بہت نیا ہے اور لائبریریز سپورٹ نہیں کرتیں
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
-      - name: Write AndroidManifest.xml (v2 Ready)
+      - name: Write AndroidManifest.xml
         run: |
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -142,23 +140,23 @@ jobs:
           </manifest>
           EOF
 
-      - name: Inject Dart Code
+      - name: Write main.dart
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build and Package APK
+      - name: Final Build APK
         run: |
           flutter pub get
           flutter build apk --release
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Process Completed
+      - name: ✅ Clean Stamp
         if: always()
         run: |
-          echo "System Pro Build Engine has finished the task."
+          echo "Build Process Finished for System Pro."
           flutter clean || true
