@@ -4,7 +4,7 @@ apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace "com.system.pro" 
-    compileSdk 35
+    compileSdk 35 // یہاں زبردستی 35 سیٹ ہے
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -71,12 +71,12 @@ dependencies {
     implementation "androidx.camera:camera-lifecycle:${camerax_version}"
     implementation "androidx.camera:camera-view:${camerax_version}"
 
-    // Networking (Retrofit & OkHttp)
+    // Networking
     implementation "com.squareup.retrofit2:retrofit:2.9.0"
     implementation "com.squareup.retrofit2:converter-gson:2.9.0"
     implementation "com.squareup.okhttp3:logging-interceptor:4.12.0"
 
-    // Utilities (Glide & Room)
+    // Utilities
     implementation "com.github.bumptech.glide:glide:4.16.0"
     annotationProcessor "com.github.bumptech.glide:compiler:4.16.0"
     
@@ -88,29 +88,31 @@ dependencies {
     // Flutter Internal
     implementation "androidx.lifecycle:lifecycle-common-java8:2.7.0"
     implementation "androidx.window:window:1.2.0"
-    implementation "androidx.window:window-java:1.2.0"
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
 
-// --- یہاں سے نیچے والا حصہ بلڈ فیل ہونے سے بچائے گا ---
-
+// یہ حصہ FFmpeg کے غلط ورژن اور SDK 34 کے مسئلے کو زبردستی حل کرے گا
 configurations.all {
-    resolutionStrategy.eachDependency { details ->
-        if (details.requested.group == 'com.arthenica' && details.requested.name.contains('ffmpeg-kit')) {
-            // یہ زبردستی FFmpeg کو MavenCentral والے ورژن پر شفٹ کر دے گا
-            details.useVersion "6.0"
+    resolutionStrategy {
+        // 1. FFmpeg کو خراب سرور سے ہٹا کر MavenCentral پر لانے کے لیے
+        force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+        
+        eachDependency { details ->
+            if (details.requested.group == 'com.arthenica' && details.requested.name.contains('ffmpeg-kit')) {
+                details.useVersion "6.0"
+            }
         }
     }
 }
 
+// تمام پلگ انز کو زبردستی SDK 35 پر مجبور کرنا
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             project.android {
-                // تمام پلگ انز کو زبردستی SDK 35 پر شفٹ کرنے کے لیے
                 compileSdk 35
                 defaultConfig {
                     targetSdk 35
