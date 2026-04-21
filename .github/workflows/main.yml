@@ -1,4 +1,4 @@
-name: Build Flutter APK (FFmpeg Absolute Fix)
+name: Build Flutter APK (FFmpeg Version Override)
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (LTS Version Fix)
+      - name: Write Pubspec (Stable Base)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -58,7 +58,6 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # یہاں ہم نے ورژن 6.0.3-LTS استعمال کیا ہے جو مستحکم ہے
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
             flutter_webrtc: 0.12.12+hotfix.1
@@ -78,21 +77,35 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Force SDK 35 & Add Repositories
+      - name: 🛠️ Force Version Resolution Strategy
         run: |
-          # گریڈل میں زبردستی SDK 35 اور ریپوزٹریز ڈالنا
-          sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
-          sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
-          sed -i "s/google()/google()\n        mavenCentral()\n        maven { url 'https:\/\/jitpack.io' }/" android/build.gradle
-          
-          # Namespace فکس
+          # ہم اینڈرائیڈ کی ایپ لیول بلڈ فائل میں ایک ایسی کمانڈ ڈال رہے ہیں جو غلط ورژن کو صحیح سے بدل دے گی
+          cat <<EOF >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                  if (details.requested.group == 'com.arthenica' && details.requested.name.contains('ffmpeg-kit')) {
+                      details.useVersion '6.0.3-LTS'
+                  }
+              }
+          }
+          EOF
+
+      - name: Update Android Configuration (SDK 35)
+        run: |
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+          
+          # ریپوزٹریز کو دوبارہ یقینی بنانا
+          sed -i "s/google()/google()\n        mavenCentral()/" android/build.gradle
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build APK (Hard Clean)
+      - name: Final Execution
         run: |
           flutter pub get
           flutter clean
