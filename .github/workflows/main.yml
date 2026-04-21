@@ -45,7 +45,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Final Dependency Sync
+      - name: Final Version Alignment (pubspec.yaml)
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
@@ -66,9 +66,9 @@ jobs:
             video_player: ^2.9.2
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: ^1.1.2
-            # Updated to match livekit_client requirements
-            flutter_webrtc: ^1.2.1
-            livekit_client: ^2.5.3
+            # Updated to latest stable to fix SurfaceTextureRenderer error
+            flutter_webrtc: ^1.4.2
+            livekit_client: ^2.7.1
             dio: ^5.7.0
             shared_preferences: ^2.3.3
             sqflite: ^2.3.3+1
@@ -80,12 +80,11 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc: 1.2.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Repositories (FFmpeg & WebRTC Fix)
+      - name: Patch Android Repositories (FFmpeg Fix)
         run: |
           cat <<EOF > android/build.gradle
           buildscript {
@@ -185,8 +184,8 @@ jobs:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Final Cleanup
+      - name: ✅ Clean Stamp
         if: always()
         run: |
-          echo "System Pro Build Engine: Final Attempt"
+          echo "System Pro: SurfaceTextureRenderer Fix Applied."
           flutter clean || true
