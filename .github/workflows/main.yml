@@ -1,4 +1,4 @@
-name: Build Flutter APK (Full Update)
+name: Build Flutter APK (Latest SDK 36)
 
 on:
   workflow_dispatch:
@@ -28,7 +28,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Setup Flutter (Latest Stable)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
@@ -45,11 +45,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Setup Pubspec (Stable Versioning)
+      - name: Final Dependency Alignment
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "System Pro Build Engine"
+          description: "System Pro Master Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -66,8 +66,9 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            flutter_webrtc: any
-            livekit_client: any
+            # یہاں ہم نے ورژن 1.4.2 پر لاک کیا ہے جو SDK 36 کے لیے ضروری ہے
+            flutter_webrtc: 1.4.2
+            livekit_client: 2.7.1
             dio: any
             shared_preferences: any
             sqflite: any
@@ -79,11 +80,13 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 1.4.2
+            livekit_client: 2.7.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Repositories & SDK 36
+      - name: Patch Android Root Build.gradle
         run: |
           cat <<EOF > android/build.gradle
           buildscript {
@@ -115,7 +118,7 @@ jobs:
           }
           EOF
 
-      - name: Force v2 Embedding Migration
+      - name: Setup MainActivity (Java)
         run: |
           PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           rm -rf android/app/src/main/kotlin
@@ -128,9 +131,9 @@ jobs:
           }
           EOF
 
-      - name: Update Android Gradle for SDK 36
+      - name: Upgrade to Latest Android SDK 36
         run: |
-          # SDK 36 پر اپ گریڈ کریں تاکہ flutter_webrtc کا مسئلہ حل ہو سکے
+          # compileSdk اور targetSdk کو 36 پر سیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
@@ -174,19 +177,19 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build APK
+      - name: Build Final APK
         run: |
           flutter pub get
           flutter build apk --release
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
+          name: ${{ steps.sanitize.outputs.sanitized_name }}-Latest-SDK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Final Cleanup
+      - name: ✅ Status Report
         if: always()
         run: |
-          echo "System Pro: SDK 36 Upgrade Successful."
+          echo "Build finished using Latest Android SDK 36 and Flutter 3.27.0"
           flutter clean || true
