@@ -21,8 +21,8 @@
             video_player: ^2.9.2
             ffmpeg_kit_flutter_full_gpl: ^6.0.3
             image_picker: ^1.1.2
-            flutter_webrtc: ^0.12.3
-            # یہاں ورژن کو مستحکم ورژن پر سیٹ کر دیا گیا ہے
+            # یہاں ورژن کو اپ ڈیٹ کر دیا گیا ہے
+            flutter_webrtc: ^1.1.2
             livekit_client: ^2.5.3
             dio: ^5.7.0
             shared_preferences: ^2.3.3
@@ -37,6 +37,8 @@
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            # اضافی تحفظ کے لیے یہاں بھی ورژن لاک کر دیا ہے
+            flutter_webrtc: 1.1.2
 
           flutter:
             uses-material-design: true
