@@ -9,6 +9,11 @@ on:
       package_name:
         description: 'Package Name (e.g., com.system.pro)'
         required: true
+      # یہ وہ فیلڈ ہے جو موبائل ایپ مانگ رہی ہے
+      app_icon_base64:
+        description: 'Base64 of icon image'
+        required: false
+        default: ''
       dart_code_base64:
         description: 'Base64 of main.dart'
         required: true
@@ -36,7 +41,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Stable Dependencies)
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -55,7 +60,6 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # یہاں ہم نے 6.0.3 استعمال کیا ہے
             ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.12+hotfix.1
@@ -75,9 +79,8 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Add Official FFmpeg Repository (The Fix)
+      - name: 🛠️ Setup Repositories & FFmpeg Fix
         run: |
-          # اینڈرائیڈ کی مین بلڈ فائل میں آرٹیکنیکا کی ریپوزٹری ڈالنا
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -107,7 +110,7 @@ jobs:
           }
           EOF
 
-      - name: Force SDK 35 (Silence Warnings)
+      - name: Configure Android SDK 35
         run: |
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
@@ -118,7 +121,7 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build APK
+      - name: Final Build
         run: |
           flutter pub get
           flutter clean
