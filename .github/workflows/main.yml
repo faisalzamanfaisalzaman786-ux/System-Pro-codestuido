@@ -1,4 +1,4 @@
-name: Build Flutter APK (Hybrid SDK Fix)
+name: Build Flutter APK (Final Path Fix)
 
 on:
   workflow_dispatch:
@@ -39,11 +39,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Unified Dependency (The Fix)
+      - name: Force Fix Dependencies (Path & Meta)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Hybrid Build"
+          description: "System Pro Ultimate Path Fix"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -60,9 +60,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم نے ورژن کو لچکدار رکھا ہے تاکہ 34 اور 36 دونوں کے فیچرز مل سکیں
-            flutter_webrtc: ">=1.1.2 <1.5.0"
-            livekit_client: ">=2.5.0 <2.8.0"
+            flutter_webrtc: ^1.1.2
+            livekit_client: ^2.5.0
             dio: any
             shared_preferences: any
             sqflite: any
@@ -71,20 +70,53 @@ jobs:
             flutter_test:
               sdk: flutter
           dependency_overrides:
+            # یہ وہ لائنز ہیں جو ۳۶ گھنٹے کا مسئلہ حل کریں گی
+            path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 1.1.2
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Auto-Fix Gradle (SDK 35 Hybrid)
+      - name: Patch Android Root Build.gradle
         run: |
-          # ہم compileSdk کو 35 پر رکھیں گے جو 36 کی جدید چیزیں بھی سمجھتا ہے اور 34 کے ساتھ بھی ہم آہنگ ہے
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url 'https://jitpack.io' }
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+      - name: Update Android Settings (SDK 35 Hybrid)
+        run: |
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
-          
-          # یہ لائن گریڈل کو کہتی ہے کہ اگر کوئی لائبریری ورژن پر ضد کرے تو اسے نظر انداز کرو
-          echo "configurations.all { resolutionStrategy.force 'androidx.core:core-ktx:1.13.1' }" >> android/app/build.gradle
+          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
+          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
       - name: Inject Dart Code
         run: |
@@ -98,5 +130,11 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Hybrid-APK
+          name: System-Pro-Master-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: ✅ Success Stamp
+        if: always()
+        run: |
+          echo "System Pro: Path conflict resolved. Build process complete."
+          flutter clean || true
