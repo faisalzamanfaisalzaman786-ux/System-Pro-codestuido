@@ -1,12 +1,10 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-// اگر فائر بیس استعمال کر رہے ہیں تو اسے ان کمنٹ کریں
 // apply plugin: 'com.google.gms.google-services'
 
 android {
-    // اینڈرائیڈ 14 (جدید ترین مستحکم ورژن)
     namespace "com.system.pro" 
-    compileSdkVersion 34
+    compileSdk 35
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -14,17 +12,19 @@ android {
 
     defaultConfig {
         applicationId "com.system.pro"
-        // اینڈرائیڈ 12+ کے لیے مندرجہ ذیل ورژنز لازمی ہیں
-        minSdkVersion 21
-        targetSdkVersion 34 
+        minSdk 24
+        targetSdk 35 
         versionCode 1
         versionName "1.0.0"
 
         multiDexEnabled true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
     }
 
-    // جاوا 17 جدید گریڈل اور فلٹر کے لیے ضروری ہے
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -37,15 +37,16 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+            // Set to true if you want to reduce APK size, but keep false for troubleshooting
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
 
 dependencies {
-    // آپ کی فراہم کردہ ڈیپینڈنسیز یہاں آئیں گی
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation "androidx.multidex:multidex:2.0.1"
 
     // AndroidX & UI
@@ -84,7 +85,7 @@ dependencies {
     implementation "androidx.room:room-ktx:$room_version"
     annotationProcessor "androidx.room:room-compiler:$room_version"
 
-    // Flutter Internal (Do not remove)
+    // Flutter Internal
     implementation "androidx.lifecycle:lifecycle-common-java8:2.7.0"
     implementation "androidx.window:window:1.2.0"
     implementation "androidx.window:window-java:1.2.0"
