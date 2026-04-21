@@ -4,6 +4,7 @@ apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace "com.system.pro" 
+    // یہاں ہم نے زبردستی 35 سیٹ کر دیا ہے
     compileSdk 35
 
     sourceSets {
@@ -94,9 +95,10 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
 
-// 1. FFmpeg Force Fix: خراب سرور کو چھوڑ کر MavenCentral استعمال کرنے کے لیے
+// یہ حصہ FFmpeg کے خراب سرور (repo.arthenica.com) کو مکمل طور پر بلاک کر دے گا
 configurations.all {
     resolutionStrategy {
+        // زبردستی ورژن 6.0 استعمال کریں جو MavenCentral پر موجود ہے
         force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
         
         eachDependency { details ->
@@ -107,7 +109,7 @@ configurations.all {
     }
 }
 
-// 2. Global SDK Override: تمام پلگ انز کو زبردستی SDK 35 اور Java 17 پر لانے کے لیے
+// تمام سب-پروجیکٹس اور پلگ انز کو زبردستی SDK 35 پر شفٹ کرنا
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
@@ -115,11 +117,6 @@ subprojects {
                 compileSdk 35
                 defaultConfig {
                     targetSdk 35
-                }
-                // Java 17 compatibility for sub-plugins
-                compileOptions {
-                    sourceCompatibility JavaVersion.VERSION_17
-                    targetCompatibility JavaVersion.VERSION_17
                 }
             }
         }
