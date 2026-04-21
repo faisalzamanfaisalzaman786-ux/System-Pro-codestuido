@@ -45,7 +45,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Resolve Dependencies (LTS Version)
+      - name: Final Dependency Sync
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
@@ -66,7 +66,8 @@ jobs:
             video_player: ^2.9.2
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: ^1.1.2
-            flutter_webrtc: ^0.12.3
+            # Updated to match livekit_client requirements
+            flutter_webrtc: ^1.2.1
             livekit_client: ^2.5.3
             dio: ^5.7.0
             shared_preferences: ^2.3.3
@@ -79,13 +80,13 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 1.2.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Repositories (FFmpeg Fix)
+      - name: Patch Android Repositories (FFmpeg & WebRTC Fix)
         run: |
-          # اینڈرائیڈ کے روٹ build.gradle کو مکمل درست کرنا تاکہ Maven Central ہر جگہ دستیاب ہو
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -178,14 +179,14 @@ jobs:
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Process Completed
+      - name: ✅ Final Cleanup
         if: always()
         run: |
-          echo "System Pro: Repository Patch Applied Successfully."
+          echo "System Pro Build Engine: Final Attempt"
           flutter clean || true
