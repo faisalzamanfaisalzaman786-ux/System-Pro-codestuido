@@ -78,20 +78,16 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Nuclear Fix
+      - name: 🛠️ Setup Repositories & SDK 35 Fix
         run: |
           flutter pub get
 
-          # پب کیشے اور لوکل فائلز میں ورژن کو 5.1 پر سیٹ کرنا (جو کہ میون پر مستحکم ہے)
-          echo "Fixing FFmpeg to version 5.1 (Stable)..."
+          # FFmpeg Fix
+          echo "Fixing FFmpeg versions..."
           find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/5.1/g' {} + || true
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0.3/5.1/g' {} + || true
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0/5.1/g' {} + || true
-          
           find . -name "build.gradle" -exec sed -i 's/6.0-2/5.1/g' {} + || true
-          find . -name "build.gradle" -exec sed -i 's/6.0.3/5.1/g' {} + || true
-          find . -name "build.gradle" -exec sed -i 's/6.0/5.1/g' {} + || true
 
+          # Project Level Gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -101,27 +97,49 @@ jobs:
               }
           }
           allprojects {
-              repositories { 
-                  google()
-                  mavenCentral()
-                  maven { url 'https://www.jitpack.io' }
-                  // آر تھینیکا کی اپنی ریپوزٹری اگر میون کام نہ کرے
-                  maven { url "https://maven.google.com" }
-              }
+              repositories { google(); mavenCentral(); maven { url 'https://www.jitpack.io' } }
               configurations.all {
-                  resolutionStrategy {
-                      // ورژن 5.1 کو فورس کرنا کیونکہ یہ پبلک ریپوزٹریز پر موجود ہے
-                      force 'com.arthenica:ffmpeg-kit-full-gpl:5.1'
-                  }
+                  resolutionStrategy { force 'com.arthenica:ffmpeg-kit-full-gpl:5.1' }
               }
           }
           EOF
 
-          sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
-          sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
-          sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
-          
-          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+          # App Level Gradle (SDK 35 Force)
+          # ہم پوری فائل کو دوبارہ لکھ رہے ہیں تاکہ کوئی پرانی سیٹنگ مداخلت نہ کرے
+          cat <<EOF > android/app/build.gradle
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          android {
+              namespace "${{ github.event.inputs.package_name }}"
+              compileSdkVersion 35
+              
+              defaultConfig {
+                  applicationId "${{ github.event.inputs.package_name }}"
+                  minSdkVersion 24
+                  targetSdkVersion 35
+                  versionCode 1
+                  versionName "1.0"
+                  multiDexEnabled true
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions { jvmTarget = '17' }
+          }
+
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+              implementation "androidx.multidex:multidex:2.0.1"
+          }
+          EOF
+
+          # تمام پلگ انز کو زبردستی SDK 35 پر شفٹ کرنا
+          echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
         run: echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
