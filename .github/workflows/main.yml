@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec
+      - name: Write Pubspec (Stable Dependencies)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,7 +59,8 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            ffmpeg_kit_flutter_full_gpl: any
+            # ہم نے پیکیج کو 'video' ورژن میں بدل دیا ہے جو زیادہ مستحکم ہے
+            ffmpeg_kit_flutter_video: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -70,20 +71,18 @@ jobs:
           dev_dependencies:
             flutter_test:
               sdk: flutter
+          dependency_overrides:
+            path: 1.9.0
+            meta: 1.15.0
           flutter:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Repo-Level Fix
+      - name: 🛠️ Setup Repositories & SDK 35 Fix
         run: |
           flutter pub get
 
-          # پب کیشے میں ورژن کی تکرار ختم کرنا
-          # ہم کسی مخصوص ورژن کو فورس کرنے کے بجائے '6.0.3' (جو کہ ڈیفالٹ ہے) پر واپس جا رہے ہیں
-          # لیکن اس بار ریپوزٹری کا راستہ درست کریں گے
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
-
-          # Project Level Gradle (ریپوزٹریز کا اضافہ)
+          # Project Level Gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -96,15 +95,12 @@ jobs:
               repositories { 
                   google()
                   mavenCentral()
-                  // یہ وہ ریپوزٹری ہے جہاں FFmpeg کے تمام ورژنز موجود ہوتے ہیں
-                  maven { url "https://maven.google.com" }
                   maven { url "https://jitpack.io" }
               }
-              // ہم یہاں سے ResolutionStrategy ہٹا رہے ہیں تاکہ گریڈل خود فیصلہ کرے
           }
           EOF
 
-          # App Level Gradle (SDK 35)
+          # App Level Gradle (SDK 35 Force & Namespace)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -129,6 +125,10 @@ jobs:
                   versionName "1.0"
                   multiDexEnabled true
               }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
@@ -136,7 +136,7 @@ jobs:
           }
           EOF
 
-          # تمام سب پروجیکٹس کو SDK 35 پر مجبور کرنا
+          # تمام پلگ انز کو زبردستی SDK 35 پر شفٹ کرنا تاکہ 'workmanager' وغیرہ کا ایرر نہ آئے
           echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
