@@ -1,4 +1,4 @@
-name: Build Flutter APK (Version Range Fix)
+name: Build Flutter APK (Stable Environment Fix)
 
 on:
   workflow_dispatch:
@@ -28,10 +28,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Setup Stable Flutter (The Game Changer)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          # ہم 3.27 سے واپس 3.24 پر جا رہے ہیں جو ان لائبریریز کے ساتھ بہترین چلتا ہے
+          flutter-version: '3.24.0'
           channel: 'stable'
 
       - name: Create Project
@@ -39,15 +40,15 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Flexible Range)
+      - name: Write Stable Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Build"
+          description: "System Pro Stable Build"
           publish_to: none
           version: 1.0.0+1
           environment:
-            sdk: ">=3.6.0 <4.0.0"
+            sdk: ">=3.5.0 <4.0.0"
           dependencies:
             flutter:
               sdk: flutter
@@ -60,8 +61,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم نے رینج دی ہے تاکہ فلٹر خود بہترین ورژن تلاش کرے
-            flutter_webrtc: '>=1.1.0 <1.2.0'
+            # 1.1.2 اب بغیر کسی پیچنگ کے چلے گا
+            flutter_webrtc: 1.1.2
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -77,10 +78,11 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Fix Android SDK Configuration
+      - name: Configure Android SDK 34 (Stable)
         run: |
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
+          # فلٹر 3.24 کے لیے SDK 34 یا 35 بہترین ہے
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
@@ -88,15 +90,13 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Clean & Build
+      - name: Clean & Build APK
         run: |
-          # پچھلی تمام خراب ڈیپینڈنسیز کو صاف کریں
-          flutter pub cache clean -f
           flutter pub get
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-APK
+          name: System-Pro-Stable-APK
           path: build/app/outputs/flutter-apk/app-release.apk
