@@ -61,16 +61,14 @@ jobs:
 
       - name: 🛠️ Setup Repositories & Nuclear Fix
         run: |
-          # 1. پہلے تمام پلگ انز ڈاؤن لوڈ کریں
+          # 1. پلگ انز ڈاؤن لوڈ کریں
           flutter pub get
 
-          # 2. اب زبردستی پورے کمپیوٹر (Runner) میں جہاں بھی 6.0-2 لکھا ہے اسے 6.0.3 سے بدل دیں
-          # ہم نے اس بار "PUB_CACHE" کو بھی نشانہ بنایا ہے جہاں پلگ انز کا اصلی کوڈ ہوتا ہے
-          sudo find /opt/hostedtoolcache/flutter -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
+          # 2. FFmpeg ورژن کو زبردستی 6.0.3 کرنا تاکہ ایرر نہ آئے
+          # تمام build.gradle فائلوں میں 6.0-2 کو 6.0.3 سے بدلنا
           find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
-          find . -name "build.gradle" -exec sed -i 's/6.0"/6.0.3"/g' {} + || true
 
-          # 3. پروجیکٹ لیول گریڈل سیٹ کریں
+          # 3. پروجیکٹ لیول گریڈل (build.gradle) کو دوبارہ لکھنا
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -84,13 +82,21 @@ jobs:
           }
           EOF
 
-          # 4. ایپ لیول گریڈل اور SDK 35 کی سیٹنگز
-          cat <<EOF >> android/app/build.gradle
+          # 4. ایپ لیول گریڈل (app/build.gradle) کو کلین اپ اور اپ ڈیٹ کرنا
+          # پہلے سے موجود غلط سیٹنگز کو ٹھیک کرنا
+          sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
+          sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
+          sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
+          
+          # فائل کے آخر میں جادوئی بلاک شامل کرنا (بغیر کسی بریکٹ ایرر کے)
+          cat <<'EOF' >> android/app/build.gradle
+
           configurations.all {
               resolutionStrategy {
                   force 'com.arthenica:ffmpeg-kit-full-gpl:6.0.3'
               }
           }
+
           subprojects {
               afterEvaluate { project ->
                   if (project.hasProperty('android')) {
@@ -104,9 +110,7 @@ jobs:
           }
           EOF
 
-          sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
-          sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
-          sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
+          # Namespace سیٹ کرنا
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
       - name: Inject Dart Code
