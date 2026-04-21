@@ -15,6 +15,7 @@ android {
         multiDexEnabled true
         
         ndk {
+            // ان فلٹرز کی وجہ سے ایپ کا سائز بھی کم ہوگا اور وہ ان ڈیوائسز پر چلے گی
             abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
         }
     }
@@ -27,20 +28,20 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug // یا اپنا ریلیز کی اسٹور استعمال کریں
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 }
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation "androidx.multidex:multidex:2.0.1"
-    
-    // آپ کی تمام دیگر ڈیپنڈنسیز یہاں موجود ہونی چاہئیں (Firebase, CameraX وغیرہ)
-    // جو میں نے پچھلی فائل میں دی تھیں
-}
-
-// یہ جادوئی حصہ ہے جو بلڈ کو پاس کروائے گا
+// FFmpeg کے مسئلے کو جڑ سے ختم کرنے کے لیے یہ حصہ یہاں بھی ضروری ہے
 configurations.all {
     resolutionStrategy {
-        // یہ لائن گریڈل کو کہتی ہے کہ '6.0-2' کو بھول جاؤ اور '6.0' اٹھاؤ
+        // یہ لائن گریڈل کو مجبور کرے گی کہ وہ 6.0-2 کے بجائے 6.0 اٹھائے
         force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
         
         eachDependency { details ->
@@ -51,12 +52,25 @@ configurations.all {
     }
 }
 
-// تمام پلگ انز کو SDK 35 پر مجبور کرنا
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "androidx.multidex:multidex:2.0.1"
+    
+    // فائر بیس اور دیگر ڈیپنڈنسیز
+    implementation platform('com.google.firebase:firebase-bom:32.2.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    
+    // اگر آپ FFmpeg پلگ ان استعمال کر رہے ہیں تو اسے یہاں ان کمنٹ کریں (اگر پب اسپیک سے نہیں ہو رہا)
+    // implementation 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+}
+
+// یہ کوڈ بلاک تمام سب-پروجیکٹس (پلگ انز) کو SDK 35 پر شفٹ کر دے گا
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             project.android {
                 compileSdk 35
+                buildToolsVersion "35.0.0"
                 defaultConfig {
                     targetSdk 35
                 }
