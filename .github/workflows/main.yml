@@ -83,18 +83,15 @@ jobs:
           # 1. ڈیپینڈنسیز ڈاؤن لوڈ کریں
           flutter pub get
 
-          # 2. FFmpeg پلگ ان کے اصل سورس کوڈ کو کیشے میں جا کر ٹھیک کرنا
-          # یہ قدم بہت اہم ہے کیونکہ پلگ ان کے اندر '6.0-2' ہارڈ کوڈڈ ہوتا ہے
-          FFMPEG_PATH=$(flutter pub cache path ffmpeg_kit_flutter_full_gpl)
-          if [ -d "$FFMPEG_PATH" ]; then
-            find "$FFMPEG_PATH" -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} +
-            echo "✅ FFmpeg Plugin Source Fixed at $FFMPEG_PATH"
-          fi
+          # 2. FFmpeg پلگ ان کے سورس کوڈ کو ٹھیک کرنا (بغیر 'pub cache path' کمانڈ کے)
+          # ہم براہ راست پب کیشے کے فولڈر میں جا کر تمام build.gradle فائلز میں تبدیلی کر رہے ہیں
+          echo "Fixing FFmpeg in pub cache..."
+          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
 
-          # 3. پورے پروجیکٹ میں کہیں بھی غلط ورژن ہو تو اسے بدلنا
+          # 3. لوکل پروجیکٹ کی فائلز کو بھی ٹھیک کرنا
           find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
 
-          # 4. پروجیکٹ لیول گریڈل (android/build.gradle) دوبارہ لکھنا
+          # 4. پروجیکٹ لیول گریڈل
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -113,12 +110,12 @@ jobs:
           }
           EOF
 
-          # 5. ایپ لیول گریڈل کی سیٹنگز
+          # 5. ایپ لیول گریڈل اور SDK ورژن
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
           sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
           
-          # Namespace شامل کرنا
+          # Namespace سیٹ کرنا
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
       - name: Inject Dart Code
