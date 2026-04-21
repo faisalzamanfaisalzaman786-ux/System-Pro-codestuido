@@ -1,4 +1,4 @@
-name: Build Flutter APK (Latest SDK 36)
+name: Build Flutter APK (Hybrid SDK Fix)
 
 on:
   workflow_dispatch:
@@ -34,22 +34,16 @@ jobs:
           flutter-version: '3.27.0'
           channel: 'stable'
 
-      - name: Sanitize App Name
-        id: sanitize
-        run: |
-          S_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
-          echo "sanitized_name=${S_NAME}" >> $GITHUB_OUTPUT
-
-      - name: Create Clean Flutter Project
+      - name: Create Project
         run: |
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
-          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
+          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Final Dependency Solver
+      - name: Unified Dependency (The Fix)
         run: |
           cat <<EOF > pubspec.yaml
-          name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "System Pro Build Engine"
+          name: system_pro_app
+          description: "System Pro Hybrid Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -66,9 +60,9 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # یہاں ہم نے ورژن 1.4.2 پر لاک کیا ہے
-            flutter_webrtc: 1.4.2
-            livekit_client: any
+            # یہاں ہم نے ورژن کو لچکدار رکھا ہے تاکہ 34 اور 36 دونوں کے فیچرز مل سکیں
+            flutter_webrtc: ">=1.1.2 <1.5.0"
+            livekit_client: ">=2.5.0 <2.8.0"
             dio: any
             shared_preferences: any
             sqflite: any
@@ -76,118 +70,33 @@ jobs:
           dev_dependencies:
             flutter_test:
               sdk: flutter
-            flutter_lints: ^5.0.0
           dependency_overrides:
-            path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc: 1.4.2
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Patch Android Repositories
+      - name: Auto-Fix Gradle (SDK 35 Hybrid)
         run: |
-          cat <<EOF > android/build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-                  maven { url 'https://jitpack.io' }
-              }
-          }
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-      - name: Force v2 Embedding Migration
-        run: |
-          PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
-          rm -rf android/app/src/main/kotlin
-          rm -rf android/app/src/main/java/*
-          mkdir -p android/app/src/main/java/$PACKAGE_PATH
-          cat <<EOF > android/app/src/main/java/$PACKAGE_PATH/MainActivity.java
-          package ${{ github.event.inputs.package_name }};
-          import io.flutter.embedding.android.FlutterActivity;
-          public class MainActivity extends FlutterActivity {
-          }
-          EOF
-
-      - name: Update Android Gradle Settings (SDK 36)
-        run: |
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
+          # ہم compileSdk کو 35 پر رکھیں گے جو 36 کی جدید چیزیں بھی سمجھتا ہے اور 34 کے ساتھ بھی ہم آہنگ ہے
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
-          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
-          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
-
-      - name: Write AndroidManifest.xml
-        run: |
-          cat <<EOF > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ github.event.inputs.package_name }}">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <application
-                  android:label="${{ github.event.inputs.app_name }}"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
-          EOF
+          
+          # یہ لائن گریڈل کو کہتی ہے کہ اگر کوئی لائبریری ورژن پر ضد کرے تو اسے نظر انداز کرو
+          echo "configurations.all { resolutionStrategy.force 'androidx.core:core-ktx:1.13.1' }" >> android/app/build.gradle
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build APK
+      - name: Final Execution
         run: |
           flutter pub get
           flutter build apk --release
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
+          name: System-Pro-Hybrid-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: ✅ Clean Stamp
-        if: always()
-        run: |
-          echo "System Pro: Version conflict resolved by dynamic scaling for LiveKit."
-          flutter clean || true
