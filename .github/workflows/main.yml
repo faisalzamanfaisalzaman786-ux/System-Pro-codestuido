@@ -59,9 +59,9 @@ jobs:
           flutter: { uses-material-design: true }
           EOF
 
-      - name: 🛠️ Setup Repositories & Dependency Redirect
+      - name: 🛠️ Setup Repositories & Nuclear FFmpeg Fix
         run: |
-          # پروجیکٹ لیول گریڈل
+          # پروجیکٹ لیول گریڈل (صاف ستھرا)
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -75,13 +75,23 @@ jobs:
           }
           EOF
 
-          # ایپ لیول گریڈل: یہاں ہم 6.0-2 کو زبردستی 6.0 سے بدل رہے ہیں
+          # پب گیٹ کریں تاکہ پلگ انز ڈاؤن لوڈ ہو جائیں
+          flutter pub get
+
+          # اب جادو: تمام کیشے فولڈرز میں گھس کر 6.0-2 کو 6.0 سے بدلنا
+          # ہم PUB_CACHE کو بھی نشانہ بنائیں گے
+          find $PUB_CACHE -name "build.gradle" -exec sed -i 's/6.0-2/6.0/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0/g' {} + || true
+
+          # ایپ لیول گریڈل میں زبردستی سیٹنگز اور SDK 35 ڈالنا
           cat <<EOF >> android/app/build.gradle
           configurations.all {
-              resolutionStrategy.dependencySubstitution {
-                  substitute module('com.arthenica:ffmpeg-kit-full-gpl:6.0-2') using module('com.arthenica:ffmpeg-kit-full-gpl:6.0')
+              resolutionStrategy {
+                  force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+                  dependencySubstitution {
+                      substitute module('com.arthenica:ffmpeg-kit-full-gpl:6.0-2') using module('com.arthenica:ffmpeg-kit-full-gpl:6.0')
+                  }
               }
-              resolutionStrategy.force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
           }
 
           subprojects {
@@ -96,6 +106,7 @@ jobs:
           }
           EOF
 
+          # SDK ورژن کو زبردستی اپ ڈیٹ کرنا
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
           sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
@@ -106,7 +117,6 @@ jobs:
 
       - name: Build APK
         run: |
-          flutter pub get
           flutter build apk --release
 
       - name: Upload APK
