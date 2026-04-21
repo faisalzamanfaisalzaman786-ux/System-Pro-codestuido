@@ -19,9 +19,8 @@
             flutter_local_notifications: ^17.2.3
             workmanager: ^0.5.2
             video_player: ^2.9.2
-            ffmpeg_kit_flutter_full_gpl: ^6.0.3
+            ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: ^1.1.2
-            # یہاں ورژن کو اپ ڈیٹ کر دیا گیا ہے
             flutter_webrtc: ^1.1.2
             livekit_client: ^2.5.3
             dio: ^5.7.0
@@ -37,8 +36,9 @@
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
-            # اضافی تحفظ کے لیے یہاں بھی ورژن لاک کر دیا ہے
             flutter_webrtc: 1.1.2
+            # یہ لائن FFmpeg کے ضدی ایرر کو ختم کرنے کے لیے شامل کی گئی ہے
+            ffmpeg_kit_flutter_full_gpl: 6.0.3
 
           flutter:
             uses-material-design: true
