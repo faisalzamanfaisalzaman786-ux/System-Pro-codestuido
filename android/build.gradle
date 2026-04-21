@@ -19,6 +19,13 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
     }
+
+    // FFmpeg ورژن کا مسئلہ حل کرنے کے لیے یہ حصہ شامل کیا گیا ہے
+    configurations.all {
+        resolutionStrategy {
+            force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+        }
+    }
 }
 
 rootProject.buildDir = '../build'
