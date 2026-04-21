@@ -83,13 +83,14 @@ jobs:
           # 1. ڈیپینڈنسیز ڈاؤن لوڈ کریں
           flutter pub get
 
-          # 2. FFmpeg پلگ ان کے سورس کوڈ کو ٹھیک کرنا (بغیر 'pub cache path' کمانڈ کے)
-          # ہم براہ راست پب کیشے کے فولڈر میں جا کر تمام build.gradle فائلز میں تبدیلی کر رہے ہیں
-          echo "Fixing FFmpeg in pub cache..."
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
+          # 2. پب کیشے میں ورژن کو زبردستی 6.0 کرنا (6.0-2 یا 6.0.3 کو ہٹا کر)
+          echo "Fixing FFmpeg in pub cache to stable 6.0..."
+          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/6.0/g' {} + || true
+          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0.3/6.0/g' {} + || true
 
           # 3. لوکل پروجیکٹ کی فائلز کو بھی ٹھیک کرنا
-          find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0.3/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/6.0.3/6.0/g' {} + || true
 
           # 4. پروجیکٹ لیول گریڈل
           cat <<EOF > android/build.gradle
@@ -104,7 +105,8 @@ jobs:
               repositories { google(); mavenCentral(); maven { url 'https://www.jitpack.io' } }
               configurations.all {
                   resolutionStrategy {
-                      force 'com.arthenica:ffmpeg-kit-full-gpl:6.0.3'
+                      // ورژن 6.0 سب سے زیادہ مستحکم ہے اور ریپوزٹری پر موجود ہے
+                      force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
                   }
               }
           }
