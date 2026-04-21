@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final JitPack Fix)
+name: Build Flutter APK (Permanent FFmpeg Fix)
 
 on:
   workflow_dispatch:
@@ -9,9 +9,6 @@ on:
       package_name:
         description: 'Package Name (e.g., com.system.pro)'
         required: true
-      app_icon_base64:
-        description: 'Base64 of icon image (PNG/JPG)'
-        required: false
       dart_code_base64:
         description: 'Base64 of main.dart'
         required: true
@@ -39,7 +36,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Fixed Version)
+      - name: Write Pubspec (Stable Dependencies)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -58,7 +55,7 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # یہاں ورژن کو بغیر LTS کے 6.0.3 رکھا ہے
+            # یہاں ہم نے 6.0.3 استعمال کیا ہے
             ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.12+hotfix.1
@@ -78,9 +75,9 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ The Global Repository Fix
+      - name: 🛠️ Add Official FFmpeg Repository (The Fix)
         run: |
-          # اینڈرائیڈ کی روٹ بلڈ فائل کو مکمل ری رائٹ کرنا
+          # اینڈرائیڈ کی مین بلڈ فائل میں آرٹیکنیکا کی ریپوزٹری ڈالنا
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -96,8 +93,8 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
+                  maven { url "https://repo.arthenica.com" }
                   maven { url 'https://www.jitpack.io' }
-                  maven { url "https://maven.google.com" }
               }
           }
           rootProject.buildDir = '../build'
@@ -110,7 +107,7 @@ jobs:
           }
           EOF
 
-      - name: Configure App Settings (SDK 35)
+      - name: Force SDK 35 (Silence Warnings)
         run: |
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
@@ -121,7 +118,7 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Build Release APK
+      - name: Final Build APK
         run: |
           flutter pub get
           flutter clean
