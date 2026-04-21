@@ -1,6 +1,18 @@
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+if (flutterRoot == null) {
+    throw new GradleException("Flutter SDK not found.")
+}
+
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-// apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace "com.system.pro" 
@@ -58,7 +70,7 @@ dependencies {
     implementation "androidx.work:work-runtime-ktx:2.9.0"
     implementation "androidx.concurrent:concurrent-futures-ktx:1.1.0"
 
-    // Firebase
+    // Firebase (Bom ensures version compatibility)
     implementation platform('com.google.firebase:firebase-bom:32.7.0')
     implementation 'com.google.firebase:firebase-analytics-ktx'
     implementation 'com.google.firebase:firebase-messaging-ktx'
@@ -75,7 +87,7 @@ dependencies {
     implementation "com.squareup.retrofit2:converter-gson:2.9.0"
     implementation "com.squareup.okhttp3:logging-interceptor:4.12.0"
 
-    // Utilities (Glide & Room)
+    // Utilities
     implementation "com.github.bumptech.glide:glide:4.16.0"
     annotationProcessor "com.github.bumptech.glide:compiler:4.16.0"
     
@@ -94,9 +106,25 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
 
-// CRITICAL FIX: Force FFmpeg to use MavenCentral instead of the broken Arthenica repo
+// 1. FORCED DEPENDENCY REDIRECT (Fixes FFmpeg repo error)
 configurations.all {
-    resolutionStrategy {
-        force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'com.arthenica' && details.requested.name.contains('ffmpeg-kit')) {
+            details.useVersion "6.0"
+        }
+    }
+}
+
+// 2. FORCED SDK OVERRIDE (Fixes the "Requires SDK 35" error in plugins)
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdk 35
+                defaultConfig {
+                    targetSdk 35
+                }
+            }
+        }
     }
 }
