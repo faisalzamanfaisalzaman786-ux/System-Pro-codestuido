@@ -1,4 +1,4 @@
-name: Build Flutter APK (SDK 36 & Surface Fix)
+name: Build Flutter APK (Atomic Fix SDK 36)
 
 on:
   workflow_dispatch:
@@ -76,32 +76,56 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Fix Android SDK to 36
+      - name: Atomic Gradle Fix (Force SDK 36)
         run: |
-          # یہاں ہم زبردستی 36 سیٹ کر رہے ہیں تاکہ WebRTC خوش رہے
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
-          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
-          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
+          # ہم پوری فائل کو دوبارہ لکھ رہے ہیں تاکہ ورژن 36 ہر صورت میں اپلائی ہو
+          cat <<EOF > android/app/build.gradle
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          android {
+              namespace "${{ github.event.inputs.package_name }}"
+              compileSdk 36
+              defaultConfig {
+                  applicationId "${{ github.event.inputs.package_name }}"
+                  minSdk 24
+                  targetSdk 36
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          EOF
 
-      - name: 🛠️ Smart Patch WebRTC (Surface Fix)
+      - name: 🛠️ Precise WebRTC Patching
         run: |
           flutter pub get
           FILE_PATH=$(find /home/runner/.pub-cache -name "SurfaceTextureRenderer.java" | head -n 1)
           if [ -n "$FILE_PATH" ]; then
-            echo "Cleaning and Patching: $FILE_PATH"
-            # پہلے سے موجود غلط اوور رائیڈز کو صاف کرنا اور نیا میتھڈ صحیح جگہ پر ڈالنا
-            sed -i '/onSurfaceDestroyed/d' "$FILE_PATH"
-            sed -i '/public void onSurfaceAvailable/i \            @Override public void onSurfaceDestroyed(android.graphics.SurfaceTexture surface) {}' "$FILE_PATH"
+            echo "Deep Cleaning & Patching: $FILE_PATH"
+            # ہم پوری فائل کے اندر 'onSurfaceDestroyed' والے بلاک کو مکمل صاف کر کے دوبارہ ڈال رہے ہیں
+            perl -i -0777 -pe 's/new TextureRegistry\.SurfaceProducer\.Callback\(\) \{/new TextureRegistry.SurfaceProducer.Callback() {\n            \@Override public void onSurfaceDestroyed(android.graphics.SurfaceTexture surface) {}\n/g' "$FILE_PATH"
+            # ڈبل اوور رائیڈز ہٹانے کے لیے صفائی
+            sed -i '125,135d' "$FILE_PATH" || true
           fi
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final APK Build
+      - name: Final Build
         run: |
-          # ہم --no-pub استعمال کریں گے تاکہ ہماری پیچنگ ضائع نہ ہو
           flutter build apk --release --no-pub
 
       - name: Upload APK
