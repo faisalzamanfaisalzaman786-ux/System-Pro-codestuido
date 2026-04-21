@@ -60,7 +60,6 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
-            # فلٹر 3.24 کے لیے سب سے بہترین اور مستحکم ورژن
             flutter_webrtc: 0.12.2
             livekit_client: any
             dio: any
@@ -77,9 +76,9 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & SDK 35
+      - name: 🛠️ Setup Repositories & FFmpeg Paka Fix
         run: |
-          # FFmpeg اور دیگر کے لیے ریپوزٹریز ڈالنا
+          # پروجیکٹ لیول فائل کو درست کرنا (خراب لنک نکال دیا گیا ہے)
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -95,7 +94,6 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-                  maven { url "https://repo.arthenica.com" }
                   maven { url 'https://www.jitpack.io' }
               }
           }
@@ -104,12 +102,32 @@ jobs:
               project.buildDir = "\${rootProject.buildDir}/\${project.name}"
               project.evaluationDependsOn(':app')
           }
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
+          EOF
+
+          # FFmpeg کو MavenCentral پر مجبور کرنے کے لیے ایپ لیول گریڈل میں جادوئی کوڈ ڈالنا
+          cat <<EOF >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy {
+                  force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
+              }
+          }
+
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdk 35
+                          defaultConfig {
+                              targetSdk 35
+                          }
+                      }
+                  }
+              }
           }
           EOF
 
-          # SDK 35 کو زبردستی لاگو کرنا تاکہ وارننگز ختم ہوں
+          # SDK ورژن کو اپ ڈیٹ کرنا
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
           sed -i "s/minSdkVersion .*/minSdkVersion 24/" android/app/build.gradle
