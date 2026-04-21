@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Flexible Solution)
+name: Build Flutter APK (SDK 36 & Surface Fix)
 
 on:
   workflow_dispatch:
@@ -34,22 +34,16 @@ jobs:
           flutter-version: '3.27.0'
           channel: 'stable'
 
-      - name: Sanitize App Name
-        id: sanitize
-        run: |
-          S_NAME=$(echo "${{ github.event.inputs.app_name }}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_' | sed 's/[^a-z0-9_]//g')
-          echo "sanitized_name=${S_NAME}" >> $GITHUB_OUTPUT
-
       - name: Create Project
         run: |
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
-          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
+          flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Optimized pubspec.yaml
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
-          name: ${{ steps.sanitize.outputs.sanitized_name }}
-          description: "Universal App"
+          name: system_pro_app
+          description: "System Pro Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -57,66 +51,61 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            camera: ^0.11.0+2
-            permission_handler: ^11.3.1
-            path_provider: ^2.1.4
-            flutter_background_service: ^5.1.0
-            flutter_local_notifications: ^17.2.3
-            workmanager: ^0.5.2
-            video_player: ^2.9.2
-            ffmpeg_kit_flutter_full_gpl: ^6.0.3
-            image_picker: ^1.1.2
-            # ورژن کو 'any' کر دیا تاکہ ایرر نہ آئے
+            camera: any
+            permission_handler: any
+            path_provider: any
+            flutter_background_service: any
+            flutter_local_notifications: any
+            workmanager: any
+            video_player: any
+            ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
+            image_picker: any
             flutter_webrtc: any
             livekit_client: any
-            dio: ^5.7.0
-            shared_preferences: ^2.3.3
-            sqflite: ^2.3.3+1
-            device_info_plus: ^11.1.0
+            dio: any
+            shared_preferences: any
+            sqflite: any
+            device_info_plus: any
           dev_dependencies:
             flutter_test:
               sdk: flutter
-            flutter_lints: ^5.0.0
           dependency_overrides:
-            # صرف ضروری چیزوں کو اوور رائیڈ کریں
             path: 1.9.0
             meta: 1.15.0
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Update Android SDK 36 Configuration
+      - name: Fix Android SDK to 36
         run: |
+          # یہاں ہم زبردستی 36 سیٹ کر رہے ہیں تاکہ WebRTC خوش رہے
           sed -i 's/compileSdkVersion .*/compileSdkVersion 36/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 36/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
-          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
           sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
-      - name: 🛠️ Auto-Patch Logic (The Real Solution)
+      - name: 🛠️ Smart Patch WebRTC (Surface Fix)
         run: |
-          # پہلے پیکیج حاصل کریں
           flutter pub get
-          # اب کیشے میں جا کر اس فائل کو ٹھیک کریں جو ویب آر ٹی سی کا اصل مسئلہ ہے
           FILE_PATH=$(find /home/runner/.pub-cache -name "SurfaceTextureRenderer.java" | head -n 1)
           if [ -n "$FILE_PATH" ]; then
-            echo "Patching file: $FILE_PATH"
-            # اس لائن کو شامل کرنا ضروری ہے تاکہ کمپائلیشن ایرر نہ آئے
+            echo "Cleaning and Patching: $FILE_PATH"
+            # پہلے سے موجود غلط اوور رائیڈز کو صاف کرنا اور نیا میتھڈ صحیح جگہ پر ڈالنا
+            sed -i '/onSurfaceDestroyed/d' "$FILE_PATH"
             sed -i '/public void onSurfaceAvailable/i \            @Override public void onSurfaceDestroyed(android.graphics.SurfaceTexture surface) {}' "$FILE_PATH"
-          else
-            echo "Warning: SurfaceTextureRenderer.java not found."
           fi
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build APK
+      - name: Final APK Build
         run: |
-          flutter build apk --release
+          # ہم --no-pub استعمال کریں گے تاکہ ہماری پیچنگ ضائع نہ ہو
+          flutter build apk --release --no-pub
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sanitize.outputs.sanitized_name }}-Build
+          name: System-Pro-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
