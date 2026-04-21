@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Safe Version Strategy)
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,8 +59,7 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # ورژن 4.5.1 سب سے زیادہ مستحکم اور دستیاب ورژن ہے
-            ffmpeg_kit_flutter_full_gpl: 4.5.1
+            ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -71,49 +70,36 @@ jobs:
           dev_dependencies:
             flutter_test:
               sdk: flutter
-          dependency_overrides:
-            path: 1.9.0
-            meta: 1.15.0
-            # یہاں بھی ورژن کو لاک کر دیا گیا ہے
-            ffmpeg_kit_flutter_full_gpl: 4.5.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Nuclear Fix
+      - name: 🛠️ Setup Repositories & Clean Build Fix
         run: |
           flutter pub get
 
-          # پب کیشے میں ورژن کو زبردستی 4.5.1 پر سیٹ کرنا
-          echo "Force-patching FFmpeg in pub cache..."
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0-2/4.5.1/g' {} + || true
-          find $HOME/.pub-cache -name "build.gradle" -exec sed -i 's/6.0.3/4.5.1/g' {} + || true
-
-          # Project Level Gradle
+          # Project Level Gradle (صفائی کے ساتھ ریپوزٹریز سیٹ کرنا)
           cat <<EOF > android/build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
               }
           }
           allprojects {
-              repositories { 
+              repositories {
                   google()
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
               }
-              configurations.all {
-                  resolutionStrategy {
-                      // ورژن 4.5.1 کو ہر جگہ فورس کرنا
-                      force 'com.arthenica:ffmpeg-kit-full-gpl:4.5.1'
-                  }
-              }
           }
           EOF
 
-          # App Level Gradle (SDK 35 & Flutter Root Fix)
+          # App Level Gradle (کوئی پیچیدہ سیٹنگ نہیں، صرف بنیادی ضرورت)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -138,10 +124,6 @@ jobs:
                   versionName "1.0"
                   multiDexEnabled true
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
@@ -149,7 +131,7 @@ jobs:
           }
           EOF
 
-          # تمام سب پروجیکٹس کو SDK 35 پر مجبور کرنا
+          # تمام ڈیپینڈنسیز کو SDK 35 پر لاک کرنا (تاکہ نوٹیفکیشن اور ورک مینیجر کا مسئلہ نہ آئے)
           echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
