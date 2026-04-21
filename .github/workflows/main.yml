@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Clean Fix)
+name: Build Flutter APK (Final JitPack Fix)
 
 on:
   workflow_dispatch:
@@ -39,11 +39,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec
+      - name: Write Pubspec (Fixed Version)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Final Build"
+          description: "System Pro Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -58,6 +58,7 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
+            # یہاں ورژن کو بغیر LTS کے 6.0.3 رکھا ہے
             ffmpeg_kit_flutter_full_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.12+hotfix.1
@@ -77,8 +78,9 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ The Forced Resolution Strategy (Clean)
+      - name: 🛠️ The Global Repository Fix
         run: |
+          # اینڈرائیڈ کی روٹ بلڈ فائل کو مکمل ری رائٹ کرنا
           cat <<EOF > android/build.gradle
           buildscript {
               repositories {
@@ -94,21 +96,13 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-                  maven { url 'https://jitpack.io' }
-              }
-              configurations.all {
-                  resolutionStrategy.eachDependency { details ->
-                      if (details.requested.group == 'com.arthenica') {
-                          details.useVersion '6.0.3'
-                      }
-                  }
+                  maven { url 'https://www.jitpack.io' }
+                  maven { url "https://maven.google.com" }
               }
           }
           rootProject.buildDir = '../build'
           subprojects {
               project.buildDir = "\${rootProject.buildDir}/\${project.name}"
-          }
-          subprojects {
               project.evaluationDependsOn(':app')
           }
           tasks.register("clean", Delete) {
@@ -116,7 +110,7 @@ jobs:
           }
           EOF
 
-      - name: Configure App (SDK 35)
+      - name: Configure App Settings (SDK 35)
         run: |
           sed -i "s/compileSdkVersion .*/compileSdkVersion 35/" android/app/build.gradle
           sed -i "s/targetSdkVersion .*/targetSdkVersion 35/" android/app/build.gradle
