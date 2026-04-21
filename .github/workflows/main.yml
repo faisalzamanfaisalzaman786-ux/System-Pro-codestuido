@@ -45,7 +45,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name ${{ steps.sanitize.outputs.sanitized_name }} --platforms android .
 
-      - name: Version Sync (pubspec.yaml)
+      - name: Resolve Dependencies (LTS Version)
         run: |
           cat <<EOF > pubspec.yaml
           name: ${{ steps.sanitize.outputs.sanitized_name }}
@@ -83,7 +83,40 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Force v2 Embedding & Clean Java
+      - name: Patch Android Repositories (FFmpeg Fix)
+        run: |
+          # اینڈرائیڈ کے روٹ build.gradle کو مکمل درست کرنا تاکہ Maven Central ہر جگہ دستیاب ہو
+          cat <<EOF > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url 'https://jitpack.io' }
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+      - name: Force v2 Embedding Migration
         run: |
           PACKAGE_PATH=$(echo "${{ github.event.inputs.package_name }}" | tr '.' '/')
           rm -rf android/app/src/main/kotlin
@@ -96,12 +129,8 @@ jobs:
           }
           EOF
 
-      - name: Fix FFmpeg Repo & Android Config
+      - name: Update App-level Gradle
         run: |
-          # اینڈرائیڈ کی سیٹنگز میں Maven Central اور Google Repos کو یقینی بنانا
-          sed -i "s/google()/google()\n        mavenCentral()\n        maven { url 'https:\/\/jitpack.io' }/g" android/build.gradle
-          
-          # SDK سیٹنگز
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
@@ -149,14 +178,14 @@ jobs:
           flutter pub get
           flutter build apk --release
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.sanitize.outputs.sanitized_name }}-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: ✅ Final Stamp
+      - name: ✅ Process Completed
         if: always()
         run: |
-          echo "System Pro: Build #334 Fixed."
+          echo "System Pro: Repository Patch Applied Successfully."
           flutter clean || true
