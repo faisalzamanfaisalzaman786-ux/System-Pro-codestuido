@@ -1,4 +1,4 @@
-name: Build Flutter APK (Atomic Fix SDK 36)
+name: Build Flutter APK (Version 1.1.1 Fix)
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec
+      - name: Write Pubspec (Stable Versions)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -60,7 +60,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            flutter_webrtc: any
+            # یہ ورژن فلٹر 3.27 کے ساتھ مستحکم ہے
+            flutter_webrtc: 1.1.1
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -72,64 +73,31 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 1.1.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Atomic Gradle Fix (Force SDK 36)
+      - name: Force Fix Android Configuration
         run: |
-          # ہم پوری فائل کو دوبارہ لکھ رہے ہیں تاکہ ورژن 36 ہر صورت میں اپلائی ہو
-          cat <<EOF > android/app/build.gradle
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          android {
-              namespace "${{ github.event.inputs.package_name }}"
-              compileSdk 36
-              defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
-                  minSdk 24
-                  targetSdk 36
-                  versionCode 1
-                  versionName "1.0"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
-          flutter {
-              source '../..'
-          }
-          EOF
-
-      - name: 🛠️ Precise WebRTC Patching
-        run: |
-          flutter pub get
-          FILE_PATH=$(find /home/runner/.pub-cache -name "SurfaceTextureRenderer.java" | head -n 1)
-          if [ -n "$FILE_PATH" ]; then
-            echo "Deep Cleaning & Patching: $FILE_PATH"
-            # ہم پوری فائل کے اندر 'onSurfaceDestroyed' والے بلاک کو مکمل صاف کر کے دوبارہ ڈال رہے ہیں
-            perl -i -0777 -pe 's/new TextureRegistry\.SurfaceProducer\.Callback\(\) \{/new TextureRegistry.SurfaceProducer.Callback() {\n            \@Override public void onSurfaceDestroyed(android.graphics.SurfaceTexture surface) {}\n/g' "$FILE_PATH"
-            # ڈبل اوور رائیڈز ہٹانے کے لیے صفائی
-            sed -i '125,135d' "$FILE_PATH" || true
-          fi
+          # گریڈل فائل کو درست طریقے سے اپ ڈیٹ کرنا
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
+          sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
+          sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' android/app/build.gradle
+          sed -i "/defaultConfig {/i \    namespace \"${{ github.event.inputs.package_name }}\"" android/app/build.gradle
 
       - name: Inject Dart Code
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Build
+      - name: Final Build APK
         run: |
-          flutter build apk --release --no-pub
+          flutter pub get
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-APK
+          name: System-Pro-Final-APK
           path: build/app/outputs/flutter-apk/app-release.apk
