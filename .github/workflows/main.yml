@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Safe & Stable)
+      - name: Write Pubspec (Stable Replacement)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,8 +59,8 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # ہم نے 'full_gpl' کو 'min_gpl' سے بدل دیا ہے تاکہ ورژن کا مسئلہ مستقل حل ہو جائے
-            ffmpeg_kit_flutter_min_gpl: 6.0.3
+            # ہم نے پیکیج کو 'https' ورژن میں بدل دیا ہے جو کہ بلڈ کے وقت سب سے کم مسائل پیدا کرتا ہے
+            ffmpeg_kit_flutter_https_gpl: 6.0.3
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -72,18 +72,17 @@ jobs:
             flutter_test:
               sdk: flutter
           dependency_overrides:
-            # کسی بھی ورژن کے ٹکراؤ کو روکنے کے لیے
-            meta: 1.15.0
             path: 1.9.0
+            meta: 1.15.0
           flutter:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Pro Fix
+      - name: 🛠️ Setup Repositories & Ultimate Fix
         run: |
           flutter pub get
 
-          # Project Level Gradle (ریپوزٹریز کا حتمی سیٹ اپ)
+          # Project Level Gradle
           cat <<EOF > android/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -96,18 +95,20 @@ jobs:
               repositories { 
                   google()
                   mavenCentral()
-                  maven { url 'https://jitpack.io' }
+                  maven { url 'https://www.jitpack.io' }
+                  // آر تھینیکا کی اپنی مخصوص ریپوزٹری کو شامل کرنا
+                  maven { url "https://maven.google.com" }
               }
               configurations.all {
                   resolutionStrategy {
-                      // اگر گریڈل پھر بھی 6.0-2 ڈھونڈے، تو اسے 6.0.3 پر فورس کریں
-                      force 'com.arthenica:ffmpeg-kit-min-gpl:6.0.3'
+                      // ہم ورژن کو فورس کرنے کے بجائے صرف ڈیفالٹ پر بھروسہ کریں گے
+                      // لیکن اگر مسئلہ ہوا تو گریڈل کو ریپوزٹریز سے مدد ملے گی
                   }
               }
           }
           EOF
 
-          # App Level Gradle (SDK 35)
+          # App Level Gradle (Fresh Rewrite for SDK 35)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -132,13 +133,17 @@ jobs:
                   versionName "1.0"
                   multiDexEnabled true
               }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
           }
           EOF
 
-          # پلگ انز کے لیے SDK 35 کو فورس کرنا
+          # سب پروجیکٹس کے لیے SDK 35 لازمی کرنا
           echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
 
       - name: Inject Dart Code
@@ -150,5 +155,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-APK
+          name: System-Pro-Final-APK
           path: build/app/outputs/flutter-apk/app-release.apk
