@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Unified Fix)
+name: Build Flutter APK (FFmpeg & WebRTC Success)
 
 on:
   workflow_dispatch:
@@ -31,7 +31,6 @@ jobs:
       - name: Setup Stable Flutter
         uses: subosito/flutter-action@v2
         with:
-          # 3.24.0 ان تمام لائبریریز کے لیے بہترین بیلنس ہے
           flutter-version: '3.24.0'
           channel: 'stable'
 
@@ -40,7 +39,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Conflict Resolution)
+      - name: Write Pubspec (Stable Dependencies)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,10 +58,9 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # FFmpeg کا ورژن تبدیل کیا گیا ہے جو 3.24 کے ساتھ ہم آہنگ ہے
-            ffmpeg_kit_flutter_full_gpl: 6.0.3
+            # FFmpeg کا مستحکم ورژن جو Maven پر موجود ہے
+            ffmpeg_kit_flutter_full_gpl: ^6.0.3
             image_picker: any
-            # سسٹم کا تجویز کردہ ورژن
             flutter_webrtc: 0.12.12+hotfix.1
             livekit_client: any
             dio: any
@@ -80,9 +78,12 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: Configure Android SDK 35 (Final Alignment)
+      - name: Force Fix Android Configuration (SDK 35)
         run: |
-          # تمام لائبریریز کو خوش رکھنے کے لیے SDK 35 سیٹ کیا گیا ہے
+          # گریڈل میں ریپوزٹریز کو ٹھیک کرنا تاکہ FFmpeg مل سکے
+          sed -i "s/google()/google()\n        mavenCentral()/" android/build.gradle
+          
+          # SDK 35 سیٹ کرنا
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
@@ -92,11 +93,11 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Final Execution
+      - name: Final Build Execution
         run: |
           flutter pub get
-          # اگر FFmpeg کا ایشو آئے تو کلین بلڈ کریں
           flutter clean
+          # بلڈ کے دوران تمام لائبریریز کو زبردستی ڈاؤن لوڈ کرنا
           flutter build apk --release
 
       - name: Upload APK
