@@ -4,7 +4,7 @@ apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace "com.system.pro" 
-    compileSdk 35 // یہاں زبردستی 35 سیٹ ہے
+    compileSdk 35
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
@@ -94,10 +94,9 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
 
-// یہ حصہ FFmpeg کے غلط ورژن اور SDK 34 کے مسئلے کو زبردستی حل کرے گا
+// 1. FFmpeg Force Fix: خراب سرور کو چھوڑ کر MavenCentral استعمال کرنے کے لیے
 configurations.all {
     resolutionStrategy {
-        // 1. FFmpeg کو خراب سرور سے ہٹا کر MavenCentral پر لانے کے لیے
         force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
         
         eachDependency { details ->
@@ -108,7 +107,7 @@ configurations.all {
     }
 }
 
-// تمام پلگ انز کو زبردستی SDK 35 پر مجبور کرنا
+// 2. Global SDK Override: تمام پلگ انز کو زبردستی SDK 35 اور Java 17 پر لانے کے لیے
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
@@ -116,6 +115,11 @@ subprojects {
                 compileSdk 35
                 defaultConfig {
                     targetSdk 35
+                }
+                // Java 17 compatibility for sub-plugins
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
                 }
             }
         }
