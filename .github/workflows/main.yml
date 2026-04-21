@@ -76,37 +76,30 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & FFmpeg Nuclear Fix
+      - name: 🛠️ Setup Repositories & Nuclear Fix
         run: |
+          # پروجیکٹ لیول فائل
           cat <<EOF > android/build.gradle
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
               }
           }
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-                  maven { url 'https://www.jitpack.io' }
-              }
-          }
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
-              project.evaluationDependsOn(':app')
+              repositories { google(); mavenCentral(); maven { url 'https://www.jitpack.io' } }
           }
           EOF
 
-          # FFmpeg ورژن کو زبردستی 6.0 پر بدلنا تاکہ ڈاؤن لوڈ ایرر ختم ہو
+          # پب گیٹ کے بعد پلگ انز کی فائلوں کو براہ راست ایڈٹ کرنا
           flutter pub get
-          find . -name "build.gradle" -exec sed -i 's/6.0-2/6.0/g' {} +
+          
+          # یہ کمانڈ پورے سسٹم میں جہاں بھی 6.0-2 ہے اسے 6.0 کر دے گی
+          # ہم نے اس بار اسے زیادہ پاور فل بنایا ہے
+          grep -rl "6.0-2" . | xargs sed -i 's/6.0-2/6.0/g' || true
 
+          # ایپ لیول گریڈل میں زبردستی سیٹنگز ڈالنا
           cat <<EOF >> android/app/build.gradle
           configurations.all {
               resolutionStrategy {
@@ -118,9 +111,7 @@ jobs:
                   if (project.hasProperty('android')) {
                       project.android {
                           compileSdk 35
-                          defaultConfig {
-                              targetSdk 35
-                          }
+                          defaultConfig { targetSdk 35 }
                       }
                   }
               }
@@ -138,8 +129,6 @@ jobs:
 
       - name: Build APK
         run: |
-          flutter pub get
-          flutter clean
           flutter build apk --release
 
       - name: Upload APK
