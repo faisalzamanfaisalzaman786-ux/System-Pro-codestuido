@@ -1,4 +1,4 @@
-name: Build Flutter APK (Stable Environment Fix)
+name: Build Flutter APK (Final Precision Fix)
 
 on:
   workflow_dispatch:
@@ -28,10 +28,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Stable Flutter (The Game Changer)
+      - name: Setup Stable Flutter
         uses: subosito/flutter-action@v2
         with:
-          # ہم 3.27 سے واپس 3.24 پر جا رہے ہیں جو ان لائبریریز کے ساتھ بہترین چلتا ہے
           flutter-version: '3.24.0'
           channel: 'stable'
 
@@ -40,11 +39,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Stable Pubspec
+      - name: Write Pubspec (Precision Versioning)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Stable Build"
+          description: "System Pro Success Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -61,8 +60,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            # 1.1.2 اب بغیر کسی پیچنگ کے چلے گا
-            flutter_webrtc: 1.1.2
+            # یہاں ہم نے وہ ورژن ڈالا ہے جو پب ڈیول خود تجویز کر رہا ہے
+            flutter_webrtc: 0.12.12+hotfix.1
             livekit_client: any
             dio: any
             shared_preferences: any
@@ -74,13 +73,13 @@ jobs:
           dependency_overrides:
             path: 1.9.0
             meta: 1.15.0
+            flutter_webrtc: 0.12.12+hotfix.1
           flutter:
             uses-material-design: true
           EOF
 
-      - name: Configure Android SDK 34 (Stable)
+      - name: Configure Android SDK 34
         run: |
-          # فلٹر 3.24 کے لیے SDK 34 یا 35 بہترین ہے
           sed -i 's/compileSdkVersion .*/compileSdkVersion 34/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 34/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 24/' android/app/build.gradle
@@ -90,7 +89,7 @@ jobs:
         run: |
           echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
-      - name: Clean & Build APK
+      - name: Final Build APK
         run: |
           flutter pub get
           flutter build apk --release
@@ -98,5 +97,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Stable-APK
+          name: System-Pro-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
