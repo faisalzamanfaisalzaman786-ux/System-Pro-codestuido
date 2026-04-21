@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Path Fix)
+name: Build Flutter APK (Ultimate Flexible Fix)
 
 on:
   workflow_dispatch:
@@ -39,11 +39,11 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Force Fix Dependencies (Path & Meta)
+      - name: Flexible Pubspec (No Hard Locks)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
-          description: "System Pro Ultimate Path Fix"
+          description: "System Pro Flexible Build"
           publish_to: none
           version: 1.0.0+1
           environment:
@@ -60,8 +60,8 @@ jobs:
             video_player: any
             ffmpeg_kit_flutter_full_gpl: 6.0.3-LTS
             image_picker: any
-            flutter_webrtc: ^1.1.2
-            livekit_client: ^2.5.0
+            flutter_webrtc: any
+            livekit_client: any
             dio: any
             shared_preferences: any
             sqflite: any
@@ -70,10 +70,9 @@ jobs:
             flutter_test:
               sdk: flutter
           dependency_overrides:
-            # یہ وہ لائنز ہیں جو ۳۶ گھنٹے کا مسئلہ حل کریں گی
+            # صرف ان کو لاک کیا گیا ہے جو ورژن کنفلکٹ پیدا کرتے ہیں
             path: 1.9.0
             meta: 1.15.0
-            flutter_webrtc: 1.1.2
           flutter:
             uses-material-design: true
           EOF
@@ -124,17 +123,12 @@ jobs:
 
       - name: Final Execution
         run: |
+          # پب گیٹ کے ساتھ کنفلکٹ ریزولوشن
           flutter pub get
           flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-Hybrid-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: ✅ Success Stamp
-        if: always()
-        run: |
-          echo "System Pro: Path conflict resolved. Build process complete."
-          flutter clean || true
