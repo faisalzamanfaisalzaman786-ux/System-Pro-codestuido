@@ -2,7 +2,7 @@ name: System Pro Remote Builder
 
 on:
   repository_dispatch:
-    types: [build-app] # یہ ویب انٹرفیس سے آنے والے سگنل کو پہچانے گا
+    types: [build-app]
 
 jobs:
   build:
@@ -21,7 +21,6 @@ jobs:
 
       - name: 3. Create Android Project Structure
         run: |
-          # اینڈرائیڈ کا معیاری ڈھانچہ بنانا
           mkdir -p app/src/main/java/${{ github.event.client_payload.package_name }}
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -29,8 +28,12 @@ jobs:
 
       - name: 4. Inject Code from Web Interface
         run: |
-          # ویب انٹرفیس سے آنے والے کوڈ کو فائلوں میں محفوظ کرنا
-          echo "${{ github.event.client_payload.java }}" > app/src/main/java/${{ github.event.client_payload.package_name }}/MainActivity.java
+          # پیکیج نیم کے مطابق فولڈر پاتھ بنانا
+          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
+          
+          # فائلیں محفوظ کرنا
+          echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
@@ -41,11 +44,10 @@ jobs:
         if: github.event.client_payload.images_base64 != ''
         run: |
           echo "${{ github.event.client_payload.images_base64 }}" | base64 --decode > images.zip
-          unzip images.zip -d app/src/main/res/mipmap-hdpi/
+          unzip -o images.zip -d app/src/main/res/mipmap-hdpi/
 
-      - name: 6. Configure Build Files (Gradle)
+      - name: 6. Configure Gradle Files
         run: |
-          # خودکار بلڈ فائلیں بنانا تاکہ گوگل ٹولز انہیں چلا سکیں
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -71,12 +73,15 @@ jobs:
           }
           EOF
 
-      - name: 7. Build APK
+      - name: 7. Setup Android SDK
         uses: android-actions/setup-android@v3
-        run: |
-          gradle assembleDebug
 
-      - name: 8. Upload Final APK
+      - name: 8. Build APK with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 9. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}
