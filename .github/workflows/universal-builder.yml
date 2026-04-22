@@ -37,11 +37,9 @@ jobs:
           echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
 
-      - name: 5. Generate Gradle Wrapper & Files
+      - name: 5. Generate Essential Build Files
         run: |
-          # گریڈل کی بنیادی فائلیں خود بنانا
-          gradle wrapper --gradle-version 8.10.2
-          
+          # پہلے سیٹنگز اور بلڈ فائلیں بنانا تاکہ گریڈل ایرر نہ دے
           cat <<EOF > settings.gradle
           rootProject.name = "${{ github.event.client_payload.app_name }}"
           include ':app'
@@ -51,6 +49,9 @@ jobs:
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }
           EOF
 
@@ -70,16 +71,18 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: 6. Build APK
+      - name: 6. Setup Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.10.2
+
+      - name: 7. Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - name: 7. Upload Final APK
+      - name: 8. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}
