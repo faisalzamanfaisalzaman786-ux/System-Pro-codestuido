@@ -1,4 +1,4 @@
-name: Build Flutter APK (WebRTC SDK Fix)
+name: Build Flutter APK (Final Gradle Fix)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Stable Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0' # واپس لیٹسٹ ورژن پر کیونکہ WebRTC نئے فیچرز مانگ رہا ہے
+          flutter-version: '3.24.0'
           channel: 'stable'
 
       - name: Create Clean Project
@@ -37,9 +37,8 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: 🛠️ Android SDK & WebRTC Compatibility Fix
+      - name: 🛠️ Android Fixes & SDK Alignment
         run: |
-          # پیکیج کا راستہ درست کرنا
           PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
@@ -50,21 +49,42 @@ jobs:
           class MainActivity: FlutterActivity()
           EOF
 
-          # App Level build.gradle (SDK 34 پر سیٹ کرنا)
-          cat <<EOF > android/app/build.gradle
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
+          # Project Level build.gradle
+          # یہاں ہم نے afterEvaluate کے ایرر کو حل کرنے کے لیے طریقہ بدلا ہے
+          cat <<EOF > android/build.gradle
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories { google(); mavenCentral() }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+              }
           }
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          allprojects {
+              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
+          }
+          
+          // تمام سب پروجیکٹس کے لیے SDK ورژن کو فورس کرنے کا نیا طریقہ
+          subprojects {
+              project.configurations.all {
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
+                          details.useVersion '8.2.1'
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # App Level build.gradle
+          cat <<EOF > android/app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
           apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
           android {
               namespace "${{ github.event.inputs.package_name }}"
-              compileSdkVersion 34 
+              compileSdkVersion 34
               defaultConfig {
                   applicationId "${{ github.event.inputs.package_name }}"
                   minSdkVersion 21
@@ -81,28 +101,15 @@ jobs:
           }
           EOF
 
-          # پلگ انز کے ورژن کو زبردستی کنٹرول کرنا
-          echo "subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 34
-                          defaultConfig { targetSdkVersion 34 }
-                      }
-                  }
-              }
-          }" >> android/build.gradle
-
-      - name: Write Pubspec (Fixed Versions)
+      - name: Write Pubspec (Fixed WebRTC)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
           dependencies:
             flutter: { sdk: flutter }
-            shared_preferences: ^2.2.0
-            path_provider: ^2.1.0
-            # ہم نے ورژن کو 0.12.0 پر لاک کر دیا ہے تاکہ نئے "Callback" ایررز نہ آئیں
-            flutter_webrtc: 0.12.0 
+            shared_preferences: any
+            path_provider: any
+            flutter_webrtc: 0.12.0
           environment: { sdk: ">=3.5.0 <4.0.0" }
           flutter: { uses-material-design: true }
           EOF
