@@ -59,7 +59,8 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            ffmpeg_kit_flutter_full_gpl: 6.0.3
+            # یہاں ہم نے ورژن کو مکمل طور پر آزاد چھوڑا ہے تاکہ فلٹر خود فیصلہ کرے
+            ffmpeg_kit_flutter_full_gpl: any
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -77,7 +78,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & Nuclear Version Fix
+      - name: 🛠️ Setup Repositories & Force LTS Fix
         run: |
           flutter pub get
 
@@ -96,25 +97,23 @@ jobs:
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
               }
-              // یہ جادوئی حصہ ہے: یہ ہر اس لائبریری کو ٹھیک کرے گا جو 6.0-2 ڈھونڈ رہی ہے
               configurations.all {
-                  resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-                      if (details.requested.group == 'com.arthenica' && details.requested.version == '6.0-2') {
-                          details.useVersion '6.0' // اسے مستحکم ورژن پر موڑ دیں
+                  resolutionStrategy.eachDependency { details ->
+                      if (details.requested.group == 'com.arthenica') {
+                          // تمام ورژنز کو زبردستی 4.5.LTS پر منتقل کرنا جو کہ Maven پر موجود ہے
+                          details.useVersion '4.5.LTS'
                       }
                   }
               }
           }
           EOF
 
-          # App Level Gradle (SDK 35)
+          # App Level Gradle (SDK 35 Fix)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
+              localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
           }
           def flutterRoot = localProperties.getProperty('flutter.sdk')
           apply plugin: 'com.android.application'
