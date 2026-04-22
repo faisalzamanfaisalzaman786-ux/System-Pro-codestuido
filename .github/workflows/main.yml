@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Clean Build)
+name: Build Flutter APK (Final MainActivity Fix)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
         description: 'Package Name'
         required: true
       dart_code:
-        description: 'Paste your main.dart code HERE (Plain Text)'
+        description: 'Paste your main.dart code HERE'
         required: true
 
 jobs:
@@ -36,6 +36,20 @@ jobs:
         run: |
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
+
+      - name: 🛠️ Fix Android Manifest & MainActivity
+        run: |
+          # پیکیج کا راستہ بنانا
+          PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
+          mkdir -p android/app/src/main/kotlin/$PKG_PATH
+          
+          # MainActivity.kt کو نئے سرے سے لکھنا (جاوا کے بجائے کوٹلن کے مستحکم امپورٹس کے ساتھ)
+          cat <<EOF > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
+          package ${{ github.event.inputs.package_name }}
+          import io.flutter.embedding.android.FlutterActivity
+          class MainActivity: FlutterActivity() {
+          }
+          EOF
 
       - name: Write Pubspec
         run: |
@@ -112,7 +126,7 @@ jobs:
           include ":app"
           EOF
 
-      - name: Inject Dart Code (Plain Text Mode)
+      - name: Inject Dart Code
         shell: bash
         run: |
           cat <<'EOF' > lib/main.dart
@@ -120,10 +134,10 @@ jobs:
           EOF
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-APK
+          name: System-Pro-Final-APK
           path: build/app/outputs/flutter-apk/app-release.apk
