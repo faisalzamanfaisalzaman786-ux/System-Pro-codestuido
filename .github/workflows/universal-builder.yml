@@ -27,21 +27,19 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-      - name: 4. Inject Files from UI
+      - name: 4. Inject Files & Fix Resources
         run: |
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
-          
-          # Injecting Java, XML, and Manifest
           echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           
-          # Ensuring resources are not empty
+          # Default resources to prevent crash if UI sends empty data
           echo "${{ github.event.client_payload.styles || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme.App\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\" /></resources>' }}" > app/src/main/res/values/styles.xml
           echo "${{ github.event.client_payload.colors || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"colorPrimary\">#00FFCC</color></resources>' }}" > app/src/main/res/values/colors.xml
           echo "${{ github.event.client_payload.strings || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">SystemProApp</string></resources>' }}" > app/src/main/res/values/strings.xml
 
-      - name: 5. Prepare Build Logic
+      - name: 5. Configure Build Files
         run: |
           cat <<EOF > settings.gradle
           rootProject.name = "SystemProBuilder"
@@ -74,17 +72,18 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: 6. Run Build with Detailed Logging
+      - name: 6. Optimized Build Execution
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --info
+          # میموری بڑھانے اور کیش صاف کرنے کے لیے آپشنز
+          export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m"
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
 
-      - name: 7. Upload Result
+      - name: 7. Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
