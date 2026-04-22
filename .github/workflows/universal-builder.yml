@@ -19,26 +19,33 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Setup Project
+      - name: 3. Smart Project Setup
         run: |
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
+          # اگر UI سے ڈیٹا نہیں آیا تو ڈیفالٹ ویلیوز استعمال کرنا
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # Inject Data
+          # Injecting Code with Safety
           echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           
-          # Default Resources
+          # Fixed Resources
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="purple_200">#FFBB86FC</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemPro</string></resources>' > app/src/main/res/values/strings.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
 
-      - name: 4. Build Scripts
+      - name: 4. Critical Build Files
         run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -46,12 +53,19 @@ jobs:
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace "${{ github.event.client_payload.package_name }}"
+              namespace "$PKG_NAME"
               compileSdk 34
-              defaultConfig { applicationId "${{ github.event.client_payload.package_name }}"; minSdk 24; targetSdk 34 }
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -59,16 +73,15 @@ jobs:
           }
           EOF
 
-      - name: 5. Build and Show Errors
+      - name: 5. Execute Force Build
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          # صرف ایررز دکھانے کے لیے --quiet استعمال کیا ہے
-          ./gradlew assembleDebug --quiet || ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace --info
 
-      - name: 6. Upload
+      - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}
+          name: ${{ github.event.client_payload.app_name || 'SystemPro_Build' }}
           path: app/build/outputs/apk/debug/*.apk
