@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final MainActivity Fix)
+name: Build Flutter APK (Final SDK Path Fix)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Stable Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.22.0' # تھوڑا پرانا لیکن مستحکم ورژن
           channel: 'stable'
 
       - name: Create Clean Project
@@ -37,69 +37,27 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: 🛠️ Fix Android Manifest & MainActivity
+      - name: 🛠️ Comprehensive Android Fix
         run: |
-          # پیکیج کا راستہ بنانا
+          # پیکیج کا راستہ درست کرنا اور پرانی فائلز ہٹانا
+          rm -rf android/app/src/main/kotlin/com/systempro/system_pro_app
           PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
-          # MainActivity.kt کو نئے سرے سے لکھنا (جاوا کے بجائے کوٹلن کے مستحکم امپورٹس کے ساتھ)
+          # MainActivity.kt کو سادہ ترین شکل میں لکھنا
           cat <<EOF > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
           package ${{ github.event.inputs.package_name }}
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity() {
-          }
+          class MainActivity: FlutterActivity()
           EOF
 
-      - name: Write Pubspec
-        run: |
-          cat <<EOF > pubspec.yaml
-          name: system_pro_app
-          description: "System Pro App Build"
-          publish_to: none
-          version: 1.0.0+1
-          environment:
-            sdk: ">=3.5.0 <4.0.0"
-          dependencies:
-            flutter:
-              sdk: flutter
-            camera: any
-            permission_handler: any
-            path_provider: any
-            flutter_background_service: any
-            flutter_local_notifications: any
-            workmanager: any
-            video_player: any
-            image_picker: any
-            flutter_webrtc: 0.12.2
-            livekit_client: any
-            dio: any
-            shared_preferences: any
-            sqflite: any
-            device_info_plus: any
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-          dependency_overrides:
-            path: 1.9.0
-            meta: 1.15.0
-          flutter:
-            uses-material-design: true
-          EOF
-
-      - name: 🛠️ ⚡ Force Upgrade Gradle & Kotlin
-        run: |
-          cd android
-          sed -i 's/gradle-7.6.3-all.zip/gradle-8.2-all.zip/g' gradle/wrapper/gradle-wrapper.properties
-          cd ..
-          flutter pub get
-
+          # Project Level build.gradle (پرانا لیکن کام کرنے والا اسٹرکچر)
           cat <<EOF > android/build.gradle
           buildscript {
-              ext.kotlin_version = '1.9.22'
+              ext.kotlin_version = '1.8.22'
               repositories { google(); mavenCentral() }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
@@ -108,22 +66,51 @@ jobs:
           }
           EOF
 
-          cat <<EOF > android/settings.gradle
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  return properties.getProperty("flutter.sdk")
-              }()
-              includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          # App Level build.gradle
+          cat <<EOF > android/app/build.gradle
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
           }
-          plugins {
-              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
-              id "com.android.application" version "8.2.1" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          android {
+              namespace "${{ github.event.inputs.package_name }}"
+              compileSdkVersion 34
+              defaultConfig {
+                  applicationId "${{ github.event.inputs.package_name }}"
+                  minSdkVersion 21
+                  targetSdkVersion 34
+                  versionCode 1
+                  versionName "1.0"
+                  multiDexEnabled true
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = '17' }
           }
-          include ":app"
+          EOF
+
+          # Gradle Wrapper Downgrade (جو 7.3.0 کے ساتھ کام کرے)
+          sed -i 's/gradle-.*-all.zip/gradle-7.5-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Write Pubspec
+        run: |
+          cat <<EOF > pubspec.yaml
+          name: system_pro_app
+          dependencies:
+            flutter: { sdk: flutter }
+            shared_preferences: any
+            path_provider: any
+            flutter_webrtc: any
+          environment: { sdk: ">=3.0.0 <4.0.0" }
+          flutter: { uses-material-design: true }
           EOF
 
       - name: Inject Dart Code
@@ -139,5 +126,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-Success-APK
           path: build/app/outputs/flutter-apk/app-release.apk
