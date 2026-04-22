@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Gradle Fix)
+name: Build Flutter APK (Final Property Fix)
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: 🛠️ Android Fixes & SDK Alignment
+      - name: 🛠️ Fix Android Configuration
         run: |
           PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
@@ -49,59 +49,64 @@ jobs:
           class MainActivity: FlutterActivity()
           EOF
 
-          # Project Level build.gradle
-          # یہاں ہم نے afterEvaluate کے ایرر کو حل کرنے کے لیے طریقہ بدلا ہے
-          cat <<EOF > android/build.gradle
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+          # Settings.gradle (جدید طریقہ جو flutterRoot کے مسئلے کو حل کرے گا)
+          cat <<EOF > android/settings.gradle
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+              includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
               }
           }
-          allprojects {
-              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
+          plugins {
+              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+              id "com.android.application" version "8.2.1" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
           }
-          
-          // تمام سب پروجیکٹس کے لیے SDK ورژن کو فورس کرنے کا نیا طریقہ
-          subprojects {
-              project.configurations.all {
-                  resolutionStrategy.eachDependency { details ->
-                      if (details.requested.group == 'com.android.tools.build' && details.requested.name == 'gradle') {
-                          details.useVersion '8.2.1'
-                      }
-                  }
-              }
-          }
+          include ":app"
           EOF
 
           # App Level build.gradle
           cat <<EOF > android/app/build.gradle
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
 
           android {
               namespace "${{ github.event.inputs.package_name }}"
-              compileSdkVersion 34
+              compileSdk 34
+
               defaultConfig {
                   applicationId "${{ github.event.inputs.package_name }}"
-                  minSdkVersion 21
-                  targetSdkVersion 34
+                  minSdk 21
+                  targetSdk 34
                   versionCode 1
                   versionName "1.0"
                   multiDexEnabled true
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              kotlinOptions { jvmTarget = '17' }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
           }
           EOF
 
-      - name: Write Pubspec (Fixed WebRTC)
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
