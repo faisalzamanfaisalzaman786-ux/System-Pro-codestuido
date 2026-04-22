@@ -19,20 +19,17 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Create Android Project Structure
+      - name: 3. Create Project Structure
         run: |
-          mkdir -p app/src/main/java/${{ github.event.client_payload.package_name }}
+          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-      - name: 4. Inject Code from Web Interface
+      - name: 4. Inject Code from UI
         run: |
-          # پیکیج نیم کے مطابق فولڈر پاتھ بنانا
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          
-          # فائلیں محفوظ کرنا
           echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
@@ -40,21 +37,20 @@ jobs:
           echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
           echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
 
-      - name: 5. Handle Images (Base64)
-        if: github.event.client_payload.images_base64 != ''
+      - name: 5. Generate Gradle Wrapper & Files
         run: |
-          echo "${{ github.event.client_payload.images_base64 }}" | base64 --decode > images.zip
-          unzip -o images.zip -d app/src/main/res/mipmap-hdpi/
+          # گریڈل کی بنیادی فائلیں خود بنانا
+          gradle wrapper --gradle-version 8.10.2
+          
+          cat <<EOF > settings.gradle
+          rootProject.name = "${{ github.event.client_payload.app_name }}"
+          include ':app'
+          EOF
 
-      - name: 6. Configure Gradle Files
-        run: |
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
           }
           EOF
 
@@ -71,17 +67,19 @@ jobs:
                   versionName "1.0"
               }
           }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
 
-      - name: 7. Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 8. Build APK with Gradle
+      - name: 6. Build APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - name: 9. Upload Final APK
+      - name: 7. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}
