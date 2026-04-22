@@ -19,7 +19,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Create Project Folders
+      - name: 3. Create Project Structure
         run: |
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
@@ -27,33 +27,21 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-      - name: 4. Inject Project Files
+      - name: 4. Inject Files from UI
         run: |
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           
-          # MainActivity injection
+          # Injecting Java, XML, and Manifest
           echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # XML Layout injection
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
-          
-          # Manifest injection
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           
-          # Resources - Ensuring they are never empty to avoid Gradle crash
-          STYLE_VAL="${{ github.event.client_payload.styles }}"
-          if [ -z "$STYLE_VAL" ]; then STYLE_VAL='<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>'; fi
-          echo "$STYLE_VAL" > app/src/main/res/values/styles.xml
-          
-          COLOR_VAL="${{ github.event.client_payload.colors }}"
-          if [ -z "$COLOR_VAL" ]; then COLOR_VAL='<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color></resources>'; fi
-          echo "$COLOR_VAL" > app/src/main/res/values/colors.xml
-          
-          STRING_VAL="${{ github.event.client_payload.strings }}"
-          if [ -z "$STRING_VAL" ]; then STRING_VAL='<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">SystemProApp</string></resources>'; fi
-          echo "$STRING_VAL" > app/src/main/res/values/strings.xml
+          # Ensuring resources are not empty
+          echo "${{ github.event.client_payload.styles || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme.App\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\" /></resources>' }}" > app/src/main/res/values/styles.xml
+          echo "${{ github.event.client_payload.colors || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"colorPrimary\">#00FFCC</color></resources>' }}" > app/src/main/res/values/colors.xml
+          echo "${{ github.event.client_payload.strings || '<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">SystemProApp</string></resources>' }}" > app/src/main/res/values/strings.xml
 
-      - name: 5. Construct Build Logic
+      - name: 5. Prepare Build Logic
         run: |
           cat <<EOF > settings.gradle
           rootProject.name = "SystemProBuilder"
@@ -82,7 +70,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -91,13 +78,13 @@ jobs:
           }
           EOF
 
-      - name: 6. Execution & Error Capture
+      - name: 6. Run Build with Detailed Logging
         run: |
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew assembleDebug --info # --info ہمیں کوڈ کی اصل غلطی دکھائے گا
+          ./gradlew assembleDebug --stacktrace --info
 
-      - name: 7. Deliver Artifact
+      - name: 7. Upload Result
         if: success()
         uses: actions/upload-artifact@v4
         with:
