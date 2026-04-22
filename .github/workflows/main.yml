@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final WebRTC & FFmpeg Fix)
+name: Build Flutter APK (Final WebRTC & Kotlin Fix)
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: Write Pubspec (Safe Build)
+      - name: Write Pubspec
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
@@ -59,7 +59,7 @@ jobs:
             flutter_local_notifications: any
             workmanager: any
             video_player: any
-            # FFmpeg کو عارضی طور پر ہٹا دیا گیا ہے تاکہ بلڈ کامیاب ہو سکے
+            # FFmpeg کو ابھی بھی ہٹا کر رکھا ہے تاکہ پہلے Kotlin کا مسئلہ حل ہو
             image_picker: any
             flutter_webrtc: 0.12.2
             livekit_client: any
@@ -77,21 +77,25 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: 🛠️ Setup Repositories & SDK 35 Fix
+      - name: 🛠️ ⚡ High-Priority Kotlin & Build Fix
         run: |
           flutter pub get
 
-          # Project Level Gradle
+          # 1. Project Level Build.gradle - Kotlin Version Update
           cat <<EOF > android/build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
+              ext.kotlin_version = '1.9.22'  // جدید ترین کوٹلن ورژن
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
           allprojects {
-              repositories { 
+              repositories {
                   google()
                   mavenCentral()
                   maven { url 'https://jitpack.io' }
@@ -99,21 +103,48 @@ jobs:
           }
           EOF
 
-          # App Level Gradle (SDK 35 & Namespace Fix)
-          cat <<EOF > android/app/build.gradle
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
+          # 2. Settings.gradle - Plugin Management Fix
+          # فلٹر کے نئے ورژنز میں یہاں سے بھی کوٹلن ورژن کنٹرول ہوتا ہے
+          cat <<EOF > android/settings.gradle
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }()
+
+              includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
+
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
           }
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          plugins {
+              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+              id "com.android.application" version "8.2.1" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          }
+
+          include ":app"
+          EOF
+
+          # 3. App Level Build.gradle - Namespace & SDK 35
+          cat <<EOF > android/app/build.gradle
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
 
           android {
               namespace "${{ github.event.inputs.package_name }}"
               compileSdkVersion 35
+              
               defaultConfig {
                   applicationId "${{ github.event.inputs.package_name }}"
                   minSdkVersion 24
@@ -122,24 +153,41 @@ jobs:
                   versionName "1.0"
                   multiDexEnabled true
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
           }
+
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
           }
           EOF
 
-          # تمام ڈیپینڈنسیز کو SDK 35 پر لاک کرنا
-          echo "subprojects { afterEvaluate { project -> if (project.hasProperty('android')) { project.android { compileSdkVersion 35; defaultConfig { targetSdkVersion 35 } } } } }" >> android/build.gradle
+          # 4. Force Kotlin version on all sub-projects
+          echo "subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 35
+                          defaultConfig { targetSdkVersion 35 }
+                      }
+                  }
+                  if (project.plugins.hasPlugin('kotlin-android')) {
+                      project.kotlin {
+                          jvmTarget = '17'
+                      }
+                  }
+              }
+          }" >> android/build.gradle
 
       - name: Inject Dart Code
-        run: |
-          # اگر آپ کے ڈارٹ کوڈ میں FFmpeg کا استعمال ہے، تو بلڈ فیل ہو سکتا ہے۔ 
-          # اسے انجیکٹ کرنے سے پہلے اس بات کو یقینی بنائیں کہ کوڈ میں FFmpeg امپورٹ نہ ہو۔
-          echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
+        run: echo "${{ github.event.inputs.dart_code_base64 }}" | base64 -d > lib/main.dart
 
       - name: Build APK
         run: flutter build apk --release
@@ -147,5 +195,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-APK
+          name: System-Pro-Kotlin-Fixed-APK
           path: build/app/outputs/flutter-apk/app-release.apk
