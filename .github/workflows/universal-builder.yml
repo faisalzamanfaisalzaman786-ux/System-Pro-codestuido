@@ -16,40 +16,44 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. گوگل/اینڈرائیڈ کا آفیشل جاوا سیٹ اپ (JDK 17)
-      - name: Set up JDK 17
+      # 2. گوگل/اینڈرائیڈ کا آفیشل جاوا سیٹ اپ (JDK 21)
+      # جدید ایپس کے لیے Java 21 اب لازمی ہے
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle' # یہ بلڈ کو تیز کرے گا
+          cache: 'gradle'
 
       # 3. گوگل کا آفیشل اینڈرائیڈ ایس ڈی کے (Android SDK) پیکیج
-      # یہ خود بخود تمام ضروری بلڈ ٹولز ڈاؤن لوڈ کر لے گا
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4. آپ کی ٹارگٹ ریپازٹری کو کلون کرنا
+      # 4. ٹارگٹ ریپازٹری کو کلون کرنا
       - name: Clone External Repository
         run: git clone ${{ github.event.inputs.repo_url }} target_app
 
-      # 5. گریڈل کو آفیشل طریقے سے کنفیگر کرنا
+      # 5. گریڈل کو اپ ڈیٹ کرنا (جدید ورژن 8.10.2)
       - name: Configure Gradle
         run: |
           cd target_app
+          # اگر پروجیکٹ میں gradlew نہ ہو تو اسے سیٹ کرنا
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper --gradle-version 8.10.2
+          fi
           chmod +x gradlew
-          # گوگل کے تازہ ترین اسٹینڈرڈ کے مطابق گریڈل کو اپ ڈیٹ کرنا
-          ./gradlew wrapper --gradle-version 8.5
+          # زبردستی گریڈل ورژن کو 8.10.2 پر اپ گریڈ کرنا تاکہ ایرر نہ آئے
+          ./gradlew wrapper --gradle-version 8.10.2
 
-      # 6. APK بنانا (Official Build Command)
+      # 6. APK بنانا (پورے لاگ کے ساتھ)
       - name: Build with Gradle
         run: |
           cd target_app
           ./gradlew assembleDebug --stacktrace
 
-      # 7. تیار شدہ APK کو سیو کرنا
+      # 7. تیار شدہ APK کو اپ لوڈ کرنا
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Official-Package-APK
-          path: target_app/app/build/outputs/apk/debug/*.apk
+          path: target_app/**/build/outputs/apk/debug/*.apk
