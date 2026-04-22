@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final SDK Path Fix)
+name: Build Flutter APK (WebRTC SDK Fix)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       - name: Setup Stable Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # تھوڑا پرانا لیکن مستحکم ورژن
+          flutter-version: '3.24.0' # واپس لیٹسٹ ورژن پر کیونکہ WebRTC نئے فیچرز مانگ رہا ہے
           channel: 'stable'
 
       - name: Create Clean Project
@@ -37,36 +37,20 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
-      - name: 🛠️ Comprehensive Android Fix
+      - name: 🛠️ Android SDK & WebRTC Compatibility Fix
         run: |
-          # پیکیج کا راستہ درست کرنا اور پرانی فائلز ہٹانا
-          rm -rf android/app/src/main/kotlin/com/systempro/system_pro_app
+          # پیکیج کا راستہ درست کرنا
           PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
-          # MainActivity.kt کو سادہ ترین شکل میں لکھنا
+          # MainActivity.kt
           cat <<EOF > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
           package ${{ github.event.inputs.package_name }}
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity: FlutterActivity()
           EOF
 
-          # Project Level build.gradle (پرانا لیکن کام کرنے والا اسٹرکچر)
-          cat <<EOF > android/build.gradle
-          buildscript {
-              ext.kotlin_version = '1.8.22'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
-              }
-          }
-          allprojects {
-              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
-          }
-          EOF
-
-          # App Level build.gradle
+          # App Level build.gradle (SDK 34 پر سیٹ کرنا)
           cat <<EOF > android/app/build.gradle
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -80,7 +64,7 @@ jobs:
 
           android {
               namespace "${{ github.event.inputs.package_name }}"
-              compileSdkVersion 34
+              compileSdkVersion 34 
               defaultConfig {
                   applicationId "${{ github.event.inputs.package_name }}"
                   minSdkVersion 21
@@ -97,19 +81,29 @@ jobs:
           }
           EOF
 
-          # Gradle Wrapper Downgrade (جو 7.3.0 کے ساتھ کام کرے)
-          sed -i 's/gradle-.*-all.zip/gradle-7.5-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+          # پلگ انز کے ورژن کو زبردستی کنٹرول کرنا
+          echo "subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 34
+                          defaultConfig { targetSdkVersion 34 }
+                      }
+                  }
+              }
+          }" >> android/build.gradle
 
-      - name: Write Pubspec
+      - name: Write Pubspec (Fixed Versions)
         run: |
           cat <<EOF > pubspec.yaml
           name: system_pro_app
           dependencies:
             flutter: { sdk: flutter }
-            shared_preferences: any
-            path_provider: any
-            flutter_webrtc: any
-          environment: { sdk: ">=3.0.0 <4.0.0" }
+            shared_preferences: ^2.2.0
+            path_provider: ^2.1.0
+            # ہم نے ورژن کو 0.12.0 پر لاک کر دیا ہے تاکہ نئے "Callback" ایررز نہ آئیں
+            flutter_webrtc: 0.12.0 
+          environment: { sdk: ">=3.5.0 <4.0.0" }
           flutter: { uses-material-design: true }
           EOF
 
