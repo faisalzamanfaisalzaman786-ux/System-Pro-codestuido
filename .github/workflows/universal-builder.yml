@@ -1,0 +1,55 @@
+name: System Pro Official Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'Target Repository URL'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. گٹ ہب کا آفیشل چیک آؤٹ ٹول
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. گوگل/اینڈرائیڈ کا آفیشل جاوا سیٹ اپ (JDK 17)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle' # یہ بلڈ کو تیز کرے گا
+
+      # 3. گوگل کا آفیشل اینڈرائیڈ ایس ڈی کے (Android SDK) پیکیج
+      # یہ خود بخود تمام ضروری بلڈ ٹولز ڈاؤن لوڈ کر لے گا
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 4. آپ کی ٹارگٹ ریپازٹری کو کلون کرنا
+      - name: Clone External Repository
+        run: git clone ${{ github.event.inputs.repo_url }} target_app
+
+      # 5. گریڈل کو آفیشل طریقے سے کنفیگر کرنا
+      - name: Configure Gradle
+        run: |
+          cd target_app
+          chmod +x gradlew
+          # گوگل کے تازہ ترین اسٹینڈرڈ کے مطابق گریڈل کو اپ ڈیٹ کرنا
+          ./gradlew wrapper --gradle-version 8.5
+
+      # 6. APK بنانا (Official Build Command)
+      - name: Build with Gradle
+        run: |
+          cd target_app
+          ./gradlew assembleDebug --stacktrace
+
+      # 7. تیار شدہ APK کو سیو کرنا
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Official-Package-APK
+          path: target_app/app/build/outputs/apk/debug/*.apk
