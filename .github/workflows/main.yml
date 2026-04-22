@@ -1,4 +1,4 @@
-name: Build Flutter APK (Final Property Fix)
+name: Build Flutter APK (Final Gradle Wrapper Fix)
 
 on:
   workflow_dispatch:
@@ -37,6 +37,13 @@ jobs:
           find . -maxdepth 1 -not -path '*/.*' -not -name '.' -exec rm -rf {} +
           flutter create --org $(echo ${{ github.event.inputs.package_name }} | cut -d'.' -f1,2) --project-name system_pro_app --platforms android .
 
+      - name: 🛠️ Force Upgrade Gradle Wrapper (Crucial Fix)
+        run: |
+          # گریڈل ورژن کو 7.6.3 سے 8.2 پر اپ گریڈ کرنا تاکہ پلگ انز کے ساتھ میچ کرے
+          cd android
+          sed -i 's/gradle-7.6.3-all.zip/gradle-8.2-all.zip/g' gradle/wrapper/gradle-wrapper.properties
+          cd ..
+
       - name: 🛠️ Fix Android Configuration
         run: |
           PKG_PATH=$(echo ${{ github.event.inputs.package_name }} | tr '.' '/')
@@ -49,15 +56,13 @@ jobs:
           class MainActivity: FlutterActivity()
           EOF
 
-          # Settings.gradle (جدید طریقہ جو flutterRoot کے مسئلے کو حل کرے گا)
+          # Settings.gradle
           cat <<EOF > android/settings.gradle
           pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
                   file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
+                  return properties.getProperty("flutter.sdk")
               }()
               includeBuild("\$flutterSdkPath/packages/flutter_tools/gradle")
               repositories {
