@@ -1,59 +1,83 @@
-name: System Pro Official Builder
+name: System Pro Remote Builder
 
 on:
-  workflow_dispatch:
-    inputs:
-      repo_url:
-        description: 'Target Repository URL'
-        required: true
+  repository_dispatch:
+    types: [build-app] # یہ ویب انٹرفیس سے آنے والے سگنل کو پہچانے گا
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. گٹ ہب کا آفیشل چیک آؤٹ ٹول
-      - name: Checkout Code
+      - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      # 2. گوگل/اینڈرائیڈ کا آفیشل جاوا سیٹ اپ (JDK 21)
-      # جدید ایپس کے لیے Java 21 اب لازمی ہے
-      - name: Set up JDK 21
+      - name: 2. Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. گوگل کا آفیشل اینڈرائیڈ ایس ڈی کے (Android SDK) پیکیج
-      - name: Setup Android SDK
+      - name: 3. Create Android Project Structure
+        run: |
+          # اینڈرائیڈ کا معیاری ڈھانچہ بنانا
+          mkdir -p app/src/main/java/${{ github.event.client_payload.package_name }}
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+
+      - name: 4. Inject Code from Web Interface
+        run: |
+          # ویب انٹرفیس سے آنے والے کوڈ کو فائلوں میں محفوظ کرنا
+          echo "${{ github.event.client_payload.java }}" > app/src/main/java/${{ github.event.client_payload.package_name }}/MainActivity.java
+          echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
+          echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
+          echo "${{ github.event.client_payload.styles }}" > app/src/main/res/values/styles.xml
+          echo "${{ github.event.client_payload.colors }}" > app/src/main/res/values/colors.xml
+          echo "${{ github.event.client_payload.strings }}" > app/src/main/res/values/strings.xml
+
+      - name: 5. Handle Images (Base64)
+        if: github.event.client_payload.images_base64 != ''
+        run: |
+          echo "${{ github.event.client_payload.images_base64 }}" | base64 --decode > images.zip
+          unzip images.zip -d app/src/main/res/mipmap-hdpi/
+
+      - name: 6. Configure Build Files (Gradle)
+        run: |
+          # خودکار بلڈ فائلیں بنانا تاکہ گوگل ٹولز انہیں چلا سکیں
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace "${{ github.event.client_payload.package_name }}"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "${{ github.event.client_payload.package_name }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: 7. Build APK
         uses: android-actions/setup-android@v3
-
-      # 4. ٹارگٹ ریپازٹری کو کلون کرنا
-      - name: Clone External Repository
-        run: git clone ${{ github.event.inputs.repo_url }} target_app
-
-      # 5. گریڈل کو اپ ڈیٹ کرنا (جدید ورژن 8.10.2)
-      - name: Configure Gradle
         run: |
-          cd target_app
-          # اگر پروجیکٹ میں gradlew نہ ہو تو اسے سیٹ کرنا
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --gradle-version 8.10.2
-          fi
-          chmod +x gradlew
-          # زبردستی گریڈل ورژن کو 8.10.2 پر اپ گریڈ کرنا تاکہ ایرر نہ آئے
-          ./gradlew wrapper --gradle-version 8.10.2
+          gradle assembleDebug
 
-      # 6. APK بنانا (پورے لاگ کے ساتھ)
-      - name: Build with Gradle
-        run: |
-          cd target_app
-          ./gradlew assembleDebug --stacktrace
-
-      # 7. تیار شدہ APK کو اپ لوڈ کرنا
-      - name: Upload APK
+      - name: 8. Upload Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: Official-Package-APK
-          path: target_app/**/build/outputs/apk/debug/*.apk
+          name: ${{ github.event.client_payload.app_name }}
+          path: app/build/outputs/apk/debug/*.apk
