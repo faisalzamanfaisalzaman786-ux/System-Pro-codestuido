@@ -17,20 +17,19 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: 3. Smart Project Setup
         run: |
-          # اگر UI سے ڈیٹا نہیں آیا تو ڈیفالٹ ویلیوز استعمال کرنا
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # Create Directory Structure
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # Injecting Code with Safety
+          # Injecting Code
           echo "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
@@ -40,18 +39,25 @@ jobs:
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
 
-      - name: 4. Critical Build Files
+      - name: 4. Generate Build Scripts
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
-          echo "include ':app'" > settings.gradle
+          cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
           
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
-          allprojects { repositories { google(); mavenCentral() } }
           EOF
           
           cat <<EOF > app/build.gradle
@@ -66,20 +72,26 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: 5. Execute Force Build
-        run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --info
+      - name: 5. Setup Gradle & Build
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
 
-      - name: 6. Deliver APK
+      - name: 6. Execute Build
+        run: |
+          chmod +x gradlew || true
+          gradle assembleDebug --stacktrace
+
+      - name: 7. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
