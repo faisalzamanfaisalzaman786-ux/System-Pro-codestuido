@@ -28,18 +28,12 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
-          ${{ github.event.client_payload.java }}
-          EOF
-
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
-          EOF
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
-          ${{ github.event.client_payload.manifest }}
-          EOF
+          # فائلیں بنانے کا سب سے محفوظ طریقہ
+          printf "%s" "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
+          printf "%s" "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
+          printf "%s" "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           
+          # ریسورس فائلیں
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -49,34 +43,19 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ':app'
           EOF
           
           cat <<EOF > build.gradle
-          // اسکرپٹ کو چلانے کے لیے ضروری ریپوزٹریز یہاں بھی شامل کر دی ہیں
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.1'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           EOF
           
@@ -101,7 +80,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Setup Gradle & Build
+      - name: 5. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.1.1
@@ -112,7 +91,7 @@ jobs:
             gradle wrapper
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
       - name: 7. Deliver APK
         if: success()
