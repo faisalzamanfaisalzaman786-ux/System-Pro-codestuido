@@ -28,7 +28,6 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # 'cat' کا محفوظ استعمال
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -64,9 +63,7 @@ jobs:
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { 
-                  classpath 'com.android.tools.build:gradle:8.1.1' 
-              }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           EOF
           
@@ -91,16 +88,15 @@ jobs:
           }
           EOF
 
-      - name: 5. Setup Gradle & Wrapper
-        run: |
-          # گریڈل 8.1.1 کو فورس کرنا
-          gradle wrapper --gradle-version 8.1.1
-          chmod +x gradlew
+      - name: 5. Force Setup Gradle 8.1.1
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.1.1
 
       - name: 6. Execute Build
         run: |
-          # 'gradle' کے بجائے './gradlew' استعمال کریں تاکہ صحیح ورژن چلے
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          # سسٹم گریڈل کے بجائے ایکشن سے انسٹال شدہ گریڈل استعمال کریں
+          gradle assembleDebug --stacktrace --no-daemon
 
       - name: 7. Deliver APK
         if: success()
