@@ -21,7 +21,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup & Package Fix
+      - name: 3. Smart Project Setup & Manifest Cleaning
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
@@ -30,22 +30,25 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
 
-          # جاوا فائل لکھنا اور پیکیج نیم کو خودکار درست کرنا
+          # Writing Java File
           echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # XML لے آؤٹ
+          # Writing XML File
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # مینی فیسٹ کی صفائی
+          # Cleaning Manifest: Removing missing icon and package name conflicts
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
+          sed -i 's/android:icon="@mipmap\/ic_launcher"//g' temp_manifest.xml
+          sed -i 's/android:roundIcon="@mipmap\/ic_launcher_round"//g' temp_manifest.xml
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # ضروری ریسورسز
+          # Default Resources to avoid theme and app_name errors
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -100,10 +103,9 @@ jobs:
           gradle-version: 8.1.1
           cache-disabled: true
 
-      - name: 6. Execute Build & Catch Specific Error
+      - name: 6. Execute Build
         run: |
-          # بلڈ چلائیں اور اگر فیل ہو تو صرف ایرر دکھائیں
-          gradle assembleDebug --no-daemon || (gradle assembleDebug --no-daemon --stacktrace | grep -A 5 "error:")
+          gradle assembleDebug --stacktrace --no-daemon
 
       - name: 7. Deliver APK
         if: success()
