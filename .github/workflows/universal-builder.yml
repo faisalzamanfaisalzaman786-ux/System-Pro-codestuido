@@ -42,16 +42,20 @@ jobs:
           
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_name</string></resources>" > app/src/main/res/values/strings.xml
 
       - name: 4. Generate Build Scripts
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
+          # یہ وہ فائل ہے جو بلڈ ٹھیک کرے گی
+          cat <<EOF > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
           cat <<EOF > settings.gradle
-          pluginManagement { 
-              repositories { google(); mavenCentral(); gradlePluginPortal() } 
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
@@ -95,7 +99,6 @@ jobs:
 
       - name: 6. Execute Build
         run: |
-          # سسٹم گریڈل کے بجائے ایکشن سے انسٹال شدہ گریڈل استعمال کریں
           gradle assembleDebug --stacktrace --no-daemon
 
       - name: 7. Deliver APK
