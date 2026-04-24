@@ -4,7 +4,6 @@ on:
   repository_dispatch:
     types: [build-app]
 
-# ریلیز اور آرٹیکلز لکھنے کے لیے پرمیشنز
 permissions:
   contents: write
 
@@ -36,30 +35,24 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-xxhdpi
 
-          # جاوا فائل لکھنا
           echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # XML لے آؤٹ لکھنا
           echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
           sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
           mv temp_layout.xml app/src/main/res/layout/activity_main.xml
 
-          # مینی فیسٹ کی صفائی اور آئیکن سیٹ اپ
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
-          # آئیکن اور راؤنڈ آئیکن کو مینی فیسٹ میں فکس کرنا
           sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
           sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
           sed -i '/<application/ s/$/ android:icon="@mipmap\/ic_launcher" android:roundIcon="@mipmap\/ic_launcher"/' temp_manifest.xml
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # آئیکن ہینڈلنگ (Base64 ڈیٹا کو امیج میں بدلنا)
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          # ڈیفالٹ ریسورسز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -69,7 +62,6 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -79,14 +71,12 @@ jobs:
           rootProject.name = "SystemPro"
           include ':app'
           EOF
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           EOF
-          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -118,24 +108,15 @@ jobs:
         run: |
           gradle assembleDebug --no-daemon
 
-      - name: 7. Upload Artifact (For Safety)
+      - name: 7. Upload Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro_Build' }}
+          name: APK-Build
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: 8. Create GitHub Release (Easy Download)
+      - name: 8. Generate Direct Download Link
         if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: "System Pro: ${{ github.event.client_payload.app_name }} (#${{ github.run_number }})"
-          files: app/build/outputs/apk/debug/*.apk
-          body: |
-            Build successfully completed!
-            Application Name: ${{ github.event.client_payload.app_name }}
-            Package: ${{ github.event.client_payload.package_name }}
-            Developer Email: ${{ github.event.client_payload.email }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### 🚀 Direct Download Link" >> $GITHUB_STEP_SUMMARY
+          echo "Download your APK here: [Click to Download](https://nightly.link/${{ github.repository }}/workflows/android/main/APK-Build.zip)" >> $GITHUB_STEP_SUMMARY
