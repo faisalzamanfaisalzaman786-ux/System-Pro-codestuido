@@ -48,31 +48,34 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
-          # تمام ریپوزٹریز یہاں ڈیفائن کی گئی ہیں
           cat <<EOF > settings.gradle
-          pluginManagement { 
-              repositories { 
+          pluginManagement {
+              repositories {
                   google()
                   mavenCentral()
-                  gradlePluginPortal() 
-              } 
+                  gradlePluginPortal()
+              }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { 
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories {
                   google()
-                  mavenCentral() 
+                  mavenCentral()
               }
           }
           rootProject.name = "SystemPro"
           include ':app'
           EOF
           
-          # یہاں سے ریپوزٹریز ہٹا دی گئی ہیں تاکہ ٹکراؤ نہ ہو
           cat <<EOF > build.gradle
+          // اسکرپٹ کو چلانے کے لیے ضروری ریپوزٹریز یہاں بھی شامل کر دی ہیں
           buildscript {
-              dependencies { 
-                  classpath 'com.android.tools.build:gradle:8.1.1' 
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.1'
               }
           }
           EOF
