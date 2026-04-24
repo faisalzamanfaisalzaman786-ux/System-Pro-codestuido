@@ -27,33 +27,32 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          
-          # فائلیں لکھنا
+
+          # جاوا فائل لکھنا
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
 
+          # XML فائل لکھنا
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # مینی فیسٹ سے پرانا پیکیج نیم ہٹانے کے لیے 'sed' کا استعمال
+          # مینی فیسٹ کی صفائی: پیکیج نیم ہٹانا (جدید اصول) اور خالی جگہوں کا خاتمہ
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed 's/package="[^"]*"//g' temp_manifest.xml > app/src/main/AndroidManifest.xml
           
-          # ریسورسز
+          # ڈیفالٹ ریسورسز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
 
-      - name: 4. Generate Build Scripts
+      - name: 4. Final Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
-          cat <<EOF > gradle.properties
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
 
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -75,7 +74,7 @@ jobs:
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace "$PKG_NAME"  // اب پیکیج نیم صرف یہاں استعمال ہو رہا ہے
+              namespace "$PKG_NAME"
               compileSdk 34
               defaultConfig {
                   applicationId "$PKG_NAME"
@@ -84,7 +83,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
+              buildFeatures { viewBinding false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -93,14 +92,15 @@ jobs:
           }
           EOF
 
-      - name: 5. Force Setup Gradle 8.1.1
+      - name: 5. Setup Gradle 8.1.1
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.1.1
 
       - name: 6. Execute Build
         run: |
-          gradle assembleDebug --stacktrace --info --no-daemon
+          # اب ہم پکی بلڈ کریں گے
+          gradle assembleDebug --stacktrace --no-daemon
 
       - name: 7. Deliver APK
         if: success()
