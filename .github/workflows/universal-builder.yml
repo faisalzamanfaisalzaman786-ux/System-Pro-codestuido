@@ -1,14 +1,35 @@
+name: System Pro Remote Builder
+
+on:
+  repository_dispatch:
+    types: [build-app]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Setup Environment
+        uses: actions/checkout@v4
+
+      - name: 2. Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: 3. Smart Project Setup
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # ڈائریکٹری اسٹرکچر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # محفوظ طریقے سے کوڈ انجیکٹ کرنے کے لیے 'cat' کا استعمال کریں
+          # پے لوڈ سے کوڈ کو محفوظ طریقے سے انجیکٹ کرنا
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -21,7 +42,70 @@
           ${{ github.event.client_payload.manifest }}
           EOF
           
-          # باقی فائلیں ویسے ہی رہیں گی
+          # ضروری ریسورس فائلیں تیار کرنا
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
+
+      - name: 4. Generate Build Scripts
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          
+          cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+          
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          EOF
+          
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes { release { minifyEnabled false } }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: 5. Setup Gradle & Build
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: 6. Execute Build
+        run: |
+          # اگر gradlew فائل موجود نہ ہو تو اسے بنانے کی کوشش کریں
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 7. Deliver APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'SystemPro_Build' }}
+          path: app/build/outputs/apk/debug/*.apk
