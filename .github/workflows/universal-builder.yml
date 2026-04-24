@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [build-app]
 
+env:
+  # Node.js 24 وارننگ کو ختم کرنے کے لیے
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,17 +32,16 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # جاوا فائل
+          # کوڈ فائلز لکھنا
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
 
-          # XML فائل
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # مینی فیسٹ (پیکیج نیم کے بغیر)
+          # مینی فیسٹ کی درستی
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed 's/package="[^"]*"//g' temp_manifest.xml > app/src/main/AndroidManifest.xml
           
@@ -50,7 +53,6 @@ jobs:
       - name: 4. Final Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
@@ -83,10 +85,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              lintOptions {
-                  checkReleaseBuilds false
-                  abortOnError false
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -99,11 +97,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.1.1
+          cache-disabled: true # عارضی طور پر کیشے بند تاکہ گٹ ہب کے ایرر سے بچا جا سکے
 
-      - name: 6. Execute Build
+      - name: 6. Execute Build & Catch Errors
         run: |
-          # ایرر کو ڈھونڈنے کے لیے تفصیلی لاگز
-          gradle assembleDebug --stacktrace --info --no-daemon
+          # --quiet کے بغیر تاکہ ہم تفصیل سے ایرر دیکھ سکیں
+          ./gradlew assembleDebug --stacktrace
 
       - name: 7. Deliver APK
         if: success()
