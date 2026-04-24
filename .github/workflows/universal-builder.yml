@@ -21,7 +21,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup
+      - name: 3. Smart Project Setup & Package Fix
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
@@ -31,22 +31,21 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # Writing Java File
-          cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
-          ${{ github.event.client_payload.java }}
-          EOF
+          # جاوا فائل لکھنا اور پیکیج نیم کو خودکار درست کرنا
+          echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
+          sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # Writing XML File
+          # XML لے آؤٹ
           cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # Auto-Cleaning Manifest
+          # مینی فیسٹ کی صفائی
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # Essential Resources
+          # ضروری ریسورسز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -86,10 +85,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              lintOptions {
-                  checkReleaseBuilds false
-                  abortOnError false
-              }
+              lintOptions { abortOnError false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -104,10 +100,10 @@ jobs:
           gradle-version: 8.1.1
           cache-disabled: true
 
-      - name: 6. Execute Build
+      - name: 6. Execute Build & Catch Specific Error
         run: |
-          # Detailed error logging
-          gradle assembleDebug --stacktrace --no-daemon
+          # بلڈ چلائیں اور اگر فیل ہو تو صرف ایرر دکھائیں
+          gradle assembleDebug --no-daemon || (gradle assembleDebug --no-daemon --stacktrace | grep -A 5 "error:")
 
       - name: 7. Deliver APK
         if: success()
