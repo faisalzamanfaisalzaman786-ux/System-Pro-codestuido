@@ -21,7 +21,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup & Resource Injection
+      - name: 3. Smart Project Setup & Style Cleaning
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
@@ -30,31 +30,25 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
 
-          # Writing Java File
+          # جاوا فائل لکھنا اور پیکیج درست کرنا
           echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
-          # جاوا فائل کے اندر پیکیج نیم کی پہلی لائن درست کرنا
           sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # Writing XML File
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
-          EOF
+          # XML لے آؤٹ لکھنا اور غائب اسٹائلز (CalcButton وغیرہ) کو ہٹانا
+          echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
+          # یہ کمانڈ کسی بھی ایسے اسٹائل کو ہٹا دے گی جو بلڈ روک رہا ہو
+          sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
+          mv temp_layout.xml app/src/main/res/layout/activity_main.xml
 
-          # مینی فیسٹ کو "آئرن پروف" بنانا
+          # مینی فیسٹ کی مکمل صفائی
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
-          # پیکیج نیم، آئیکن اور راؤنڈ آئیکن کے حوالے ختم کرنا تاکہ بلڈ نہ رکے
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
           sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
           sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
-          # اگر لیبل غائب ہو تو اسے شامل کرنا
-          if ! grep -q "android:label=" temp_manifest.xml; then
-             sed -i 's/<application/<application android:label="@string\/app_name"/g' temp_manifest.xml
-          fi
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # ضروری ریسورسز (تھیم، کلر، اسٹرنگ)
+          # ڈیفالٹ ریسورسز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -94,10 +88,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              lintOptions {
-                  checkReleaseBuilds false
-                  abortOnError false
-              }
+              lintOptions { abortOnError false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -114,7 +105,6 @@ jobs:
 
       - name: 6. Execute Build
         run: |
-          # بغیر ڈیبگ لاگز کے صاف بلڈ تاکہ ہم اصل نتیجہ دیکھ سکیں
           gradle assembleDebug --no-daemon
 
       - name: 7. Deliver APK
