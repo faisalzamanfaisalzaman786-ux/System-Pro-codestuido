@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [build-app]
 
+env:
+  # Node.js 24 کی وارننگ ختم کرنے کے لیے
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,12 +32,12 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # فائلیں بنانے کا سب سے محفوظ طریقہ
+          # فائلیں لکھنے کے لیے 'printf' کا استعمال تاکہ کریکٹرز خراب نہ ہوں
           printf "%s" "${{ github.event.client_payload.java }}" > app/src/main/java/$PKG_PATH/MainActivity.java
           printf "%s" "${{ github.event.client_payload.xml }}" > app/src/main/res/layout/activity_main.xml
           printf "%s" "${{ github.event.client_payload.manifest }}" > app/src/main/AndroidManifest.xml
           
-          # ریسورس فائلیں
+          # ضروری ریسورسز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -71,7 +75,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -80,20 +83,14 @@ jobs:
           }
           EOF
 
-      - name: 5. Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.1.1
-
-      - name: 6. Execute Build
+      - name: 5. Execute Build
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper
-          fi
+          # گریڈل ریپر (Wrapper) خود بنائیں اگر موجود نہ ہو
+          gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace --info
 
-      - name: 7. Deliver APK
+      - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
