@@ -12,10 +12,10 @@ jobs:
       - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Set up JDK 21
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17'
           distribution: 'temurin'
 
       - name: 3. Smart Project Setup
@@ -24,12 +24,11 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # ڈائریکٹری اسٹرکچر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # پے لوڈ سے کوڈ کو محفوظ طریقے سے انجیکٹ کرنا
+          # Injecting Code safely
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -42,7 +41,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
           
-          # ضروری ریسورس فائلیں تیار کرنا
+          # Basic Resources
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -64,7 +63,10 @@ jobs:
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }
           EOF
           
@@ -92,16 +94,15 @@ jobs:
       - name: 5. Setup Gradle & Build
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.2
+          gradle-version: 8.1.1
 
       - name: 6. Execute Build
         run: |
-          # اگر gradlew فائل موجود نہ ہو تو اسے بنانے کی کوشش کریں
           if [ ! -f gradlew ]; then
             gradle wrapper
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
       - name: 7. Deliver APK
         if: success()
