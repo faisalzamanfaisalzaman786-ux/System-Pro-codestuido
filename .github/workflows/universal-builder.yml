@@ -28,7 +28,7 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # محفوظ ترین طریقہ: پے لوڈ کو براہ راست فائل میں ڈالنا
+          # 'cat' کا محفوظ استعمال
           cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -41,7 +41,6 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
           
-          # ریسورس فائلیں
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -51,7 +50,9 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           
           cat <<EOF > settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          pluginManagement { 
+              repositories { google(); mavenCentral(); gradlePluginPortal() } 
+          }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() }
@@ -63,7 +64,9 @@ jobs:
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+              dependencies { 
+                  classpath 'com.android.tools.build:gradle:8.1.1' 
+              }
           }
           EOF
           
@@ -79,6 +82,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -87,14 +91,18 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Setup Gradle & Wrapper
         run: |
-          # گریڈل فائلز بنانا
+          # گریڈل 8.1.1 کو فورس کرنا
           gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
 
-      - name: 6. Deliver APK
+      - name: 6. Execute Build
+        run: |
+          # 'gradle' کے بجائے './gradlew' استعمال کریں تاکہ صحیح ورژن چلے
+          ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: 7. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
