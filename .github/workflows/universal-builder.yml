@@ -4,6 +4,11 @@ on:
   repository_dispatch:
     types: [build-app]
 
+# ریلیز بنانے کے لیے یہ پرمیشنز لازمی ہیں
+permissions:
+  contents: write
+  packages: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -21,7 +26,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup & Style Cleaning
+      - name: 3. Smart Project Setup & Icon Handling
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
@@ -30,25 +35,27 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-xxhdpi
 
-          # جاوا فائل لکھنا اور پیکیج درست کرنا
+          # Java & XML Setup
           echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # XML لے آؤٹ لکھنا اور غائب اسٹائلز (CalcButton وغیرہ) کو ہٹانا
           echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
-          # یہ کمانڈ کسی بھی ایسے اسٹائل کو ہٹا دے گی جو بلڈ روک رہا ہو
           sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
           mv temp_layout.xml app/src/main/res/layout/activity_main.xml
 
-          # مینی فیسٹ کی مکمل صفائی
+          # Manifest Setup
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
           mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          # ڈیفالٹ ریسورسز
+          # Icon Handling (اگر ایچ ٹی ایم ایل سے آئیکن آیا ہے)
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          fi
+
+          # Default Resources
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
@@ -85,8 +92,8 @@ jobs:
                   applicationId "$PKG_NAME"
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode ${{ github.run_number }}
+                  versionName "1.0.${{ github.run_number }}"
               }
               lintOptions { abortOnError false }
           }
@@ -97,19 +104,18 @@ jobs:
           }
           EOF
 
-      - name: 5. Setup Gradle 8.1.1
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.1.1
-          cache-disabled: true
-
-      - name: 6. Execute Build
+      - name: 5. Execute Build
         run: |
+          chmod +x gradlew || true
           gradle assembleDebug --no-daemon
 
-      - name: 7. Deliver APK
+      - name: 6. Create Release & Upload APK
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v1
         with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro_Build' }}
-          path: app/build/outputs/apk/debug/*.apk
+          tag_name: build-${{ github.run_number }}
+          name: System Pro Build #${{ github.run_number }}
+          files: app/build/outputs/apk/debug/*.apk
+          body: "Developer Email: ${{ github.event.client_payload.email }}\nYour System Pro APK is ready for download."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
