@@ -9,28 +9,24 @@
         android:id="@+id/etAppName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="App Name"
-        android:layout_marginBottom="12dp" />
+        android:hint="App Name" />
 
     <EditText
         android:id="@+id/etPkgName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Package Name"
-        android:layout_marginBottom="12dp" />
+        android:hint="Package Name" />
 
     <EditText
         android:id="@+id/etGhToken"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="GitHub Token"
-        android:layout_marginBottom="12dp"
-        android:inputType="textPassword" />
+        android:hint="GitHub Token" />
 
     <EditText
         android:id="@+id/etGhRepo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Repository (username/repo)" />
+        android:hint="GitHub Repo" />
 
 </LinearLayout>
