@@ -36,24 +36,40 @@ jobs:
           mkdir -p $ANDROID_ROOT/app/src/main/res/values
           mkdir -p $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi
 
+          # جاوا فائل انجکشن
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
-          sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
-          mv temp_layout.xml $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
+          # XML لے آؤٹ
+          echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
-          sed -i 's/package="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
-          sed -i '/<application/ s/$/ android:icon="@mipmap\/ic_launcher" android:roundIcon="@mipmap\/ic_launcher"/' temp_manifest.xml
-          mv temp_manifest.xml $ANDROID_ROOT/app/src/main/AndroidManifest.xml
+          # مینی فیسٹ انجکشن (صاف ستھرا طریقہ)
+          cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:allowBackup="true"
+                  android:label="@string/app_name"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:theme="@style/Theme.App">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
           
+          # آئی کن
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
+          # ریسورس فائلز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
@@ -95,11 +111,6 @@ jobs:
                   versionCode ${{ github.run_number }}
                   versionName "1.0.${{ github.run_number }}"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              // کوڈ وارننگز کو نظر انداز کرنے کے لیے
               tasks.withType(JavaCompile) {
                   options.compilerArgs << "-Xlint:none" << "-nowarn"
               }
