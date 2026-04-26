@@ -1,1 +1,10 @@
-لکھفچ
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="neon_cyan">#00FFCC</color>
+    <color name="neon_pink">#FF007F</color>
+    <color name="neon_green">#39FF14</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="glass_white">#1AFFFFFF</color>
+    <color name="dark_grey">#121212</color>
+</resources>
