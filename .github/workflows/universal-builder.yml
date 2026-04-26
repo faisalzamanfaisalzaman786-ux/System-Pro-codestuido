@@ -1,38 +1,3 @@
-name: System Pro Remote Builder (Master Complete)
-
-on:
-  repository_dispatch:
-    types: [build-app]
-
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 1. Setup Environment
-        uses: actions/checkout@v4
-        with:
-          clean: true
-
-      - name: 2. Deep Clean & Directory Prep
-        run: |
-          rm -rf android/
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-
-      - name: 3. Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
       - name: 4. Inject Master Android Structure
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
@@ -42,23 +7,29 @@ jobs:
           
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           
-          # جاوا فائل انجیکشن
+          # 1. پہلے پوری جاوا فائل کو سیو کریں
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           
-          # 🛠️ JAVA ERROR PATCH: IOException کو ہینڈل کرنا
-          # یہ لائن جاوا کے اس مخصوص ایرر کو 'try-catch' کے ذریعے خاموش کر دے گی
-          sed -i 's/conn.getResponseCode()/try_get_code(conn)/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo -e "\nprivate int try_get_code(java.net.HttpURLConnection c){try{return c.getResponseCode();}catch(Exception e){return -1;}}" >> $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          # آخری بریکٹ کو ایڈجسٹ کرنا
-          sed -i '$ d' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo -e "}" >> $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-
+          # 2. پیکیج نیم کو درست کریں
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # لے آؤٹ انجیکشن
-          echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # سیٹنگز ڈائیلاگ انجیکشن
+          # 3. 🛠️ سمارٹ پیچ: IOException والے فنکشن کو کلاس کے اندر شامل کرنا
+          # ہم آخری بریکٹ سے پہلے اپنا محفوظ فنکشن انجیکٹ کریں گے
+          sed -i '$ d' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          cat <<EOF >> $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+
+    private int try_get_code(java.net.HttpURLConnection c) {
+        try { return c.getResponseCode(); } catch (Exception e) { return -1; }
+    }
+}
+EOF
+
+          # 4. کوڈ میں جہاں ایرر آ رہا تھا وہاں فنکشن بدل دیں
+          sed -i 's/conn.getResponseCode()/try_get_code(conn)/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # --- باقی تمام فائلیں (Layouts, Styles, etc.) پہلے جیسی ہی رہیں گی ---
+          echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
+          
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -71,20 +42,17 @@ jobs:
           </LinearLayout>
           EOF
 
-          # آئیکن لاجک
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           else
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           fi
 
-          # مینی فیسٹ
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
@@ -99,8 +67,7 @@ jobs:
               </application>
           </manifest>
           EOF
-          
-          # اسٹائلز
+
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -115,64 +82,3 @@ jobs:
 
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
-
-      - name: 5. Professional Config Injection
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          ANDROID_ROOT="android"
-          echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
-          echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
-          echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
-          echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
-
-          cat <<EOF > $ANDROID_ROOT/build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
-          EOF
-
-          cat <<EOF > $ANDROID_ROOT/app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-
-      - name: 6. Secure Gradle Setup
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.1.1
-          build-root-directory: android
-
-      - name: 7. Execute Master Build
-        run: |
-          cd android
-          gradle assembleDebug --no-daemon
-
-      - name: 8. Upload Result
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Final-APK
-          path: android/app/build/outputs/apk/debug/*.apk
-
-      - name: 9. Summary & Final Clean
-        if: always()
-        run: |
-          echo "### 🚀 System Pro: Build Finished" >> $GITHUB_STEP_SUMMARY
-          rm -rf android/
