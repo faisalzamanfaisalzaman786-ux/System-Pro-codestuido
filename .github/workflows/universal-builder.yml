@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Final Master Fix)
+name: System Pro Remote Builder (Final Master Fix V2)
 
 on:
   repository_dispatch:
@@ -47,12 +47,25 @@ jobs:
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # 🖼️ ICON LOGIC: پہلی ترجیح آپ کا اپلوڈ کردہ آئیکن ہے
+          # 🛠️ SETTINGS DIALOG INJECTION: جاوا کوڈ کے ایررز ختم کرنے کے لیے
+          cat <<EOF > $ANDROID_ROOT/app/src/main/res/layout/dialog_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" />
+          </LinearLayout>
+          EOF
+
+          # 🖼️ ICON LOGIC
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "✅ Using User-Uploaded Icon..."
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           else
-            echo "⚠️ No Icon uploaded, using professional 1x1 fallback..."
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           fi
 
@@ -61,10 +74,6 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.CAMERA" />
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
@@ -80,23 +89,16 @@ jobs:
           </manifest>
           EOF
           
-          # ماسٹر اسٹائلز (تمام بٹن اسٹائلز کے ساتھ)
+          # ماسٹر اسٹائلز
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">#00FFCC</item>
               </style>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:textColor">#FFFFFF</item>
-              </style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:textColor">#00FFCC</item>
-              </style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:backgroundTint">#00FFCC</item>
-                  <item name="android:textColor">#000000</item>
-              </style>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#00FFCC</item></style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="android:backgroundTint">#00FFCC</item><item name="android:textColor">#000000</item></style>
           </resources>
           EOF
 
@@ -146,7 +148,7 @@ jobs:
           gradle-version: 8.1.1
           build-root-directory: android
 
-      - name: 7. Execute Master Build
+      - name: 7. Execute Final Success Build
         run: |
           cd android
           gradle assembleDebug --no-daemon
@@ -155,11 +157,11 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-Build
+          name: SystemPro-Final-Build
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: 9. Summary & Final Clean
         if: always()
         run: |
-          echo "### 🚀 System Pro: Master Build Completed" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro: Build Process Finished" >> $GITHUB_STEP_SUMMARY
           rm -rf android/
