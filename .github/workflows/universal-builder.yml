@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Master Edition)
+name: System Pro Remote Builder (Final Master Fix)
 
 on:
   repository_dispatch:
@@ -25,7 +25,7 @@ jobs:
           rm -rf android/
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/xml
 
       - name: 3. Set up JDK 17
@@ -43,12 +43,20 @@ jobs:
           
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           
-          # جاوا اور ایکس ایم ایل انجکشن
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # ماسٹر مینی فیسٹ (تمام پرمیشنز کے ساتھ)
+          # 🖼️ ICON LOGIC: پہلی ترجیح آپ کا اپلوڈ کردہ آئیکن ہے
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "✅ Using User-Uploaded Icon..."
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          else
+            echo "⚠️ No Icon uploaded, using professional 1x1 fallback..."
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          fi
+
+          # ماسٹر مینی فیسٹ
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -61,7 +69,6 @@ jobs:
                   android:allowBackup="true"
                   android:label="@string/app_name"
                   android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher"
                   android:theme="@style/Theme.App">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -73,7 +80,7 @@ jobs:
           </manifest>
           EOF
           
-          # ماسٹر اسٹائلز (بٹنز کے تمام ایررز کا حل)
+          # ماسٹر اسٹائلز (تمام بٹن اسٹائلز کے ساتھ)
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -96,27 +103,21 @@ jobs:
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
 
-      - name: 5. Professional Config & Dependency Injection
+      - name: 5. Professional Config Injection
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
-          
           echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
           echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
-          
-          cat <<EOF > $ANDROID_ROOT/settings.gradle
-          rootProject.name = "SystemPro"
-          include ':app'
-          EOF
+          echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
+          echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
 
           cat <<EOF > $ANDROID_ROOT/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
-          allprojects {
-              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
-          }
+          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
           EOF
 
           cat <<EOF > $ANDROID_ROOT/app/build.gradle
@@ -131,10 +132,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -143,26 +140,26 @@ jobs:
           }
           EOF
 
-      - name: 6. Secure Gradle Setup (8.1.1)
+      - name: 6. Secure Gradle Setup
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.1.1
           build-root-directory: android
 
-      - name: 7. Execute Professional Clean Build
+      - name: 7. Execute Master Build
         run: |
           cd android
           gradle assembleDebug --no-daemon
 
-      - name: 8. Upload Artifact
+      - name: 8. Upload Result
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Master-APK
+          name: SystemPro-Success-Build
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: 9. Summary & Final Clean
         if: always()
         run: |
-          echo "### 🚀 System Pro: Master Build Successful" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro: Master Build Completed" >> $GITHUB_STEP_SUMMARY
           rm -rf android/
