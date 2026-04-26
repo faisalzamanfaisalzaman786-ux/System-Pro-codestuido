@@ -7,9 +7,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,59 +21,35 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup & Icon Injection
+      - name: 3. Dynamic Package & Folder Setup
         run: |
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          # پیکیج نیم موبائل UI سے آئے گا، ورنہ ڈیفالٹ استعمال ہوگا
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # پرانے پیکیج فولڈرز کو صاف کر کے نیا ڈائنامک پاتھ بنانا
+          rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-
-          echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
-          sed -i "1s|^package .*|package $PKG_NAME;|" app/src/main/java/$PKG_PATH/MainActivity.java
-
-          echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
-          sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
-          mv temp_layout.xml app/src/main/res/layout/activity_main.xml
-
-          echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
-          sed -i 's/package="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
-          sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
-          sed -i '/<application/ s/$/ android:icon="@mipmap\/ic_launcher" android:roundIcon="@mipmap\/ic_launcher"/' temp_manifest.xml
-          mv temp_manifest.xml app/src/main/AndroidManifest.xml
           
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          fi
+          # جاوا فائل کو صحیح ڈائنامک فولڈر میں منتقل کرنا اور پیکیج نیم اپڈیٹ کرنا
+          # یہ فرض کر رہا ہے کہ آپ کی MainActivity ریپوزٹری میں موجود ہے
+          cp -r .github/templates/MainActivity.java app/src/main/java/$PKG_PATH/ || cp app/src/main/java/com/system/pro/MainActivity.java app/src/main/java/$PKG_PATH/ || echo "MainActivity already in place"
           
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/styles.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > app/src/main/res/values/strings.xml
+          # فائل کے اندر پیکیج کی پہلی لائن کو ڈائنامک بنانا
+          find app/src/main/java -name "*.java" -exec sed -i "1s|^package .*|package $PKG_NAME;|" {} +
 
       - name: 4. Final Build Configuration
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+          
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          
           cat <<EOF > settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() }
-          }
           rootProject.name = "SystemPro"
           include ':app'
           EOF
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          EOF
+
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -87,9 +60,8 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode ${{ github.run_number }}
-                  versionName "1.0.${{ github.run_number }}"
+                  versionName "1.0"
               }
-              lintOptions { abortOnError false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -98,25 +70,14 @@ jobs:
           }
           EOF
 
-      - name: 5. Setup Gradle 8.1.1
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.1.1
-          cache-disabled: true
-
-      - name: 6. Execute Build
+      - name: 5. Execute Build
         run: |
-          gradle assembleDebug --no-daemon
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 7. Upload Artifact
+      - name: 6. Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build
+          name: ${{ github.event.client_payload.app_name || 'App' }}-Build
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: 8. Generate Direct Download Link
-        if: success()
-        run: |
-          echo "### 🚀 Direct Download Link" >> $GITHUB_STEP_SUMMARY
-          echo "Download your APK here: [Click to Download](https://nightly.link/${{ github.repository }}/workflows/android/main/APK-Build.zip)" >> $GITHUB_STEP_SUMMARY
