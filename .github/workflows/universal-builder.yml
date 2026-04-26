@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Final Fix)
+name: System Pro Remote Builder (Ultra Clean V4)
 
 on:
   repository_dispatch:
@@ -77,17 +77,23 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
+          
           echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
           echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
-          echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
-          echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
+          
+          cat <<EOF > $ANDROID_ROOT/settings.gradle
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
 
           cat <<EOF > $ANDROID_ROOT/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
           EOF
 
           cat <<EOF > $ANDROID_ROOT/app/build.gradle
@@ -102,6 +108,10 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -109,26 +119,27 @@ jobs:
           }
           EOF
 
-      - name: 6. Setup and Generate Wrapper
-        run: |
-          cd android
-          # یہ کمانڈ گریڈل کو فورس کرے گی کہ وہ 'gradlew' فائل بنائے
-          gradle wrapper --gradle-version 8.1.1
+      - name: 6. Secure Gradle Setup
+        # یہاں ہم گریڈل 8.1.1 کو براہ راست لوڈ کر رہے ہیں تاکہ سسٹم کا ورژن مداخلت نہ کرے
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.1.1
+          build-root-directory: android
 
-      - name: 7. Execute Professional Build
+      - name: 7. Execute Clean Professional Build
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # ہم اب براہ راست 'gradle' کمانڈ استعمال کریں گے جو اوپر والے اسٹیپ نے سیٹ اپ کی ہے
+          gradle assembleDebug --no-daemon
 
       - name: 8. Upload Result
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
+          name: SystemPro-Success-Build
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 9. Summary & Cleanup
+      - name: 9. Summary & Final Clean
         if: always()
         run: |
           echo "### 🚀 System Pro: Build Finished" >> $GITHUB_STEP_SUMMARY
