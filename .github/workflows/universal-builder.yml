@@ -24,35 +24,39 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Project Setup & Icon Injection
+      - name: 3. Professional Project Assembly
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           ANDROID_ROOT="android"
+          
+          # پروفیشنل فولڈر اسٹرکچر بنانا
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           mkdir -p $ANDROID_ROOT/app/src/main/res/layout
           mkdir -p $ANDROID_ROOT/app/src/main/res/values
           mkdir -p $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi
 
-          # جاوا فائل انجکشن
+          # جاوا کوڈ کا انجکشن اور پیکیج کی درستگی
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # XML لے آؤٹ
+          # لے آؤٹ فائل
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # مینی فیسٹ انجکشن (صاف ستھرا طریقہ)
+          # کلین اینڈرائیڈ مینی فیسٹ (پیشہ ورانہ سیٹ اپ)
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher"
+                  android:supportsRtl="true"
                   android:theme="@style/Theme.App">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -64,17 +68,17 @@ jobs:
           </manifest>
           EOF
           
-          # آئی کن
+          # آئی کن ہینڈلنگ
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          # ریسورس فائلز
+          # ریسورسز اور تھیمز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
 
-      - name: 4. Final Build Configuration
+      - name: 4. Industrial Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
@@ -109,10 +113,17 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode ${{ github.run_number }}
-                  versionName "1.0.${{ github.run_number }}"
+                  versionName "1.0"
               }
-              tasks.withType(JavaCompile) {
-                  options.compilerArgs << "-Xlint:none" << "-nowarn"
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
           }
           dependencies {
@@ -126,22 +137,21 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.1.1
-          cache-disabled: true
 
-      - name: 6. Execute Build
+      - name: 6. Execute Production Build
         run: |
           cd android
           gradle assembleDebug --no-daemon
 
-      - name: 7. Upload Artifact
+      - name: 7. Upload Professional APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build
+          name: SystemPro-Release-Build
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 8. Generate Summary Link
+      - name: 8. Summary & Download Link
         if: success()
         run: |
-          echo "### 🚀 Build Successful" >> $GITHUB_STEP_SUMMARY
-          echo "Download: [APK-Build](https://nightly.link/${{ github.repository }}/workflows/android/main/APK-Build.zip)" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro: Build Successful" >> $GITHUB_STEP_SUMMARY
+          echo "Your professional APK is ready. [Download here](https://nightly.link/${{ github.repository }}/workflows/android/main/SystemPro-Release-Build.zip)" >> $GITHUB_STEP_SUMMARY
