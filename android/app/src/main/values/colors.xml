@@ -1,4 +1,26 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="primary">#FF000000</color>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="LoveboxTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- بنیادی کلرز -->
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryVariant">#3700B3</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#03DAC6</item>
+        <item name="colorSecondaryVariant">#018786</item>
+        <item name="colorOnSecondary">#000000</item>
+        
+        <!-- یہ خاص طور پر EditText کے لیے -->
+        <item name="android:editTextBackground">@drawable/edittext_background</item>
+        <item name="android:editTextColor">?android:attr/textColorPrimary</item>
+        <item name="colorControlNormal">#757575</item>
+        <item name="colorControlActivated">?attr/colorPrimary</item>
+        <item name="colorControlHighlight">#40FFFFFF</item>
+        
+        <!-- ونڈو کا بیک گراؤنڈ -->
+        <item name="android:windowBackground">@android:color/white</item>
+        
+        <!-- ڈیفالٹ ٹیکسٹ کلرز -->
+        <item name="android:textColorPrimary">@android:color/black</item>
+        <item name="android:textColorSecondary">@android:color/darker_gray</item>
+        <item name="android:textColorHint">@android:color/darker_gray</item>
+    </style>
 </resources>
