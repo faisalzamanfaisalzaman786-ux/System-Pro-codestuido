@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Ultra Clean V4)
+name: System Pro Remote Builder (Master Edition)
 
 on:
   repository_dispatch:
@@ -26,6 +26,7 @@ jobs:
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/xml
 
       - name: 3. Set up JDK 17
         uses: actions/setup-java@v4
@@ -33,7 +34,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. Build Professional Project Structure
+      - name: 4. Inject Master Android Structure
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
@@ -41,14 +42,21 @@ jobs:
           ANDROID_ROOT="android"
           
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
+          
+          # جاوا اور ایکس ایم ایل انجکشن
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
+          # ماسٹر مینی فیسٹ (تمام پرمیشنز کے ساتھ)
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.CAMERA" />
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
@@ -65,15 +73,30 @@ jobs:
           </manifest>
           EOF
           
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          fi
-          
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/src/main/res/values/styles.xml
+          # ماسٹر اسٹائلز (بٹنز کے تمام ایررز کا حل)
+          cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#00FFCC</item>
+              </style>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:textColor">#FFFFFF</item>
+              </style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:textColor">#00FFCC</item>
+              </style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:backgroundTint">#00FFCC</item>
+                  <item name="android:textColor">#000000</item>
+              </style>
+          </resources>
+          EOF
+
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
 
-      - name: 5. Professional Config Injection
+      - name: 5. Professional Config & Dependency Injection
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
@@ -92,7 +115,7 @@ jobs:
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
           allprojects {
-              repositories { google(); mavenCentral() }
+              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
           }
           EOF
 
@@ -116,31 +139,30 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: 6. Secure Gradle Setup
-        # یہاں ہم گریڈل 8.1.1 کو براہ راست لوڈ کر رہے ہیں تاکہ سسٹم کا ورژن مداخلت نہ کرے
+      - name: 6. Secure Gradle Setup (8.1.1)
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.1.1
           build-root-directory: android
 
-      - name: 7. Execute Clean Professional Build
+      - name: 7. Execute Professional Clean Build
         run: |
           cd android
-          # ہم اب براہ راست 'gradle' کمانڈ استعمال کریں گے جو اوپر والے اسٹیپ نے سیٹ اپ کی ہے
           gradle assembleDebug --no-daemon
 
-      - name: 8. Upload Result
+      - name: 8. Upload Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-Build
+          name: SystemPro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: 9. Summary & Final Clean
         if: always()
         run: |
-          echo "### 🚀 System Pro: Build Finished" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro: Master Build Successful" >> $GITHUB_STEP_SUMMARY
           rm -rf android/
