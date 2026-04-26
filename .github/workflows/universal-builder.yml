@@ -7,6 +7,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,46 +24,69 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Dynamic Package & Folder Setup
+      - name: 3. Smart Project Setup & Icon Injection
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          # اینڈرائیڈ روٹ فولڈر سیٹ اپ
           ANDROID_ROOT="android"
-          
-          # اگر android کا فولڈر نہیں ہے تو بنائیں
-          mkdir -p $ANDROID_ROOT/app/src/main/java
-          
-          # جاوا فائل کا بیک اپ اور ٹرانسفر
-          mkdir -p temp_src
-          cp $ANDROID_ROOT/app/src/main/java/com/system/pro/MainActivity.java temp_src/MainActivity.java || echo "No file to backup"
-          
-          rm -rf $ANDROID_ROOT/app/src/main/java/*
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
+          mkdir -p $ANDROID_ROOT/app/src/main/res/layout
+          mkdir -p $ANDROID_ROOT/app/src/main/res/values
+          mkdir -p $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi
+
+          # جاوا فائل انجیکشن
+          echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # XML لے آؤٹ انجیکشن
+          echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
+          sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
+          mv temp_layout.xml $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
+
+          # مینی فیسٹ انجیکشن
+          echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
+          sed -i 's/package="[^"]*"//g' temp_manifest.xml
+          sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
+          sed -i 's/android:roundIcon="[^"]*"//g' temp_manifest.xml
+          sed -i '/<application/ s/$/ android:icon="@mipmap\/ic_launcher" android:roundIcon="@mipmap\/ic_launcher"/' temp_manifest.xml
+          mv temp_manifest.xml $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           
-          if [ -f temp_src/MainActivity.java ]; then
-            mv temp_src/MainActivity.java $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          # آئی کن انجیکشن
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          find $ANDROID_ROOT/app/src/main/java -name "*.java" -exec sed -i "1s|^package .*|package $PKG_NAME;|" {} +
-          rm -rf temp_src
+          # ریسورس فائلز
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/res/values/styles.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/res/values/colors.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
 
-      - name: 4. Generate Missing Gradle Wrapper
+      - name: 4. Final Build Configuration
         run: |
-          cd android
-          # اگر گریڈل فائلز غائب ہیں تو یہ کمانڈ انہیں جنریٹ کر دے گی
-          gradle wrapper --gradle-version 8.1.1
-
-      - name: 5. Final Build Configuration
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
           
           echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
           echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
           
           cat <<EOF > $ANDROID_ROOT/settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() }
+          }
           rootProject.name = "SystemPro"
           include ':app'
+          EOF
+
+          cat <<EOF > $ANDROID_ROOT/build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
           EOF
 
           cat <<EOF > $ANDROID_ROOT/app/build.gradle
@@ -73,24 +99,37 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode ${{ github.run_number }}
-                  versionName "1.0"
+                  versionName "1.0.${{ github.run_number }}"
               }
+              lintOptions { abortOnError false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
+
+      - name: 5. Setup Gradle 8.1.1
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.1.1
+          cache-disabled: true
 
       - name: 6. Execute Build
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon
 
-      - name: 7. Upload APK
+      - name: 7. Upload Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'App' }}-Build
+          name: APK-Build
           path: android/app/build/outputs/apk/debug/*.apk
+
+      - name: 8. Generate Summary Link
+        if: success()
+        run: |
+          echo "### 🚀 Build Successful" >> $GITHUB_STEP_SUMMARY
+          echo "Download: [APK-Build](https://nightly.link/${{ github.repository }}/workflows/android/main/APK-Build.zip)" >> $GITHUB_STEP_SUMMARY
