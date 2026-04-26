@@ -31,22 +31,18 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           ANDROID_ROOT="android"
-          # تمام ضروری ڈائریکٹریز بنانا
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           mkdir -p $ANDROID_ROOT/app/src/main/res/layout
           mkdir -p $ANDROID_ROOT/app/src/main/res/values
           mkdir -p $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi
 
-          # جاوا فائل
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # XML لے آؤٹ
           echo '${{ github.event.client_payload.xml }}' > temp_layout.xml
           sed -i 's/style="@style\/[^"]*"//g' temp_layout.xml
           mv temp_layout.xml $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # مینی فیسٹ
           echo '${{ github.event.client_payload.manifest }}' > temp_manifest.xml
           sed -i 's/package="[^"]*"//g' temp_manifest.xml
           sed -i 's/android:icon="[^"]*"//g' temp_manifest.xml
@@ -54,12 +50,10 @@ jobs:
           sed -i '/<application/ s/$/ android:icon="@mipmap\/ic_launcher" android:roundIcon="@mipmap\/ic_launcher"/' temp_manifest.xml
           mv temp_manifest.xml $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           
-          # آئی کن
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          # ریسورس فائلز (پاتھ درست کر دیا گیا ہے)
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
@@ -101,7 +95,14 @@ jobs:
                   versionCode ${{ github.run_number }}
                   versionName "1.0.${{ github.run_number }}"
               }
-              lintOptions { abortOnError false }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              // کوڈ وارننگز کو نظر انداز کرنے کے لیے
+              tasks.withType(JavaCompile) {
+                  options.compilerArgs << "-Xlint:none" << "-nowarn"
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
