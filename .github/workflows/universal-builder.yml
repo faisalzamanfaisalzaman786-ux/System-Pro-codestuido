@@ -27,40 +27,41 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          echo "Setting up package: $PKG_NAME at path: $PKG_PATH"
+          # اینڈرائیڈ روٹ فولڈر کا تعین (آپ کے اسکرین شاٹ کے مطابق یہ 'android' ہے)
+          ANDROID_ROOT="android"
+          
+          echo "Setting up package: $PKG_NAME at path: $ANDROID_ROOT/app/src/main/java/$PKG_PATH"
 
           # عارضی طور پر موجودہ جاوا فائل کو محفوظ کرنا
-          # یہ فرض کر رہا ہے کہ فائل اس وقت 'app/src/main/java/com/system/pro/MainActivity.java' پر ہے
           mkdir -p temp_src
-          cp app/src/main/java/com/system/pro/MainActivity.java temp_src/MainActivity.java || echo "Original file not found, checking alternatives..."
+          cp $ANDROID_ROOT/app/src/main/java/com/system/pro/MainActivity.java temp_src/MainActivity.java || echo "Original file not found"
 
           # پرانے تمام جاوا فولڈرز کی صفائی
-          rm -rf app/src/main/java/*
+          rm -rf $ANDROID_ROOT/app/src/main/java/*
 
           # نیا ڈائنامک فولڈر بنانا
-          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
 
           # فائل کو نئے پاتھ میں منتقل کرنا
           if [ -f temp_src/MainActivity.java ]; then
-            mv temp_src/MainActivity.java app/src/main/java/$PKG_PATH/MainActivity.java
+            mv temp_src/MainActivity.java $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
           # فائل کے اندر پیکیج کی پہلی لائن کو ڈائنامک بنانا
-          find app/src/main/java -name "*.java" -exec sed -i "1s|^package .*|package $PKG_NAME;|" {} +
-          
-          # فالتو فائلیں صاف کرنا
+          find $ANDROID_ROOT/app/src/main/java -name "*.java" -exec sed -i "1s|^package .*|package $PKG_NAME;|" {} +
           rm -rf temp_src
 
       - name: 4. Final Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+          ANDROID_ROOT="android"
           
           # Gradle Properties
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
+          echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
+          echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
           
           # Settings Gradle
-          cat <<EOF > settings.gradle
+          cat <<EOF > $ANDROID_ROOT/settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -71,7 +72,7 @@ jobs:
           EOF
 
           # App Build Gradle (Dynamic Namespace)
-          cat <<EOF > app/build.gradle
+          cat <<EOF > $ANDROID_ROOT/app/build.gradle
           plugins { id 'com.android.application' }
           android {
               namespace "$PKG_NAME"
@@ -98,7 +99,7 @@ jobs:
 
       - name: 5. Execute Build
         run: |
-          # گریڈل کو ایگزیکیوٹ کرنے کی اجازت دینا اور بلڈ رن کرنا
+          cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
@@ -107,4 +108,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name || 'App' }}-Build
-          path: app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
