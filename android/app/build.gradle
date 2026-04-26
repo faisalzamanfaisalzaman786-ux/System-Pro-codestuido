@@ -1,80 +1,45 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'com.google.gms.google-services'
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    namespace "com.system.pro" 
-    compileSdk 35 // زبردستی 35
+    namespace 'com.system.pro'
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.system.pro"
         minSdk 24
-        targetSdk 35 
+        targetSdk 34
         versionCode 1
-        versionName "1.0.0"
-        multiDexEnabled true
-        
-        ndk {
-            // ان فلٹرز کی وجہ سے ایپ کا سائز بھی کم ہوگا اور وہ ان ڈیوائسز پر چلے گی
-            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug // یا اپنا ریلیز کی اسٹور استعمال کریں
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-}
-
-// FFmpeg کے مسئلے کو جڑ سے ختم کرنے کے لیے یہ حصہ یہاں بھی ضروری ہے
-configurations.all {
-    resolutionStrategy {
-        // یہ لائن گریڈل کو مجبور کرے گی کہ وہ 6.0-2 کے بجائے 6.0 اٹھائے
-        force 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
-        
-        eachDependency { details ->
-            if (details.requested.group == 'com.arthenica') {
-                details.useVersion "6.0"
-            }
-        }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-    implementation "androidx.multidex:multidex:2.0.1"
-    
-    // فائر بیس اور دیگر ڈیپنڈنسیز
-    implementation platform('com.google.firebase:firebase-bom:32.2.0')
-    implementation 'com.google.firebase:firebase-analytics'
-    
-    // اگر آپ FFmpeg پلگ ان استعمال کر رہے ہیں تو اسے یہاں ان کمنٹ کریں (اگر پب اسپیک سے نہیں ہو رہا)
-    // implementation 'com.arthenica:ffmpeg-kit-full-gpl:6.0'
-}
+    // Core AndroidX & UI
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.0'
 
-// یہ کوڈ بلاک تمام سب-پروجیکٹس (پلگ انز) کو SDK 35 پر شفٹ کر دے گا
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            project.android {
-                compileSdk 35
-                buildToolsVersion "35.0.0"
-                defaultConfig {
-                    targetSdk 35
-                }
-            }
-        }
-    }
+    // Networking & JSON
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.github.bumptech.glide:glide:4.15.1'
+
+    // Play Services (Optional but useful)
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
 }
