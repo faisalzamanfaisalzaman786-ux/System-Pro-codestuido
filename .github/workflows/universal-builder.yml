@@ -23,33 +23,54 @@ jobs:
 
       - name: 3. Dynamic Package & Folder Setup
         run: |
-          # پیکیج نیم موبائل UI سے آئے گا، ورنہ ڈیفالٹ استعمال ہوگا
+          # پیکیج نیم اور پاتھ کا تعین
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # پرانے پیکیج فولڈرز کو صاف کر کے نیا ڈائنامک پاتھ بنانا
+          echo "Setting up package: $PKG_NAME at path: $PKG_PATH"
+
+          # عارضی طور پر موجودہ جاوا فائل کو محفوظ کرنا
+          # یہ فرض کر رہا ہے کہ فائل اس وقت 'app/src/main/java/com/system/pro/MainActivity.java' پر ہے
+          mkdir -p temp_src
+          cp app/src/main/java/com/system/pro/MainActivity.java temp_src/MainActivity.java || echo "Original file not found, checking alternatives..."
+
+          # پرانے تمام جاوا فولڈرز کی صفائی
           rm -rf app/src/main/java/*
+
+          # نیا ڈائنامک فولڈر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
-          
-          # جاوا فائل کو صحیح ڈائنامک فولڈر میں منتقل کرنا اور پیکیج نیم اپڈیٹ کرنا
-          # یہ فرض کر رہا ہے کہ آپ کی MainActivity ریپوزٹری میں موجود ہے
-          cp -r .github/templates/MainActivity.java app/src/main/java/$PKG_PATH/ || cp app/src/main/java/com/system/pro/MainActivity.java app/src/main/java/$PKG_PATH/ || echo "MainActivity already in place"
-          
+
+          # فائل کو نئے پاتھ میں منتقل کرنا
+          if [ -f temp_src/MainActivity.java ]; then
+            mv temp_src/MainActivity.java app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
           # فائل کے اندر پیکیج کی پہلی لائن کو ڈائنامک بنانا
           find app/src/main/java -name "*.java" -exec sed -i "1s|^package .*|package $PKG_NAME;|" {} +
+          
+          # فالتو فائلیں صاف کرنا
+          rm -rf temp_src
 
       - name: 4. Final Build Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           
+          # Gradle Properties
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
+          # Settings Gradle
           cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() }
+          }
           rootProject.name = "SystemPro"
           include ':app'
           EOF
 
+          # App Build Gradle (Dynamic Namespace)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -60,7 +81,12 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode ${{ github.run_number }}
-                  versionName "1.0"
+                  versionName "1.0.${{ github.run_number }}"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
               }
           }
           dependencies {
@@ -72,6 +98,7 @@ jobs:
 
       - name: 5. Execute Build
         run: |
+          # گریڈل کو ایگزیکیوٹ کرنے کی اجازت دینا اور بلڈ رن کرنا
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
