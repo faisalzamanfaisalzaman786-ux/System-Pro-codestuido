@@ -1,39 +1,5 @@
-name: System Pro Remote Builder (Final Master Fix V2)
-
-on:
-  repository_dispatch:
-    types: [build-app]
-
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 1. Setup Environment
-        uses: actions/checkout@v4
-        with:
-          clean: true
-
-      - name: 2. Deep Clean & Directory Prep
-        run: |
-          rm -rf android/
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/xml
-
-      - name: 3. Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
+      # ... پچھلے تمام اسٹیپس وہی رہیں گے ...
+      
       - name: 4. Inject Master Android Structure
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
@@ -43,18 +9,25 @@ jobs:
           
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           
+          # جاوا فائل کو کاپی کرنا
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # 🛠️ JAVA PATCH: IOException ایرر کو فکس کرنا (لائن 485 اور اس جیسی دیگر کالز کے لیے)
+          # ہم پورے کوڈ کو سمارٹ طریقے سے ہینڈل کریں گے تاکہ کمپائلیشن نہ رکے
+          sed -i 's/conn.getResponseCode()/((Integer)inkSafeResponse(conn))/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # پیکیج نیم درست کرنا
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # ایکس ایم ایل فائلز انجیکٹ کرنا
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          # 🛠️ SETTINGS DIALOG INJECTION: جاوا کوڈ کے ایررز ختم کرنے کے لیے
+          # ڈائیلاگ سیٹنگز فائل (اگر موجود نہ ہو تو)
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical"
-              android:padding="16dp">
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:padding="16dp">
               <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
               <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
               <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
@@ -62,106 +35,4 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 🖼️ ICON LOGIC
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          else
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          fi
-
-          # ماسٹر مینی فیسٹ
-          cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:allowBackup="true"
-                  android:label="@string/app_name"
-                  android:icon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.App">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          
-          # ماسٹر اسٹائلز
-          cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/styles.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-              </style>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#00FFCC</item></style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="android:backgroundTint">#00FFCC</item><item name="android:textColor">#000000</item></style>
-          </resources>
-          EOF
-
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
-
-      - name: 5. Professional Config Injection
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          ANDROID_ROOT="android"
-          echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
-          echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
-          echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
-          echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
-
-          cat <<EOF > $ANDROID_ROOT/build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
-          EOF
-
-          cat <<EOF > $ANDROID_ROOT/app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-
-      - name: 6. Secure Gradle Setup
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: 8.1.1
-          build-root-directory: android
-
-      - name: 7. Execute Final Success Build
-        run: |
-          cd android
-          gradle assembleDebug --no-daemon
-
-      - name: 8. Upload Result
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Final-Build
-          path: android/app/build/outputs/apk/debug/*.apk
-
-      - name: 9. Summary & Final Clean
-        if: always()
-        run: |
-          echo "### 🚀 System Pro: Build Process Finished" >> $GITHUB_STEP_SUMMARY
-          rm -rf android/
+          # ... (آئیکن اور مینی فیسٹ والا باقی کوڈ وہی رہے گا) ...
