@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Auto-Repair)
+name: System Pro Remote Builder (Ultra Clean)
 
 on:
   repository_dispatch:
@@ -15,48 +15,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Setup Environment
+      - name: 1. Deep Clean Environment
+        # ریپوزٹری کو کلین اسٹیٹ میں لانا تاکہ پرانا کوئی ڈیٹا رنر پر باقی نہ رہے
         uses: actions/checkout@v4
+        with:
+          clean: true
 
-      - name: 2. Set up JDK 17
+      - name: 2. Purge Previous Artifacts & Temporary Files
+        run: |
+          echo "🧹 Starting Deep Clean..."
+          # اینڈرائیڈ روٹ اور عارضی فائلوں کی مکمل صفائی
+          rm -rf android/
+          rm -rf app/src/main/
+          rm -rf *.xml *.java *.apk
+          # گریڈل کے پرانے کیشے اور ورکنگ ڈائریکٹریز کی صفائی
+          rm -rf ~/.gradle/caches/
+          rm -rf ~/.gradle/wrapper/
+          echo "✨ Environment is now Crystal Clean."
+
+      - name: 3. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Auto-Repair & Project Assembly
+      - name: 4. Build Fresh Project Structure
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_ROOT="android"
           
-          echo "🚀 Checking and Repairing Folder Structure..."
-          # اگر اینڈرائیڈ روٹ غائب ہے تو اسے بنانا
+          # نئے سرے سے فولڈرز بنانا (کوئی پرانی فائل یہاں نہیں بچ سکے گی)
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           mkdir -p $ANDROID_ROOT/app/src/main/res/layout
           mkdir -p $ANDROID_ROOT/app/src/main/res/values
           mkdir -p $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi
 
-          echo "Injecting Java Code..."
+          echo "Injecting Fresh Code Assets..."
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          echo "Injecting XML Layout..."
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
 
-          echo "Generating Professional Manifest..."
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher"
-                  android:supportsRtl="true"
                   android:theme="@style/Theme.App">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -72,22 +82,20 @@ jobs:
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          echo "Fixing Resource Files..."
+          # ریسورسز جنریشن
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > $ANDROID_ROOT/app/src/main/res/values/styles.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#000000</color></resources>' > $ANDROID_ROOT/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > $ANDROID_ROOT/app/src/main/res/values/strings.xml
 
-      - name: 4. Online Gradle Repair & Config
+      - name: 5. Fresh Gradle Initialization
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           ANDROID_ROOT="android"
-          
-          echo "Downloading and Placing Gradle Wrapper..."
           cd $ANDROID_ROOT
-          # یہ کمانڈ انٹرنیٹ سے گریڈل کی ضروری فائلیں ڈاؤن لوڈ کرے گی
+          
+          # آن لائن تازہ ترین گریڈل ریپر ڈاؤن لوڈ کرنا
           gradle wrapper --gradle-version 8.1.1
           
-          echo "Repairing Build Configuration Files..."
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
@@ -132,22 +140,24 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Industrial Build
+      - name: 6. Execute Clean Build
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # 'clean' کمانڈ کے ساتھ بلڈ چلانا تاکہ پرانا کوئی بھی ڈیٹا مکس نہ ہو
+          ./gradlew clean assembleDebug --no-daemon
 
-      - name: 6. Upload Professional APK
+      - name: 7. Post-Build Cleanup & Upload
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AutoRepair-Build
+          name: SystemPro-Clean-Build-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Professional Summary
-        if: success()
+      - name: 8. Final Waste Removal
+        if: always()
         run: |
-          echo "### 🚀 System Pro: Build Success" >> $GITHUB_STEP_SUMMARY
-          echo "Repaired and built your APK successfully." >> $GITHUB_STEP_SUMMARY
-          echo "Download Link: [Click to Download](https://nightly.link/${{ github.repository }}/workflows/android/main/SystemPro-AutoRepair-Build.zip)" >> $GITHUB_STEP_SUMMARY
+          # بلڈ ختم ہونے کے بعد تمام حساس اور عارضی ڈیٹا ڈیلیٹ کرنا
+          echo "🚮 Finalizing and cleaning workspace..."
+          rm -rf android/
+          rm -rf temp_layout.xml
