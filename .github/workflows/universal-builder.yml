@@ -24,45 +24,55 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Icon Injection
+      - name: 3. Core Synthesis & Resource Fix
         shell: bash
         run: |
-          # ڈیٹا نکالنا
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # فولڈرز کی تیاری (Stable Structure)
+          # فولڈرز کی تیاری
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # کوڈ انجیکشن
+          # کوڈ اور لے آؤٹ انجیکشن
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
 
-          # آئکن انجیکشن (Base64 Decode)
+          # آئکن انجیکشن
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
           
-          # ضروری ریسورسز
+          # تمام غائب رنگوں (Missing Colors) کا اضافہ
+          cat <<EOF > android/app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="secondary_brand">#39FF14</color>
+              <color name="text_on_primary">#FFFFFF</color>
+              <color name="text_medium_emphasis">#80FFFFFF</color>
+              <color name="app_background">#0F111A</color>
+              <color name="black">#000000</color>
+              <color name="white">#FFFFFF</color>
+              <color name="colorPrimary">#00FFCC</color>
+              <color name="colorPrimaryDark">#000000</color>
+          </resources>
+          EOF
+
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > android/app/src/main/res/values/styles.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="app_background">#0F111A</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > android/app/src/main/res/values/colors.xml
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Build Configuration (Verified SDKs)
+      - name: 4. Build Configuration
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
-          
-          # settings.gradle فکس
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
-
-          # app/build.gradle (SDK 34 & Gradle 8.5 Support)
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -75,7 +85,6 @@ jobs:
                   versionCode ${{ github.run_number }}
                   versionName "1.0.${{ github.run_number }}"
               }
-              lintOptions { abortOnError false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -84,25 +93,24 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build (Locked to Gradle 8.5)
+      - name: 5. Execute Build (Locked to 8.5)
         run: |
           cd android
           if [ ! -f "gradlew" ]; then
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --parallel
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Sync Knowledge & Upload
+      - name: 6. Knowledge Sync & Upload
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Direct Download Summary
+      - name: 7. Direct Download Link
         if: success()
         run: |
-          echo "### 🚀 System Pro: Build Success!" >> $GITHUB_STEP_SUMMARY
-          echo "Package: ${{ github.event.client_payload.package_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Build Success!" >> $GITHUB_STEP_SUMMARY
           echo "Download: [Direct APK Download](https://nightly.link/${{ github.repository }}/workflows/main/main/APK-Build-${{ github.run_number }}.zip)" >> $GITHUB_STEP_SUMMARY
