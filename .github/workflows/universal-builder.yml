@@ -21,20 +21,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Initialize Gradle Wrapper
+      - name: 3. Core Project Synthesis
         run: |
-          cd android
-          gradle wrapper --gradle-version 8.5 --distribution-type bin
-          chmod +x gradlew
-
-      - name: 4. Core Project Synthesis
-        run: |
-          # پیکیج نیم اور راستے سیٹ کرنا
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_MAIN="android/app/src/main"
           
-          # پرانے جاوا فولڈرز صاف کر کے نئے بنانا تاکہ ٹکراؤ نہ ہو
+          # صفائی اور فولڈر اسٹرکچر
           rm -rf $ANDROID_MAIN/java/*
           mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           mkdir -p $ANDROID_MAIN/res/drawable
@@ -45,7 +38,7 @@ jobs:
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > $ANDROID_MAIN/AndroidManifest.xml
           
-          # پیکیج نیم کی خودکار درستی (Sed Command)
+          # پیکیج نیم کی خودکار درستی
           sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
@@ -55,14 +48,16 @@ jobs:
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable/ic_launcher.png
           fi
 
-      - name: 5. Build Execution
-        run: |
-          cd android
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+      - name: 4. Build with Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.5 # یہاں ہم ایکشن کو ورژن سنبھالنے دیں گے
+          build-root-directory: android
+          arguments: assembleDebug --stacktrace
 
-      - name: 6. Artifact Delivery
+      - name: 5. Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build
+          name: SystemPro-APK
           path: android/app/build/outputs/apk/debug/*.apk
