@@ -27,18 +27,19 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_MAIN="android/app/src/main"
           
-          # صفائی اور فولڈر اسٹرکچر
+          # مکمل صفائی تاکہ پرانا ڈیٹا بلڈ خراب نہ کرے
           rm -rf $ANDROID_MAIN/java/*
           mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           mkdir -p $ANDROID_MAIN/res/drawable
           mkdir -p $ANDROID_MAIN/res/layout
+          mkdir -p $ANDROID_MAIN/res/values
           
           # فائلیں لکھنا
           echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > $ANDROID_MAIN/AndroidManifest.xml
           
-          # پیکیج نیم کی خودکار درستی
+          # پیکیج نیم اور نیم اسپیس کی خودکار درستی
           sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
@@ -51,9 +52,9 @@ jobs:
       - name: 4. Build with Gradle
         uses: gradle/gradle-build-action@v3
         with:
-          gradle-version: 8.5 # یہاں ہم ایکشن کو ورژن سنبھالنے دیں گے
+          gradle-version: 8.5
           build-root-directory: android
-          arguments: assembleDebug --stacktrace
+          arguments: clean assembleDebug --stacktrace --warning-mode all
 
       - name: 5. Artifact Delivery
         if: success()
