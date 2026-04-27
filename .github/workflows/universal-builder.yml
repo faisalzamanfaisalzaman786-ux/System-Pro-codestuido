@@ -10,6 +10,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # نجی نوڈ وارننگ کو ختم کرنے کے لیے
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
@@ -21,30 +23,30 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Python Logic)
+      - name: 3. Core Synthesis (Safe Python)
         shell: python
         run: |
           import os
           import re
 
-          # ڈیٹا حاصل کرنا
+          # Configuration
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           main_dir = "android/app/src/main"
           res_dir = f"{main_dir}/res"
           java_dir = f"{main_dir}/java/{pkg_path}"
 
-          # ضروری فولڈرز بنانا
+          # Folder Creation
           for d in [java_dir, f"{res_dir}/layout", f"{res_dir}/drawable", f"{res_dir}/values"]:
               os.makedirs(d, exist_ok=True)
 
-          # فائلیں لکھنا (Safe Way)
+          # Write Activity, Layout & Manifest
           with open(f"{java_dir}/MainActivity.java", "w") as f: f.write("""${{ github.event.client_payload.java }}""")
           with open(f"{res_dir}/layout/activity_main.xml", "w") as f: f.write("""${{ github.event.client_payload.xml }}""")
           with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write("""${{ github.event.client_payload.manifest }}""")
 
-          # تمام ضروری رنگ (Colors) انجیکٹ کرنا
-          colors_xml = '''<?xml version="1.0" encoding="utf-8"?>
+          # Final Colors Injection (Fixed Variable Error)
+          colors_xml = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
               <color name="secondary_brand">#39FF14</color>
@@ -53,15 +55,16 @@ jobs:
               <color name="app_background">#0F111A</color>
               <color name="black">#000000</color>
               <color name="white">#FFFFFF</color>
-          </resources>'''
-          with open(f"{res_dir}/values/colors.xml", "w") as f: f.write(colors_content if 'colors_content' in locals() else colors_xml)
+          </resources>"""
+          with open(f"{res_dir}/values/colors.xml", "w") as f: f.write(colors_xml)
 
-          # آئکن فکس (Vector Icon)
-          icon_svg = '<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>'
+          # Vector Launcher Icons
+          icon_svg = """<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>"""
           with open(f"{res_dir}/drawable/ic_launcher.xml", "w") as f: f.write(icon_svg)
           with open(f"{res_dir}/drawable/ic_launcher_round.xml", "w") as f: f.write(icon_svg)
 
-          # گریڈل فائل اپ ڈیٹ کرنا
+          # Gradle Namespace Sync
           gradle_file = "android/app/build.gradle"
           if os.path.exists(gradle_file):
               with open(gradle_file, "r") as f: data = f.read()
@@ -69,20 +72,20 @@ jobs:
               data = re.sub(r"applicationId\s+['\"].*['\"]", f"applicationId '{pkg_name}'", data)
               with open(gradle_file, "w") as f: f.write(data)
 
-      - name: 4. Build with Gradle (Modern Way)
+      - name: 4. Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
+          ./gradlew clean assembleDebug --no-daemon
 
       - name: 5. Knowledge Sync
         if: success()
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Engine Stabilized - Build Success" && git push || echo "No changes"
+          git add . && git commit -m "Engine Stabilized - Build #154" && git push || echo "No changes"
 
-      - name: 6. Delivery
+      - name: 6. Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
