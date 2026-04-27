@@ -10,110 +10,72 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # نوڈ وارننگ کو ختم کرنے اور جدید انجن استعمال کرنے کے لیے
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: 2. Set up Java 17
+      - name: 2. Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Full Project Synthesis (Path Alignment)
+      - name: 3. Core Injection (The Working Method)
         shell: python
         run: |
           import os
-
-          # پیکیج نیم کی سیٹنگ
+          
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           
-          # وہ فائلیں جو گریڈل کو 'assembleDebug' چلانے کے لیے لازمی چاہیے
-          files = {
-              # 1. روٹ سیٹنگز
-              "settings.gradle": "include ':app'",
-              
-              # 2. مین بلڈ فائل (بنیادی ریپوزٹریز)
-              "build.gradle": """
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }""",
+          # ڈائریکٹ پاتھ سیٹ کرنا
+          base_path = "android/app/src/main"
+          java_dir = f"{base_path}/java/{pkg_path}"
+          res_dir = f"{base_path}/res"
 
-              # 3. ایپ لیول بلڈ فائل (جہاں assembleDebug ٹاسک چھپا ہوتا ہے)
-              "app/build.gradle": f"""
-          plugins {{
-              id 'com.android.application'
-          }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }}
-              buildTypes {{
-                  release {{
-                      minifyEnabled false
-                  }}
-              }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }}""",
+          # ضروری فولڈرز بنانا
+          os.makedirs(java_dir, exist_ok=True)
+          os.makedirs(f"{res_dir}/layout", exist_ok=True)
+          os.makedirs(f"{res_dir}/values", exist_ok=True)
 
-              # 4. آپ کا فراہم کردہ اینڈرائیڈ کوڈ اور لے آؤٹ
-              f"app/src/main/java/{pkg_path}/MainActivity.java": """${{ github.event.client_payload.java }}""",
-              "app/src/main/res/layout/activity_main.xml": """${{ github.event.client_payload.xml }}""",
-              "app/src/main/AndroidManifest.xml": """${{ github.event.client_payload.manifest }}""",
-              
-              # 5. ضروری ریسورسز (Colors)
-              "app/src/main/res/values/colors.xml": """<?xml version='1.0' encoding='utf-8'?>
+          # فائلیں لکھنا
+          with open(f"{java_dir}/MainActivity.java", "w") as f: 
+              f.write("""${{ github.event.client_payload.java }}""")
+          
+          with open(f"{res_dir}/layout/activity_main.xml", "w") as f: 
+              f.write("""${{ github.event.client_payload.xml }}""")
+          
+          with open(f"{base_path}/AndroidManifest.xml", "w") as f: 
+              f.write("""${{ github.event.client_payload.manifest }}""")
+
+          # کلرز فائل (تاکہ ریسورس ایرر نہ آئے)
+          colors_xml = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <color name='primary_brand'>#00E5FF</color>
-              <color name='secondary_brand'>#39FF14</color>
-              <color name='app_background'>#0F111A</color>
-              <color name='black'>#000000</color>
-              <color name='white'>#FFFFFF</color>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="app_background">#0F111A</color>
+              <color name="black">#000000</color>
+              <color name="white">#FFFFFF</color>
           </resources>"""
-          }
+          with open(f"{res_dir}/values/colors.xml", "w") as f: 
+              f.write(colors_xml)
 
-          # فولڈرز بنانا اور فائلیں لکھنا
-          for path, content in files.items():
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              with open(path, "w") as f:
-                  f.write(content.strip())
-
-      - name: 4. Initialize & Execute Build
+      - name: 4. Build Execution (Final Stage)
         run: |
-          # گریڈل ریپر تیار کرنا اگر موجود نہ ہو
-          gradle wrapper --gradle-version 8.5
+          cd android
           chmod +x gradlew
-          # اب گریڈل کو 'app' پروجیکٹ اور 'assembleDebug' ٹاسک مل جائے گا
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 5. Knowledge Sync (Auto Commit)
+      - name: 5. Knowledge Sync
         if: success()
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Engine Reconstructed - Paths Verified" && git push || echo "No changes"
+          git add . && git commit -m "Stable Build Success" && git push || echo "No changes"
 
-      - name: 6. Deliver APK
+      - name: 6. APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Master-APK
-          path: "app/build/outputs/apk/debug/*.apk"
+          path: android/app/build/outputs/apk/debug/*.apk
