@@ -24,30 +24,24 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Dynamic Package & Code Injection
+      - name: 3. Dynamic Injection
         shell: bash
         run: |
-          # پیکیج نیم نکالنا (جاوا فائل کی پہلی لائن سے)
           JAVA_CODE='${{ github.event.client_payload.java }}'
-          EXTRACTED_PKG=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+')
+          EXTRACTED_PKG=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+' | head -1)
           PKG_NAME=${EXTRACTED_PKG:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          echo "Building for Package: $PKG_NAME"
-          
-          # مکمل صفائی
           rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # فائلیں بنانا
           echo "$JAVA_CODE" > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # ڈائیلاگ فائل (سیٹنگز کے لیے)
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -60,19 +54,14 @@ jobs:
           </LinearLayout>
           EOF
 
-          # ریسورسز اور کلرز
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
-              <color name="secondary_brand">#39FF14</color>
               <color name="app_background">#02040c</color>
               <color name="white">#FFFFFF</color>
-              <color name="black">#000000</color>
               <color name="border_subtle">#33FFFFFF</color>
               <color name="surface_card">#1E2130</color>
-              <color name="text_on_primary">#FFFFFF</color>
-              <color name="text_medium_emphasis">#80FFFFFF</color>
               <color name="colorPrimary">#00E5FF</color>
               <color name="colorPrimaryDark">#02040c</color>
           </resources>
@@ -91,10 +80,10 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Final Gradle Sync
+      - name: 4. Final Build Setup
         run: |
           JAVA_CODE='${{ github.event.client_payload.java }}'
-          PKG_NAME=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+')
+          PKG_NAME=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+' | head -1)
           cd android
           echo "include ':app'" > settings.gradle
           cat <<EOF > app/build.gradle
@@ -128,5 +117,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
