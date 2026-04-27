@@ -37,21 +37,21 @@ jobs:
           echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
           
-          # 1. پیکیج نیم کی خودکار درستی
-          find android/ -type f \( -name "*.java" -o -name "*.xml" -o -name "build.gradle" \) -exec sed -i "s/com.faisal.systempro/$PKG_NAME/g" {} +
+          # 1. پیکیج نیم کی درستی (بغیر کسی پیچیدہ بریکٹ کے)
+          sed -i "s/com.faisal.systempro/$PKG_NAME/g" android/app/build.gradle
           sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # 2. مینی فیسٹ سے تھیم نکالنا (بغیر کسی پیچیدہ بریکٹ کے)
+          # 2. مینی فیسٹ سے تھیم کا نام نکالنا
           THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' $MAIN/AndroidManifest.xml || echo "Theme.SystemProMaster")
 
-          # 3. ریسورس فائلز بنانا (printf کے ساتھ تاکہ سنٹیکس ایرر نہ آئے)
+          # 3. ریسورس فائلز بنانا (printf کا محفوظ طریقہ)
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n <color name="text_high_emphasis">#FFFFFF</color>\n <color name="text_medium_emphasis">#B0BEC5</color>\n <color name="border_subtle">#33FFFFFF</color>\n <color name="text_on_primary">#000000</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
 
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="colorSecondary">@color/secondary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">\n <item name="android:background">@drawable/custom_button_wrapper</item>\n </style>\n <style name="BuildButton" parent="Widget.MaterialComponents.Button">\n <item name="android:backgroundTint">@color/secondary_brand</item>\n </style>\n</resources>' "$THEME_NAME" > $MAIN/res/values/themes.xml
 
-          # بٹن ریپیئر
+          # بٹن ڈیزائن ریپیئر
           printf '<?xml version="1.0" encoding="utf-8"?>\n<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF"><item><shape><solid android:color="@android:color/white"/><corners android:radius="12dp"/></shape></item></ripple>' > $MAIN/res/drawable/custom_button_wrapper.xml
 
       - name: 4. Build Engine (Gradle Execute)
@@ -65,12 +65,13 @@ jobs:
         if: success()
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          cp android/app/src/main/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml || true
+          mkdir -p master_library/history
+          cp $MAIN/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
           git add master_library/
-          git commit -m "Update Library $TIMESTAMP" || echo "No changes"
-          git push || echo "Push skipped"
+          git commit -m "Library Update $TIMESTAMP" || echo "No changes"
+          git push || echo "Push failed"
 
       - name: 6. APK Delivery
         if: success()
