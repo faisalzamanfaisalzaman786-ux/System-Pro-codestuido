@@ -11,46 +11,57 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout
+      - name: 1. Environment Setup
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Java Setup
+      - name: 2. Java Configuration
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Core Synthesis
+      - name: 3. Core Logic (Python Based)
+        # یہاں ہم پائتھن استعمال کر رہے ہیں تاکہ بریکٹ کا کوئی مسئلہ نہ آئے
+        shell: python
         run: |
-          # Safe Variable Assignment
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          MAIN="android/app/src/main"
-          
-          # Replace dots with slashes without brackets
-          PKG_PATH="${PKG_NAME//.//}"
-          
-          # Create Directories
-          mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
-          
-          # File Generation
-          echo "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
-          echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
-          echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
-          
-          # Fixed Replacement Logic
-          sed -i "s/com.faisal.systempro/$PKG_NAME/g" android/app/build.gradle
-          sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
-          sed -i "s|namespace .*|namespace '$PKG_NAME'|" android/app/build.gradle
-          sed -i "s|applicationId .*|applicationId \"$PKG_NAME\"|" android/app/build.gradle
+          import os
 
-          # Resource Injection
-          T_NAME="Theme.SystemProMaster"
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n</resources>' "$T_NAME" > $MAIN/res/values/themes.xml
+          # پے لوڈ ڈیٹا حاصل کرنا
+          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
+          java_code = """${{ github.event.client_payload.java }}"""
+          xml_code = """${{ github.event.client_payload.xml }}"""
+          manifest_code = """${{ github.event.client_payload.manifest }}"""
+          
+          # پاتھ بنانا (بغیر کسی شیل ایرر کے)
+          pkg_path = pkg_name.replace('.', '/')
+          main_dir = f"android/app/src/main"
+          java_dir = f"{main_dir}/java/{pkg_path}"
+          
+          # فولڈرز بنانا
+          os.makedirs(java_dir, exist_ok=True)
+          os.makedirs(f"{main_dir}/res/layout", exist_ok=True)
+          os.makedirs(f"{main_dir}/res/values", exist_ok=True)
+          os.makedirs("master_library/history", exist_ok=True)
+          
+          # فائلیں لکھنا
+          with open(f"{java_dir}/MainActivity.java", "w") as f: f.write(java_code)
+          with open(f"{main_dir}/res/layout/activity_main.xml", "w") as f: f.write(xml_code)
+          with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write(manifest_code)
 
-      - name: 4. Build Execution
+          # پیکیج نیم اور نیم اسپیس کی درستی
+          gradle_path = "android/app/build.gradle"
+          if os.path.exists(gradle_path):
+              with open(gradle_path, "r") as f: content = f.read()
+              content = content.replace("com.faisal.systempro", pkg_name)
+              # گریڈل میں نیم اسپیس اور ایپلیکیشن آئی ڈی کو زبردستی اپ ڈیٹ کرنا
+              import re
+              content = re.sub(r"namespace\s+['\"].*['\"]", f"namespace '{pkg_name}'", content)
+              content = re.sub(r"applicationId\s+['\"].*['\"]", f"applicationId '{pkg_name}'", content)
+              with open(gradle_path, "w") as f: f.write(content)
+
+      - name: 4. Build Execution (Gradle)
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.5
@@ -60,13 +71,11 @@ jobs:
       - name: 5. Knowledge Bank Sync
         if: success()
         run: |
-          mkdir -p master_library/history
-          cp $MAIN/res/layout/activity_main.xml master_library/history/sync.xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
           git add . && git commit -m "Auto-Update" && git push || echo "Done"
 
-      - name: 6. APK Artifact
+      - name: 6. APK Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
