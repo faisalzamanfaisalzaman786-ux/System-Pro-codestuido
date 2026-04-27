@@ -8,10 +8,12 @@ android {
     compileSdk 34
 
     defaultConfig {
+        applicationId "com.systempro.app"
         minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -35,7 +37,7 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.core:core-ktx:1.12.0'
 
-    // 2. نیٹ ورکنگ اور انٹرنیٹ (Networking - Retrofit & OkHttp)
+    // 2. نیٹ ورکنگ (Networking - Retrofit & OkHttp)
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
@@ -48,10 +50,15 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.6.2'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
 
-    // 5. جدید UI اور ڈیزائن (Material Design 3 & Animations)
+    // 5. اینیمیشنز اور ڈیزائن (Lottie & Palette)
     implementation 'androidx.palette:palette:1.0.0'
     implementation 'com.airbnb.android:lottie:6.1.0'
 
-    // 6. پرمیشن ہینڈلنگ (Easy Permissions)
+    // 6. پرمیشن ہینڈلنگ
     implementation 'pub.devrel:easypermissions:3.0.0'
+
+    // ٹیسٹنگ لائبریریز
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
