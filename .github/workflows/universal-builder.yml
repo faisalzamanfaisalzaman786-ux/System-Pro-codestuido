@@ -1,4 +1,4 @@
-name: System Pro Master Engine
+Name: System Pro Master Engine
 
 on:
   repository_dispatch:
@@ -27,36 +27,84 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_MAIN="android/app/src/main"
           
-          # مکمل صفائی تاکہ پرانا ڈیٹا بلڈ خراب نہ کرے
           rm -rf $ANDROID_MAIN/java/*
           mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           mkdir -p $ANDROID_MAIN/res/drawable
           mkdir -p $ANDROID_MAIN/res/layout
           mkdir -p $ANDROID_MAIN/res/values
           
-          # فائلیں لکھنا
           echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > $ANDROID_MAIN/AndroidManifest.xml
           
-          # پیکیج نیم اور نیم اسپیس کی خودکار درستی
           sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # آئیکن ہینڈلنگ
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable/ic_launcher.png
           fi
 
-      - name: 4. Build with Gradle
+      - name: 4. Dynamic UI & Color Injection
+        run: |
+          ANDROID_RES="android/app/src/main/res"
+          
+          # 1. خودکار کلر فائل بنانا (YAML سے کنٹرول)
+          cat <<EOF > $ANDROID_RES/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">${{ github.event.client_payload.primary_color || '#00E5FF' }}</color>
+              <color name="secondary_brand">${{ github.event.client_payload.secondary_color || '#39FF14' }}</color>
+              <color name="app_background">#0F111A</color>
+              <color name="surface_card">#1AFFFFFF</color>
+              <color name="border_subtle">#33FFFFFF</color>
+              <color name="text_high_emphasis">#FFFFFF</color>
+              <color name="text_medium_emphasis">#B0BEC5</color>
+              <color name="text_on_primary">#000000</color>
+          </resources>
+          EOF
+
+          # 2. خودکار تھیم فائل بنانا (نام مینی فیسٹ سے ہم آہنگ کرنا)
+          # ہم مینی فیسٹ سے تھیم کا نام نکال کر اسے تھیم فائل میں انجیکٹ کریں گے
+          THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' android/app/src/main/AndroidManifest.xml || echo "Theme.SystemProMaster")
+          
+          cat <<EOF > $ANDROID_RES/values/themes.xml
+          <resources>
+              <style name="$THEME_NAME" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/primary_brand</item>
+                  <item name="colorSecondary">@color/secondary_brand</item>
+                  <item name="android:windowBackground">@color/app_background</item>
+              </style>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:background">@drawable/custom_button_wrapper</item>
+                  <item name="android:textColor">@color/primary_brand</item>
+              </style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:textColor">@color/text_medium_emphasis</item>
+              </style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:background">@drawable/custom_button_wrapper</item>
+                  <item name="android:backgroundTint">@color/secondary_brand</item>
+                  <item name="android:textColor">@color/text_on_primary</item>
+              </style>
+          </resources>
+          EOF
+
+          # 3. ضروری ڈرا ایبل فائل بنانا
+          cat <<EOF > $ANDROID_RES/drawable/custom_button_wrapper.xml
+          <ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF">
+              <item><shape android:shape="rectangle"><solid android:color="@android:color/white"/><corners android:radius="12dp"/><stroke android:width="1dp" android:color="@color/border_subtle"/></shape></item>
+          </ripple>
+          EOF
+
+      - name: 5. Build with Gradle
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.5
           build-root-directory: android
           arguments: clean assembleDebug --stacktrace --warning-mode all
 
-      - name: 5. Artifact Delivery
+      - name: 6. Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
