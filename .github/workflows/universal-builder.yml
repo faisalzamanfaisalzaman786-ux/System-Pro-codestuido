@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Python Precision Logic)
+      - name: 3. Core Synthesis (Deep Symbol Injection)
         shell: python
         run: |
           import os
@@ -35,53 +35,59 @@ jobs:
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           
-          # فولڈرز بنانا
+          # فولڈرز کی تیاری
           base = "android/app/src/main"
           java_dir = f"{base}/java/{pkg_path}"
           for d in [java_dir, f"{base}/res/layout", f"{base}/res/values", f"{base}/res/drawable", f"{base}/res/mipmap-xxhdpi"]:
               os.makedirs(d, exist_ok=True)
 
           # جاوا فائل لکھنا
+          java_code = """${{ github.event.client_payload.java }}"""
           with open(f"{java_dir}/MainActivity.java", "w") as f:
-              f.write("""${{ github.event.client_payload.java }}""")
+              f.write(java_code)
 
-          # XML کلین اپ (ڈبل XML ہیڈر سے بچنے کے لیے)
+          # XML کلین اپ اور آئی ڈی انجکشن
           raw_xml = """${{ github.event.client_payload.xml }}"""
           clean_xml = re.sub(r'<\?xml[^>]*\?>', '', raw_xml).strip()
 
-          # فائنل XML تیار کرنا جو تمام جاوا آئی ڈیز کو سپورٹ کرے
+          # تمام ممکنہ مسنگ آئی ڈیز کا اضافہ (Hidden Layer)
           full_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent">
-              {clean_xml}
+              
+              <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+                  {clean_xml}
+              </LinearLayout>
+
               <LinearLayout android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone">
                   <EditText android:id="@+id/etPkgName" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etGhToken" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etGhRepo" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etAppPath" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/etRepoName" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                  <Button android:id="@+id/btnBuild" android:layout_width="wrap_content" android:layout_height="wrap_content" />
               </LinearLayout>
-          </FrameLayout>"""
+          </RelativeLayout>"""
           
           with open(f"{base}/res/layout/activity_main.xml", "w") as f:
               f.write(full_xml)
 
-          # مینی فیسٹ اور آئکن
+          # مینی فیسٹ اور آئکن فکس
           manifest = """${{ github.event.client_payload.manifest }}"""
           manifest = manifest.replace('@drawable/ic_launcher', '@mipmap/ic_launcher')
           with open(f"{base}/AndroidManifest.xml", "w") as f:
               f.write(manifest)
 
-          # آئکن انجکشن
+          # آئکن انجکشن (Base64)
           icon_data = "${{ github.event.client_payload.icon_data }}"
           if icon_data:
               import base64
-              with open(f"{base}/res/mipmap-xxhdpi/ic_launcher.png", "wb") as f:
-                  f.write(base64.b64decode(icon_data))
-              with open(f"{base}/res/drawable/ic_launcher.png", "wb") as f:
-                  f.write(base64.b64decode(icon_data))
+              img_data = base64.b64decode(icon_data)
+              with open(f"{base}/res/mipmap-xxhdpi/ic_launcher.png", "wb") as f: f.write(img_data)
+              with open(f"{base}/res/drawable/ic_launcher.png", "wb") as f: f.write(img_data)
 
-          # کلرز اور ریسورسز
+          # فائنل کلر سیٹ (تمام مسنگ کلرز کے ساتھ)
           colors = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
@@ -93,6 +99,8 @@ jobs:
               <color name="surface_card">#1E2130</color>
               <color name="text_on_primary">#FFFFFF</color>
               <color name="text_medium_emphasis">#80FFFFFF</color>
+              <color name="colorPrimary">#00E5FF</color>
+              <color name="colorPrimaryDark">#0F111A</color>
           </resources>"""
           with open(f"{base}/res/values/colors.xml", "w") as f: f.write(colors)
           with open(f"{base}/res/values/styles.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>')
@@ -140,8 +148,8 @@ jobs:
           name: SystemPro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Summary
+      - name: 7. Success Link
         if: success()
         run: |
-          echo "### 🚀 BUILD SUCCESSFUL!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 SUCCESS! BUILD #170" >> $GITHUB_STEP_SUMMARY
           echo "Download: [Direct APK Link](https://nightly.link/${{ github.repository }}/workflows/main/main/SystemPro-Master-APK.zip)" >> $GITHUB_STEP_SUMMARY
