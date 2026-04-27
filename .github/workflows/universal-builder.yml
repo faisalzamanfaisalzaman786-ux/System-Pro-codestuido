@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Clean Synthesis & Resource Generation
+      - name: 3. Clean Synthesis & Professional Resource Mapping
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,7 +36,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # جاوا اور ایکس ایم ایل انجکشن
+          # Core Injection
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -45,12 +45,11 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # مینی فیسٹ (تھیم اور آئکن کے ساتھ)
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # 🛑 اہم فکس: آئکن پیدا کرنا (AAPT ایرر حل کرنے کے لیے)
+          # Placeholder Resources
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
@@ -58,7 +57,7 @@ jobs:
           </vector>
           EOF
 
-          # 🛑 اہم فکس: تھیمز اور اسٹائلز (تاکہ Theme.SystemProMaster مل جائے)
+          # 🛑 اہم فکس: تمام مسنگ اسٹائلز (TabButton, BuildButton etc)
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -66,7 +65,25 @@ jobs:
                   <item name="colorPrimaryDark">@color/app_background</item>
                   <item name="colorAccent">@color/primary_brand</item>
               </style>
+              
               <style name="Theme.App" parent="Theme.SystemProMaster" />
+
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:textColor">#FFFFFF</item>
+                  <item name="android:textSize">12sp</item>
+                  <item name="android:textAllCaps">false</item>
+              </style>
+
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="backgroundTint">#00E5FF</item>
+                  <item name="android:textColor">#02040c</item>
+                  <item name="cornerRadius">8dp</item>
+              </style>
+
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
+                  <item name="strokeColor">#33FFFFFF</item>
+                  <item name="android:textColor">#FFFFFF</item>
+              </style>
           </resources>
           EOF
 
@@ -82,20 +99,15 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Gradle 8.5 Master Configuration
+      - name: 4. Gradle 8.5 Master Engine
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
-          
-          # AndroidX فلیگز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-
-          # Settings
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # Root Build
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -106,7 +118,6 @@ jobs:
           }
           EOF
 
-          # App Build
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -127,7 +138,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Final Execution (Gradle 8.5)
+      - name: 5. Force Execute Build (Gradle 8.5)
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
@@ -138,5 +149,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
+          name: SystemPro-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
