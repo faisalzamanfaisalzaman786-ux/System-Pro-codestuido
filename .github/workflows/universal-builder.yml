@@ -24,14 +24,13 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Smart Resource Injection (No-Fail Sync)
+      - name: 3. Full Resource Injection (Fixing Missing Colors)
         shell: bash
         run: |
-          # پیکیج سیٹ اپ
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # پرانے ریسورسز کی مکمل صفائی (Duplicate ختم کرنے کے لیے)
+          # مکمل صفائی
           rm -rf android/app/src/main/res/values/*.xml
           
           mkdir -p android/app/src/main/java/$PKG_PATH
@@ -40,32 +39,21 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # جاوا اور لے آؤٹ انجیکشن
+          # جاوا، ایکس ایم ایل اور مینی فیسٹ
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
+          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # مینی فیسٹ انجیکشن اور آٹو تھیم فکس
-          # ہم مینی فیسٹ سے تھیم کا نام نکال کر اسے اسٹائل فائل میں سیٹ کریں گے
-          MANIFEST_CONTENT='${{ github.event.client_payload.manifest }}'
-          echo "$MANIFEST_CONTENT" > android/app/src/main/AndroidManifest.xml
-          
-          # مینی فیسٹ میں پیکیج اور ایکٹیویٹی کی درستی
+          # پیکیج نیم فکس
           sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" android/app/src/main/AndroidManifest.xml
-          
-          # آئکن ہینڈلنگ
+
+          # آئکن
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # ریسورسز کی تیاری (Theme.SystemProMaster کو خاص طور پر شامل کیا گیا ہے)
-          cat <<EOF > android/app/src/main/res/values/strings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">${{ github.event.client_payload.app_name || 'SystemPro' }}</string>
-          </resources>
-          EOF
-
+          # وہ تمام رنگ جو ایرر میں آ رہے تھے (border_subtle, surface_card وغیرہ)
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -74,10 +62,16 @@ jobs:
               <color name="app_background">#02040c</color>
               <color name="white">#FFFFFF</color>
               <color name="black">#000000</color>
+              <color name="border_subtle">#33FFFFFF</color>
+              <color name="surface_card">#1E2130</color>
+              <color name="text_on_primary">#FFFFFF</color>
+              <color name="text_medium_emphasis">#80FFFFFF</color>
+              <color name="colorPrimary">#00E5FF</color>
+              <color name="colorPrimaryDark">#02040c</color>
           </resources>
           EOF
 
-          # اسٹائلز فائل - یہاں ہم نے دونوں نام (Theme.App اور Theme.SystemProMaster) رکھ دیے ہیں تاکہ ایرر نہ آئے
+          # تمام ضروری تھیمز اور اسٹائلز
           cat <<EOF > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -105,6 +99,8 @@ jobs:
               </style>
           </resources>
           EOF
+
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
       - name: 4. Build Configuration
         run: |
@@ -139,7 +135,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success Output
+      - name: 6. Final Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
