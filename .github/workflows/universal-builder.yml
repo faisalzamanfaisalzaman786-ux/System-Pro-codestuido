@@ -1,4 +1,4 @@
-name: System Pro Remote Builder (Final Fix)
+name: System Pro Master Engine
 
 on:
   repository_dispatch:
@@ -7,9 +7,6 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,145 +14,55 @@ jobs:
     steps:
       - name: 1. Setup Environment
         uses: actions/checkout@v4
-        with:
-          clean: true
 
-      - name: 2. Deep Clean & Directory Prep
-        run: |
-          rm -rf android/
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-
-      - name: 3. Set up JDK 17
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 4. Build Professional Project Structure
+      - name: 3. Core Project Synthesis
         run: |
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ANDROID_ROOT="android"
           
-          mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
-          echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          # ضروری فولڈرز کی تیاری (بغیر پرانا ڈیٹا مٹائے)
+          mkdir -p android/app/src/main/java/$PKG_PATH
+          mkdir -p android/app/src/main/res/layout
+          mkdir -p android/app/src/main/res/values
           
-          if grep -q "package " $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java; then
-            sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          else
-            echo "package $PKG_NAME;" | cat - $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java > temp && mv temp $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
+          # یوزر کا جاوا اور XML کوڈ انجیکٹ کرنا
+          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
           
-          # Java IOException Patch
-          sed -i 's/conn.getResponseCode()/try_get_code(conn)/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          sed -i '$ d' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo -e "\n    private int try_get_code(java.net.HttpURLConnection c){try{return c.getResponseCode();}catch(Exception e){return -1;}}\n}" >> $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-
-          echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">'$APP_NAME'</string></resources>' > $ANDROID_ROOT/app/src/main/res/values/strings.xml
+          # پیکیج نیم کی ہر جگہ درستگی
+          sed -i "s|^package .*|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
           
-          mkdir -p $ANDROID_ROOT/app/src/main/res/values
-          cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/themes.xml
-          <resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>
-          EOF
+          # ماسٹر فائلوں کو ان کی جگہوں پر منتقل کرنا
+          # (یہ فائلیں ہم اگلے مرحلے میں آپ کی ریپوزٹری میں ڈالیں گے)
+          cp master_app_build.gradle android/app/build.gradle
+          cp master_manifest.xml android/app/src/main/AndroidManifest.xml
+          
+          # فائلز کے اندر پیکیج نیم اپ ڈیٹ کرنا
+          sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
+          sed -i "s|package=\".*\"|package=\"$PKG_NAME\"|" android/app/src/main/AndroidManifest.xml
 
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          else
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          fi
-
-          cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.App" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: 5. Config Injection (Updated)
-        run: |
-          ANDROID_ROOT="android"
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
-          echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> $ANDROID_ROOT/gradle.properties
-          echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
-          echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
-
-          cat <<EOF > $ANDROID_ROOT/build.gradle
-          buildscript { 
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
-          }
-          allprojects { 
-            repositories { google(); mavenCentral() } 
-          }
-          EOF
-
-      - name: 6. Inject Professional App Build File
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          cat <<EOF > android/app/build.gradle
-          plugins { id 'com.android.application' }
-          android { 
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig { 
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0" 
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
-                  }
-              }
-          }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              implementation 'androidx.core:core-ktx:1.12.0'
-          }
-          EOF
-
-      - name: 7. Force Gradle Wrapper & Build
+      - name: 4. Build Execution
         run: |
           cd android
-          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 8. Upload Result
+      - name: 5. Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 9. Summary
+      - name: 6. Build Insights
         if: always()
         run: |
-          echo "### 🚀 System Pro: Build Finished Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro Master Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "Build finished at $(date)" >> $GITHUB_STEP_SUMMARY
