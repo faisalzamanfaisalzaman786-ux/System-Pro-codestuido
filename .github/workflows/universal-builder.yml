@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # نجی نوڈ وارننگ کو ختم کرنے کے لیے
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
@@ -23,29 +23,32 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Safe Python)
+      - name: 3. Core Synthesis (Auto-Path Fix)
         shell: python
         run: |
           import os
           import re
 
-          # Configuration
+          # ڈیٹا حاصل کرنا
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
-          main_dir = "android/app/src/main"
+          
+          # راستوں کی خودکار تصدیق (Checking if 'android' folder exists or not)
+          base_dir = "android/app" if os.path.exists("android/app") else "app"
+          main_dir = f"{base_dir}/src/main"
           res_dir = f"{main_dir}/res"
           java_dir = f"{main_dir}/java/{pkg_path}"
 
-          # Folder Creation
+          # فولڈرز بنانا
           for d in [java_dir, f"{res_dir}/layout", f"{res_dir}/drawable", f"{res_dir}/values"]:
               os.makedirs(d, exist_ok=True)
 
-          # Write Activity, Layout & Manifest
+          # فائلیں لکھنا
           with open(f"{java_dir}/MainActivity.java", "w") as f: f.write("""${{ github.event.client_payload.java }}""")
           with open(f"{res_dir}/layout/activity_main.xml", "w") as f: f.write("""${{ github.event.client_payload.xml }}""")
           with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write("""${{ github.event.client_payload.manifest }}""")
 
-          # Final Colors Injection (Fixed Variable Error)
+          # کلرز انجیکٹ کرنا
           colors_xml = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
@@ -58,24 +61,23 @@ jobs:
           </resources>"""
           with open(f"{res_dir}/values/colors.xml", "w") as f: f.write(colors_xml)
 
-          # Vector Launcher Icons
+          # آئکن فکس
           icon_svg = """<?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>"""
           with open(f"{res_dir}/drawable/ic_launcher.xml", "w") as f: f.write(icon_svg)
           with open(f"{res_dir}/drawable/ic_launcher_round.xml", "w") as f: f.write(icon_svg)
 
-          # Gradle Namespace Sync
-          gradle_file = "android/app/build.gradle"
-          if os.path.exists(gradle_file):
-              with open(gradle_file, "r") as f: data = f.read()
-              data = re.sub(r"namespace\s+['\"].*['\"]", f"namespace '{pkg_name}'", data)
-              data = re.sub(r"applicationId\s+['\"].*['\"]", f"applicationId '{pkg_name}'", data)
-              with open(gradle_file, "w") as f: f.write(data)
-
-      - name: 4. Build APK
+      - name: 4. Build APK (Smart Path Execution)
         run: |
-          cd android
-          chmod +x gradlew
+          # ڈھونڈنا کہ gradlew کہاں ہے
+          GRADLEW_PATH=$(find . -name gradlew)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew not found anywhere in the repository!"
+            exit 1
+          fi
+          
+          chmod +x $GRADLEW_PATH
+          cd $(dirname $GRADLEW_PATH)
           ./gradlew clean assembleDebug --no-daemon
 
       - name: 5. Knowledge Sync
@@ -83,11 +85,11 @@ jobs:
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Engine Stabilized - Build #154" && git push || echo "No changes"
+          git add . && git commit -m "Engine Stabilized - Path Fixed" && git push || echo "No changes"
 
-      - name: 6. Upload APK
+      - name: 6. Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Master-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: "**/build/outputs/apk/debug/*.apk"
