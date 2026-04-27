@@ -34,13 +34,13 @@ jobs:
           xml_code = """${{ github.event.client_payload.xml }}"""
           manifest_code = """${{ github.event.client_payload.manifest }}"""
           
-          # Directory Setup
+          # Path Setup
           pkg_path = pkg_name.replace('.', '/')
           main_dir = "android/app/src/main"
           java_dir = f"{main_dir}/java/{pkg_path}"
           res_dir = f"{main_dir}/res"
           
-          # Create all required folders
+          # Create Directories
           for d in [java_dir, f"{res_dir}/layout", f"{res_dir}/drawable", f"{res_dir}/values", "master_library/history"]:
               os.makedirs(d, exist_ok=True)
           
@@ -49,19 +49,27 @@ jobs:
           with open(f"{res_dir}/layout/activity_main.xml", "w") as f: f.write(xml_code)
           with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write(manifest_code)
 
-          # 2. Repair Missing Icons (Fixes the current AAPT error)
+          # 2. Repair Missing Icons
           dummy_icon = '<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>'
           with open(f"{res_dir}/drawable/ic_launcher.xml", "w") as f: f.write(dummy_icon)
           with open(f"{res_dir}/drawable/ic_launcher_round.xml", "w") as f: f.write(dummy_icon)
 
-          # 3. Create Essential Values
-          with open(f"{res_dir}/values/colors.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">#00E5FF</color>\n <color name="app_background">#0F111A</color>\n</resources>')
+          # 3. Inject Missing Colors (Fixing Build #150 errors)
+          # یہاں ہم نے وہ تمام کلرز ڈال دیے ہیں جن کی وجہ سے ایرر آ رہا تھا
+          colors_xml = '''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="secondary_brand">#39FF14</color>
+              <color name="text_on_primary">#FFFFFF</color>
+              <color name="text_medium_emphasis">#80FFFFFF</color>
+              <color name="app_background">#0F111A</color>
+          </resources>'''
+          with open(f"{res_dir}/values/colors.xml", "w") as f: f.write(colors_xml)
           
           with open(f"{res_dir}/values/strings.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <string name="app_name">System Pro Master</string>\n</resources>')
+              f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <string name="app_name">System Pro Master</string>\n</resources>')
 
-          # 4. Critical Build.gradle Sync
+          # 4. Build.gradle Sync
           gradle_path = "android/app/build.gradle"
           if os.path.exists(gradle_path):
               with open(gradle_path, "r") as f: content = f.read()
@@ -69,7 +77,7 @@ jobs:
               content = re.sub(r"applicationId\s+['\"].*['\"]", f"applicationId '{pkg_name}'", content)
               with open(gradle_path, "w") as f: f.write(content)
 
-      - name: 4. Build Execution (Clean Assemble)
+      - name: 4. Build Execution (Gradle Clean)
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.5
@@ -81,7 +89,7 @@ jobs:
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Auto-Fix Build Success" && git push || echo "No changes"
+          git add . && git commit -m "Fixed Resource Colors Build #151" && git push || echo "No changes"
 
       - name: 6. APK Artifact Delivery
         if: success()
