@@ -20,13 +20,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: 3. Initialize Gradle Wrapper
         run: |
           cd android
-          # اگر gradlew فائل موجود نہ ہو تو اسے خود بخود تیار کرنا
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
 
       - name: 4. Core Project Synthesis
@@ -53,7 +51,7 @@ jobs:
       - name: 5. Build Execution
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: 6. Artifact Delivery
         if: success()
