@@ -19,9 +19,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 3. Core Injection (The Working Method)
+      - name: 3. Core Synthesis (Root Method)
         shell: python
         run: |
           import os
@@ -29,53 +28,37 @@ jobs:
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           
-          # ڈائریکٹ پاتھ سیٹ کرنا
-          base_path = "android/app/src/main"
-          java_dir = f"{base_path}/java/{pkg_path}"
-          res_dir = f"{base_path}/res"
+          # فائلیں براہ راست صحیح فولڈرز میں بنانا
+          java_file = f"app/src/main/java/{pkg_path}/MainActivity.java"
+          xml_file = "app/src/main/res/layout/activity_main.xml"
+          manifest_file = "app/src/main/AndroidManifest.xml"
+          colors_file = "app/src/main/res/values/colors.xml"
 
-          # ضروری فولڈرز بنانا
-          os.makedirs(java_dir, exist_ok=True)
-          os.makedirs(f"{res_dir}/layout", exist_ok=True)
-          os.makedirs(f"{res_dir}/values", exist_ok=True)
+          for f in [java_file, xml_file, manifest_file, colors_file]:
+              os.makedirs(os.path.dirname(f), exist_ok=True)
 
-          # فائلیں لکھنا
-          with open(f"{java_dir}/MainActivity.java", "w") as f: 
-              f.write("""${{ github.event.client_payload.java }}""")
-          
-          with open(f"{res_dir}/layout/activity_main.xml", "w") as f: 
-              f.write("""${{ github.event.client_payload.xml }}""")
-          
-          with open(f"{base_path}/AndroidManifest.xml", "w") as f: 
-              f.write("""${{ github.event.client_payload.manifest }}""")
+          with open(java_file, "w") as f: f.write("""${{ github.event.client_payload.java }}""")
+          with open(xml_file, "w") as f: f.write("""${{ github.event.client_payload.xml }}""")
+          with open(manifest_file, "w") as f: f.write("""${{ github.event.client_payload.manifest }}""")
+          with open(colors_file, "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#0F111A</color></resources>')
 
-          # کلرز فائل (تاکہ ریسورس ایرر نہ آئے)
-          colors_xml = """<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="primary_brand">#00E5FF</color>
-              <color name="app_background">#0F111A</color>
-              <color name="black">#000000</color>
-              <color name="white">#FFFFFF</color>
-          </resources>"""
-          with open(f"{res_dir}/values/colors.xml", "w") as f: 
-              f.write(colors_xml)
-
-      - name: 4. Build Execution (Final Stage)
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: 4. Build with Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: assembleDebug
+          # یہاں ہم نے 'cd android' نہیں کیا، بلکہ براہ راست روٹ سے چلایا
+          build-root-directory: . 
 
       - name: 5. Knowledge Sync
         if: success()
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Stable Build Success" && git push || echo "No changes"
+          git add . && git commit -m "Restored 1:40m Success Build" && git push || echo "No changes"
 
       - name: 6. APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Master-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: "**/build/outputs/apk/debug/*.apk"
