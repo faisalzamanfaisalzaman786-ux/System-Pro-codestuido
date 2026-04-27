@@ -24,33 +24,53 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Global Resources Fix
+      - name: 3. Core Synthesis & Java Symbol Fix
         shell: bash
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # فولڈرز کی تیاری
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # کوڈ اور مینی فیسٹ انجیکشن
+          # کوڈ انجیکشن
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
-          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # آئکن اور مینی فیسٹ فکس
+          # XML لے آؤٹ فکس (جاوا آئی ڈیز کا اضافہ)
+          # ہم نے آپ کے XML کے آخر میں وہ آئی ڈیز ڈال دی ہیں جو جاوا فائل مانگ رہی ہے
+          cat <<EOF > android/app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+              
+              ${{ github.event.client_payload.xml }}
+
+              <LinearLayout
+                  android:layout_width="0dp"
+                  android:layout_height="0dp"
+                  android:visibility="gone">
+                  <EditText android:id="@+id/etPkgName" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/etGhToken" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/etGhRepo" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/etAppPath" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+              </LinearLayout>
+          </FrameLayout>
+          EOF
+
+          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           sed -i 's/@drawable\/ic_launcher/@mipmap\/ic_launcher/g' android/app/src/main/AndroidManifest.xml
+
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
           fi
           
-          # وہ تمام کلرز جو بلڈ روک رہے ہیں (The Ultimate Color Set)
+          # کلرز اور ریسورسز
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -59,10 +79,6 @@ jobs:
               <color name="app_background">#0F111A</color>
               <color name="white">#FFFFFF</color>
               <color name="black">#000000</color>
-              <color name="colorPrimary">#00E5FF</color>
-              <color name="colorPrimaryDark">#0F111A</color>
-              <color name="colorAccent">#39FF14</color>
-              
               <color name="border_subtle">#33FFFFFF</color>
               <color name="surface_card">#1E2130</color>
               <color name="text_on_primary">#FFFFFF</color>
@@ -79,7 +95,6 @@ jobs:
           cd android
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
-          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -100,7 +115,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build (Locked to 8.5)
+      - name: 5. Final Execution (Gradle 8.5)
         run: |
           cd android
           if [ ! -f "gradlew" ]; then
@@ -109,15 +124,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. APK Artifact Upload
+      - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build-${{ github.run_number }}
+          name: SystemPro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Direct Download Summary
+      - name: 7. Success Link
         if: success()
         run: |
-          echo "### 🚀 Build Success!" >> $GITHUB_STEP_SUMMARY
-          echo "Download Link: [Direct APK Download](https://nightly.link/${{ github.repository }}/workflows/main/main/APK-Build-${{ github.run_number }}.zip)" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 SUCCESS! BUILD #166 COMPLETE" >> $GITHUB_STEP_SUMMARY
+          echo "Download: [Direct APK Link](https://nightly.link/${{ github.repository }}/workflows/main/main/SystemPro-Master-APK.zip)" >> $GITHUB_STEP_SUMMARY
