@@ -17,14 +17,14 @@ jobs:
       - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Java Setup
+      - name: 2. Java Setup (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Synthesis & Manifest Modernization
+      - name: 3. Dynamic Synthesis & Manifest Cleanup
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -37,7 +37,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # 🛑 اہم فکس: مینی فیسٹ سے package attribute ہٹا دیا گیا ہے
+          # 🛑 مینی فیسٹ کا لیٹسٹ فارمیٹ (بغیر پیکیج ایٹریبیوٹ کے)
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -61,81 +61,79 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا کوڈ اور آٹو پیچ
+          # جاوا کوڈ انجکشن اور خودکار پیکیج سیٹنگ
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
           
-          # پیکیج نیم سنک کرنا
-          sed -i "s/package .*;/package $PKG_NAME;/g" android/app/src/main/java/$PKG_PATH/MainActivity.java
-          # IOException ہینڈلر
+          # جاوا فائل کے اندر پیکیج نیم درست کرنا
+          sed -i "1s|^package .*;|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # IOException پیچ
           sed -i 's/conn.getResponseCode()/({ try { return conn.getResponseCode(); } catch (Exception e) { return -1; } })/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # لے آؤٹ اور ریسورسز
-          cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
-          EOF
-
+          # ریسورسز (Strings, Colors, Themes)
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
+          
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/primary_brand</item>
+                  <item name="colorPrimary">#00E5FF</item>
               </style>
-              <style name="Theme.App" parent="Theme.SystemProMaster" />
               <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
               <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00E5FF</item></style>
           </resources>
           EOF
 
-          cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color></resources>
-          EOF
-
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Final Gradle Bridge (8.5)
+      - name: 4. Build System Configuration (Gradle 8.5)
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
+
           cat <<EOF > build.gradle
-          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-          android { 
+          android {
               namespace "$PKG_NAME"
-              compileSdk 34 
-              defaultConfig { 
+              compileSdk 34
+              defaultConfig {
                   applicationId "$PKG_NAME"
-                  minSdk 24 
-                  targetSdk 34 
-                  versionCode 1 
-                  versionName "1.0" 
-              } 
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
           }
-          dependencies { 
+          dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0' 
+              implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
 
-      - name: 5. Execute Final Build
+      - name: 5. Execute Build
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Deliver Artifact
+      - name: 6. Deliver Success APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-APK
+          name: ${{ github.event.client_payload.app_name }}-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
