@@ -23,32 +23,30 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Auto-Path Fix)
+      - name: 3. Core Synthesis & Resource Patch
         shell: python
         run: |
           import os
           import re
 
-          # ڈیٹا حاصل کرنا
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           
-          # راستوں کی خودکار تصدیق (Checking if 'android' folder exists or not)
+          # Path Auto-Detection
           base_dir = "android/app" if os.path.exists("android/app") else "app"
           main_dir = f"{base_dir}/src/main"
           res_dir = f"{main_dir}/res"
           java_dir = f"{main_dir}/java/{pkg_path}"
 
-          # فولڈرز بنانا
           for d in [java_dir, f"{res_dir}/layout", f"{res_dir}/drawable", f"{res_dir}/values"]:
               os.makedirs(d, exist_ok=True)
 
-          # فائلیں لکھنا
+          # Write Activity & Manifest
           with open(f"{java_dir}/MainActivity.java", "w") as f: f.write("""${{ github.event.client_payload.java }}""")
           with open(f"{res_dir}/layout/activity_main.xml", "w") as f: f.write("""${{ github.event.client_payload.xml }}""")
           with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write("""${{ github.event.client_payload.manifest }}""")
 
-          # کلرز انجیکٹ کرنا
+          # Inject Colors
           colors_xml = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
@@ -61,33 +59,22 @@ jobs:
           </resources>"""
           with open(f"{res_dir}/values/colors.xml", "w") as f: f.write(colors_xml)
 
-          # آئکن فکس
-          icon_svg = """<?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>"""
-          with open(f"{res_dir}/drawable/ic_launcher.xml", "w") as f: f.write(icon_svg)
-          with open(f"{res_dir}/drawable/ic_launcher_round.xml", "w") as f: f.write(icon_svg)
-
-      - name: 4. Build APK (Smart Path Execution)
+      - name: 4. Initialize Gradle Wrapper (If Missing)
         run: |
-          # ڈھونڈنا کہ gradlew کہاں ہے
-          GRADLEW_PATH=$(find . -name gradlew)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew not found anywhere in the repository!"
-            exit 1
+          if [ ! -f "gradlew" ] && [ ! -f "android/gradlew" ]; then
+            echo "Gradlew not found. Initializing new wrapper..."
+            gradle wrapper --gradle-version 8.5
           fi
-          
+
+      - name: 5. Build APK
+        run: |
+          # Find gradlew again after possible initialization
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
           chmod +x $GRADLEW_PATH
           cd $(dirname $GRADLEW_PATH)
           ./gradlew clean assembleDebug --no-daemon
 
-      - name: 5. Knowledge Sync
-        if: success()
-        run: |
-          git config --global user.name "System-Pro-Bot"
-          git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Engine Stabilized - Path Fixed" && git push || echo "No changes"
-
-      - name: 6. Delivery
+      - name: 6. Sync & Deliver
         if: success()
         uses: actions/upload-artifact@v4
         with:
