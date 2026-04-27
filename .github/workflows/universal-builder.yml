@@ -23,39 +23,44 @@ jobs:
           distribution: 'temurin'
 
       - name: 3. Core Logic (Python Based)
-        # یہاں ہم پائتھن استعمال کر رہے ہیں تاکہ بریکٹ کا کوئی مسئلہ نہ آئے
         shell: python
         run: |
           import os
 
-          # پے لوڈ ڈیٹا حاصل کرنا
+          # Data Retrieval
           pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
           java_code = """${{ github.event.client_payload.java }}"""
           xml_code = """${{ github.event.client_payload.xml }}"""
           manifest_code = """${{ github.event.client_payload.manifest }}"""
           
-          # پاتھ بنانا (بغیر کسی شیل ایرر کے)
+          # Path Setup
           pkg_path = pkg_name.replace('.', '/')
-          main_dir = f"android/app/src/main"
+          main_dir = "android/app/src/main"
           java_dir = f"{main_dir}/java/{pkg_path}"
+          res_dir = f"{main_dir}/res"
           
-          # فولڈرز بنانا
+          # Create Directories
           os.makedirs(java_dir, exist_ok=True)
-          os.makedirs(f"{main_dir}/res/layout", exist_ok=True)
-          os.makedirs(f"{main_dir}/res/values", exist_ok=True)
+          os.makedirs(f"{res_dir}/layout", exist_ok=True)
+          os.makedirs(f"{res_dir}/drawable", exist_ok=True)
+          os.makedirs(f"{res_dir}/values", exist_ok=True)
           os.makedirs("master_library/history", exist_ok=True)
           
-          # فائلیں لکھنا
+          # Write Source Files
           with open(f"{java_dir}/MainActivity.java", "w") as f: f.write(java_code)
-          with open(f"{main_dir}/res/layout/activity_main.xml", "w") as f: f.write(xml_code)
+          with open(f"{res_dir}/layout/activity_main.xml", "w") as f: f.write(xml_code)
           with open(f"{main_dir}/AndroidManifest.xml", "w") as f: f.write(manifest_code)
 
-          # پیکیج نیم اور نیم اسپیس کی درستی
+          # --- ICON REPAIR (Fixes the current error) ---
+          # Creating a dummy icon if it's missing in AndroidManifest
+          with open(f"{res_dir}/drawable/ic_launcher.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?>\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FF00E5FF" android:pathData="M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z"/></vector>')
+
+          # Gradle & Namespace Sync
           gradle_path = "android/app/build.gradle"
           if os.path.exists(gradle_path):
               with open(gradle_path, "r") as f: content = f.read()
               content = content.replace("com.faisal.systempro", pkg_name)
-              # گریڈل میں نیم اسپیس اور ایپلیکیشن آئی ڈی کو زبردستی اپ ڈیٹ کرنا
               import re
               content = re.sub(r"namespace\s+['\"].*['\"]", f"namespace '{pkg_name}'", content)
               content = re.sub(r"applicationId\s+['\"].*['\"]", f"applicationId '{pkg_name}'", content)
@@ -66,7 +71,7 @@ jobs:
         with:
           gradle-version: 8.5
           build-root-directory: android
-          arguments: assembleDebug
+          arguments: assembleDebug --stacktrace
 
       - name: 5. Knowledge Bank Sync
         if: success()
