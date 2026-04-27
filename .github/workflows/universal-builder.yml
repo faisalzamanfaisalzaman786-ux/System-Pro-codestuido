@@ -22,36 +22,35 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Project Synthesis
+      - name: 3. Smart Code Injection
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          ANDROID_MAIN="android/app/src/main"
           
-          # ضروری فولڈرز کی تیاری (بغیر پرانا ڈیٹا مٹائے)
-          mkdir -p android/app/src/main/java/$PKG_PATH
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
+          # جاوا فائل کا فولڈر بنانا
+          mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           
-          # یوزر کا جاوا اور XML کوڈ انجیکٹ کرنا
-          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
+          # یوزر کا کوڈ متعلقہ فائلوں میں ڈالنا
+          echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
+          echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
           
-          # پیکیج نیم کی ہر جگہ درستگی
-          sed -i "s|^package .*|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
+          # جاوا فائل میں پیکیج نیم درست کرنا
+          if grep -q "package " $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java; then
+            sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
+          else
+            echo "package $PKG_NAME;" | cat - $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java > temp && mv temp $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
+          fi
           
-          # ماسٹر فائلوں کو ان کی جگہوں پر منتقل کرنا
-          # (یہ فائلیں ہم اگلے مرحلے میں آپ کی ریپوزٹری میں ڈالیں گے)
-          cp master_app_build.gradle android/app/build.gradle
-          cp master_manifest.xml android/app/src/main/AndroidManifest.xml
-          
-          # فائلز کے اندر پیکیج نیم اپ ڈیٹ کرنا
+          # اسٹینڈرڈ فائلوں میں پیکیج نیم اور نیم اسپیس اپ ڈیٹ کرنا
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
-          sed -i "s|package=\".*\"|package=\"$PKG_NAME\"|" android/app/src/main/AndroidManifest.xml
+          sed -i "s|package=\".*\"|package=\"$PKG_NAME\"|" $ANDROID_MAIN/AndroidManifest.xml
 
-      - name: 4. Build Execution
+      - name: 4. Professional Build Execution
         run: |
           cd android
           chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.5
           ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 5. Artifact Delivery
@@ -65,4 +64,3 @@ jobs:
         if: always()
         run: |
           echo "### 🚀 System Pro Master Build Status" >> $GITHUB_STEP_SUMMARY
-          echo "Build finished at $(date)" >> $GITHUB_STEP_SUMMARY
