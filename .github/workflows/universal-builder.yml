@@ -24,26 +24,28 @@ jobs:
 
       - name: 3. Core Synthesis
         run: |
-          # Variable assignment
+          # Safe Variable Assignment
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           MAIN="android/app/src/main"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # Directory structure
+          # Replace dots with slashes without brackets
+          PKG_PATH="${PKG_NAME//.//}"
+          
+          # Create Directories
           mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
           
-          # File generation
+          # File Generation
           echo "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
           
-          # Automatic replacement (No brackets in logic)
+          # Fixed Replacement Logic
           sed -i "s/com.faisal.systempro/$PKG_NAME/g" android/app/build.gradle
           sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace .*|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId .*|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # Resource management
+          # Resource Injection
           T_NAME="Theme.SystemProMaster"
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n</resources>' "$T_NAME" > $MAIN/res/values/themes.xml
@@ -55,14 +57,14 @@ jobs:
           build-root-directory: android
           arguments: assembleDebug
 
-      - name: 5. Library Sync
+      - name: 5. Knowledge Bank Sync
         if: success()
         run: |
           mkdir -p master_library/history
-          cp $MAIN/res/layout/activity_main.xml master_library/history/last_build.xml || true
+          cp $MAIN/res/layout/activity_main.xml master_library/history/sync.xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Auto-Update" && git push || echo "Already Updated"
+          git add . && git commit -m "Auto-Update" && git push || echo "Done"
 
       - name: 6. APK Artifact
         if: success()
