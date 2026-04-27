@@ -17,34 +17,37 @@ jobs:
       - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Set up JDK 17
+      - name: 2. Java & SDK Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Smart Synthesis & Java Patching
+      - name: 3. Core Synthesis (Dynamic Package & Style Injection)
         shell: bash
         run: |
+          # پیکیج نیم اور ایپ نیم نکالنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          APP_NAME="${{ github.event.client_payload.app_name || 'System Pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # پرانا ڈیٹا صاف کرنا اور نئی ڈائریکٹری بنانا
           rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # جاوا کوڈ کا انجکشن اور IOException کا آٹو فکس
+          # جاوا کوڈ کا انجکشن اور IOException کا آٹو پیچ
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
 
-          # 🛑 اہم پیچ (Patch): IOException والے ایرر کو خودکار طریقے سے ٹھیک کرنا
-          # یہ کمانڈ آپ کے کوڈ کی اس مخصوص لائن کو ڈھونڈ کر اسے try-catch میں ڈال دے گی
-          sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/try { int code = conn.getResponseCode(); mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show()); } catch (Exception e) { e.printStackTrace(); }/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
+          # جاوا ایرر فکسنگ (try-catch patch)
+          sed -i 's/conn.getResponseCode()/({ try { return conn.getResponseCode(); } catch (Exception e) { return -1; } })/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
+          # لے آؤٹ اور مینی فیسٹ
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
@@ -53,20 +56,20 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # سیٹنگز ڈائیلاگ (آئی ڈیز کے ساتھ)
+          # سیٹنگز ڈائیلاگ (تمام ضروری IDs کے ساتھ)
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="wrap_content"
               android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF"/>
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF"/>
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF"/>
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" android:textColor="#FFFFFF"/>
           </LinearLayout>
           EOF
 
-          # ریسورسز (آئکن، تھیم اور اسٹائلز)
+          # آئیکن اور اسٹائلز (Design Engine)
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
@@ -76,7 +79,6 @@ jobs:
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">@color/primary_brand</item>
                   <item name="colorPrimaryDark">@color/app_background</item>
-                  <item name="colorAccent">@color/primary_brand</item>
               </style>
               <style name="Theme.App" parent="Theme.SystemProMaster" />
               <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
@@ -89,36 +91,51 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color><color name="white">#FFFFFF</color></resources>
           EOF
 
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Final Gradle 8.5 Build Engine
+      - name: 4. Gradle & Permissions Setup
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-          android { namespace "$PKG_NAME"; compileSdk 34; defaultConfig { applicationId "$PKG_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
+          android { 
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig { 
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies { 
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
 
-      - name: 5. Execute Compilation
+      - name: 5. Build Execution (Gradle 8.5)
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success APK Delivery
+      - name: 6. Deliver Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Success-APK
+          name: ${{ github.event.client_payload.app_name }}-APK
           path: android/app/build/outputs/apk/debug/*.apk
