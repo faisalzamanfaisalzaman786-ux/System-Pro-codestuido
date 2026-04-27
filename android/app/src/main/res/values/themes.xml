@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary_brand</item>
         <item name="colorSecondary">@color/secondary_brand</item>
         <item name="android:windowBackground">@color/app_background</item>
