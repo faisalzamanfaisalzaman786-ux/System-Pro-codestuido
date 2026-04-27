@@ -24,24 +24,36 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Dynamic Injection
+      - name: 3. Clean Core Synthesis
         shell: bash
         run: |
-          JAVA_CODE='${{ github.event.client_payload.java }}'
-          EXTRACTED_PKG=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+' | head -1)
-          PKG_NAME=${EXTRACTED_PKG:-"com.faisal.systempro"}
+          # پیکیج نیم کا تعین
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # مکمل صفائی اور ڈائریکٹریز کی تیاری
           rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          echo "$JAVA_CODE" > android/app/src/main/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
-          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
-          
+          # جاوا فائل لکھنا (بغیر کسی شیل مداخلت کے)
+          cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          ${{ github.event.client_payload.java }}
+          EOF
+
+          # مین لے آؤٹ لکھنا
+          cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
+          ${{ github.event.client_payload.xml }}
+          EOF
+
+          # مینی فیسٹ لکھنا
+          cat <<'EOF' > android/app/src/main/AndroidManifest.xml
+          ${{ github.event.client_payload.manifest }}
+          EOF
+
+          # سیٹنگز ڈائیلاگ
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -54,6 +66,7 @@ jobs:
           </LinearLayout>
           EOF
 
+          # بنیادی ریسورسز
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -80,10 +93,9 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Final Build Setup
+      - name: 4. Build Setup
         run: |
-          JAVA_CODE='${{ github.event.client_payload.java }}'
-          PKG_NAME=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+' | head -1)
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
           echo "include ':app'" > settings.gradle
           cat <<EOF > app/build.gradle
@@ -106,16 +118,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Final Compilation
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. APK Delivery
+      - name: 6. Success Output
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
+          name: SystemPro-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
