@@ -24,27 +24,30 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Full Logic & Layout Synthesis
+      - name: 3. Dynamic Package & Code Injection
         shell: bash
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          # پیکیج نیم نکالنا (جاوا فائل کی پہلی لائن سے)
+          JAVA_CODE='${{ github.event.client_payload.java }}'
+          EXTRACTED_PKG=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+')
+          PKG_NAME=${EXTRACTED_PKG:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # مکمل صفائی تاکہ کوئی پرانا کچرا نہ رہے
-          rm -rf android/app/src/main/res/values/*.xml
-          rm -rf android/app/src/main/res/layout/*.xml
+          echo "Building for Package: $PKG_NAME"
           
+          # مکمل صفائی
+          rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # جاوا، مین لے آؤٹ اور مینی فیسٹ
-          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          # فائلیں بنانا
+          echo "$JAVA_CODE" > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # 🛑 اہم فکس: سیٹنگز ڈائیلاگ فائل بنانا (تاکہ آئی ڈیز مل سکیں)
+          # ڈائیلاگ فائل (سیٹنگز کے لیے)
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -57,15 +60,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # پیکیج نیم درستگی
-          sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" android/app/src/main/AndroidManifest.xml
-
-          # آئکن انجیکشن
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/drawable/ic_launcher.png
-          fi
-
-          # رنگوں کا مکمل سیٹ
+          # ریسورسز اور کلرز
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -83,7 +78,6 @@ jobs:
           </resources>
           EOF
 
-          # اسٹائلز اور تھیمز
           cat <<EOF > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -97,9 +91,10 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Gradle Setup
+      - name: 4. Final Gradle Sync
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          JAVA_CODE='${{ github.event.client_payload.java }}'
+          PKG_NAME=$(echo "$JAVA_CODE" | grep -oP 'package \K[^;]+')
           cd android
           echo "include ':app'" > settings.gradle
           cat <<EOF > app/build.gradle
@@ -129,7 +124,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success Output
+      - name: 6. APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
