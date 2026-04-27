@@ -24,30 +24,35 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Resource Fix
+      - name: 3. Core Synthesis & Asset Protection
         shell: bash
         run: |
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # فولڈرز کی تیاری
+          # فولڈرز کی درست سیٹنگ (Drawable اور Mipmap دونوں)
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # کوڈ اور لے آؤٹ انجیکشن
+          # کوڈ انجیکشن
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
+          
+          # مینی فیسٹ فکس (آئکن پاتھ کو Mipmap پر سیٹ کرنا)
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
+          sed -i 's/@drawable\/ic_launcher/@mipmap\/ic_launcher/g' android/app/src/main/AndroidManifest.xml
 
-          # آئکن انجیکشن
+          # آئکن انجیکشن (دونوں جگہوں پر تاکہ ایرر نہ آئے)
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
           fi
           
-          # تمام غائب رنگوں (Missing Colors) کا اضافہ
+          # تمام کلر ریسورسز کا فائنل فکس
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -59,7 +64,6 @@ jobs:
               <color name="black">#000000</color>
               <color name="white">#FFFFFF</color>
               <color name="colorPrimary">#00FFCC</color>
-              <color name="colorPrimaryDark">#000000</color>
           </resources>
           EOF
 
@@ -100,17 +104,17 @@ jobs:
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --parallel
 
-      - name: 6. Knowledge Sync & Upload
+      - name: 6. APK Artifact Upload
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Direct Download Link
+      - name: 7. Direct Download Summary
         if: success()
         run: |
-          echo "### 🚀 Build Success!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 System Pro: Build Success!" >> $GITHUB_STEP_SUMMARY
           echo "Download: [Direct APK Download](https://nightly.link/${{ github.repository }}/workflows/main/main/APK-Build-${{ github.run_number }}.zip)" >> $GITHUB_STEP_SUMMARY
