@@ -32,7 +32,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # Cache Gradle for faster builds
           cache: 'gradle'
 
       - name: 4. Build Professional Project Structure
@@ -45,67 +44,73 @@ jobs:
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           
-          # Fix package declaration
           if grep -q "package " $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java; then
             sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           else
             echo "package $PKG_NAME;" | cat - $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java > temp && mv temp $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           fi
           
-          # 🛠️ Java IOException Patch
+          # Java IOException Patch
           sed -i 's/conn.getResponseCode()/try_get_code(conn)/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i '$ d' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
           echo -e "\n    private int try_get_code(java.net.HttpURLConnection c){try{return c.getResponseCode();}catch(Exception e){return -1;}}\n}" >> $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
 
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
-          
-          # Create strings.xml for App Name
           echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">'$APP_NAME'</string></resources>' > $ANDROID_ROOT/app/src/main/res/values/strings.xml
           
-          # Theme File
           mkdir -p $ANDROID_ROOT/app/src/main/res/values
           cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/themes.xml
-          <resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.DarkActionBar" /></resources>
+          <resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>
           EOF
 
-          # Icon Handling
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           else
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 -d > $ANDROID_ROOT/app/src/main/res/mipmap-mdpi/ic_launcher.png
           fi
 
-          # Android Manifest
           cat <<EOF > $ANDROID_ROOT/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.App">
-                  <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <application android:allowBackup="true" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.App" android:usesCleartextTraffic="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
               </application>
           </manifest>
           EOF
 
-      - name: 5. Professional Config Injection
+      - name: 5. Config Injection (Updated)
         run: |
           ANDROID_ROOT="android"
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "android.useAndroidX=true" > $ANDROID_ROOT/gradle.properties
           echo "android.enableJetifier=true" >> $ANDROID_ROOT/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> $ANDROID_ROOT/gradle.properties
           echo "rootProject.name = 'SystemPro'" > $ANDROID_ROOT/settings.gradle
           echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
 
           cat <<EOF > $ANDROID_ROOT/build.gradle
           buildscript { 
             repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' } 
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
           }
           allprojects { 
             repositories { google(); mavenCentral() } 
           }
           EOF
 
-          cat <<EOF > $ANDROID_ROOT/app/build.gradle
+      - name: 6. Inject Professional App Build File
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          cat <<EOF > android/app/build.gradle
           plugins { id 'com.android.application' }
           android { 
               namespace "$PKG_NAME"
@@ -117,28 +122,31 @@ jobs:
                   versionCode 1
                   versionName "1.0" 
               }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
               buildTypes {
                   release {
                       minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
                   }
               }
           }
           dependencies { 
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0' 
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'androidx.core:core-ktx:1.12.0'
           }
           EOF
 
-      - name: 6. Setup Gradle Wrapper
+      - name: 7. Force Gradle Wrapper & Build
         run: |
           cd android
-          gradle wrapper --gradle-version 8.1.1
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-
-      - name: 7. Execute Professional Build
-        run: |
-          cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: 8. Upload Result
         if: success()
@@ -147,8 +155,7 @@ jobs:
           name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 9. Summary & Final Clean
+      - name: 9. Summary
         if: always()
         run: |
-          echo "### 🚀 System Pro: Build Finished" >> $GITHUB_STEP_SUMMARY
-          rm -rf android/
+          echo "### 🚀 System Pro: Build Finished Successfully" >> $GITHUB_STEP_SUMMARY
