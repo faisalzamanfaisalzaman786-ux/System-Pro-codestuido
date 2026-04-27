@@ -48,7 +48,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # سیٹنگز ڈائیلاگ
+          # Settings Dialog
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -87,25 +87,32 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Professional Gradle Configuration
+      - name: 4. Final Gradle Engineering
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
           
+          # settings.gradle (New Format)
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
+
           # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
           EOF
 
-          # settings.gradle
-          echo "include ':app'" > settings.gradle
-          
           # app/build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
@@ -116,8 +123,13 @@ jobs:
                   applicationId "$PKG_NAME"
                   minSdk 24
                   targetSdk 34
-                  versionCode ${{ github.run_number }}
-                  versionName "1.0.${{ github.run_number }}"
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
               }
           }
           dependencies {
@@ -132,7 +144,7 @@ jobs:
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 6. APK Delivery
         if: success()
