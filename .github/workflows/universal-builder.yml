@@ -17,123 +17,98 @@ jobs:
       - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Java & SDK Setup
+      - name: 2. Java Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Dynamic Package & Style Injection)
+      - name: 3. Smart Synthesis & Manifest Fix
         shell: bash
         run: |
-          # پیکیج نیم اور ایپ نیم نکالنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           APP_NAME="${{ github.event.client_payload.app_name || 'System Pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # پرانا ڈیٹا صاف کرنا اور نئی ڈائریکٹری بنانا
           rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # جاوا کوڈ کا انجکشن اور IOException کا آٹو پیچ
+          # 🛑 اہم فکس: مینی فیسٹ میں پیکج نیم خودکار طور پر شامل کرنا
+          cat <<'EOF' > android/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG_NAME">
+              ${{ github.event.client_payload.manifest }}
+          </manifest>
+          EOF
+          
+          # اگر پے لوڈ میں مینی فیسٹ مکمل ہے تو ڈبل ٹیگ سے بچنے کے لیے صفائی
+          sed -i 's/<manifest[^>]*>//g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<\/manifest>//g' android/app/src/main/AndroidManifest.xml
+          # اب دوبارہ صحیح طریقے سے ری-ریپ (Re-wrap) کرنا
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"$PKG_NAME\">" > temp.xml
+          cat android/app/src/main/AndroidManifest.xml >> temp.xml
+          echo "</manifest>" >> temp.xml
+          mv temp.xml android/app/src/main/AndroidManifest.xml
+
+          # جاوا کوڈ اور پیچ
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
-
-          # جاوا ایرر فکسنگ (try-catch patch)
           sed -i 's/conn.getResponseCode()/({ try { return conn.getResponseCode(); } catch (Exception e) { return -1; } })/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # لے آؤٹ اور مینی فیسٹ
+          # باقی ریسورسز
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          cat <<'EOF' > android/app/src/main/AndroidManifest.xml
-          ${{ github.event.client_payload.manifest }}
-          EOF
-
-          # سیٹنگز ڈائیلاگ (تمام ضروری IDs کے ساتھ)
-          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" android:textColor="#FFFFFF"/>
-          </LinearLayout>
-          EOF
-
-          # آئیکن اور اسٹائلز (Design Engine)
-          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
-          EOF
-
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/primary_brand</item>
-                  <item name="colorPrimaryDark">@color/app_background</item>
-              </style>
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/primary_brand</item></style>
               <style name="Theme.App" parent="Theme.SystemProMaster" />
               <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00E5FF</item><item name="android:textColor">#02040c</item></style>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item></style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00E5FF</item></style>
           </resources>
           EOF
 
           cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color><color name="white">#FFFFFF</color></resources>
+          <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color></resources>
           EOF
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
+          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
+          EOF
 
-      - name: 4. Gradle & Permissions Setup
+      - name: 4. Gradle Setup
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-          
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-          android { 
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig { 
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
+          android { namespace "$PKG_NAME"; compileSdk 34; defaultConfig { applicationId "$PKG_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
 
-      - name: 5. Build Execution (Gradle 8.5)
+      - name: 5. Build
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Deliver Artifact
+      - name: 6. APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
