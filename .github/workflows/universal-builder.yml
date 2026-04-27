@@ -1,4 +1,4 @@
-name: System Pro Master Engine
+name: System Pro Master Engine (Universal AI)
 
 on:
   repository_dispatch:
@@ -12,63 +12,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Setup Environment
+      - name: 1. Environment Setup
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # تاکہ ہسٹری اور بینک اپڈیٹ ہو سکے
 
-      - name: 2. Set up JDK 17
+      - name: 2. JDK 17 Configuration
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Core Project Synthesis
+      - name: 3. Intelligent Project Synthesis (Self-Repair)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ANDROID_MAIN="android/app/src/main"
+          MAIN="android/app/src/main"
           
-          rm -rf $ANDROID_MAIN/java/*
-          mkdir -p $ANDROID_MAIN/java/$PKG_PATH
-          mkdir -p $ANDROID_MAIN/res/drawable
-          mkdir -p $ANDROID_MAIN/res/layout
-          mkdir -p $ANDROID_MAIN/res/values
+          # ڈائریکٹریز کی تیاری
+          mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
           
-          echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
-          echo '${{ github.event.client_payload.manifest }}' > $ANDROID_MAIN/AndroidManifest.xml
+          # پے لوڈ انجیکشن
+          echo '${{ github.event.client_payload.java }}' > $MAIN/java/$PKG_PATH/MainActivity.java
+          echo '${{ github.event.client_payload.xml }}' > $MAIN/res/layout/activity_main.xml
+          echo '${{ github.event.client_payload.manifest }}' > $MAIN/AndroidManifest.xml
           
-          sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
+          # --- SELF REPAIR LOGIC ---
+          # 1. پیکیج نیم کی تمام فائلوں میں جبری درستی
+          find android/ -type f \( -name "*.java" -o -name "*.xml" -o -name "build.gradle" \) -exec sed -i "s/com.faisal.systempro/$PKG_NAME/g" {} +
+          sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable/ic_launcher.png
-          fi
+          # 2. مینی فیسٹ سے تھیم نکال کر خودکار سنک کرنا
+          THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' $MAIN/AndroidManifest.xml || echo "Theme.SystemProMaster")
 
-      - name: 4. Dynamic UI & Color Injection
-        run: |
-          ANDROID_RES="android/app/src/main/res"
-          
-          # Colors Injection
-          cat <<EOF > $ANDROID_RES/values/colors.xml
+          # 3. یونیورسل ریسورس جنریٹر (اگر فائلیں غائب ہوں)
+          cat <<EOF > $MAIN/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">${{ github.event.client_payload.primary_color || '#00E5FF' }}</color>
               <color name="secondary_brand">${{ github.event.client_payload.secondary_color || '#39FF14' }}</color>
               <color name="app_background">#0F111A</color>
-              <color name="surface_card">#1AFFFFFF</color>
-              <color name="border_subtle">#33FFFFFF</color>
               <color name="text_high_emphasis">#FFFFFF</color>
               <color name="text_medium_emphasis">#B0BEC5</color>
-              <color name="text_on_primary">#000000</color>
+              <color name="border_subtle">#33FFFFFF</color>
           </resources>
           EOF
 
-          # Extracting Theme Name safely
-          THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' android/app/src/main/AndroidManifest.xml || echo "Theme.SystemProMaster")
-
-          # Themes Injection (Using 'EOF' to prevent shell variable expansion)
-          cat <<EOF > $ANDROID_RES/values/themes.xml
+          cat <<EOF > $MAIN/res/values/themes.xml
           <resources>
               <style name="$THEME_NAME" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">@color/primary_brand</item>
@@ -76,52 +68,41 @@ jobs:
                   <item name="android:windowBackground">@color/app_background</item>
               </style>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">48dp</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:layout_margin">4dp</item>
                   <item name="android:background">@drawable/custom_button_wrapper</item>
-                  <item name="android:textColor">@color/primary_brand</item>
-                  <item name="android:textAllCaps">false</item>
-              </style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">match_parent</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:background">?attr/selectableItemBackground</item>
-                  <item name="android:textColor">@color/text_medium_emphasis</item>
-                  <item name="android:textSize">12sp</item>
               </style>
               <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:layout_width">match_parent</item>
-                  <item name="android:layout_height">56dp</item>
-                  <item name="android:layout_margin">12dp</item>
-                  <item name="android:background">@drawable/custom_button_wrapper</item>
                   <item name="android:backgroundTint">@color/secondary_brand</item>
-                  <item name="android:textColor">@color/text_on_primary</item>
-                  <item name="android:textStyle">bold</item>
               </style>
           </resources>
           EOF
 
-          # Button Wrapper
-          cat <<EOF > $ANDROID_RES/drawable/custom_button_wrapper.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF">
-              <item><shape android:shape="rectangle"><solid android:color="@android:color/white"/><corners android:radius="12dp"/><stroke android:width="1dp" android:color="@color/border_subtle"/></shape></item>
-          </ripple>
-          EOF
+          # بٹن ریپیئر (اگر غائب ہو)
+          if [ ! -f "$MAIN/res/drawable/custom_button_wrapper.xml" ]; then
+             printf '<?xml version="1.0" encoding="utf-8"?>\n<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF"><item><shape><solid android:color="@android:color/white"/><corners android:radius="12dp"/></shape></item></ripple>' > $MAIN/res/drawable/custom_button_wrapper.xml
+          fi
 
-      - name: 5. Build with Gradle
+      - name: 4. Build Engine (Gradle Execute)
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.5
           build-root-directory: android
-          arguments: clean assembleDebug --stacktrace --warning-mode all
+          arguments: clean assembleDebug --stacktrace
 
-      - name: 6. Artifact Delivery
+      - name: 5. Build Knowledge Bank (Save Success Data)
+        if: success()
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          cp android/app/src/main/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml
+          cp android/app/src/main/res/values/colors.xml master_library/history/colors_$TIMESTAMP.xml
+          git config --global user.name "System-Pro-Bot"
+          git config --global user.email "bot@systempro.com"
+          git add master_library/
+          git commit -m "Vocabulary Update: Saved successful build resources $TIMESTAMP"
+          git push || echo "No changes to push"
+
+      - name: 6. APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-APK
+          name: SystemPro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
