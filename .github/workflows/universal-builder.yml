@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Infrastructure Sync
+      - name: 3. Core Synthesis & Resource Injection
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,7 +36,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # لکھنے کا طریقہ محفوظ بنایا گیا ہے (EOF کے ساتھ)
+          # لکھنے کا عمل (MainActivity & Layout)
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -49,20 +49,15 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # سیٹنگز ڈائیلاگ
-          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo"/>
-          </LinearLayout>
+          # 🛑 اہم فکس: ڈیفالٹ آئیکن بنانا (AAPT ایرر حل کرنے کے لیے)
+          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/>
+          </vector>
           EOF
 
-          # ریسورسز فکس
+          # ریسورسز (Colors & Strings)
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -76,50 +71,27 @@ jobs:
           </resources>
           EOF
 
-          cat <<EOF > android/app/src/main/res/values/styles.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
-              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button"><item name="android:textSize">10sp</item></style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button"><item name="android:textSize">10sp</item></style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00FFCC</item></style>
-          </resources>
-          EOF
-
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
       - name: 4. Gradle 8.5 Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
-          
-          # AndroidX فلیگز کا مستقل حل
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "rootProject.name = 'SystemPro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-          # settings.gradle
-          cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = "SystemPro"
-          include ':app'
-          EOF
-
-          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
           EOF
 
-          # app/build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -140,16 +112,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Force Gradle 8.5 & Compilation
+      - name: 5. Execute Build (Force 8.5)
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success APK Delivery
+      - name: 6. APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-8.5-APK
+          name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
