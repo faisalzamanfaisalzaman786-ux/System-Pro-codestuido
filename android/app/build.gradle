@@ -1,10 +1,10 @@
-// یہ پلگ ان بتاتا ہے کہ یہ ایک اینڈرائیڈ ایپ ہے
+// یہ پلگ ان بتاتا ہے کہ یہ ایک اینڈرائیڈ ایپلیکیشن ہے
 plugins {
     id 'com.android.application'
 }
 
 android {
-    // یہ پاتھ آپ کے اسکرین شاٹ کے مطابق ہے
+    // آپ کا پیکیج نیم
     namespace 'com.faisal.systempro' 
     compileSdk 34
 
@@ -24,8 +24,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
-    // یہ حصہ بہت ضروری ہے تاکہ گریڈل کو فائلیں مل سکیں
+
+    // یہ حصہ گریڈل کو بتاتا ہے کہ فائلیں کہاں پڑی ہیں
     sourceSets {
         main {
             manifest.srcFile 'src/main/AndroidManifest.xml'
@@ -33,9 +33,15 @@ android {
             res.srcDirs = ['src/main/res']
         }
     }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 }
 
 dependencies {
+    // بنیادی اینڈرائیڈ لائبریریز
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
