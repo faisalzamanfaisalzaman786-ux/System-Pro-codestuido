@@ -15,7 +15,7 @@ jobs:
       - name: 1. Environment Setup
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # تاکہ ہسٹری اور بینک اپڈیٹ ہو سکے
+          fetch-depth: 0
 
       - name: 2. JDK 17 Configuration
         uses: actions/setup-java@v4
@@ -32,22 +32,22 @@ jobs:
           # ڈائریکٹریز کی تیاری
           mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
           
-          # پے لوڈ انجیکشن
-          echo '${{ github.event.client_payload.java }}' > $MAIN/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > $MAIN/res/layout/activity_main.xml
-          echo '${{ github.event.client_payload.manifest }}' > $MAIN/AndroidManifest.xml
+          # پے لوڈ انجیکشن (اگر ڈیٹا موجود ہو)
+          echo "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
+          echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
+          echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
           
-          # --- SELF REPAIR LOGIC ---
           # 1. پیکیج نیم کی تمام فائلوں میں جبری درستی
           find android/ -type f \( -name "*.java" -o -name "*.xml" -o -name "build.gradle" \) -exec sed -i "s/com.faisal.systempro/$PKG_NAME/g" {} +
           sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # 2. مینی فیسٹ سے تھیم نکال کر خودکار سنک کرنا
-          THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' $MAIN/AndroidManifest.xml || echo "Theme.SystemProMaster")
+          # 2. مینی فیسٹ سے تھیم نکال کر خودکار سنک کرنا (محفوظ طریقہ)
+          THEME_RAW=$(grep -oP 'android:theme="@style/\K[^"]+' $MAIN/AndroidManifest.xml || echo "Theme.SystemProMaster")
+          THEME_NAME=$(echo $THEME_RAW | cut -d'/' -fNF)
 
-          # 3. یونیورسل ریسورس جنریٹر (اگر فائلیں غائب ہوں)
+          # 3. یونیورسل ریسورس جنریٹر
           cat <<EOF > $MAIN/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -57,10 +57,12 @@ jobs:
               <color name="text_high_emphasis">#FFFFFF</color>
               <color name="text_medium_emphasis">#B0BEC5</color>
               <color name="border_subtle">#33FFFFFF</color>
+              <color name="text_on_primary">#000000</color>
           </resources>
           EOF
 
           cat <<EOF > $MAIN/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="$THEME_NAME" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">@color/primary_brand</item>
@@ -76,7 +78,7 @@ jobs:
           </resources>
           EOF
 
-          # بٹن ریپیئر (اگر غائب ہو)
+          # بٹن ریپیئر
           if [ ! -f "$MAIN/res/drawable/custom_button_wrapper.xml" ]; then
              printf '<?xml version="1.0" encoding="utf-8"?>\n<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF"><item><shape><solid android:color="@android:color/white"/><corners android:radius="12dp"/></shape></item></ripple>' > $MAIN/res/drawable/custom_button_wrapper.xml
           fi
@@ -92,13 +94,13 @@ jobs:
         if: success()
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          cp android/app/src/main/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml
-          cp android/app/src/main/res/values/colors.xml master_library/history/colors_$TIMESTAMP.xml
+          cp android/app/src/main/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml || true
+          cp android/app/src/main/res/values/colors.xml master_library/history/colors_$TIMESTAMP.xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
           git add master_library/
-          git commit -m "Vocabulary Update: Saved successful build resources $TIMESTAMP"
-          git push || echo "No changes to push"
+          git commit -m "Vocabulary Update: Saved successful build resources $TIMESTAMP" || echo "No changes"
+          git push || echo "Push failed"
 
       - name: 6. APK Delivery
         if: success()
