@@ -49,7 +49,7 @@ jobs:
         run: |
           ANDROID_RES="android/app/src/main/res"
           
-          # colors.xml بنانا
+          # Colors Injection
           cat <<EOF > $ANDROID_RES/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -64,12 +64,13 @@ jobs:
           </resources>
           EOF
 
-          # themes.xml بنانا (مینی فیسٹ سے نام نکال کر)
-          THEME_NAME=\$(grep -oP 'android:theme="@style/\K[^"]+' android/app/src/main/AndroidManifest.xml || echo "Theme.SystemProMaster")
-          
+          # Extracting Theme Name safely
+          THEME_NAME=$(grep -oP 'android:theme="@style/\K[^"]+' android/app/src/main/AndroidManifest.xml || echo "Theme.SystemProMaster")
+
+          # Themes Injection (Using 'EOF' to prevent shell variable expansion)
           cat <<EOF > $ANDROID_RES/values/themes.xml
           <resources>
-              <style name="\$THEME_NAME" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+              <style name="$THEME_NAME" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">@color/primary_brand</item>
                   <item name="colorSecondary">@color/secondary_brand</item>
                   <item name="android:windowBackground">@color/app_background</item>
@@ -99,12 +100,11 @@ jobs:
                   <item name="android:backgroundTint">@color/secondary_brand</item>
                   <item name="android:textColor">@color/text_on_primary</item>
                   <item name="android:textStyle">bold</item>
-                  <item name="android:textSize">16sp</item>
               </style>
           </resources>
           EOF
 
-          # custom_button_wrapper.xml بنانا
+          # Button Wrapper
           cat <<EOF > $ANDROID_RES/drawable/custom_button_wrapper.xml
           <?xml version="1.0" encoding="utf-8"?>
           <ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF">
