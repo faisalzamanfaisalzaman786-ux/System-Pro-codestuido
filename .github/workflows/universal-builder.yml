@@ -24,38 +24,44 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Deep File Sync)
+      - name: 3. Core Synthesis (Clean Resource Injection)
         shell: bash
         run: |
-          # پیکیج اور فولڈر سیٹ اپ
+          # پیکیج سیٹ اپ
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          # پرانے ریسورسز کی مکمل صفائی (Duplicate ختم کرنے کے لیے)
+          rm -rf android/app/src/main/res/values/*.xml
+          
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # 1. جاوا فائل انجیکشن (آپ کا بھیجا ہوا کوڈ)
+          # جاوا، ایکس ایم ایل اور مینی فیسٹ انجیکشن
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
-
-          # 2. ایکس ایم ایل لے آؤٹ انجیکشن (آپ کا بھیجا ہوا لے آؤٹ)
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
-
-          # 3. مینی فیسٹ انجیکشن
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # پیکیج نیم کی خودکار درستی
+          # مینی فیسٹ درستگی
           sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" android/app/src/main/AndroidManifest.xml
-          sed -i "s/android:name=\"[^\"]*MainActivity\"/android:name=\".MainActivity\"/g" android/app/src/main/AndroidManifest.xml
 
-          # 4. آئکن ہینڈلنگ
+          # آئکن ہینڈلنگ
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # 5. تمام ضروری ریسورسز (تاکہ کوئی بھی کلر یا اسٹائل مسنگ نہ ہو)
+          # سنگل سورس ریسورس فائل (کوئی ڈوپلیکیٹ نہیں ہوگا)
+          cat <<EOF > android/app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">${{ github.event.client_payload.app_name || 'SystemPro' }}</string>
+          </resources>
+          EOF
+
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -67,24 +73,26 @@ jobs:
           </resources>
           EOF
 
-          # اسٹائلز فکس (Material Components کے لیے)
+          # تمام اسٹائلز صرف اسی ایک فائل میں ہوں گے
           cat <<EOF > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+              
               <style name="ActionButton" parent="Widget.MaterialComponents.Button">
                   <item name="android:layout_width">0dp</item>
                   <item name="android:layout_height">wrap_content</item>
                   <item name="android:layout_weight">1</item>
                   <item name="android:textSize">10sp</item>
-                  <item name="backgroundTint">#2a3a60</item>
               </style>
+
               <style name="TabButton" parent="Widget.MaterialComponents.Button">
                   <item name="android:layout_width">0dp</item>
                   <item name="android:layout_height">wrap_content</item>
                   <item name="android:layout_weight">1</item>
                   <item name="android:textSize">10sp</item>
               </style>
+
               <style name="BuildButton" parent="Widget.MaterialComponents.Button">
                   <item name="android:layout_height">wrap_content</item>
                   <item name="backgroundTint">#00FFCC</item>
@@ -92,8 +100,6 @@ jobs:
               </style>
           </resources>
           EOF
-
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
       - name: 4. Build Configuration
         run: |
@@ -113,7 +119,6 @@ jobs:
                   versionCode ${{ github.run_number }}
                   versionName "1.0.${{ github.run_number }}"
               }
-              buildFeatures { viewBinding false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -129,9 +134,9 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success Output
+      - name: 6. Delivering Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
