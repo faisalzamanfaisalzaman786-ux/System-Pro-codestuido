@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Resource Injection
+      - name: 3. Clean Synthesis & Resource Generation
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,7 +36,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # لکھنے کا عمل (MainActivity & Layout)
+          # جاوا اور ایکس ایم ایل انجکشن
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -45,11 +45,12 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
+          # مینی فیسٹ (تھیم اور آئکن کے ساتھ)
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # 🛑 اہم فکس: ڈیفالٹ آئیکن بنانا (AAPT ایرر حل کرنے کے لیے)
+          # 🛑 اہم فکس: آئکن پیدا کرنا (AAPT ایرر حل کرنے کے لیے)
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
@@ -57,31 +58,44 @@ jobs:
           </vector>
           EOF
 
-          # ریسورسز (Colors & Strings)
+          # 🛑 اہم فکس: تھیمز اور اسٹائلز (تاکہ Theme.SystemProMaster مل جائے)
+          cat <<EOF > android/app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/primary_brand</item>
+                  <item name="colorPrimaryDark">@color/app_background</item>
+                  <item name="colorAccent">@color/primary_brand</item>
+              </style>
+              <style name="Theme.App" parent="Theme.SystemProMaster" />
+          </resources>
+          EOF
+
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
               <color name="app_background">#02040c</color>
               <color name="white">#FFFFFF</color>
-              <color name="border_subtle">#33FFFFFF</color>
               <color name="surface_card">#1E2130</color>
-              <color name="colorPrimary">#00E5FF</color>
-              <color name="colorPrimaryDark">#02040c</color>
           </resources>
           EOF
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Gradle 8.5 Configuration
+      - name: 4. Gradle 8.5 Master Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
+          
+          # AndroidX فلیگز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+
+          # Settings
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
+          # Root Build
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -92,6 +106,7 @@ jobs:
           }
           EOF
 
+          # App Build
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -112,7 +127,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build (Force 8.5)
+      - name: 5. Final Execution (Gradle 8.5)
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
