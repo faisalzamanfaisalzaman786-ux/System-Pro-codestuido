@@ -32,6 +32,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          # Cache Gradle for faster builds
+          cache: 'gradle'
 
       - name: 4. Build Professional Project Structure
         run: |
@@ -42,7 +44,13 @@ jobs:
           
           mkdir -p $ANDROID_ROOT/app/src/main/java/$PKG_PATH
           echo '${{ github.event.client_payload.java }}' > $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
-          sed -i "1s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # Fix package declaration
+          if grep -q "package " $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java; then
+            sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo "package $PKG_NAME;" | cat - $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java > temp && mv temp $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
           
           # 🛠️ Java IOException Patch
           sed -i 's/conn.getResponseCode()/try_get_code(conn)/g' $ANDROID_ROOT/app/src/main/java/$PKG_PATH/MainActivity.java
@@ -51,15 +59,13 @@ jobs:
 
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_ROOT/app/src/main/res/layout/activity_main.xml
           
-          # Dialog Settings
-          cat <<EOF > $ANDROID_ROOT/app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" />
-          </LinearLayout>
+          # Create strings.xml for App Name
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">'$APP_NAME'</string></resources>' > $ANDROID_ROOT/app/src/main/res/values/strings.xml
+          
+          # Theme File
+          mkdir -p $ANDROID_ROOT/app/src/main/res/values
+          cat <<EOF > $ANDROID_ROOT/app/src/main/res/values/themes.xml
+          <resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.DarkActionBar" /></resources>
           EOF
 
           # Icon Handling
@@ -90,22 +96,40 @@ jobs:
           echo "include ':app'" >> $ANDROID_ROOT/settings.gradle
 
           cat <<EOF > $ANDROID_ROOT/build.gradle
-          buildscript { repositories { google(); mavenCentral() }
-          dependencies { classpath 'com.android.tools.build:gradle:8.1.1' } }
-          allprojects { repositories { google(); mavenCentral() } }
+          buildscript { 
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.1.1' } 
+          }
+          allprojects { 
+            repositories { google(); mavenCentral() } 
+          }
           EOF
 
           cat <<EOF > $ANDROID_ROOT/app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace "$PKG_NAME"
+          android { 
+              namespace "$PKG_NAME"
               compileSdk 34
-              defaultConfig { applicationId "$PKG_NAME"
-                  minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0' }
+              defaultConfig { 
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0" 
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies { 
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0' 
+          }
           EOF
 
-      - name: 6. Force Setup Gradle Wrapper
+      - name: 6. Setup Gradle Wrapper
         run: |
           cd android
           gradle wrapper --gradle-version 8.1.1
@@ -114,7 +138,7 @@ jobs:
       - name: 7. Execute Professional Build
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 8. Upload Result
         if: success()
