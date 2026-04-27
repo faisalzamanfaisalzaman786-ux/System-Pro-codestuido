@@ -24,58 +24,65 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Auto-Cleanup Logic)
-        shell: bash
+      - name: 3. Core Synthesis (Python Precision Logic)
+        shell: python
         run: |
-          APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          mkdir -p android/app/src/main/java/$PKG_PATH
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          import os
+          import re
 
-          # جاوا کوڈ انجیکشن
-          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          # ڈیٹا حاصل کرنا
+          app_name = "${{ github.event.client_payload.app_name }}" or "SystemPro"
+          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
+          pkg_path = pkg_name.replace('.', '/')
           
-          # XML کلین اپ اور انجیکشن (تاکہ ڈبل XML ٹیگ نہ آئے)
-          RAW_XML='${{ github.event.client_payload.xml }}'
-          CLEAN_XML=$(echo "$RAW_XML" | sed 's/<?xml[^>]*?>//g')
-          
-          cat <<EOF > android/app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
+          # فولڈرز بنانا
+          base = "android/app/src/main"
+          java_dir = f"{base}/java/{pkg_path}"
+          for d in [java_dir, f"{base}/res/layout", f"{base}/res/values", f"{base}/res/drawable", f"{base}/res/mipmap-xxhdpi"]:
+              os.makedirs(d, exist_ok=True)
+
+          # جاوا فائل لکھنا
+          with open(f"{java_dir}/MainActivity.java", "w") as f:
+              f.write("""${{ github.event.client_payload.java }}""")
+
+          # XML کلین اپ (ڈبل XML ہیڈر سے بچنے کے لیے)
+          raw_xml = """${{ github.event.client_payload.xml }}"""
+          clean_xml = re.sub(r'<\?xml[^>]*\?>', '', raw_xml).strip()
+
+          # فائنل XML تیار کرنا جو تمام جاوا آئی ڈیز کو سپورٹ کرے
+          full_xml = f"""<?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent">
-              
-              $CLEAN_XML
-
-              <LinearLayout
-                  android:layout_width="0dp"
-                  android:layout_height="0dp"
-                  android:visibility="gone">
+              {clean_xml}
+              <LinearLayout android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone">
                   <EditText android:id="@+id/etPkgName" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etGhToken" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etGhRepo" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   <EditText android:id="@+id/etAppPath" android:layout_width="wrap_content" android:layout_height="wrap_content" />
               </LinearLayout>
-          </FrameLayout>
-          EOF
-
-          # مینی فیسٹ اور آئکن فکس
-          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
-          sed -i 's/@drawable\/ic_launcher/@mipmap\/ic_launcher/g' android/app/src/main/AndroidManifest.xml
-
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
-          fi
+          </FrameLayout>"""
           
-          # فائنل کلر سیٹ
-          cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
+          with open(f"{base}/res/layout/activity_main.xml", "w") as f:
+              f.write(full_xml)
+
+          # مینی فیسٹ اور آئکن
+          manifest = """${{ github.event.client_payload.manifest }}"""
+          manifest = manifest.replace('@drawable/ic_launcher', '@mipmap/ic_launcher')
+          with open(f"{base}/AndroidManifest.xml", "w") as f:
+              f.write(manifest)
+
+          # آئکن انجکشن
+          icon_data = "${{ github.event.client_payload.icon_data }}"
+          if icon_data:
+              import base64
+              with open(f"{base}/res/mipmap-xxhdpi/ic_launcher.png", "wb") as f:
+                  f.write(base64.b64decode(icon_data))
+              with open(f"{base}/res/drawable/ic_launcher.png", "wb") as f:
+                  f.write(base64.b64decode(icon_data))
+
+          # کلرز اور ریسورسز
+          colors = """<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="primary_brand">#00E5FF</color>
               <color name="secondary_brand">#39FF14</color>
@@ -86,11 +93,10 @@ jobs:
               <color name="surface_card">#1E2130</color>
               <color name="text_on_primary">#FFFFFF</color>
               <color name="text_medium_emphasis">#80FFFFFF</color>
-          </resources>
-          EOF
-
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > android/app/src/main/res/values/styles.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
+          </resources>"""
+          with open(f"{base}/res/values/colors.xml", "w") as f: f.write(colors)
+          with open(f"{base}/res/values/styles.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>')
+          with open(f"{base}/res/values/strings.xml", "w") as f: f.write(f'<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">{app_name}</string></resources>')
 
       - name: 4. Build Configuration
         run: |
@@ -134,8 +140,8 @@ jobs:
           name: SystemPro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
 
-      - name: 7. Success Link
+      - name: 7. Summary
         if: success()
         run: |
-          echo "### 🚀 SUCCESS! BUILD #167 COMPLETE" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 BUILD SUCCESSFUL!" >> $GITHUB_STEP_SUMMARY
           echo "Download: [Direct APK Link](https://nightly.link/${{ github.repository }}/workflows/main/main/SystemPro-Master-APK.zip)" >> $GITHUB_STEP_SUMMARY
