@@ -27,34 +27,33 @@ jobs:
           gradle wrapper --gradle-version 8.5 --distribution-type bin
           chmod +x gradlew
 
-      - name: 4. Core Project Synthesis (Package & Icon)
+      - name: 4. Core Project Synthesis
         run: |
-          # پیکیج نیم حاصل کرنا (اگر نہ ملے تو ڈیفالٹ استعمال کرنا)
+          # پیکیج نیم اور راستے سیٹ کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_MAIN="android/app/src/main"
           
-          # فولڈرز بنانا
+          # پرانے جاوا فولڈرز صاف کر کے نئے بنانا تاکہ ٹکراؤ نہ ہو
+          rm -rf $ANDROID_MAIN/java/*
           mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           mkdir -p $ANDROID_MAIN/res/drawable
+          mkdir -p $ANDROID_MAIN/res/layout
           
-          # جاوا اور ایکس ایم ایل فائلیں تیار کرنا
+          # فائلیں لکھنا
           echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
+          echo '${{ github.event.client_payload.manifest }}' > $ANDROID_MAIN/AndroidManifest.xml
           
-          # آپ کا اپنا آئیکن اپلوڈ کرنے کی لاجک
-          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "Custom Icon Detected. Processing..."
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable/ic_launcher.png
-          else
-            # اگر آئیکن نہ بھیجا جائے تو خالی فائل بنانا تاکہ بلڈ فیل نہ ہو
-            touch $ANDROID_MAIN/res/drawable/ic_launcher.png
-          fi
-          
-          # پیکیج نیم کو تمام فائلوں میں خودکار طریقے سے ریپلیس کرنا
+          # پیکیج نیم کی خودکار درستی (Sed Command)
           sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId \".*\"|applicationId \"$PKG_NAME\"|" android/app/build.gradle
+
+          # آئیکن ہینڈلنگ
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable/ic_launcher.png
+          fi
 
       - name: 5. Build Execution
         run: |
