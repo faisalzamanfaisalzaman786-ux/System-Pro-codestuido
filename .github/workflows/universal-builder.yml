@@ -24,36 +24,48 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Full Resource Injection (Fixing Missing Colors)
+      - name: 3. Full Logic & Layout Synthesis
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # مکمل صفائی
+          # مکمل صفائی تاکہ کوئی پرانا کچرا نہ رہے
           rm -rf android/app/src/main/res/values/*.xml
+          rm -rf android/app/src/main/res/layout/*.xml
           
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # جاوا، ایکس ایم ایل اور مینی فیسٹ
+          # جاوا، مین لے آؤٹ اور مینی فیسٹ
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          # پیکیج نیم فکس
+          # 🛑 اہم فکس: سیٹنگز ڈائیلاگ فائل بنانا (تاکہ آئی ڈیز مل سکیں)
+          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo"/>
+          </LinearLayout>
+          EOF
+
+          # پیکیج نیم درستگی
           sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" android/app/src/main/AndroidManifest.xml
 
-          # آئکن
+          # آئکن انجیکشن
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
-            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # وہ تمام رنگ جو ایرر میں آ رہے تھے (border_subtle, surface_card وغیرہ)
+          # رنگوں کا مکمل سیٹ
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -71,43 +83,25 @@ jobs:
           </resources>
           EOF
 
-          # تمام ضروری تھیمز اور اسٹائلز
+          # اسٹائلز اور تھیمز
           cat <<EOF > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
               <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
-              
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">wrap_content</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:textSize">10sp</item>
-              </style>
-
-              <style name="TabButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">wrap_content</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:textSize">10sp</item>
-              </style>
-
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:layout_height">wrap_content</item>
-                  <item name="backgroundTint">#00FFCC</item>
-                  <item name="android:textColor">#02040c</item>
-              </style>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button"><item name="android:textSize">10sp</item></style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button"><item name="android:textSize">10sp</item></style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00FFCC</item></style>
           </resources>
           EOF
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Build Configuration
+      - name: 4. Gradle Setup
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
-          echo "rootProject.name = 'SystemPro'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          echo "include ':app'" > settings.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -135,7 +129,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Final Delivery
+      - name: 6. Success Output
         if: success()
         uses: actions/upload-artifact@v4
         with:
