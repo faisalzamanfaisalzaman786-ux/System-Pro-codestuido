@@ -1,4 +1,4 @@
-name: System Pro Master Engine (Universal AI)
+name: System Pro Master Engine
 
 on:
   repository_dispatch:
@@ -10,73 +10,62 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 1. Environment Setup
+      - name: 1. Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. JDK 17 Configuration
+      - name: 2. Java Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Core Engine Synthesis
-        # یہاں ہم نے تمام پیچیدہ بریکٹس ختم کر دیے ہیں تاکہ شیل ایرر نہ آئے
+      - name: 3. Smart Synthesis
         run: |
+          # بنیادی معلومات
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           MAIN="android/app/src/main"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # فولڈرز کی تیاری
           mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
           
-          echo "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
-          echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
-          echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
+          # فائلیں لکھنا
+          printf "%s" "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
+          printf "%s" "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
+          printf "%s" "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
           
-          # پیکیج نیم کی سیدھی درستی
+          # خودکار ریپیئر (بغیر کسی بریکٹ کے)
           sed -i "s/com.faisal.systempro/$PKG_NAME/g" android/app/build.gradle
           sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace .*|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId .*|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # تھیم کا نام نکالنے کا محفوظ طریقہ
-          THEME_NAME="Theme.SystemProMaster"
-          if grep -q "android:theme" $MAIN/AndroidManifest.xml; then
-            THEME_NAME=$(grep -o 'android:theme="[^"]*"' $MAIN/AndroidManifest.xml | cut -d'/' -f2 | tr -d '"')
-          fi
+          # تھیم سیٹ اپ
+          T_NAME="Theme.SystemProMaster"
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n</resources>' "$T_NAME" > $MAIN/res/values/themes.xml
 
-          # ریسورس فائلز بنانا (printf سب سے زیادہ محفوظ ہے)
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n <color name="text_high_emphasis">#FFFFFF</color>\n <color name="text_medium_emphasis">#B0BEC5</color>\n <color name="border_subtle">#33FFFFFF</color>\n <color name="text_on_primary">#000000</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
-
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="colorSecondary">@color/secondary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">\n <item name="android:background">@drawable/custom_button_wrapper</item>\n </style>\n <style name="BuildButton" parent="Widget.MaterialComponents.Button">\n <item name="android:backgroundTint">@color/secondary_brand</item>\n </style>\n</resources>' "$THEME_NAME" > $MAIN/res/values/themes.xml
-
-          # بٹن ریپیئر (اگر ڈیزائن غائب ہو)
-          printf '<?xml version="1.0" encoding="utf-8"?>\n<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="#40FFFFFF"><item><shape><solid android:color="@android:color/white"/><corners android:radius="12dp"/></shape></item></ripple>' > $MAIN/res/drawable/custom_button_wrapper.xml
-
-      - name: 4. Build Engine (Gradle Execute)
+      - name: 4. Build
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: 8.5
           build-root-directory: android
-          arguments: clean assembleDebug --stacktrace
+          arguments: assembleDebug
 
-      - name: 5. Knowledge Bank Sync
+      - name: 5. Bank Update
         if: success()
         run: |
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          cp android/app/src/main/res/layout/activity_main.xml master_library/history/layout_$TIMESTAMP.xml || true
+          cp $MAIN/res/layout/activity_main.xml master_library/history/L_$(date +%s).xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add master_library/
-          git commit -m "Update Library $TIMESTAMP" || echo "No changes"
-          git push || echo "Push skipped"
+          git add . && git commit -m "Lib Update" && git push || echo "Done"
 
-      - name: 6. APK Delivery
+      - name: 6. APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Master-APK
+          name: SystemPro-APK
           path: android/app/build/outputs/apk/debug/*.apk
