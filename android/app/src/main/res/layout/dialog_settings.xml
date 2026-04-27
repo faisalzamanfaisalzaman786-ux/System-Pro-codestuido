@@ -3,30 +3,39 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="20dp"
+    android:background="@color/surface">
 
-    <EditText
-        android:id="@+id/etAppName"
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings"
+        android:textColor="@color/primary"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="15dp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/glass_border"
+        android:layout_marginBottom="15dp" />
+
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="App Name" />
+        android:text="Configure System Pro Options"
+        android:textColor="@color/on_background"
+        android:textSize="14sp" />
 
-    <EditText
-        android:id="@+id/etPkgName"
-        android:layout_width="match_parent"
+    <Button
+        android:id="@+id/btn_close"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:hint="Package Name" />
-
-    <EditText
-        android:id="@+id/etGhToken"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="GitHub Token" />
-
-    <EditText
-        android:id="@+id/etGhRepo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="GitHub Repo" />
+        android:text="CLOSE"
+        android:layout_gravity="end"
+        android:layout_marginTop="20dp"
+        style="@style/Widget.App.Button" />
 
 </LinearLayout>
