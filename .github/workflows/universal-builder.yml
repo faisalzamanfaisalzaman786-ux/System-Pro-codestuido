@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Resource Injection
+      - name: 3. Infrastructure Sync
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,6 +36,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
+          # لکھنے کا طریقہ محفوظ بنایا گیا ہے (EOF کے ساتھ)
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -48,7 +49,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # Settings Dialog
+          # سیٹنگز ڈائیلاگ
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -61,6 +62,7 @@ jobs:
           </LinearLayout>
           EOF
 
+          # ریسورسز فکس
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -87,29 +89,33 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Build System Configuration (AndroidX Fix)
+      - name: 4. Gradle 8.5 Configuration
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
           
-          # 🛑 اہم: gradle.properties بنانا (آپ کا بتایا ہوا حل)
-          cat <<EOF > gradle.properties
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
+          # AndroidX فلیگز کا مستقل حل
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
 
           # settings.gradle
-          echo "rootProject.name = 'SystemPro'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "SystemPro"
+          include ':app'
+          EOF
 
           # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
           EOF
 
@@ -134,16 +140,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Compilation
+      - name: 5. Force Gradle 8.5 & Compilation
         run: |
           cd android
-          gradle wrapper --gradle-version 8.1.1
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. APK Delivery
+      - name: 6. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Final-8.5-APK
           path: android/app/build/outputs/apk/debug/*.apk
