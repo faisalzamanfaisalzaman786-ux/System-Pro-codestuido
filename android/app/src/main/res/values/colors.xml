@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="main_background">#0F111A</color>
-    <color name="surface_color">#1AFFFFFF</color> <color name="neon_cyan">#00E5FF</color>
-    <color name="neon_green">#39FF14</color>
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#B0BEC5</color>
-    
-    <color name="border_color">#4DFFFFFF</color>
+    <color name="primary_brand">#00E5FF</color>    <color name="secondary_brand">#39FF14</color>  <color name="app_background">#0F111A</color>   <color name="surface_card">#1AFFFFFF</color>   <color name="border_subtle">#4DFFFFFF</color>  <color name="text_high_emphasis">#FFFFFF</color>
+    <color name="text_medium_emphasis">#B0BEC5</color> <color name="text_on_primary">#000000</color>
 </resources>
