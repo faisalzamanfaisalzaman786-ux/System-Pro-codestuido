@@ -1,7 +1,11 @@
-apply plugin: 'com.android.application'
+// یہ پلگ ان بتاتا ہے کہ یہ ایک اینڈرائیڈ ایپ ہے
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    namespace 'com.faisal.systempro'
+    // یہ پاتھ آپ کے اسکرین شاٹ کے مطابق ہے
+    namespace 'com.faisal.systempro' 
     compileSdk 34
 
     defaultConfig {
@@ -10,6 +14,7 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -19,23 +24,19 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
+    
+    // یہ حصہ بہت ضروری ہے تاکہ گریڈل کو فائلیں مل سکیں
+    sourceSets {
+        main {
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+            java.srcDirs = ['src/main/java']
+            res.srcDirs = ['src/main/res']
+        }
     }
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
 }
