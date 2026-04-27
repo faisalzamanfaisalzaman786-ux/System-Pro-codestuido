@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Java Symbol Fix
+      - name: 3. Core Synthesis (Auto-Cleanup Logic)
         shell: bash
         run: |
           APP_NAME="${{ github.event.client_payload.app_name || 'SystemPro' }}"
@@ -37,18 +37,20 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # کوڈ انجیکشن
+          # جاوا کوڈ انجیکشن
           echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           
-          # XML لے آؤٹ فکس (جاوا آئی ڈیز کا اضافہ)
-          # ہم نے آپ کے XML کے آخر میں وہ آئی ڈیز ڈال دی ہیں جو جاوا فائل مانگ رہی ہے
+          # XML کلین اپ اور انجیکشن (تاکہ ڈبل XML ٹیگ نہ آئے)
+          RAW_XML='${{ github.event.client_payload.xml }}'
+          CLEAN_XML=$(echo "$RAW_XML" | sed 's/<?xml[^>]*?>//g')
+          
           cat <<EOF > android/app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent">
               
-              ${{ github.event.client_payload.xml }}
+              $CLEAN_XML
 
               <LinearLayout
                   android:layout_width="0dp"
@@ -62,6 +64,7 @@ jobs:
           </FrameLayout>
           EOF
 
+          # مینی فیسٹ اور آئکن فکس
           echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           sed -i 's/@drawable\/ic_launcher/@mipmap\/ic_launcher/g' android/app/src/main/AndroidManifest.xml
 
@@ -70,7 +73,7 @@ jobs:
             cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
           fi
           
-          # کلرز اور ریسورسز
+          # فائنل کلر سیٹ
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -115,7 +118,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Final Execution (Gradle 8.5)
+      - name: 5. Execute Build (Gradle 8.5)
         run: |
           cd android
           if [ ! -f "gradlew" ]; then
@@ -134,5 +137,5 @@ jobs:
       - name: 7. Success Link
         if: success()
         run: |
-          echo "### 🚀 SUCCESS! BUILD #166 COMPLETE" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 SUCCESS! BUILD #167 COMPLETE" >> $GITHUB_STEP_SUMMARY
           echo "Download: [Direct APK Link](https://nightly.link/${{ github.repository }}/workflows/main/main/SystemPro-Master-APK.zip)" >> $GITHUB_STEP_SUMMARY
