@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis
+      - name: 3. Core Synthesis & Resource Injection
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -87,29 +87,29 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Final Gradle Engineering
+      - name: 4. Build System Configuration (AndroidX Fix)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
           
-          # settings.gradle (New Format)
-          cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          rootProject.name = "SystemPro"
-          include ':app'
+          # 🛑 اہم: gradle.properties بنانا (آپ کا بتایا ہوا حل)
+          cat <<EOF > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
           EOF
+
+          # settings.gradle
+          echo "rootProject.name = 'SystemPro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
           # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }
           EOF
 
@@ -126,11 +126,6 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -139,16 +134,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Execute Compilation
         run: |
           cd android
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: 6. APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
+          name: SystemPro-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
