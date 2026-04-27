@@ -24,26 +24,21 @@ jobs:
 
       - name: 3. Core Synthesis
         run: |
-          # Define Variables
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           MAIN="android/app/src/main"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # Prepare Directories
           mkdir -p $MAIN/java/$PKG_PATH $MAIN/res/layout $MAIN/res/values $MAIN/res/drawable master_library/history
           
-          # Writing Files
           echo "${{ github.event.client_payload.java }}" > $MAIN/java/$PKG_PATH/MainActivity.java
           echo "${{ github.event.client_payload.xml }}" > $MAIN/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest }}" > $MAIN/AndroidManifest.xml
           
-          # Auto Repair Package & Namespace
           sed -i "s/com.faisal.systempro/$PKG_NAME/g" android/app/build.gradle
           sed -i "s|^package .*|package $PKG_NAME;|" $MAIN/java/$PKG_PATH/MainActivity.java
           sed -i "s|namespace .*|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|applicationId .*|applicationId \"$PKG_NAME\"|" android/app/build.gradle
 
-          # Theme and Color Management
           T_NAME="Theme.SystemProMaster"
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="primary_brand">%s</color>\n <color name="secondary_brand">%s</color>\n <color name="app_background">#0F111A</color>\n</resources>' "${{ github.event.client_payload.primary_color || '#00E5FF' }}" "${{ github.event.client_payload.secondary_color || '#39FF14' }}" > $MAIN/res/values/colors.xml
           printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <style name="%s" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n <item name="colorPrimary">@color/primary_brand</item>\n <item name="android:windowBackground">@color/app_background</item>\n </style>\n</resources>' "$T_NAME" > $MAIN/res/values/themes.xml
@@ -62,7 +57,7 @@ jobs:
           cp $MAIN/res/layout/activity_main.xml master_library/history/layout_backup.xml || true
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Engine Auto-Update" && git push || echo "Sync Done"
+          git add . && git commit -m "Auto-Update-Engine" && git push || echo "Sync Done"
 
       - name: 6. APK Delivery
         if: success()
