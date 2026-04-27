@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & ID Synchronization
+      - name: 3. Smart Synthesis & Java Patching
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,10 +36,14 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # Core Files
+          # جاوا کوڈ کا انجکشن اور IOException کا آٹو فکس
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
+
+          # 🛑 اہم پیچ (Patch): IOException والے ایرر کو خودکار طریقے سے ٹھیک کرنا
+          # یہ کمانڈ آپ کے کوڈ کی اس مخصوص لائن کو ڈھونڈ کر اسے try-catch میں ڈال دے گی
+          sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/try { int code = conn.getResponseCode(); mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show()); } catch (Exception e) { e.printStackTrace(); }/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
@@ -49,7 +53,7 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # 🛑 اہم فکس: آئی ڈیز کا جاوا کوڈ کے ساتھ ہم آہنگ ہونا (etGhRepo وغیرہ)
+          # سیٹنگز ڈائیلاگ (آئی ڈیز کے ساتھ)
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -62,7 +66,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # ریسورسز فکس (Styles & Icons)
+          # ریسورسز (آئکن، تھیم اور اسٹائلز)
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
@@ -87,7 +91,7 @@ jobs:
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Build Engine Configuration (8.5)
+      - name: 4. Final Gradle 8.5 Build Engine
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
@@ -116,5 +120,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
+          name: SystemPro-Final-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
