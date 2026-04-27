@@ -24,77 +24,76 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Smart Synthesis (Universal ID Mapping)
-        shell: python
+      - name: 3. Core Synthesis (Deep File Sync)
+        shell: bash
         run: |
-          import os
-          import re
+          # پیکیج اور فولڈر سیٹ اپ
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          mkdir -p android/app/src/main/java/$PKG_PATH
+          mkdir -p android/app/src/main/res/layout
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
 
-          # ڈیٹا حاصل کرنا
-          app_name = "${{ github.event.client_payload.app_name }}" or "SystemPro"
-          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
-          pkg_path = pkg_name.replace('.', '/')
+          # 1. جاوا فائل انجیکشن (آپ کا بھیجا ہوا کوڈ)
+          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # 2. ایکس ایم ایل لے آؤٹ انجیکشن (آپ کا بھیجا ہوا لے آؤٹ)
+          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
+
+          # 3. مینی فیسٹ انجیکشن
+          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
           
-          base = "android/app/src/main"
-          java_dir = f"{base}/java/{pkg_path}"
-          for d in [java_dir, f"{base}/res/layout", f"{base}/res/values", f"{base}/res/drawable", f"{base}/res/mipmap-xxhdpi"]:
-              os.makedirs(d, exist_ok=True)
+          # پیکیج نیم کی خودکار درستی
+          sed -i "s/package=\"[^\"]*\"/package=\"$PKG_NAME\"/g" android/app/src/main/AndroidManifest.xml
+          sed -i "s/android:name=\"[^\"]*MainActivity\"/android:name=\".MainActivity\"/g" android/app/src/main/AndroidManifest.xml
 
-          # جاوا فائل انجیکشن
-          java_code = """${{ github.event.client_payload.java }}"""
-          with open(f"{java_dir}/MainActivity.java", "w") as f:
-              f.write(java_code)
+          # 4. آئکن ہینڈلنگ
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png android/app/src/main/res/drawable/ic_launcher.png
+          fi
 
-          # XML کلین اپ
-          raw_xml = """${{ github.event.client_payload.xml }}"""
-          clean_xml = re.sub(r'<\?xml[^>]*\?>', '', raw_xml).strip()
+          # 5. تمام ضروری ریسورسز (تاکہ کوئی بھی کلر یا اسٹائل مسنگ نہ ہو)
+          cat <<EOF > android/app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="secondary_brand">#39FF14</color>
+              <color name="app_background">#02040c</color>
+              <color name="white">#FFFFFF</color>
+              <color name="black">#000000</color>
+          </resources>
+          EOF
 
-          # تمام ممکنہ جاوا آئی ڈیز کا مجموعہ (تاکہ کوئی سمبل مسنگ نہ رہے)
-          missing_ids = [
-              "etPkgName", "etGhToken", "etGhRepo", "etAppPath", "etRepoName", 
-              "etGhPath", "etAppRepo", "btnBuild", "btnGenerate", "tvStatus"
-          ]
-          
-          id_injection = "".join([f'<EditText android:id="@+id/{i}" android:layout_width="0dp" android:layout_height="0dp" />' for i in missing_ids])
+          # اسٹائلز فکس (Material Components کے لیے)
+          cat <<EOF > android/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:layout_width">0dp</item>
+                  <item name="android:layout_height">wrap_content</item>
+                  <item name="android:layout_weight">1</item>
+                  <item name="android:textSize">10sp</item>
+                  <item name="backgroundTint">#2a3a60</item>
+              </style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:layout_width">0dp</item>
+                  <item name="android:layout_height">wrap_content</item>
+                  <item name="android:layout_weight">1</item>
+                  <item name="android:textSize">10sp</item>
+              </style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:layout_height">wrap_content</item>
+                  <item name="backgroundTint">#00FFCC</item>
+                  <item name="android:textColor">#02040c</item>
+              </style>
+          </resources>
+          EOF
 
-          full_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-              <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
-                  {clean_xml}
-              </LinearLayout>
-              <LinearLayout android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone">
-                  {id_injection}
-              </LinearLayout>
-          </RelativeLayout>"""
-          
-          with open(f"{base}/res/layout/activity_main.xml", "w") as f:
-              f.write(full_xml)
-
-          # مینی فیسٹ فکس
-          manifest = """${{ github.event.client_payload.manifest }}"""
-          manifest = manifest.replace('@drawable/ic_launcher', '@mipmap/ic_launcher')
-          # پیکیج نیم کو مینی فیسٹ میں سنک کرنا
-          manifest = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', manifest)
-          with open(f"{base}/AndroidManifest.xml", "w") as f:
-              f.write(manifest)
-
-          # آئکن انجکشن
-          icon_data = "${{ github.event.client_payload.icon_data }}"
-          if icon_data:
-              import base64
-              img = base64.b64decode(icon_data)
-              with open(f"{base}/res/mipmap-xxhdpi/ic_launcher.png", "wb") as f: f.write(img)
-              with open(f"{base}/res/drawable/ic_launcher.png", "wb") as f: f.write(img)
-
-          # ریسورسز فکس
-          with open(f"{base}/res/values/colors.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="secondary_brand">#39FF14</color><color name="app_background">#0F111A</color><color name="white">#FFFFFF</color><color name="black">#000000</color><color name="border_subtle">#33FFFFFF</color><color name="surface_card">#1E2130</color><color name="text_on_primary">#FFFFFF</color><color name="text_medium_emphasis">#80FFFFFF</color><color name="colorPrimary">#00E5FF</color><color name="colorPrimaryDark">#0F111A</color></resources>')
-          with open(f"{base}/res/values/styles.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>')
-          with open(f"{base}/res/values/strings.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">{app_name}</string></resources>')
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
       - name: 4. Build Configuration
         run: |
@@ -114,6 +113,7 @@ jobs:
                   versionCode ${{ github.run_number }}
                   versionName "1.0.${{ github.run_number }}"
               }
+              buildFeatures { viewBinding false }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -122,24 +122,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build (The Final Run)
+      - name: 5. Execute Build
         run: |
           cd android
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --gradle-version 8.5
-          fi
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 6. APK Artifact Upload
+      - name: 6. Success Output
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
-
-      - name: 7. Success Link
-        if: success()
-        run: |
-          echo "### 🚀 MISSION ACCOMPLISHED!" >> $GITHUB_STEP_SUMMARY
-          echo "Download: [Direct Link](https://nightly.link/${{ github.repository }}/workflows/main/main/SystemPro-Final-APK.zip)" >> $GITHUB_STEP_SUMMARY
