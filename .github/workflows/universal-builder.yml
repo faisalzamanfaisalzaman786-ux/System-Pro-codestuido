@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Clean Synthesis & Professional Resource Mapping
+      - name: 3. Core Synthesis & ID Synchronization
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,7 +36,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # Core Injection
+          # Core Files
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
@@ -49,15 +49,24 @@ jobs:
           ${{ github.event.client_payload.manifest }}
           EOF
 
-          # Placeholder Resources
-          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/>
-          </vector>
+          # 🛑 اہم فکس: آئی ڈیز کا جاوا کوڈ کے ساتھ ہم آہنگ ہونا (etGhRepo وغیرہ)
+          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
+          </LinearLayout>
           EOF
 
-          # 🛑 اہم فکس: تمام مسنگ اسٹائلز (TabButton, BuildButton etc)
+          # ریسورسز فکس (Styles & Icons)
+          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
+          EOF
+
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -65,41 +74,20 @@ jobs:
                   <item name="colorPrimaryDark">@color/app_background</item>
                   <item name="colorAccent">@color/primary_brand</item>
               </style>
-              
               <style name="Theme.App" parent="Theme.SystemProMaster" />
-
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:textColor">#FFFFFF</item>
-                  <item name="android:textSize">12sp</item>
-                  <item name="android:textAllCaps">false</item>
-              </style>
-
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="backgroundTint">#00E5FF</item>
-                  <item name="android:textColor">#02040c</item>
-                  <item name="cornerRadius">8dp</item>
-              </style>
-
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
-                  <item name="strokeColor">#33FFFFFF</item>
-                  <item name="android:textColor">#FFFFFF</item>
-              </style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00E5FF</item><item name="android:textColor">#02040c</item></style>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item></style>
           </resources>
           EOF
 
           cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="primary_brand">#00E5FF</color>
-              <color name="app_background">#02040c</color>
-              <color name="white">#FFFFFF</color>
-              <color name="surface_card">#1E2130</color>
-          </resources>
+          <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color><color name="white">#FFFFFF</color></resources>
           EOF
 
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Gradle 8.5 Master Engine
+      - name: 4. Build Engine Configuration (8.5)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
@@ -107,47 +95,26 @@ jobs:
           echo "android.enableJetifier=true" >> gradle.properties
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
-
           cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
+          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
-
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-          android {
-              namespace "$PKG_NAME"
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
+          android { namespace "$PKG_NAME"; compileSdk 34; defaultConfig { applicationId "$PKG_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
           EOF
 
-      - name: 5. Force Execute Build (Gradle 8.5)
+      - name: 5. Execute Compilation
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. APK Delivery
+      - name: 6. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Success-APK
           path: android/app/build/outputs/apk/debug/*.apk
