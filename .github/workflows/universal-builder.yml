@@ -22,48 +22,42 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Project Synthesis
+      - name: 3. Initialize Gradle Wrapper
+        run: |
+          cd android
+          # اگر gradlew فائل موجود نہ ہو تو اسے خود بخود تیار کرنا
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+      - name: 4. Core Project Synthesis
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ANDROID_MAIN="android/app/src/main"
           
-          # فولڈرز کی تیاری
           mkdir -p $ANDROID_MAIN/java/$PKG_PATH
           mkdir -p $ANDROID_MAIN/res/drawable-xxhdpi
           
-          # 1. جاوا اور XML کوڈ انجکشن
           echo '${{ github.event.client_payload.java }}' > $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
           echo '${{ github.event.client_payload.xml }}' > $ANDROID_MAIN/res/layout/activity_main.xml
           
-          # 2. آئیکن ہینڈلنگ (اگر UI سے بھیجا گیا ہو)
           if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
             echo "${{ github.event.client_payload.icon_data }}" | base64 -d > $ANDROID_MAIN/res/drawable-xxhdpi/ic_launcher.png
-            # مینی فیسٹ میں آئیکن کا ریفرنس درست کرنا (اگر ضرورت ہو)
             sed -i 's|android:icon="@mipmap/ic_launcher"|android:icon="@drawable/ic_launcher"|g' $ANDROID_MAIN/AndroidManifest.xml
           fi
           
-          # 3. پیکیج نیم کی خودکار درستی
           sed -i "s|^package .*|package $PKG_NAME;|" $ANDROID_MAIN/java/$PKG_PATH/MainActivity.java
-          
-          # 4. گریڈل اور مینی فیسٹ میں نیم اسپیس سیٹ کرنا
           sed -i "s|namespace '.*'|namespace '$PKG_NAME'|" android/app/build.gradle
           sed -i "s|package=\".*\"|package=\"$PKG_NAME\"|" $ANDROID_MAIN/AndroidManifest.xml
 
-      - name: 4. Build Execution
+      - name: 5. Build Execution
         run: |
           cd android
-          chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 5. Artifact Delivery
+      - name: 6. Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build
           path: android/app/build/outputs/apk/debug/*.apk
-
-      - name: 6. Build Insights
-        if: always()
-        run: |
-          echo "### 🚀 System Pro Master: Build Successfully Consolidated" >> $GITHUB_STEP_SUMMARY
