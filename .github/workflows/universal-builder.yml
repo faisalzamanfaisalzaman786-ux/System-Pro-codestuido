@@ -7,58 +7,102 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Code
+      - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Setup Java 17
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 3. Core Synthesis (Root Method)
-        shell: python
+      - name: 3. Core Synthesis & Icon Injection
+        shell: bash
         run: |
-          import os
+          # ڈیٹا نکالنا
+          APP_NAME="${{ github.event.client_payload.app_name || 'SystemProApp' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
-          pkg_path = pkg_name.replace('.', '/')
+          # فولڈرز کی تیاری (Stable Structure)
+          mkdir -p android/app/src/main/java/$PKG_PATH
+          mkdir -p android/app/src/main/res/layout
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+
+          # کوڈ انجیکشن
+          echo '${{ github.event.client_payload.java }}' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          echo '${{ github.event.client_payload.xml }}' > android/app/src/main/res/layout/activity_main.xml
+          echo '${{ github.event.client_payload.manifest }}' > android/app/src/main/AndroidManifest.xml
+
+          # آئکن انجیکشن (Base64 Decode)
+          if [ ! -z "${{ github.event.client_payload.icon_data }}" ]; then
+            echo "${{ github.event.client_payload.icon_data }}" | base64 -d > android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          fi
           
-          # فائلیں براہ راست صحیح فولڈرز میں بنانا
-          java_file = f"app/src/main/java/{pkg_path}/MainActivity.java"
-          xml_file = "app/src/main/res/layout/activity_main.xml"
-          manifest_file = "app/src/main/AndroidManifest.xml"
-          colors_file = "app/src/main/res/values/colors.xml"
+          # ضروری ریسورسز
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > android/app/src/main/res/values/styles.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="app_background">#0F111A</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > android/app/src/main/res/values/colors.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
 
-          for f in [java_file, xml_file, manifest_file, colors_file]:
-              os.makedirs(os.path.dirname(f), exist_ok=True)
-
-          with open(java_file, "w") as f: f.write("""${{ github.event.client_payload.java }}""")
-          with open(xml_file, "w") as f: f.write("""${{ github.event.client_payload.xml }}""")
-          with open(manifest_file, "w") as f: f.write("""${{ github.event.client_payload.manifest }}""")
-          with open(colors_file, "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#0F111A</color></resources>')
-
-      - name: 4. Build with Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: assembleDebug
-          # یہاں ہم نے 'cd android' نہیں کیا، بلکہ براہ راست روٹ سے چلایا
-          build-root-directory: . 
-
-      - name: 5. Knowledge Sync
-        if: success()
+      - name: 4. Build Configuration (Verified SDKs)
         run: |
-          git config --global user.name "System-Pro-Bot"
-          git config --global user.email "bot@systempro.com"
-          git add . && git commit -m "Restored 1:40m Success Build" && git push || echo "No changes"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          cd android
+          
+          # settings.gradle فکس
+          echo "rootProject.name = 'SystemPro'" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-      - name: 6. APK Artifact
+          # app/build.gradle (SDK 34 & Gradle 8.5 Support)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace "$PKG_NAME"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$PKG_NAME"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode ${{ github.run_number }}
+                  versionName "1.0.${{ github.run_number }}"
+              }
+              lintOptions { abortOnError false }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: 5. Execute Build (Locked to Gradle 8.5)
+        run: |
+          cd android
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper --gradle-version 8.5
+          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --parallel
+
+      - name: 6. Sync Knowledge & Upload
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Master-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          name: APK-Build-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/*.apk
+
+      - name: 7. Direct Download Summary
+        if: success()
+        run: |
+          echo "### 🚀 System Pro: Build Success!" >> $GITHUB_STEP_SUMMARY
+          echo "Package: ${{ github.event.client_payload.package_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Download: [Direct APK Download](https://nightly.link/${{ github.repository }}/workflows/main/main/APK-Build-${{ github.run_number }}.zip)" >> $GITHUB_STEP_SUMMARY
