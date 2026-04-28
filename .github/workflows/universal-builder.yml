@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Root Cause Resolution)
+      - name: 3. Core Synthesis (Success Model)
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -37,10 +37,11 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # 🛑 اہم فکس: مینی فیسٹ میں صرف namespace ہینڈلنگ (پرانے کامیاب ماڈل کی طرح)
+          # 🛑 پکا فکس: مینی فیسٹ میں 'package' ایٹریبیوٹ کو واپس ڈال دیا گیا ہے (پرانے ماڈل کی طرح)
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG_NAME">
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
@@ -55,23 +56,24 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-              <uses-permission android:name="android.permission.INTERNET" />
           </manifest>
           EOF
 
-          # جاوا پے لوڈ + پیکیج لائن ریپلیسمنٹ
+          # جاوا کوڈ انجکشن
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
+          
+          # پیکیج نیم کی پہلی لائن کو زبردستی درست کرنا
           sed -i "1s|^package .*;|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # ریسورسز اور ڈیزائن
+          # ضروری ریسورسز
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Build Engine Locking (Forced 8.5 & Namespace)
+      - name: 4. Proven Build System (Locked to 8.5)
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
@@ -90,7 +92,7 @@ jobs:
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
-              namespace "$PKG_NAME"  // یہی پیکیج نیم کی اصل جگہ ہے
+              namespace "$PKG_NAME"
               compileSdk 34
               defaultConfig {
                   applicationId "$PKG_NAME"
@@ -106,16 +108,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execution (The Success Path)
+      - name: 5. Execute Build
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Deliver Artifact
+      - name: 6. Success APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-APK
+          name: System-Pro-Master-Success
           path: android/app/build/outputs/apk/debug/*.apk
