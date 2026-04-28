@@ -28,15 +28,18 @@ jobs:
           XML_PAYLOAD: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
+          # پیکج پاتھ کی تیاری
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
+          # کنفیگریشن فائلز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
+          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -45,6 +48,7 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
+          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -64,19 +68,56 @@ jobs:
           }
           EOF
 
+          # Styles (Custom Button Support)
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
               <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton" />
               <style name="BuildButton" parent="Widget.MaterialComponents.Button" />
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
           </resources>
           EOF
 
-          # پے لوڈ کو محفوظ طریقے سے لکھنا
+          # سیٹنگز ڈائیلاگ کی فائل (جاوا ایرر سے بچنے کے لیے)
+          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="User/Repo"/>
+          </LinearLayout>
+          EOF
+
+          # پے لوڈ کو فائلز میں لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
 
-          # ایرر والی لائنوں کی صفائی (تاکہ بلڈ فیل نہ ہو)
+          # --- AUTO-FIXER (Python) ---
+          python3 - <<'PYTHON_EOF'
+          import os
+          xml_file = "app/src/main/res/layout/activity_main.xml"
+          if os.path.exists(xml_file):
+              with open(xml_file, 'r') as f:
+                  content = f.read()
+              
+              # اگر بٹن میں سائز غائب ہے تو ڈیفالٹ سائز لگا دو
+              if '<Button' in content and 'layout_width' not in content:
+                  content = content.replace('<Button', '<Button android:layout_width="match_parent" android:layout_height="wrap_content" ')
+              
+              # اگر XML فائل صحیح طرح بند نہیں ہوئی تو اسے مکمل کرو
+              if not content.strip().endswith('>'):
+                  content += ' />\n</LinearLayout>' if '<LinearLayout' in content else ' />'
+
+              with open(xml_file, 'w') as f:
+                  f.write(content)
+          PYTHON_EOF
+
+          # جاوا فائل سے ایرر والی لائنیں نکالنا
           sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
@@ -84,10 +125,11 @@ jobs:
           sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
 
+          # Android Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemProMaster">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
