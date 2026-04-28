@@ -18,11 +18,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # یہ سٹیپ گریڈل کا بالکل صحیح ورژن (8.0) سیٹ کر دے گا
-      - name: 3. Setup Gradle 8.0
-        uses: gradle/gradle-build-action@v2
+      # یہاں ہم نے ورژن نمبر کو بالکل ٹھیک کر دیا ہے
+      - name: 3. Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.0
+          gradle-version: 8.0.2 
 
       - name: 4. Create Android Structure
         shell: bash
@@ -52,16 +52,16 @@ jobs:
           plugins { id 'com.android.application' }
           android {
               namespace '$FINAL_PKG'
-              compileSdk 33
+              compileSdk 34
               defaultConfig {
                   applicationId "$FINAL_PKG"
                   minSdk 21
-                  targetSdk 33
+                  targetSdk 34
               }
           }
           EOF
 
-          # ڈیفالٹ کوڈ اگر پے لوڈ سے نہ آئے
+          # کوڈ انجیکشن
           echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
@@ -75,12 +75,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: 5. Build APK with Specific Gradle
+      - name: 5. Build APK
         run: gradle assembleDebug --no-daemon
 
       - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-App
+          name: SystemPro-App
           path: app/build/outputs/apk/debug/*.apk
