@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Clean Synthesis (Fixed Manifest Merger)
+      - name: 3. Core Synthesis (Root Cause Resolution)
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -37,7 +37,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # 🛑 مینی فیسٹ کا وہ فارمیٹ جو "Manifest Merger" کو پسند ہے
+          # 🛑 اہم فکس: مینی فیسٹ میں صرف namespace ہینڈلنگ (پرانے کامیاب ماڈل کی طرح)
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -45,9 +45,7 @@ jobs:
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
                   android:label="@string/app_name"
-                  android:roundIcon="@drawable/ic_launcher"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.SystemProMaster">
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -61,44 +59,19 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا پے لوڈ اور پیکیج سنک
+          # جاوا پے لوڈ + پیکیج لائن ریپلیسمنٹ
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
           sed -i "1s|^package .*;|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # ایکس ایم ایل پے لوڈ (Layout)
-          cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
-          EOF
-
-          # آپ کی نئی ڈیزائن وکبلری (Themes & Colors)
-          cat <<EOF > android/app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/primary_brand</item>
-                  <item name="android:statusBarColor">@color/app_background</item>
-              </style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:textColor">#FFFFFF</item>
-              </style>
-          </resources>
-          EOF
-
-          cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="primary_brand">#00E5FF</color>
-              <color name="app_background">#02040c</color>
-          </resources>
-          EOF
-
+          # ریسورسز اور ڈیزائن
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Final Gradle Bridge (Forced 8.5)
+      - name: 4. Build Engine Locking (Forced 8.5 & Namespace)
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
@@ -117,7 +90,7 @@ jobs:
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
-              namespace "$PKG_NAME"
+              namespace "$PKG_NAME"  // یہی پیکیج نیم کی اصل جگہ ہے
               compileSdk 34
               defaultConfig {
                   applicationId "$PKG_NAME"
@@ -133,7 +106,7 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute 8.5 Build
+      - name: 5. Execution (The Success Path)
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
@@ -144,5 +117,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Success
+          name: System-Pro-Master-APK
           path: android/app/build/outputs/apk/debug/*.apk
