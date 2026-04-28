@@ -17,67 +17,53 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # یہاں سے cache والی لائن ہٹا دی گئی ہے تاکہ ایرر نہ آئے
 
-      - name: 3. Generate Optimized Android Structure
+      - name: 3. Create Structure without Conflicts
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # فولڈرز کی تیاری
+          # صفائی اور فولڈر کی تیاری
+          rm -rf app
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/values-night
           mkdir -p app/src/main/res/layout
 
-          # ڈارک اور لائٹ موڈ کلرز
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="backgroundColor">#FFFFFF</color>
-          </resources>
-          EOF
-
-          cat <<EOF > app/src/main/res/values-night/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#BB86FC</color>
-              <color name="backgroundColor">#121212</color>
-          </resources>
-          EOF
-
-          # تھیمز
-          cat <<EOF > app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemPro" parent="android:Theme.Material.Light.NoActionBar">
-                  <item name="android:windowBackground">@color/backgroundColor</item>
-              </style>
-          </resources>
-          EOF
-
-          # بلڈ کنفیگریشن
+          # لازمی فائلیں بنانا
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }" > build.gradle
-          echo "plugins { id 'com.android.application' }; android { namespace '$FINAL_PKG'; compileSdk 34; defaultConfig { applicationId '$FINAL_PKG'; minSdk 21; targetSdk 34 } }" > app/build.gradle
           
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$FINAL_PKG'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "$FINAL_PKG"
+                  minSdk 21
+                  targetSdk 33
+              }
+          }
+          EOF
+
           # کوڈ انجیکشن
-          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
-            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
-          else
-            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
+          echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+          echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
-          echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/backgroundColor"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-
-          # مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
+              <application android:label="System Pro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
@@ -85,11 +71,13 @@ jobs:
           </manifest>
           EOF
 
-      - name: 4. Compile APK (Gradle 8.0)
+      - name: 4. Forced Clean Build
         run: |
-          gradle wrapper --gradle-version 8.0
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # سسٹم کے گریڈل کے بجائے ہم یہاں گریڈل کو خود انسٹال کر کے رن کریں گے
+          sudo apt-get install gradle -y
+          gradle assembleDebug --stacktrace
+          # اگر اوپر والی کمانڈ فیل ہو تو متبادل طریقہ:
+          # ./gradlew assembleDebug (اگر ریپر موجود ہو)
 
       - name: 5. Deliver APK
         if: success()
