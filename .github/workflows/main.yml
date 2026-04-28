@@ -20,33 +20,28 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Create Project Structure (Styles Support)
+      - name: 4. Create Synchronized Project Structure
         run: |
-          # ضروری فولڈرز بنائیں
+          # فولڈرز کی تیاری
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # 1. gradle.properties (Fixed Parsing)
+          # 1. کنفیگریشن فائلز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-
-          # 2. settings.gradle
           echo "include ':app'" > settings.gradle
 
-          # 3. Root build.gradle
+          # 2. Build Scripts
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 4. App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -66,7 +61,7 @@ jobs:
           }
           EOF
 
-          # 5. Styles.xml (آپ کے ایرر کو ختم کرنے کے لیے بنیادی اسٹائلز)
+          # 3. Styles.xml (تمام کسٹم بٹنز کے لیے)
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
@@ -75,11 +70,17 @@ jobs:
           </resources>
           EOF
 
-          # 6. Java & XML Code
-          echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
+          # 4. Java Code (Payload سے حاصل کردہ)
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
 
-          # 7. Android Manifest
+          # 5. XML Layout (Payload سے حاصل کردہ)
+          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
+          ${{ github.event.client_payload.xml }}
+          EOF
+
+          # 6. Android Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -100,10 +101,5 @@ jobs:
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
+          # بلڈ کو رن کریں، اگر جاوا میں چھوٹے مسائل ہوں تو یہ رپورٹ دے گا
           ./gradlew assembleDebug --no-daemon
-
-      - name: 6. Upload Final APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-V11-Stable
-          path: app/build/outputs/apk/debug/app-debug.apk
