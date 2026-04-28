@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Clean & Modern Structure)
+      - name: 3. Core Synthesis (Success-Path with New UI)
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -37,7 +37,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # مینی فیسٹ (گوگل کے نئے رولز کے مطابق بالکل صاف)
+          # مینی فیسٹ (کامیاب ورژن: بغیر پیکج ایٹریبیوٹ کے)
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -47,7 +47,7 @@ jobs:
                   android:label="@string/app_name"
                   android:roundIcon="@drawable/ic_launcher"
                   android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+                  android:theme="@style/Theme.SystemProMaster">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -61,24 +61,51 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا کوڈ انجکشن
+          # جاوا کوڈ (آپ کا پے لوڈ + آٹو پیکیج سیٹنگ)
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
-          
-          # پیکیج نیم کی خودکار درستی
           sed -i "1s|^package .*;|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # IOException پیچ (نیٹ ورک کوڈ کے لیے)
-          sed -i 's/conn.getResponseCode()/({ try { return conn.getResponseCode(); } catch (Exception e) { return -1; } })/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # ضروری ریسورسز
+          # لے آؤٹ (آپ کا ایکس ایم ایل پے لوڈ)
+          cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
+          ${{ github.event.client_payload.xml }}
+          EOF
+
+          # آپ کی نئی "وکبلری" (Themes, Colors, Buttons)
+          cat <<EOF > android/app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/primary_brand</item>
+                  <item name="android:statusBarColor">@color/app_background</item>
+              </style>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:textColor">#FFFFFF</item>
+                  <item name="android:textAllCaps">false</item>
+              </style>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="backgroundTint">@color/primary_brand</item>
+                  <item name="android:insetTop">0dp</item>
+                  <item name="android:insetBottom">0dp</item>
+              </style>
+          </resources>
+          EOF
+
+          cat <<EOF > android/app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="app_background">#02040c</color>
+              <color name="glass_white">#22FFFFFF</color>
+          </resources>
+          EOF
+
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">$APP_NAME</string></resources>" > android/app/src/main/res/values/strings.xml
           cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Forced Gradle 8.5 Configuration
+      - name: 4. Build System Configuration (8.5 Only)
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
@@ -86,7 +113,6 @@ jobs:
           echo "rootProject.name = 'SystemPro'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # مین گریڈل فائل
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -95,7 +121,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # ایپ لیول گریڈل (Namespace Logic)
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -115,17 +140,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Build with Gradle 8.5
+      - name: 5. Execute Compilation
         run: |
           cd android
-          # یہاں ہم زبردستی 8.5 ورژن انسٹال کر رہے ہیں
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Deliver Artifact
+      - name: 6. Success Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-8.5-APK
+          name: ${{ github.event.client_payload.app_name }}-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
