@@ -9,62 +9,94 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Setup Runner
+      - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Set up JDK 17
+      - name: 2. Set up Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Smart Fetch & Code Injection
+      - name: 3. Create Android Structure From Scratch
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # Safe cleaning
-          rm -rf android_engine
+          # فولڈر بنائیں
+          mkdir -p android_engine/app/src/main/res/layout
+          mkdir -p android_engine/app/src/main/res/values
           
-          # GitHub Official CLI used to clone (No password needed)
-          gh repo clone JStumpp/android-simplest-java-app android_engine
-          
-          cd android_engine
-          
-          # Setup package identity
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
-          
-          # Re-creating directory structure
-          rm -rf app/src/main/java/*
-          mkdir -p app/src/main/java/$PKG_PATH
-          
-          # Injected logic
+          mkdir -p android_engine/app/src/main/java/$PKG_PATH
+
+          # اینڈرائیڈ کی لازمی فائلیں خود سے تیار کریں
+          cat <<EOF > android_engine/settings.gradle
+          include ':app'
+          EOF
+
+          cat <<EOF > android_engine/build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat <<EOF > android_engine/app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$FINAL_PKG'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "$FINAL_PKG"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # کوڈ انجیکٹ کریں
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
-            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); } }" > android_engine/app/src/main/java/$PKG_PATH/MainActivity.java
           else
-            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "$JAVA_CODE" > android_engine/app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
           if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#02040c"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#02040c"></RelativeLayout>' > android_engine/app/src/main/res/layout/activity_main.xml
           else
-            echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
+            echo "$XML_CODE" > android_engine/app/src/main/res/layout/activity_main.xml
           fi
 
-          # Apply Package Name to Manifest
-          sed -i "s/com.example.simplestandroidapp/$FINAL_PKG/g" app/src/main/AndroidManifest.xml
+          # مینی فیسٹ بنائیں
+          cat <<EOF > android_engine/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: 4. Compile APK
+      - name: 4. Build Professional APK
         run: |
           cd android_engine
+          # گریڈل ریپر انسٹال کریں
+          gradle wrapper
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Artifact Delivery
+      - name: 5. Deliver Finished APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
