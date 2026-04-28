@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Smart Synthesis & ID Synchronization
+      - name: 3. Smart Synthesis & Java Exception Patching
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -41,18 +41,23 @@ jobs:
           ${{ github.event.client_payload.java }}
           EOF
 
-          # مینی فیسٹ اور پیکیج کلین اپ
+          # 🛑 سرجیکل فکس: IOException کو ہینڈل کرنے کے لیے کوڈ کو پیچ کرنا
+          # یہ کمانڈ لائن 485 کے قریب موجود ایرر کو ختم کر دے گی
+          sed -i 's/conn.getResponseCode()/((HttpURLConnection)conn).getResponseCode()/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # ایک بہتر طریقہ: پوری لائن کو محفوظ بنانا
+          sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/mainHandler.post(() -> { try { int code = conn.getResponseCode(); Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show(); } catch (Exception e) { e.printStackTrace(); } });/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # مینی فیسٹ کلین اپ
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
           sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
 
-          # 🛑 فکس: ڈائیلاگ آئی ڈیز کو جاوا کوڈ کے مطابق بنانا
+          # ڈائیلاگ اور لے آؤٹ
           cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
               <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
               <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
               <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
@@ -60,12 +65,11 @@ jobs:
           </LinearLayout>
           EOF
 
-          # لے آؤٹ (XML)
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # اسٹائلز اور تھیمز (تمام بٹنز کے ساتھ)
+          # اسٹائلز اور تھیمز
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -88,7 +92,7 @@ jobs:
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Final Gradle 8.5 Engine
+      - name: 4. Final Gradle 8.5 Build Engine
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
