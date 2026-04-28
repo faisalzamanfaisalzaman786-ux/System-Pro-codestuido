@@ -36,14 +36,12 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # 🛑 اسمارٹ آئکن لاجک: پے لوڈ چیک کرنا
+          # Icon Logic
           ICON_DATA="${{ github.event.client_payload.icon_base64 }}"
           if [ -n "$ICON_DATA" ] && [ "$ICON_DATA" != "null" ]; then
-            echo "پے لوڈ سے آئکن مل گیا ہے، اسے سیٹ کر رہا ہوں..."
             echo "$ICON_DATA" | base64 --decode > android/app/src/main/res/drawable/ic_launcher.png || \
             echo "$ICON_DATA" > android/app/src/main/res/drawable/ic_launcher.xml
           else
-            echo "پے لوڈ میں آئکن نہیں ہے، ڈیفالٹ ویکٹر لگا رہا ہوں..."
             cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
             <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
                 <path android:fillColor="#00E5FF" android:pathData="M12,2L4,5V11C4,16.55 7.84,21.74 12,23C16.16,21.74 20,16.55 20,11V5L12,2Z"/>
@@ -51,34 +49,64 @@ jobs:
           EOF
           fi
 
-          # جاوا کوڈ اور پیچ
+          # Java Code
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
-          sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/mainHandler.post(() -> { try { int code = conn.getResponseCode(); Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show(); } catch (Exception e) { e.printStackTrace(); } });/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # مینی فیسٹ
+          # Manifest
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
           sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
           
-          # لے آؤٹ
+          # Layout
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # ریسورسز (Themes, Colors, Strings)
+          # 🔥 Fix: Comprehensive Styles to prevent AAPT Error
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/primary_brand</item></style>
-              <style name="Theme.App" parent="Theme.SystemProMaster" />
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item></style>
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/primary_brand</item>
+                  <item name="colorSecondary">@color/secondary_brand</item>
+                  <item name="android:windowBackground">@color/app_background</item>
+              </style>
+              
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:layout_width">0dp</item>
+                  <item name="android:layout_height">match_parent</item>
+                  <item name="android:layout_weight">1</item>
+                  <item name="android:textAllCaps">false</item>
+              </style>
+
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:layout_width">match_parent</item>
+                  <item name="android:layout_height">56dp</item>
+                  <item name="android:textStyle">bold</item>
+              </style>
+
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
+                  <item name="android:textColor">#FFFFFF</item>
+              </style>
           </resources>
           EOF
+          
+          # Copy to styles.xml for backward compatibility
+          cp android/app/src/main/res/values/themes.xml android/app/src/main/res/values/styles.xml
+
           cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color></resources>
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="primary_brand">#00E5FF</color>
+              <color name="secondary_brand">#00E5FF</color>
+              <color name="app_background">#02040c</color>
+              <color name="text_medium_emphasis">#99FFFFFF</color>
+              <color name="text_on_primary">#000000</color>
+          </resources>
           EOF
+          
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
       - name: 4. Build Engine Setup
@@ -94,8 +122,23 @@ jobs:
           EOF
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
-          android { namespace "$PKG_NAME"; compileSdk 34; defaultConfig { applicationId "$PKG_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
+          android { 
+              namespace "$PKG_NAME"
+              compileSdk 34 
+              defaultConfig { 
+                  applicationId "$PKG_NAME"
+                  minSdk 24 
+                  targetSdk 34 
+                  versionCode 1 
+                  versionName "1.0" 
+              }
+              buildFeatures { viewBinding true }
+          }
+          dependencies { 
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
           gradle wrapper --gradle-version 8.5
 
@@ -103,7 +146,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew clean assembleDebug --no-daemon
 
       - name: 6. Success APK Delivery
         if: success()
