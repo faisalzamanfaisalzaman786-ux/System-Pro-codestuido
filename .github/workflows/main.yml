@@ -18,14 +18,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Create Structure without Conflicts
+      # یہ سٹیپ گریڈل کا بالکل صحیح ورژن (8.0) سیٹ کر دے گا
+      - name: 3. Setup Gradle 8.0
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.0
+
+      - name: 4. Create Android Structure
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # صفائی اور فولڈر کی تیاری
           rm -rf app
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
@@ -33,7 +38,6 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
 
-          # لازمی فائلیں بنانا
           echo "include ':app'" > settings.gradle
           
           cat <<EOF > build.gradle
@@ -57,7 +61,7 @@ jobs:
           }
           EOF
 
-          # کوڈ انجیکشن
+          # ڈیفالٹ کوڈ اگر پے لوڈ سے نہ آئے
           echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
 
@@ -71,15 +75,10 @@ jobs:
           </manifest>
           EOF
 
-      - name: 4. Forced Clean Build
-        run: |
-          # سسٹم کے گریڈل کے بجائے ہم یہاں گریڈل کو خود انسٹال کر کے رن کریں گے
-          sudo apt-get install gradle -y
-          gradle assembleDebug --stacktrace
-          # اگر اوپر والی کمانڈ فیل ہو تو متبادل طریقہ:
-          # ./gradlew assembleDebug (اگر ریپر موجود ہو)
+      - name: 5. Build APK with Specific Gradle
+        run: gradle assembleDebug --no-daemon
 
-      - name: 5. Deliver APK
+      - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
