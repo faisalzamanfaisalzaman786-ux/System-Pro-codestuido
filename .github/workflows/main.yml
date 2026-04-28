@@ -18,43 +18,42 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Reliable Clone & Inject Logic
+      - name: 3. Authenticated Clone & Inject Logic
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
+          # یہ ٹوکن گٹ ہب خود بخود فراہم کرتا ہے تاکہ کلوننگ فیل نہ ہو
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Remove previous attempts
           rm -rf android_engine
           
-          # Clone using an alternative public URL that bypasses auth checks
-          git clone --depth 1 https://github.com/JStumpp/android-simplest-java-app android_engine
+          # ٹوکن کے ساتھ کلون کریں تاکہ یوزر نیم کا ایرر نہ آئے
+          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/JStumpp/android-simplest-java-app.git android_engine
           
           cd android_engine
           
-          # Setup package identity
+          # پیکیج سیٹ اپ
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           
-          # Reconstruct source structure
           rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # Inject Code Safely
+          # کوڈ انجیکشن
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
-            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); android.widget.Toast.makeText(this, \"Ready\", 1).show(); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           else
             echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
           if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#02040c"><TextView android:layout_centerInParent="true" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro" android:textColor="#00E5FF" android:textSize="30sp" /></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#02040c"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
           else
             echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
           fi
 
-          # Fix Manifest
           sed -i "s/com.example.simplestandroidapp/$FINAL_PKG/g" app/src/main/AndroidManifest.xml
 
       - name: 4. Compile APK
@@ -63,7 +62,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Deliver Finished APK
+      - name: 5. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
