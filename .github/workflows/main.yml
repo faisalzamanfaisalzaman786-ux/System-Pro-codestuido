@@ -23,16 +23,24 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: 4. Build Project Structure
+        # ہم ڈیٹا کو یہاں env میں رکھیں گے تاکہ شیل ایرر نہ دے
+        env:
+          JAVA_CODE: ${{ github.event.client_payload.java }}
+          XML_CODE: ${{ github.event.client_payload.xml }}
+          PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}" | tr '.' '/')
+          # پیکج پاتھ بنائیں
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
+          # کنفیگریشن فائلز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
+          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -41,13 +49,14 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
+          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
+              namespace '$PKG_NAME'
               compileSdk 34
               defaultConfig {
-                  applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
+                  applicationId '$PKG_NAME'
                   minSdk 24
                   targetSdk 34
                   versionCode 1
@@ -60,6 +69,7 @@ jobs:
           }
           EOF
 
+          # Styles
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
@@ -68,6 +78,7 @@ jobs:
           </resources>
           EOF
 
+          # Dummy Dialog
           cat <<EOF > app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -76,10 +87,11 @@ jobs:
               android:orientation="vertical" />
           EOF
 
-          # Save Java & XML from payload safely
-          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          # محفوظ طریقے سے جاوا اور ایکس ایم ایل لکھنا (No Syntax Error)
+          printf "%s" "$JAVA_CODE" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          printf "%s" "$XML_CODE" > "app/src/main/res/layout/activity_main.xml"
 
+          # Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -105,5 +117,5 @@ jobs:
       - name: 6. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Stable
+          name: SystemPro-V11-Stable
           path: app/build/outputs/apk/debug/app-debug.apk
