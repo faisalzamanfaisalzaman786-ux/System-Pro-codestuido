@@ -1,12 +1,120 @@
+name: System Pro Ultimate Engine
+
+on:
+  repository_dispatch:
+    types: [build-app]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 3. Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: 4. Build Project Structure
+        env:
+          JAVA_PAYLOAD: ${{ github.event.client_payload.java }}
+          XML_PAYLOAD: ${{ github.event.client_payload.xml }}
+          PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
-          # ... باقی فولڈرز کی کمانڈز ...
+          # پیکج پاتھ کی تیاری
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p "app/src/main/res/layout"
+          mkdir -p "app/src/main/res/values"
 
-          # یہ طریقہ پے لوڈ کو محفوظ طریقے سے فائل میں لکھے گا
-          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
-          ${{ github.event.client_payload.xml }}
+          # بنیادی کنفیگریشن فائلز
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "include ':app'" > settings.gradle
+
+          # Root build.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          ${{ github.event.client_payload.java }}
+          # App build.gradle
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$PKG_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PKG_NAME'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }
           EOF
+
+          # Styles (Custom UI buttons support)
+          cat <<EOF > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton" />
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button" />
+          </resources>
+          EOF
+
+          # Dummy layout for settings dialog
+          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical" />
+          EOF
+
+          # جاوا اور ایکس ایم ایل کو محفوظ طریقے سے فائل میں منتقل کرنا
+          printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
+
+          # Android Manifest
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: 5. Execute Build
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.5
+          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 6. Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-V11-Stable
+          path: app/build/outputs/apk/debug/app-debug.apk
