@@ -22,16 +22,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.0.2
-          # کیشے کے مسائل سے بچنے کے لیے اسے یہاں کنٹرول کریں
           cache-disabled: true
 
-      - name: 4. Build Structure & Fix XML Parsing
+      - name: 4. Build Professional Structure
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
-          PERMISSIONS: ${{ github.event.client_payload.permissions }}
           EXTRA_DEPS: ${{ github.event.client_payload.dependencies }}
         run: |
           rm -rf app
@@ -45,7 +43,7 @@ jobs:
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-          # --- Build Scripts ---
+          # --- build.gradle (Optimized) ---
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -68,12 +66,11 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
               $EXTRA_DEPS
           }
           EOF
 
-          # --- Universal Styles (AAPT Error Fix) ---
+          # --- Styles (Fixing Resource Errors) ---
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
@@ -83,26 +80,10 @@ jobs:
           </resources>
           EOF
 
-          # --- Safe Code Injection ---
-          # Java Injection
-          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
-            echo "package $FINAL_PKG; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
-          else
-            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
-
-          # XML Injection (Using 'cat' to prevent parsing errors)
-          if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
-            cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:background="#FFFFFF"></RelativeLayout>
-          EOF
-          else
-            # پے لوڈ والے کوڈ کو محفوظ طریقے سے رائٹ کرنا
-            printf "%s" "$XML_CODE" > app/src/main/res/layout/activity_main.xml
-          fi
+          # --- Java & XML Injection ---
+          # یہاں ہم اس بات کو یقینی بنا رہے ہیں کہ کوڈ صحیح طریقے سے رائٹ ہو
+          printf "%s" "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+          printf "%s" "$XML_CODE" > app/src/main/res/layout/activity_main.xml
 
           # --- Manifest ---
           cat <<EOF > app/src/main/AndroidManifest.xml
@@ -115,12 +96,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Execute Build (Forced Compilation)
         run: gradle assembleDebug --no-daemon
 
       - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V3
+          name: SystemPro-V4
           path: app/build/outputs/apk/debug/*.apk
