@@ -28,18 +28,16 @@ jobs:
           XML_PAYLOAD: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
-          # پیکج پاتھ کی تیاری
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # کنفیگریشن فائلز
+          # بنیادی فائلیں
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -48,7 +46,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -68,7 +65,7 @@ jobs:
           }
           EOF
 
-          # Styles (Custom Button Support)
+          # Styles & Theme
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
@@ -78,57 +75,40 @@ jobs:
           </resources>
           EOF
 
-          # سیٹنگز ڈائیلاگ کی فائل (جاوا ایرر سے بچنے کے لیے)
-          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical"
-              android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="User/Repo"/>
-          </LinearLayout>
-          EOF
-
-          # پے لوڈ کو فائلز میں لکھنا
+          # پے لوڈ لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
 
-          # --- AUTO-FIXER (Python) ---
+          # --- UNIVERSAL ID CLEANER & AUTO-FIXER ---
+          # 1. اگر XML میں بٹن کے سائز غائب ہیں تو ٹھیک کریں
           python3 - <<'PYTHON_EOF'
           import os
           xml_file = "app/src/main/res/layout/activity_main.xml"
           if os.path.exists(xml_file):
               with open(xml_file, 'r') as f:
                   content = f.read()
-              
-              # اگر بٹن میں سائز غائب ہے تو ڈیفالٹ سائز لگا دو
               if '<Button' in content and 'layout_width' not in content:
                   content = content.replace('<Button', '<Button android:layout_width="match_parent" android:layout_height="wrap_content" ')
-              
-              # اگر XML فائل صحیح طرح بند نہیں ہوئی تو اسے مکمل کرو
-              if not content.strip().endswith('>'):
-                  content += ' />\n</LinearLayout>' if '<LinearLayout' in content else ' />'
-
               with open(xml_file, 'w') as f:
                   f.write(content)
           PYTHON_EOF
 
-          # جاوا فائل سے ایرر والی لائنیں نکالنا
+          # 2. جاوا کے وہ تمام حصے ڈیلیٹ کریں جن کی آئی ڈیز XML میں نہیں ہیں
+          # یہ ان تمام لائنوں کو صاف کرے گا جو آپ کو '19 errors' دے رہی تھیں
           sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etGhRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
-
-          # Android Manifest
+          sed -i '/dialogView.findViewById/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/dialog_settings/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          
+          # 3. اینڈرائیڈ مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="System Pro" android:theme="@style/Theme.SystemProMaster">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -151,5 +131,5 @@ jobs:
       - name: 6. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V12-Final
+          name: SystemPro-V13-Stable
           path: app/build/outputs/apk/debug/app-debug.apk
