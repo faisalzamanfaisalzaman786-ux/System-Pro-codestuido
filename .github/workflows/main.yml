@@ -9,23 +9,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Workspace Setup
+      - name: 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: 2. Set up JDK 17
+      - name: 2. Set up Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: 3. Generate Pro Structure & Themes
+      - name: 3. Generate Optimized Android Structure
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # پیکیج اور فولڈر سیٹ اپ
+          # پیکیج اور فولڈرز کی تیاری
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
@@ -33,7 +34,7 @@ jobs:
           mkdir -p app/src/main/res/values-night
           mkdir -p app/src/main/res/layout
 
-          # --- ڈارک اور لائٹ موڈ کے کلرز ---
+          # --- ڈارک اور لائٹ موڈ کلرز ---
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -52,7 +53,7 @@ jobs:
           </resources>
           EOF
 
-          # --- ماسٹر تھیم (Automatic switching) ---
+          # --- ماسٹر تھیمز (Auto Switching) ---
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemPro" parent="android:Theme.Material.Light.NoActionBar">
@@ -69,33 +70,68 @@ jobs:
           </resources>
           EOF
 
-          # --- کوڈ انجیکشن ---
-          echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
-          
-          # اینڈرائیڈ کی بنیادی فائلیں
+          # --- بلڈ کنفیگریشن (Stable AGP 8.1.0) ---
           echo "include ':app'" > settings.gradle
-          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }" > build.gradle
-          echo "plugins { id 'com.android.application' }; android { namespace '$FINAL_PKG'; compileSdk 33; defaultConfig { applicationId '$FINAL_PKG'; minSdk 21; targetSdk 33 } }" > app/build.gradle
           
-          # مینی فیسٹ
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$FINAL_PKG'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "$FINAL_PKG"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          # --- کوڈ انجیکشن ---
+          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
+            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+          if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/backgroundColor"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          else
+            echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
+          fi
+
+          # --- مینی فیسٹ ---
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:theme="@style/Theme.SystemPro" android:label="System Pro">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-      - name: 4. Build Professional APK
+      - name: 4. Compile APK (Gradle 8.0)
         run: |
           gradle wrapper --gradle-version 8.0
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Artifact Delivery
+      - name: 5. Deliver APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Universal-Build
+          name: SystemPro-Final-App
           path: app/build/outputs/apk/debug/*.apk
