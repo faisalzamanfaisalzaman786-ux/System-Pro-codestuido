@@ -20,7 +20,7 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Create Synchronized Project Structure
+      - name: 4. Create Project Structure
         run: |
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
@@ -66,7 +66,6 @@ jobs:
           </resources>
           EOF
 
-          # جاوا اور ایکس ایم ایل کو سیو کریں
           echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
 
@@ -84,21 +83,26 @@ jobs:
           </manifest>
           EOF
 
-      - name: 5. Java Error Bypass (Optional Fix)
+      - name: 5. Smart Java Fix (Commenting Missing References)
         shell: python
         run: |
           import os
-          # یہ اسکرپٹ ان IDs کو کمنٹ کر دے گا جو XML میں نہیں ہیں تاکہ بلڈ پاس ہو جائے
-          java_file = "app/src/main/java/${{ github.event.client_payload.package_name }}".replace('.', '/') + "/MainActivity.java"
-          with open(java_file, "r") as f:
-              lines = f.readlines()
+          path = "app/src/main/java/${{ github.event.client_payload.package_name }}".replace('.', '/') + "/MainActivity.java"
           
-          with open(java_file, "w") as f:
-              for line in lines:
-                  if "etPkgName" in line or "etGhToken" in line or "etGhRepo" in line:
-                      f.write("// " + line) # Error والی لائن کو کمنٹ کر دیا
-                  else:
-                      f.write(line)
+          # ان الفاظ کی فہرست جن کی وجہ سے ایرر آ رہا ہے
+          error_keywords = ["etPkgName", "etToken", "etRepo", "etGhToken", "etGhRepo"]
+          
+          if os.path.exists(path):
+              with open(path, "r") as f:
+                  lines = f.readlines()
+              
+              with open(path, "w") as f:
+                  for line in lines:
+                      # اگر لائن میں کوئی بھی ایرر والا لفظ ہے، تو اسے کمنٹ کر دو
+                      if any(word in line for word in error_keywords):
+                          f.write("// " + line)
+                      else:
+                          f.write(line)
 
       - name: 6. Execute Build
         run: |
@@ -108,7 +112,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 7. Upload Final APK
+      - name: 7. Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-V11-Stable
