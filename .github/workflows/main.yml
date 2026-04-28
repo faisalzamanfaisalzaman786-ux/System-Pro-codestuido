@@ -20,17 +20,15 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Create Project Structure (Direct Shell Write)
+      - name: 4. Create Project Structure (Styles Support)
         run: |
-          # فولڈرز بنائیں
-          mkdir -p app/src/main/java/${{ github.event.client_payload.package_name }}
-          mkdir -p app/src/main/res/layout
-
-          # پیکج پاتھ سیٹ کریں (ڈاٹ کو سلیش سے بدلیں)
+          # ضروری فولڈرز بنائیں
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p "app/src/main/res/layout"
+          mkdir -p "app/src/main/res/values"
 
-          # 1. gradle.properties لکھیں (بالکل الگ الگ لائنیں)
+          # 1. gradle.properties (Fixed Parsing)
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
@@ -68,11 +66,20 @@ jobs:
           }
           EOF
 
-          # 5. Java & XML Code
+          # 5. Styles.xml (آپ کے ایرر کو ختم کرنے کے لیے بنیادی اسٹائلز)
+          cat <<EOF > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton" />
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button" />
+          </resources>
+          EOF
+
+          # 6. Java & XML Code
           echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
 
-          # 6. Android Manifest
+          # 7. Android Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
