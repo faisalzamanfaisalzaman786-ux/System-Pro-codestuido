@@ -1,4 +1,4 @@
-name: System Pro Master Engine
+name: System Pro Ultimate Engine
 
 on:
   repository_dispatch:
@@ -18,28 +18,65 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # یہاں ہم نے ورژن نمبر کو بالکل ٹھیک کر دیا ہے
-      - name: 3. Setup Gradle
+      - name: 3. Setup Gradle 8.0.2
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.0.2 
+          gradle-version: 8.0.2
 
-      - name: 4. Create Android Structure
+      - name: 4. Build Professional Structure
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
+          PERMISSIONS: ${{ github.event.client_payload.permissions }}
+          EXTRA_DEPS: ${{ github.event.client_payload.dependencies }}
         run: |
           rm -rf app
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/values-night
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
 
+          # --- 1. Advance Colors & Styles ---
+          cat <<EOF > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryVariant">#3700B3</color>
+              <color name="colorAccent">#03DAC6</color>
+              <color name="backgroundColor">#FFFFFF</color>
+              <color name="surfaceColor">#F5F5F5</color>
+              <color name="textColor">#000000</color>
+          </resources>
+          EOF
+
+          cat <<EOF > app/src/main/res/values-night/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#BB86FC</color>
+              <color name="backgroundColor">#121212</color>
+              <color name="surfaceColor">#1E1E1E</color>
+              <color name="textColor">#FFFFFF</color>
+          </resources>
+          EOF
+
+          # --- 2. Professional Material Theme ---
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="android:windowBackground">@color/backgroundColor</item>
+                  <item name="android:statusBarColor">@color/colorPrimaryVariant</item>
+              </style>
+          </resources>
+          EOF
+
+          # --- 3. Dynamic Build.gradle (Dependencies) ---
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -57,30 +94,67 @@ jobs:
                   applicationId "$FINAL_PKG"
                   minSdk 21
                   targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
               }
+              buildTypes { release { minifyEnabled false } }
+          }
+          dependencies {
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              $EXTRA_DEPS
           }
           EOF
 
-          # کوڈ انجیکشن
-          echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
-          echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+          # --- 4. Dynamic Manifest (Permissions) ---
+          PERMISSION_STR=""
+          IFS=',' read -ra ADDR <<< "$PERMISSIONS"
+          for i in "${ADDR[@]}"; do
+              PERMISSION_STR+="<uses-permission android:name=\"android.permission.$i\" />"
+          done
 
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro">
+              $PERMISSION_STR
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:icon="@mipmap/ic_launcher">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-      - name: 5. Build APK
+          # --- 5. Code Injection ---
+          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
+            echo "package $FINAL_PKG; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+          if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
+            cat <<EOF > app/src/main/res/layout/activity_main.xml
+            <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" 
+                android:layout_width="match_parent" android:layout_height="match_parent" 
+                android:background="@color/backgroundColor" android:gravity="center">
+                <com.google.android.material.button.MaterialButton 
+                    android:layout_width="wrap_content" android:layout_height="wrap_content" 
+                    android:text="System Pro Ready" android:backgroundTint="@color/colorPrimary"/>
+            </RelativeLayout>
+          EOF
+          else
+            echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
+          fi
+
+      - name: 5. Execute Professional Build
         run: gradle assembleDebug --no-daemon
 
-      - name: 6. Deliver APK
+      - name: 6. Deploy Universal Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
+          name: SystemPro-Universal-v1
           path: app/build/outputs/apk/debug/*.apk
