@@ -9,42 +9,40 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Setup Environment
+      - name: 1. Setup Runner
         uses: actions/checkout@v4
 
-      - name: 2. Set up Java JDK 17
+      - name: 2. Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Direct Download & Code Injection
+      - name: 3. Smart Fetch & Code Injection
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # صفائی
-          rm -rf project.zip android_engine
+          # Safe cleaning
+          rm -rf android_engine
           
-          # براہ راست ZIP فائل ڈاؤن لوڈ کریں (یہ کبھی یوزر نیم نہیں مانگے گا)
-          wget https://github.com/JStumpp/android-simplest-java-app/archive/refs/heads/master.zip -O project.zip
+          # GitHub Official CLI used to clone (No password needed)
+          gh repo clone JStumpp/android-simplest-java-app android_engine
           
-          # فائل کو ان زپ کریں
-          unzip project.zip
-          mv android-simplest-java-app-master android_engine
           cd android_engine
           
-          # پیکیج سیٹ اپ
+          # Setup package identity
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           
-          # پرانی فائلیں ہٹا کر نئی ڈائرکٹری بنانا
+          # Re-creating directory structure
           rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # جاوا اور ایکس ایم ایل کوڈ ڈالنا
+          # Injected logic
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
             echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           else
@@ -57,7 +55,7 @@ jobs:
             echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
           fi
 
-          # مینی فیسٹ اپ ڈیٹ کرنا
+          # Apply Package Name to Manifest
           sed -i "s/com.example.simplestandroidapp/$FINAL_PKG/g" app/src/main/AndroidManifest.xml
 
       - name: 4. Compile APK
@@ -66,7 +64,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Deliver Finished APK
+      - name: 5. Artifact Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
