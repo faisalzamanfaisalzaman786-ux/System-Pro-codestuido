@@ -23,7 +23,7 @@ jobs:
         with:
           gradle-version: 8.0.2
 
-      - name: 4. Build Professional Structure
+      - name: 4. Build Professional Structure & Fix Styles
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
@@ -39,13 +39,11 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
 
-          # --- 1. Crucial AndroidX Settings (Fixes Build Failure) ---
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          
           echo "include ':app'" > settings.gradle
 
-          # --- 2. Master build.gradle ---
+          # --- 1. Master build.gradle ---
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -54,7 +52,7 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # --- 3. App build.gradle ---
+          # --- 2. App build.gradle ---
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -64,8 +62,6 @@ jobs:
                   applicationId "$FINAL_PKG"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
               }
           }
           dependencies {
@@ -76,49 +72,67 @@ jobs:
           }
           EOF
 
-          # --- 4. Permissions Logic ---
+          # --- 3. Fixing Missing Styles (ActionButton, TabButton, BuildButton) ---
+          cat <<EOF > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
+              
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton">
+                  <item name="android:layout_width">wrap_content</item>
+                  <item name="android:layout_height">wrap_content</item>
+              </style>
+
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton">
+                  <item name="android:layout_width">0dp</item>
+                  <item name="android:layout_weight">1</item>
+                  <item name="android:layout_height">match_parent</item>
+              </style>
+
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
+                  <item name="android:layout_width">match_parent</item>
+                  <item name="android:layout_height">wrap_content</item>
+                  <item name="android:textAllCaps">false</item>
+              </style>
+          </resources>
+          EOF
+
+          # --- 4. Manifest & Permissions ---
           PERMISSION_STR=""
           IFS=',' read -ra ADDR <<< "$PERMISSIONS"
           for i in "${ADDR[@]}"; do
-              if [ ! -z "$i" ]; then
-                PERMISSION_STR+="<uses-permission android:name=\"android.permission.$i\" />"
-              fi
+              if [ ! -z "$i" ]; then PERMISSION_STR+="<uses-permission android:name=\"android.permission.$i\" />"; fi
           done
 
-          # --- 5. AndroidManifest ---
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               $PERMISSION_STR
-              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <category android:name="android.intent.category.LAUNCHer" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-          # --- 6. Final Code Injection ---
+          # --- 5. Final Injection ---
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
             echo "package $FINAL_PKG; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle s){ super.onCreate(s); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           else
             echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          if [ -z "$XML_CODE" ] || [ "$XML_CODE" == "null" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#FFFFFF"></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-          else
-            echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
-          fi
+          # یہاں آپ کا وہ XML آئے گا جو آپ پے لوڈ سے بھیج رہے ہیں
+          echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
 
-      - name: 5. Execute Clean Build
+      - name: 5. Execute Build
         run: gradle assembleDebug --no-daemon
 
-      - name: 6. Deliver Pro APK
+      - name: 6. Deliver Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Ultra-v1
+          name: SystemPro-Ultra-v2
           path: app/build/outputs/apk/debug/*.apk
