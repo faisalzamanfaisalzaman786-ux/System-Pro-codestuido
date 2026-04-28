@@ -16,12 +16,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # ہم نے یہاں سے کیشنگ ہٹا دی ہے تاکہ 'No file matched' والا ایرر نہ آئے
 
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Project Structure & Dependency Library Setup
+      - name: 4. Python-Based Project Structure Creator
         shell: python
         run: |
           import os
@@ -33,11 +32,11 @@ jobs:
               with open(path, "w", encoding="utf-8") as f:
                   f.write(content.strip())
 
-          # 1. Root Settings
+          # 1. Root settings.gradle
           safe_write("settings.gradle", "include ':app'")
 
-          # 2. App build.gradle (Sari dependencies ke sath)
-          app_gradle = """
+          # 2. App build.gradle
+          safe_write("app/build.gradle", """
           plugins { id 'com.android.application' }
           android {
               namespace '${{ github.event.client_payload.package_name }}'
@@ -53,10 +52,8 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
-          """
-          safe_write("app/build.gradle", app_gradle)
+          """)
 
           # 3. Root build.gradle
           safe_write("build.gradle", """
@@ -69,7 +66,19 @@ jobs:
           }
           """)
 
-          # 4. Manifest with Material Theme
+          # 4. gradle.properties (FIXED LINE BY LINE)
+          with open("gradle.properties", "w") as props:
+              props.write("android.useAndroidX=true\\n")
+              props.write("android.enableJetifier=true\\n")
+          
+          # 5. Java & XML Setup
+          java_code = """${{ github.event.client_payload.java }}"""
+          xml_code = """${{ github.event.client_payload.xml }}"""
+          pkg_path = "${{ github.event.client_payload.package_name }}".replace(".", "/")
+          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
+          safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
+          
+          # 6. Android Manifest
           safe_write("app/src/main/AndroidManifest.xml", """<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
@@ -82,24 +91,10 @@ jobs:
               </application>
           </manifest>""")
 
-          # 5. Java, XML & Properties
-          java_code = """${{ github.event.client_payload.java }}"""
-          xml_code = """${{ github.event.client_payload.xml }}"""
-          pkg_path = "${{ github.event.client_payload.package_name }}".replace(".", "/")
-          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
-          safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
-          safe_write("gradle.properties", "android.useAndroidX=true\\nandroid.enableJetifier=true")
-
-      - name: 5. Execute Build (Auto-Fetching)
+      - name: 5. Execute Build
         run: |
           if [ ! -f gradlew ]; then
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: 6. Upload Final APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-V11-Stable
-          path: app/build/outputs/apk/debug/app-debug.apk
+          ./gradlew assembleDebug --no-daemon
