@@ -60,12 +60,17 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           """
           safe_write("app/build.gradle", app_gradle)
 
           # 4. Gradle Properties
-          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true")
+          safe_write("gradle.properties", "android.useAndroidX=true\\nandroid.enableJetifier=true")
           
           # 5. Java & XML Setup
           java_code = """${{ github.event.client_payload.java }}"""
@@ -75,9 +80,25 @@ jobs:
           safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
           
-          # 6. Minimal Manifest
-          manifest = f'<?xml version="1.0" encoding="utf-8"?>\\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\\n<application android:label="System Pro">\\n<activity android:name=".MainActivity" android:exported="true">\\n<intent-filter>\\n<action android:name="android.intent.action.MAIN" />\\n<category android:name="android.intent.category.LAUNCHER" />\\n</intent-filter>\\n</activity>\\n</application>\\n</manifest>'
-          safe_write("app/src/main/AndroidManifest.xml", manifest)
+          # 6. Fixed Android Manifest (Multi-line String)
+          manifest_content = '''<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="System Pro"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHer" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>'''
+          safe_write("app/src/main/AndroidManifest.xml", manifest_content)
 
       - name: 5. Execute Build
         run: |
