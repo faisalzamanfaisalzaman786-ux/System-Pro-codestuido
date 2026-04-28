@@ -24,86 +24,95 @@ jobs:
           gradle-version: 8.0.2
           cache-disabled: true
 
-      - name: 4. Build Structure & Secure Injection
-        shell: bash
+      - name: 4. Python-Based Atomic Injection (Multi-File Support)
+        shell: python
         env:
-          JAVA_BASE64: ${{ github.event.client_payload.java }}
-          XML_BASE64: ${{ github.event.client_payload.xml }}
+          JAVA_CODE: ${{ github.event.client_payload.java }}
+          XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          rm -rf app
-          FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
-          PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
+          import os
 
-          # اینڈرائیڈ کی بنیادی سیٹنگز
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
-          echo "include ':app'" > settings.gradle
+          pkg_name = os.getenv('PKG_NAME', 'com.faisal.systempro')
+          pkg_path = pkg_name.replace('.', '/')
+          java_code = os.getenv('JAVA_CODE', '')
+          xml_code = os.getenv('XML_CODE', '')
 
-          # build.gradle فائلز
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
+          # فولڈرز کی تیاری
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace '$FINAL_PKG'
+          # 1. MainActivity Java
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
+              f.write(java_code)
+
+          # 2. Main Layout
+          with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
+              f.write(xml_code)
+
+          # 3. Missing Dialog XML (Fixes #444 Error)
+          # ہم ایک ڈیفالٹ ڈائیلاگ فائل بنا رہے ہیں تاکہ جاوا کوڈ اسے پہچان سکے
+          dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo"/>
+          </LinearLayout>"""
+          with open("app/src/main/res/layout/dialog_settings.xml", "w", encoding="utf-8") as f:
+              f.write(dialog_xml)
+
+          # گریڈل سیٹنگز
+          with open("gradle.properties", "w") as f:
+              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
+          with open("settings.gradle", "w") as f:
+              f.write("include ':app'")
+          with open("build.gradle", "w") as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
+
+          # App Gradle (With Design Dependencies)
+          app_gradle = f"""
+          plugins {{ id 'com.android.application' }}
+          android {{
+              namespace '{pkg_name}'
               compileSdk 33
-              defaultConfig {
-                  applicationId "$FINAL_PKG"
+              defaultConfig {{
+                  applicationId "{pkg_name}"
                   minSdk 21
                   targetSdk 33
-              }
-          }
-          dependencies {
+              }}
+          }}
+          dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
+          }}
+          """
+          with open("app/build.gradle", "w") as f:
+              f.write(app_gradle)
 
-          # اسٹائلز کا فکس
-          cat <<EOF > app/src/main/res/values/styles.xml
-          <resources>
+          # Styles
+          styles = """<resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"/>
               <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton"/>
               <style name="BuildButton" parent="Widget.MaterialComponents.Button"/>
-          </resources>
-          EOF
+          </resources>"""
+          with open("app/src/main/res/values/styles.xml", "w") as f:
+              f.write(styles)
 
-          # --- محفوظ طریقہ: کوڈ کو رائٹ کرنا ---
-          # اگر کوڈ Base64 میں ہے تو اسے ڈیکوڈ کرے گا، ورنہ سادہ ٹیکسٹ لکھے گا
-          if [[ "$JAVA_BASE64" == *" "* ]] || [[ -z "$JAVA_BASE64" ]]; then
-            printf "%s" "$JAVA_BASE64" > app/src/main/java/$PKG_PATH/MainActivity.java
-          else
-            echo "$JAVA_BASE64" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java || printf "%s" "$JAVA_BASE64" > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
-
-          if [[ "$XML_BASE64" == *" "* ]] || [[ -z "$XML_BASE64" ]]; then
-            printf "%s" "$XML_BASE64" > app/src/main/res/layout/activity_main.xml
-          else
-            echo "$XML_BASE64" | base64 --decode > app/src/main/res/layout/activity_main.xml || printf "%s" "$XML_BASE64" > app/src/main/res/layout/activity_main.xml
-          fi
-
-          # مینی فیسٹ
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          # Manifest
+          manifest = f"""<manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
-          </manifest>
-          EOF
+          </manifest>"""
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(manifest)
 
       - name: 5. Execute Build
         run: gradle assembleDebug --no-daemon
@@ -112,5 +121,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V5-Final
+          name: SystemPro-V7-Ready
           path: app/build/outputs/apk/debug/*.apk
