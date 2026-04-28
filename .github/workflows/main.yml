@@ -1,127 +1,28 @@
-name: System Pro Ultimate Engine
-
-on:
-  repository_dispatch:
-    types: [build-app]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 1. Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: 2. Set up Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 3. Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: 4. Create Project Structure & Missing Resources
-        run: |
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p "app/src/main/res/layout"
-          mkdir -p "app/src/main/res/values"
-
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "include ':app'" > settings.gradle
-
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace '${{ github.event.client_payload.package_name }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '${{ github.event.client_payload.package_name }}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }
-          EOF
-
-          # Styles.xml for Custom UI
-          cat <<EOF > app/src/main/res/values/styles.xml
-          <resources>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton" />
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button" />
-          </resources>
-          EOF
-
-          # Create a dummy dialog_settings.xml to prevent R.layout error
-          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical" />
-          EOF
-
-          echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
-
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-      - name: 5. Advanced Java Auto-Fix
+      - name: 5. Advanced Auto-Fix (Java & XML)
         shell: python
         run: |
           import os
-          path = "app/src/main/java/${{ github.event.client_payload.package_name }}".replace('.', '/') + "/MainActivity.java"
+          java_path = "app/src/main/java/${{ github.event.client_payload.package_name }}".replace('.', '/') + "/MainActivity.java"
+          xml_path = "app/src/main/res/layout/activity_main.xml"
           
-          # Unko comment karein jo missing hain
+          # Java Fix (Missing References)
           error_keywords = ["etPkgName", "etToken", "etRepo", "etGhToken", "etGhRepo", "etAppName"]
-          
-          if os.path.exists(path):
-              with open(path, "r") as f:
+          if os.path.exists(java_path):
+              with open(java_path, "r") as f:
                   lines = f.readlines()
-              with open(path, "w") as f:
+              with open(java_path, "w") as f:
                   for line in lines:
                       if any(word in line for word in error_keywords):
                           f.write("// " + line)
                       else:
                           f.write(line)
 
-      - name: 6. Execute Build
-        run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.5
-          fi
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: 7. Upload Stable APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-V11-Stable
-          path: app/build/outputs/apk/debug/app-debug.apk
+          # XML Fix (Missing Layout Attributes - Your Current Crash Fix)
+          if os.path.exists(xml_path):
+              with open(xml_path, "r") as f:
+                  xml_content = f.read()
+              # اگر پے لوڈ میں layout_width غائب ہے تو یہ عارضی طور پر اسے شامل کر دے گا
+              if 'layout_width' not in xml_content:
+                  xml_content = xml_content.replace('>', ' android:layout_width="match_parent" android:layout_height="match_parent">', 1)
+              with open(xml_path, "w") as f:
+                  f.write(xml_content)
