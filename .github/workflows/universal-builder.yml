@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Java Exception Patching
+      - name: 3. Core Synthesis & Patching
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -40,11 +40,9 @@ jobs:
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
-          
-          # IOException والا پکا فکس
           sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/mainHandler.post(() -> { try { int code = conn.getResponseCode(); Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show(); } catch (Exception e) { e.printStackTrace(); } });/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # مینی فیسٹ اور ایکس ایم ایل
+          # مینی فیسٹ (پیکیج نیم نکال کر)
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
@@ -54,80 +52,65 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # ڈائیلاگ، تھیمز اور کلرز
-          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp" android:background="#1E2130">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" android:textColor="#FFFFFF" android:textColorHint="#88FFFFFF"/>
-          </LinearLayout>
-          EOF
-
-          cat <<EOF > android/app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/primary_brand</item><item name="android:statusBarColor">@color/app_background</item></style>
-              <style name="Theme.App" parent="Theme.SystemProMaster" />
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton"><item name="android:textColor">#FFFFFF</item></style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"><item name="backgroundTint">#00E5FF</item><item name="android:textColor">#02040c</item></style>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item><item name="strokeColor">#00E5FF</item></style>
-          </resources>
-          EOF
-
+          # ریسورسز (Strings, Colors, Themes)
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color><color name="white">#FFFFFF</color></resources>
           EOF
-
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
-          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
+          cat <<EOF > android/app/src/main/res/values/themes.xml
+          <resources><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/primary_brand</item></style>
+          <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item></style></resources>
           EOF
 
-      - name: 4. Static Build Configuration
+      - name: 4. Build Engine Force Fix (8.5 Only)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
+          
+          # زبردستی گریڈل 8.5 کی فائل بنانا (جھوٹ بولنے کے بجائے حقیقت میں بدلنا)
+          mkdir -p gradle/wrapper
+          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          echo "rootProject.name = 'SystemPro'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
+          echo "include ':app'" > settings.gradle
           
+          # مین بلڈ فائل
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
           
+          # ایپ لیول بلڈ فائل
           cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          apply plugin: 'com.android.application'
           android {
               namespace "$PKG_NAME"
               compileSdk 34
-              defaultConfig {
-                  applicationId "$PKG_NAME"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes { release { minifyEnabled false } }
+              defaultConfig { applicationId "$PKG_NAME"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Execute Isolated Build
         run: |
           cd android
-          # ہم اب ریپر (Wrapper) کے بجائے براہ راست بلڈ کریں گے تاکہ ورژن کنفلکٹ نہ ہو
-          gradle assembleDebug --no-daemon
+          # ہم اب سسٹم کا گریڈل استعمال نہیں کریں گے بلکہ اپنا بنایا ہوا 8.5 ریپر استعمال کریں گے
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success APK Delivery
+      - name: 6. Final APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Success-APK
+          name: SystemPro-Fixed-Build
           path: android/app/build/outputs/apk/debug/*.apk
