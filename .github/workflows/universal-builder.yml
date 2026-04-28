@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis (Success-Path with New UI)
+      - name: 3. Clean Synthesis (Fixed Manifest Merger)
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -37,7 +37,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # مینی فیسٹ (کامیاب ورژن: بغیر پیکج ایٹریبیوٹ کے)
+          # 🛑 مینی فیسٹ کا وہ فارمیٹ جو "Manifest Merger" کو پسند ہے
           cat <<EOF > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -61,18 +61,18 @@ jobs:
           </manifest>
           EOF
 
-          # جاوا کوڈ (آپ کا پے لوڈ + آٹو پیکیج سیٹنگ)
+          # جاوا پے لوڈ اور پیکیج سنک
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
           sed -i "1s|^package .*;|package $PKG_NAME;|" android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # لے آؤٹ (آپ کا ایکس ایم ایل پے لوڈ)
+          # ایکس ایم ایل پے لوڈ (Layout)
           cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # آپ کی نئی "وکبلری" (Themes, Colors, Buttons)
+          # آپ کی نئی ڈیزائن وکبلری (Themes & Colors)
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -81,12 +81,6 @@ jobs:
               </style>
               <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
                   <item name="android:textColor">#FFFFFF</item>
-                  <item name="android:textAllCaps">false</item>
-              </style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="backgroundTint">@color/primary_brand</item>
-                  <item name="android:insetTop">0dp</item>
-                  <item name="android:insetBottom">0dp</item>
               </style>
           </resources>
           EOF
@@ -96,7 +90,6 @@ jobs:
           <resources>
               <color name="primary_brand">#00E5FF</color>
               <color name="app_background">#02040c</color>
-              <color name="glass_white">#22FFFFFF</color>
           </resources>
           EOF
 
@@ -105,7 +98,7 @@ jobs:
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00E5FF" android:pathData="M0,0h108v108h-108z"/></vector>
           EOF
 
-      - name: 4. Build System Configuration (8.5 Only)
+      - name: 4. Final Gradle Bridge (Forced 8.5)
         run: |
           cd android
           echo "android.useAndroidX=true" > gradle.properties
@@ -140,16 +133,16 @@ jobs:
           }
           EOF
 
-      - name: 5. Execute Compilation
+      - name: 5. Execute 8.5 Build
         run: |
           cd android
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success Delivery
+      - name: 6. Deliver Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Final-APK
+          name: ${{ github.event.client_payload.app_name }}-Success
           path: android/app/build/outputs/apk/debug/*.apk
