@@ -30,6 +30,7 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # مکمل صفائی تاکہ پرانی فائلیں ایرر نہ دیں
           rm -rf android
           mkdir -p android/app/src/main/java/$PKG_PATH
           mkdir -p android/app/src/main/res/layout
@@ -65,7 +66,9 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # 🔥 Fix: Comprehensive Styles to prevent AAPT Error
+          # صرف ایک فائل (themes.xml) بنا رہے ہیں، باقی سب ڈیلیٹ
+          rm -f android/app/src/main/res/values/styles.xml 
+          
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
@@ -92,9 +95,6 @@ jobs:
               </style>
           </resources>
           EOF
-          
-          # Copy to styles.xml for backward compatibility
-          cp android/app/src/main/res/values/themes.xml android/app/src/main/res/values/styles.xml
 
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
