@@ -24,13 +24,12 @@ jobs:
           gradle-version: 8.0.2
           cache-disabled: true
 
-      - name: 4. Build Professional Structure
+      - name: 4. Build Structure & Secure Injection
         shell: bash
         env:
-          JAVA_CODE: ${{ github.event.client_payload.java }}
-          XML_CODE: ${{ github.event.client_payload.xml }}
+          JAVA_BASE64: ${{ github.event.client_payload.java }}
+          XML_BASE64: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
-          EXTRA_DEPS: ${{ github.event.client_payload.dependencies }}
         run: |
           rm -rf app
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
@@ -39,11 +38,13 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
 
+          # اینڈرائیڈ کی بنیادی سیٹنگز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "android.suppressUnsupportedCompileSdk=34" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-          # --- build.gradle (Optimized) ---
+          # build.gradle فائلز
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -56,21 +57,20 @@ jobs:
           plugins { id 'com.android.application' }
           android {
               namespace '$FINAL_PKG'
-              compileSdk 34
+              compileSdk 33
               defaultConfig {
                   applicationId "$FINAL_PKG"
                   minSdk 21
-                  targetSdk 34
+                  targetSdk 33
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              $EXTRA_DEPS
           }
           EOF
 
-          # --- Styles (Fixing Resource Errors) ---
+          # اسٹائلز کا فکس
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
@@ -80,12 +80,21 @@ jobs:
           </resources>
           EOF
 
-          # --- Java & XML Injection ---
-          # یہاں ہم اس بات کو یقینی بنا رہے ہیں کہ کوڈ صحیح طریقے سے رائٹ ہو
-          printf "%s" "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
-          printf "%s" "$XML_CODE" > app/src/main/res/layout/activity_main.xml
+          # --- محفوظ طریقہ: کوڈ کو رائٹ کرنا ---
+          # اگر کوڈ Base64 میں ہے تو اسے ڈیکوڈ کرے گا، ورنہ سادہ ٹیکسٹ لکھے گا
+          if [[ "$JAVA_BASE64" == *" "* ]] || [[ -z "$JAVA_BASE64" ]]; then
+            printf "%s" "$JAVA_BASE64" > app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo "$JAVA_BASE64" | base64 --decode > app/src/main/java/$PKG_PATH/MainActivity.java || printf "%s" "$JAVA_BASE64" > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
 
-          # --- Manifest ---
+          if [[ "$XML_BASE64" == *" "* ]] || [[ -z "$XML_BASE64" ]]; then
+            printf "%s" "$XML_BASE64" > app/src/main/res/layout/activity_main.xml
+          else
+            echo "$XML_BASE64" | base64 --decode > app/src/main/res/layout/activity_main.xml || printf "%s" "$XML_BASE64" > app/src/main/res/layout/activity_main.xml
+          fi
+
+          # مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
@@ -96,12 +105,12 @@ jobs:
           </manifest>
           EOF
 
-      - name: 5. Execute Build (Forced Compilation)
+      - name: 5. Execute Build
         run: gradle assembleDebug --no-daemon
 
       - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V4
+          name: SystemPro-V5-Final
           path: app/build/outputs/apk/debug/*.apk
