@@ -28,18 +28,15 @@ jobs:
           XML_PAYLOAD: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
-          # پیکج پاتھ کی تیاری
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # بنیادی کنفیگریشن فائلز
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -48,7 +45,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -68,7 +64,6 @@ jobs:
           }
           EOF
 
-          # Styles (Custom UI buttons support)
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
@@ -77,7 +72,6 @@ jobs:
           </resources>
           EOF
 
-          # Dummy layout for settings dialog
           cat <<EOF > app/src/main/res/layout/dialog_settings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -86,11 +80,19 @@ jobs:
               android:orientation="vertical" />
           EOF
 
-          # جاوا اور ایکس ایم ایل کو محفوظ طریقے سے فائل میں منتقل کرنا
+          # جاوا اور ایکس ایم ایل کو لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
 
-          # Android Manifest
+          # ایرر والی لائنوں کو حذف کرنے کا طریقہ (Sed Command)
+          # یہ کمانڈ ان لائنوں کو ڈیلیٹ کر دے گی جہاں etAppName یا دیگر آئی ڈیز کا ذکر ہے
+          sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i '/etGhRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
