@@ -4,12 +4,6 @@ on:
   repository_dispatch:
     types: [build-app]
 
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,139 +18,45 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Smart Resource & Icon Synthesis
+      - name: 3. Clone & Inject Logic
         shell: bash
         run: |
+          # ایک سادہ اور فنکشنل اینڈرائیڈ پروجیکٹ کلون کریں
+          git clone https://github.com/JStumpp/android-simplest-java-app.git android
+          
+          cd android
+          
+          # پیکیج نیم سیٹ کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          rm -rf android
-          mkdir -p android/app/src/main/java/$PKG_PATH
-          mkdir -p android/app/src/main/res/layout
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/drawable
-
-          # Icon Logic
-          ICON_DATA="${{ github.event.client_payload.icon_base64 }}"
-          if [ -n "$ICON_DATA" ] && [ "$ICON_DATA" != "null" ]; then
-            echo "$ICON_DATA" | base64 --decode > android/app/src/main/res/drawable/ic_launcher.png || \
-            echo "$ICON_DATA" > android/app/src/main/res/drawable/ic_launcher.xml
-          else
-            cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
-            <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-                <path android:fillColor="#00E5FF" android:pathData="M12,2L4,5V11C4,16.55 7.84,21.74 12,23C16.16,21.74 20,16.55 20,11V5L12,2Z"/>
-            </vector>
-          EOF
-          fi
-
-          # Java Code
-          cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
+          # پرانی جاوا فائلیں ہٹا کر نئی ڈائرکٹری بنانا
+          rm -rf app/src/main/java/*
+          mkdir -p app/src/main/java/$PKG_PATH
+          
+          # پے لوڈ سے آئی ہوئی فائلیں انجیکٹ (Inject) کرنا
+          cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
 
-          # Manifest
-          cat <<'EOF' > android/app/src/main/AndroidManifest.xml
-          ${{ github.event.client_payload.manifest }}
-          EOF
-          sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
-          
-          # Main Layout
-          cat <<'EOF' > android/app/src/main/res/layout/activity_main.xml
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # ✅ Fix: Adding missing Dialog Layout to solve Java Errors
-          cat <<EOF > android/app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical"
-              android:padding="20dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" android:inputType="textPassword" />
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo" />
-          </LinearLayout>
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          ${{ github.event.client_payload.manifest }}
           EOF
 
-          # Themes & Styles
-          cat <<EOF > android/app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/primary_brand</item>
-                  <item name="colorSecondary">@color/secondary_brand</item>
-                  <item name="android:windowBackground">@color/app_background</item>
-              </style>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton">
-                  <item name="android:layout_width">0dp</item>
-                  <item name="android:layout_height">match_parent</item>
-                  <item name="android:layout_weight">1</item>
-                  <item name="android:textAllCaps">false</item>
-              </style>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button">
-                  <item name="android:layout_width">match_parent</item>
-                  <item name="android:layout_height">56dp</item>
-                  <item name="android:textStyle">bold</item>
-              </style>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
-                  <item name="android:textColor">#FFFFFF</item>
-              </style>
-          </resources>
-          EOF
+          # پیکیج نیم کو مینی فیسٹ میں سیٹ کرنا (اگر ضرورت ہو)
+          sed -i "s/com.example.simplestandroidapp/$PKG_NAME/g" app/src/main/AndroidManifest.xml
 
-          cat <<EOF > android/app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="primary_brand">#00E5FF</color>
-              <color name="secondary_brand">#00E5FF</color>
-              <color name="app_background">#02040c</color>
-              <color name="text_medium_emphasis">#99FFFFFF</color>
-              <color name="text_on_primary">#000000</color>
-          </resources>
-          EOF
-          
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
-
-      - name: 4. Build Engine Setup
-        run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          cd android
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
-          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
-          android { 
-              namespace "$PKG_NAME"
-              compileSdk 34 
-              defaultConfig { 
-                  applicationId "$PKG_NAME"
-                  minSdk 24 
-                  targetSdk 34 
-                  versionCode 1 
-                  versionName "1.0" 
-              }
-          }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-          gradle wrapper --gradle-version 8.5
-
-      - name: 5. Execute Isolated Build
+      - name: 4. Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Success APK Delivery
+      - name: 5. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
