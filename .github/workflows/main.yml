@@ -20,7 +20,7 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Python-Based Atomic Force Write
+      - name: 4. Python-Based Project Structure Creator
         shell: python
         run: |
           import os
@@ -32,21 +32,57 @@ jobs:
               with open(path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # بنیادی کنفیگریشن فائلز
-          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
+          # 1. Root settings.gradle
+          safe_write("settings.gradle", "include ':app'")
+
+          # 2. Root build.gradle
+          root_gradle = """
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          """
+          safe_write("build.gradle", root_gradle)
+
+          # 3. App build.gradle
+          app_gradle = """
+          plugins { id 'com.android.application' }
+          android {
+              namespace '${{ github.event.client_payload.package_name }}'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '${{ github.event.client_payload.package_name }}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          """
+          safe_write("app/build.gradle", app_gradle)
+
+          # 4. Gradle Properties
+          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true")
           
+          # 5. Java & XML Setup
           java_code = """${{ github.event.client_payload.java }}"""
           xml_code = """${{ github.event.client_payload.xml }}"""
-          pkg_name = "${{ github.event.client_payload.package_name }}".replace(".", "/")
+          pkg_path = "${{ github.event.client_payload.package_name }}".replace(".", "/")
 
-          safe_write(f"app/src/main/java/{pkg_name}/MainActivity.java", java_code)
+          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
+          
+          # 6. Minimal Manifest
+          manifest = f'<?xml version="1.0" encoding="utf-8"?>\\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\\n<application android:label="System Pro">\\n<activity android:name=".MainActivity" android:exported="true">\\n<intent-filter>\\n<action android:name="android.intent.action.MAIN" />\\n<category android:name="android.intent.category.LAUNCHER" />\\n</intent-filter>\\n</activity>\\n</application>\\n</manifest>'
+          safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-      - name: 5. Generate and Execute Build
+      - name: 5. Execute Build
         run: |
-          # اگر gradlew فائل نہیں ہے تو نئی جنریٹ کریں
           if [ ! -f gradlew ]; then
-            gradle wrapper
+            gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
           ./gradlew assembleDebug
