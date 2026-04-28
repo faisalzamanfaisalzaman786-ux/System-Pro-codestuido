@@ -24,7 +24,7 @@ jobs:
           gradle-version: 8.0.2
           cache-disabled: true
 
-      - name: 4. Python-Based Atomic Injection (Multi-File Support)
+      - name: 4. Python-Based Atomic Force Write
         shell: python
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
@@ -33,26 +33,23 @@ jobs:
         run: |
           import os
 
+          def safe_write(path, content):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content)
+                  f.flush()
+                  os.fsync(f.fileno()) # یہ کمانڈ ڈیٹا کو زبردستی سیو کرتی ہے
+
           pkg_name = os.getenv('PKG_NAME', 'com.faisal.systempro')
           pkg_path = pkg_name.replace('.', '/')
           java_code = os.getenv('JAVA_CODE', '')
           xml_code = os.getenv('XML_CODE', '')
 
-          # فولڈرز کی تیاری
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
+          # 1. Write Java & Main XML
+          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
+          safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 1. MainActivity Java
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
-              f.write(java_code)
-
-          # 2. Main Layout
-          with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
-              f.write(xml_code)
-
-          # 3. Missing Dialog XML (Fixes #444 Error)
-          # ہم ایک ڈیفالٹ ڈائیلاگ فائل بنا رہے ہیں تاکہ جاوا کوڈ اسے پہچان سکے
+          # 2. Write Dialog Settings (Fixes missing resource error)
           dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -62,18 +59,14 @@ jobs:
               <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
               <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo"/>
           </LinearLayout>"""
-          with open("app/src/main/res/layout/dialog_settings.xml", "w", encoding="utf-8") as f:
-              f.write(dialog_xml)
+          safe_write("app/src/main/res/layout/dialog_settings.xml", dialog_xml)
 
-          # گریڈل سیٹنگز
-          with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
-          with open("settings.gradle", "w") as f:
-              f.write("include ':app'")
-          with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
+          # 3. Android Configuration Files
+          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
+          safe_write("settings.gradle", "include ':app'")
+          safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
 
-          # App Gradle (With Design Dependencies)
+          # 4. App Gradle (Namespace fix)
           app_gradle = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -90,36 +83,33 @@ jobs:
               implementation 'com.google.android.material:material:1.9.0'
           }}
           """
-          with open("app/build.gradle", "w") as f:
-              f.write(app_gradle)
+          safe_write("app/build.gradle", app_gradle)
 
-          # Styles
-          styles = """<resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"/>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton"/>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"/>
-          </resources>"""
-          with open("app/src/main/res/values/styles.xml", "w") as f:
-              f.write(styles)
-
-          # Manifest
-          manifest = f"""<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
+          # 5. Manifest (Added explicit package attribute to fix error #445)
+          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">
+              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(manifest)
+          safe_write("app/src/main/AndroidManifest.xml", manifest)
+
+          # 6. Styles
+          styles = """<resources>
+              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"/>
+              <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton"/>
+              <style name="BuildButton" parent="Widget.MaterialComponents.Button"/>
+          </resources>"""
+          safe_write("app/src/main/res/values/styles.xml", styles)
 
       - name: 5. Execute Build
         run: gradle assembleDebug --no-daemon
 
-      - name: 6. Deliver APK
+      - name: 6. Deliver Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V7-Ready
+          name: SystemPro-V8-Final
           path: app/build/outputs/apk/debug/*.apk
