@@ -25,30 +25,29 @@ jobs:
         run: |
           import os
 
-          # یہ فنکشن اب کسی بھی پاتھ پر ایرر نہیں دے گا
           def safe_write(path, content):
               directory = os.path.dirname(path)
-              # اگر ڈائریکٹری موجود نہیں تو اسے بنائیں، ورنہ صرف فائل لکھیں
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
-              
               with open(path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # فائلیں لکھنا شروع کریں
+          # بنیادی کنفیگریشن فائلز
           safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
           
-          # پے لوڈ سے ڈیٹا حاصل کریں
           java_code = """${{ github.event.client_payload.java }}"""
           xml_code = """${{ github.event.client_payload.xml }}"""
           pkg_name = "${{ github.event.client_payload.package_name }}".replace(".", "/")
 
-          # جاوا اور ایکس ایم ایل فائلیں صحیح فولڈر سٹرکچر میں سیٹ کریں
           safe_write(f"app/src/main/java/{pkg_name}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-      - name: 5. Execute Build
+      - name: 5. Generate and Execute Build
         run: |
+          # اگر gradlew فائل نہیں ہے تو نئی جنریٹ کریں
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug
 
