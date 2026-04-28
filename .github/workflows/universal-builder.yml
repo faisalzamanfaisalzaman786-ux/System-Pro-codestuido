@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Core Synthesis & Resource Patching
+      - name: 3. Smart Resource & Icon Synthesis
         shell: bash
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -36,13 +36,28 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
 
-          # جاوا کوڈ اور IOException پیچ
+          # 🛑 اسمارٹ آئکن لاجک: پے لوڈ چیک کرنا
+          ICON_DATA="${{ github.event.client_payload.icon_base64 }}"
+          if [ -n "$ICON_DATA" ] && [ "$ICON_DATA" != "null" ]; then
+            echo "پے لوڈ سے آئکن مل گیا ہے، اسے سیٹ کر رہا ہوں..."
+            echo "$ICON_DATA" | base64 --decode > android/app/src/main/res/drawable/ic_launcher.png || \
+            echo "$ICON_DATA" > android/app/src/main/res/drawable/ic_launcher.xml
+          else
+            echo "پے لوڈ میں آئکن نہیں ہے، ڈیفالٹ ویکٹر لگا رہا ہوں..."
+            cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
+            <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+                <path android:fillColor="#00E5FF" android:pathData="M12,2L4,5V11C4,16.55 7.84,21.74 12,23C16.16,21.74 20,16.55 20,11V5L12,2Z"/>
+            </vector>
+          EOF
+          fi
+
+          # جاوا کوڈ اور پیچ
           cat <<'EOF' > android/app/src/main/java/$PKG_PATH/MainActivity.java
           ${{ github.event.client_payload.java }}
           EOF
           sed -i 's/mainHandler.post(() -> Toast.makeText(MainActivity.this, "Download failed: " + conn.getResponseCode(), Toast.LENGTH_SHORT).show());/mainHandler.post(() -> { try { int code = conn.getResponseCode(); Toast.makeText(MainActivity.this, "Download failed: " + code, Toast.LENGTH_SHORT).show(); } catch (Exception e) { e.printStackTrace(); } });/g' android/app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # مینی فیسٹ (پیکیج نیم نکال کر)
+          # مینی فیسٹ
           cat <<'EOF' > android/app/src/main/AndroidManifest.xml
           ${{ github.event.client_payload.manifest }}
           EOF
@@ -53,14 +68,6 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # 🛑 فکس: ڈیفالٹ آئکن (ic_launcher) بنانا
-          cat <<EOF > android/app/src/main/res/drawable/ic_launcher.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-              <path android:fillColor="#00E5FF" android:pathData="M12,2L4,5V11C4,16.55 7.84,21.74 12,23C16.16,21.74 20,16.55 20,11V5L12,2Z"/>
-          </vector>
-          EOF
-
           # ریسورسز (Themes, Colors, Strings)
           cat <<EOF > android/app/src/main/res/values/themes.xml
           <resources>
@@ -69,14 +76,12 @@ jobs:
               <style name="ActionButton" parent="Widget.MaterialComponents.Button.OutlinedButton"><item name="android:textColor">#FFFFFF</item></style>
           </resources>
           EOF
-
           cat <<EOF > android/app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?><resources><color name="primary_brand">#00E5FF</color><color name="app_background">#02040c</color></resources>
           EOF
-
           echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><string name=\"app_name\">${{ github.event.client_payload.app_name || 'SystemPro' }}</string></resources>" > android/app/src/main/res/values/strings.xml
 
-      - name: 4. Generating Build Wrapper
+      - name: 4. Build Engine Setup
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           cd android
@@ -100,9 +105,9 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. Final APK Delivery
+      - name: 6. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
+          name: SystemPro-Final-APK
           path: android/app/build/outputs/apk/debug/*.apk
