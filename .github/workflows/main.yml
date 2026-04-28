@@ -3,6 +3,7 @@ name: System Pro Master Engine
 on:
   repository_dispatch:
     types: [build-app]
+  workflow_dispatch: # 👈 یہ لائن مینولی رن کرنے کا بٹن دکھائے گی
 
 jobs:
   build:
@@ -18,41 +19,35 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. Clone & Inject Logic
+      - name: 3. Clone Base & Inject Code
         shell: bash
         run: |
-          # ایک سادہ اور فنکشنل اینڈرائیڈ پروجیکٹ کلون کریں
-          git clone https://github.com/JStumpp/android-simplest-java-app.git android
+          # پرانا سارا کچرا صاف کریں
+          rm -rf * # بیس پروجیکٹ کلون کریں
+          git clone https://github.com/JStumpp/android-simplest-java-app.git android_project
           
-          cd android
+          cd android_project
           
-          # پیکیج نیم سیٹ کرنا
+          # پیکیج کی تفصیلات (اگر پے لوڈ سے نہ آئیں تو ڈیفالٹ استعمال کریں)
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # پرانی جاوا فائلیں ہٹا کر نئی ڈائرکٹری بنانا
-          rm -rf app/src/main/java/*
+          # ڈائرکٹری بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # پے لوڈ سے آئی ہوئی فائلیں انجیکٹ (Inject) کرنا
-          cat <<'EOF' > app/src/main/java/$PKG_PATH/MainActivity.java
-          ${{ github.event.client_payload.java }}
+          # یہاں ہم پے لوڈ سے ڈیٹا ڈالیں گے
+          # اگر آپ مینولی رن کر رہے ہیں تو یہ فائلیں خالی ہو سکتی ہیں، اس لیے 'test' ڈیٹا ڈال رہے ہیں
+          cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
+          ${{ github.event.client_payload.java || 'package '$PKG_NAME'; public class MainActivity extends android.app.Activity {}' }}
           EOF
 
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml }}
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          ${{ github.event.client_payload.xml || '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" />' }}
           EOF
-
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
-          ${{ github.event.client_payload.manifest }}
-          EOF
-
-          # پیکیج نیم کو مینی فیسٹ میں سیٹ کرنا (اگر ضرورت ہو)
-          sed -i "s/com.example.simplestandroidapp/$PKG_NAME/g" app/src/main/AndroidManifest.xml
 
       - name: 4. Build APK
         run: |
-          cd android
+          cd android_project
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
@@ -61,4 +56,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android_project/app/build/outputs/apk/debug/*.apk
