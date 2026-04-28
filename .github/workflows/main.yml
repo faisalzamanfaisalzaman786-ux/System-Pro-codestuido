@@ -24,7 +24,7 @@ jobs:
           gradle-version: 8.0.2
           cache-disabled: true
 
-      - name: 4. Python-Based Absolute Write
+      - name: 4. Python-Based Secure Atomic Write
         shell: python
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
@@ -34,28 +34,27 @@ jobs:
           import os
 
           def safe_write(path, content):
-              # ڈائریکٹری کا راستہ نکالیں
               directory = os.path.dirname(path)
-              # اگر ڈائریکٹری کا نام خالی نہیں ہے اور وہ موجود نہیں ہے، تو اسے بنائیں
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
-              
-              # فائل لکھیں اور یقینی بنائیں کہ وہ ڈسک پر سیو ہو گئی ہے
               with open(path, "w", encoding="utf-8") as f:
-                  f.write(content)
+                  f.write(content if content else "")
                   f.flush()
                   os.fsync(f.fileno())
 
-          pkg_name = os.getenv('PKG_NAME', 'com.faisal.systempro')
+          # پیکج نیم کا فال بیک فکس (Error #450 Fix)
+          input_pkg = os.getenv('PKG_NAME', '').strip()
+          pkg_name = input_pkg if input_pkg and '.' in input_pkg else "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
+          
           java_code = os.getenv('JAVA_CODE', '')
           xml_code = os.getenv('XML_CODE', '')
 
-          # 1. اصلی جاوا اور لے آؤٹ فائلز
+          # 1. اصلی فائلیں
           safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 2. ڈیفالٹ ڈائیلاگ سیٹنگز (تاکہ سورس ایرر نہ آئے)
+          # 2. ڈائیلاگ سیٹنگز
           dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -67,12 +66,12 @@ jobs:
           </LinearLayout>"""
           safe_write("app/src/main/res/layout/dialog_settings.xml", dialog_xml)
 
-          # 3. گریڈل اور سسٹم فائلز (اب یہاں ایرر نہیں آئے گا)
+          # 3. سسٹم فائلز
           safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
           safe_write("settings.gradle", "include ':app'")
           safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
 
-          # 4. ایپ لیول بلڈ کنفیگریشن
+          # 4. ایپ گریڈل (Namespace فکس)
           app_gradle = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -91,12 +90,15 @@ jobs:
           """
           safe_write("app/build.gradle", app_gradle)
 
-          # 5. مینی فیسٹ فائل
+          # 5. مینی فیسٹ (Package attribute ہٹا دیا گیا ہے)
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
                   </activity>
               </application>
           </manifest>"""
@@ -113,9 +115,9 @@ jobs:
       - name: 5. Execute Build
         run: gradle assembleDebug --no-daemon
 
-      - name: 6. Deliver Artifact
+      - name: 6. Deliver APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V10-Final
+          name: SystemPro-V11-Stable
           path: app/build/outputs/apk/debug/*.apk
