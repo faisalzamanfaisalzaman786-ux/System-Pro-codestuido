@@ -30,13 +30,13 @@ jobs:
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
               with open(path, "w", encoding="utf-8") as f:
-                  f.write(content)
+                  f.write(content.strip())
 
           # 1. Root settings.gradle
           safe_write("settings.gradle", "include ':app'")
 
           # 2. Root build.gradle
-          root_gradle = """
+          safe_write("build.gradle", """
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
@@ -44,11 +44,10 @@ jobs:
           allprojects {
               repositories { google(); mavenCentral() }
           }
-          """
-          safe_write("build.gradle", root_gradle)
+          """)
 
           # 3. App build.gradle
-          app_gradle = """
+          safe_write("app/build.gradle", """
           plugins { id 'com.android.application' }
           android {
               namespace '${{ github.event.client_payload.package_name }}'
@@ -61,14 +60,13 @@ jobs:
                   versionName '1.0'
               }
           }
-          """
-          safe_write("app/build.gradle", app_gradle)
+          """)
 
-          # 4. Gradle Properties (Fixed Line Breaks)
-          properties_content = "android.useAndroidX=true\\nandroid.enableJetifier=true"
-          with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\\n")
-              f.write("android.enableJetifier=true\\n")
+          # 4. Gradle Properties (No more \n issues)
+          safe_write("gradle.properties", """
+          android.useAndroidX=true
+          android.enableJetifier=true
+          """)
           
           # 5. Java & XML Setup
           java_code = """${{ github.event.client_payload.java }}"""
@@ -79,7 +77,7 @@ jobs:
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
           
           # 6. Minimal Manifest
-          manifest_content = '''<?xml version="1.0" encoding="utf-8"?>
+          safe_write("app/src/main/AndroidManifest.xml", """<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
@@ -89,8 +87,7 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-          </manifest>'''
-          safe_write("app/src/main/AndroidManifest.xml", manifest_content)
+          </manifest>""")
 
       - name: 5. Execute Build
         run: |
@@ -98,7 +95,7 @@ jobs:
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: 6. Upload Stable Artifact
         uses: actions/upload-artifact@v4
