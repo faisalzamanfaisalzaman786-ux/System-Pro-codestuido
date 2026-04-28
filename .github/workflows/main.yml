@@ -24,7 +24,7 @@ jobs:
           gradle-version: 8.0.2
           cache-disabled: true
 
-      - name: 4. Python-Based Atomic Force Write
+      - name: 4. Python-Based Absolute Write
         shell: python
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
@@ -34,22 +34,28 @@ jobs:
           import os
 
           def safe_write(path, content):
-              os.makedirs(os.path.dirname(path), exist_ok=True)
+              # ڈائریکٹری کا راستہ نکالیں
+              directory = os.path.dirname(path)
+              # اگر ڈائریکٹری کا نام خالی نہیں ہے اور وہ موجود نہیں ہے، تو اسے بنائیں
+              if directory and not os.path.exists(directory):
+                  os.makedirs(directory, exist_ok=True)
+              
+              # فائل لکھیں اور یقینی بنائیں کہ وہ ڈسک پر سیو ہو گئی ہے
               with open(path, "w", encoding="utf-8") as f:
                   f.write(content)
                   f.flush()
-                  os.fsync(f.fileno()) # یہ کمانڈ ڈیٹا کو زبردستی سیو کرتی ہے
+                  os.fsync(f.fileno())
 
           pkg_name = os.getenv('PKG_NAME', 'com.faisal.systempro')
           pkg_path = pkg_name.replace('.', '/')
           java_code = os.getenv('JAVA_CODE', '')
           xml_code = os.getenv('XML_CODE', '')
 
-          # 1. Write Java & Main XML
+          # 1. اصلی جاوا اور لے آؤٹ فائلز
           safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 2. Write Dialog Settings (Fixes missing resource error)
+          # 2. ڈیفالٹ ڈائیلاگ سیٹنگز (تاکہ سورس ایرر نہ آئے)
           dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -61,12 +67,12 @@ jobs:
           </LinearLayout>"""
           safe_write("app/src/main/res/layout/dialog_settings.xml", dialog_xml)
 
-          # 3. Android Configuration Files
+          # 3. گریڈل اور سسٹم فائلز (اب یہاں ایرر نہیں آئے گا)
           safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
           safe_write("settings.gradle", "include ':app'")
           safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
 
-          # 4. App Gradle (Namespace fix)
+          # 4. ایپ لیول بلڈ کنفیگریشن
           app_gradle = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -85,7 +91,7 @@ jobs:
           """
           safe_write("app/build.gradle", app_gradle)
 
-          # 5. Manifest (Added explicit package attribute to fix error #445)
+          # 5. مینی فیسٹ فائل
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">
               <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
@@ -96,7 +102,7 @@ jobs:
           </manifest>"""
           safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-          # 6. Styles
+          # 6. اسٹائلز
           styles = """<resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"/>
               <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton"/>
@@ -111,5 +117,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V8-Final
+          name: SystemPro-V10-Final
           path: app/build/outputs/apk/debug/*.apk
