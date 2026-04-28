@@ -20,23 +20,36 @@ jobs:
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 4. Python-Based Project Structure Creator
-        shell: python
+      - name: 4. Create Project Structure (Direct Shell Write)
         run: |
-          import os
+          # فولڈرز بنائیں
+          mkdir -p app/src/main/java/${{ github.event.client_payload.package_name }}
+          mkdir -p app/src/main/res/layout
 
-          def safe_write(path, content):
-              directory = os.path.dirname(path)
-              if directory and not os.path.exists(directory):
-                  os.makedirs(directory, exist_ok=True)
-              with open(path, "w", encoding="utf-8") as f:
-                  f.write(content.strip())
+          # پیکج پاتھ سیٹ کریں (ڈاٹ کو سلیش سے بدلیں)
+          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
 
-          # 1. Root settings.gradle
-          safe_write("settings.gradle", "include ':app'")
+          # 1. gradle.properties لکھیں (بالکل الگ الگ لائنیں)
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
 
-          # 2. App build.gradle
-          safe_write("app/build.gradle", """
+          # 2. settings.gradle
+          echo "include ':app'" > settings.gradle
+
+          # 3. Root build.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          # 4. App build.gradle
+          cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
               namespace '${{ github.event.client_payload.package_name }}'
@@ -53,33 +66,15 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
           }
-          """)
+          EOF
 
-          # 3. Root build.gradle
-          safe_write("build.gradle", """
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          """)
+          # 5. Java & XML Code
+          echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
 
-          # 4. gradle.properties (FIXED LINE BY LINE)
-          with open("gradle.properties", "w") as props:
-              props.write("android.useAndroidX=true\\n")
-              props.write("android.enableJetifier=true\\n")
-          
-          # 5. Java & XML Setup
-          java_code = """${{ github.event.client_payload.java }}"""
-          xml_code = """${{ github.event.client_payload.xml }}"""
-          pkg_path = "${{ github.event.client_payload.package_name }}".replace(".", "/")
-          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
-          safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
-          
           # 6. Android Manifest
-          safe_write("app/src/main/AndroidManifest.xml", """<?xml version="1.0" encoding="utf-8"?>
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
@@ -89,7 +84,8 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-          </manifest>""")
+          </manifest>
+          EOF
 
       - name: 5. Execute Build
         run: |
@@ -98,3 +94,9 @@ jobs:
           fi
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+
+      - name: 6. Upload Final APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-V11-Stable
+          path: app/build/outputs/apk/debug/app-debug.apk
