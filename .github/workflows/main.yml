@@ -16,8 +16,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # کیشنگ کو آن کیا ہے تاکہ بار بار ڈاؤن لوڈ نہ کرنا پڑے
-          cache: 'gradle'
+          # ہم نے یہاں سے کیشنگ ہٹا دی ہے تاکہ 'No file matched' والا ایرر نہ آئے
 
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -34,17 +33,10 @@ jobs:
               with open(path, "w", encoding="utf-8") as f:
                   f.write(content.strip())
 
-          # 1. Root Settings (Repositories link)
-          safe_write("settings.gradle", """
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
-          include ':app'
-          """)
+          # 1. Root Settings
+          safe_write("settings.gradle", "include ':app'")
 
-          # 2. App build.gradle (Yahan humne 'Vocabulary' barha di hai)
+          # 2. App build.gradle (Sari dependencies ke sath)
           app_gradle = """
           plugins { id 'com.android.application' }
           android {
@@ -59,30 +51,28 @@ jobs:
               }
           }
           dependencies {
-              // Yeh libraries ab auto-download hongi, inme sab themes aur widgets hain
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              implementation 'androidx.recyclerview:recyclerview:1.3.0'
-              implementation 'androidx.cardview:cardview:1.0.0'
           }
           """
           safe_write("app/build.gradle", app_gradle)
 
-          # 3. Project Root build.gradle
+          # 3. Root build.gradle
           safe_write("build.gradle", """
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
           """)
 
-          # 4. Manifest with Standard Theme
+          # 4. Manifest with Material Theme
           safe_write("app/src/main/AndroidManifest.xml", """<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application 
-                  android:label="System Pro" 
-                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -92,7 +82,7 @@ jobs:
               </application>
           </manifest>""")
 
-          # 5. Java & XML Setup
+          # 5. Java, XML & Properties
           java_code = """${{ github.event.client_payload.java }}"""
           xml_code = """${{ github.event.client_payload.xml }}"""
           pkg_path = "${{ github.event.client_payload.package_name }}".replace(".", "/")
@@ -100,13 +90,13 @@ jobs:
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
           safe_write("gradle.properties", "android.useAndroidX=true\\nandroid.enableJetifier=true")
 
-      - name: 5. Execute Build (Auto-Fetching Dependencies)
+      - name: 5. Execute Build (Auto-Fetching)
         run: |
           if [ ! -f gradlew ]; then
             gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
 
       - name: 6. Upload Final APK
         uses: actions/upload-artifact@v4
