@@ -3,7 +3,7 @@ name: System Pro Master Engine
 on:
   repository_dispatch:
     types: [build-app]
-  workflow_dispatch: # 👈 یہ لائن مینولی رن کرنے کا بٹن دکھائے گی
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,29 +21,35 @@ jobs:
 
       - name: 3. Clone Base & Inject Code
         shell: bash
+        env:
+          JAVA_CODE: ${{ github.event.client_payload.java }}
+          XML_CODE: ${{ github.event.client_payload.xml }}
+          PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # پرانا سارا کچرا صاف کریں
+          # مکمل صفائی
           rm -rf * # بیس پروجیکٹ کلون کریں
           git clone https://github.com/JStumpp/android-simplest-java-app.git android_project
-          
           cd android_project
           
-          # پیکیج کی تفصیلات (اگر پے لوڈ سے نہ آئیں تو ڈیفالٹ استعمال کریں)
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          # پیکیج سیٹ کریں (اگر خالی ہو تو ڈیفالٹ)
+          FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
+          PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           
-          # ڈائرکٹری بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           
-          # یہاں ہم پے لوڈ سے ڈیٹا ڈالیں گے
-          # اگر آپ مینولی رن کر رہے ہیں تو یہ فائلیں خالی ہو سکتی ہیں، اس لیے 'test' ڈیٹا ڈال رہے ہیں
-          cat <<EOF > app/src/main/java/$PKG_PATH/MainActivity.java
-          ${{ github.event.client_payload.java || 'package '$PKG_NAME'; public class MainActivity extends android.app.Activity {}' }}
-          EOF
+          # جاوا فائل لکھنا
+          if [ -z "$JAVA_CODE" ]; then
+            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity {}" > app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
 
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          ${{ github.event.client_payload.xml || '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" />' }}
-          EOF
+          # ایکس ایم ایل فائل لکھنا
+          if [ -z "$XML_CODE" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" />' > app/src/main/res/layout/activity_main.xml
+          else
+            echo "$XML_CODE" > app/src/main/res/layout/activity_main.xml
+          fi
 
       - name: 4. Build APK
         run: |
