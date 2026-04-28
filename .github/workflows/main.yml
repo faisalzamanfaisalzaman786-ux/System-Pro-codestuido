@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Workspace Cleanup
+      - name: 1. Setup Environment
         uses: actions/checkout@v4
 
       - name: 2. Set up Java JDK 17
@@ -18,27 +18,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. Clone Base & Inject Logic
+      - name: 3. Fetch Base Template
+        # یہ ایک آفیشل طریقہ ہے کسی بھی پبلک ریپوزٹری کو بغیر پاسورڈ کلون کرنے کا
+        uses: actions/checkout@v4
+        with:
+          repository: JStumpp/android-simplest-java-app
+          path: android_engine
+
+      - name: 4. Inject User Logic
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # Safe Cleanup
-          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
-
-          # Using a direct zip download to avoid git authentication issues
-          curl -L https://github.com/JStumpp/android-simplest-java-app/archive/refs/heads/master.zip -o project.zip
-          unzip project.zip
-          mv android-simplest-java-app-master android_engine
           cd android_engine
           
           # Setup package identity
           FINAL_PKG=${PKG_NAME:-"com.faisal.systempro"}
           PKG_PATH=$(echo "$FINAL_PKG" | tr '.' '/')
           
-          # Prepare source directory
+          # Clean and reconstruct directory structure
           rm -rf app/src/main/java/*
           mkdir -p app/src/main/java/$PKG_PATH
           
@@ -59,13 +59,13 @@ jobs:
           # Update Manifest Package Name
           sed -i "s/com.example.simplestandroidapp/$FINAL_PKG/g" app/src/main/AndroidManifest.xml
 
-      - name: 4. Compile APK
+      - name: 5. Execute Build
         run: |
           cd android_engine
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Deliver Finished APK
+      - name: 6. Success APK Delivery
         if: success()
         uses: actions/upload-artifact@v4
         with:
