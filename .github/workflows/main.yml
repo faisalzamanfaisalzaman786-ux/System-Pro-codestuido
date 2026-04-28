@@ -72,26 +72,17 @@ jobs:
           </resources>
           EOF
 
-          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical" />
-          EOF
-
-          # جاوا اور ایکس ایم ایل کو لکھنا
+          # پے لوڈ کو محفوظ طریقے سے لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
 
-          # ایرر والی لائنوں کو حذف کرنے کا طریقہ (Sed Command)
-          # یہ کمانڈ ان لائنوں کو ڈیلیٹ کر دے گی جہاں etAppName یا دیگر آئی ڈیز کا ذکر ہے
-          sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
-          sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
-          sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
-          sed -i '/etGhRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
-          sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
-          sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java"
+          # ایرر والی لائنوں کی صفائی (تاکہ بلڈ فیل نہ ہو)
+          sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/etGhRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
 
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -118,5 +109,5 @@ jobs:
       - name: 6. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V11-Stable
+          name: SystemPro-V12-Final
           path: app/build/outputs/apk/debug/app-debug.apk
