@@ -1,28 +1,67 @@
-      - name: 5. Advanced Auto-Fix (Java & XML)
-        shell: python
-        run: |
-          import os
-          java_path = "app/src/main/java/${{ github.event.client_payload.package_name }}".replace('.', '/') + "/MainActivity.java"
-          xml_path = "app/src/main/res/layout/activity_main.xml"
-          
-          # Java Fix (Missing References)
-          error_keywords = ["etPkgName", "etToken", "etRepo", "etGhToken", "etGhRepo", "etAppName"]
-          if os.path.exists(java_path):
-              with open(java_path, "r") as f:
-                  lines = f.readlines()
-              with open(java_path, "w") as f:
-                  for line in lines:
-                      if any(word in line for word in error_keywords):
-                          f.write("// " + line)
-                      else:
-                          f.write(line)
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:padding="16dp">
 
-          # XML Fix (Missing Layout Attributes - Your Current Crash Fix)
-          if os.path.exists(xml_path):
-              with open(xml_path, "r") as f:
-                  xml_content = f.read()
-              # اگر پے لوڈ میں layout_width غائب ہے تو یہ عارضی طور پر اسے شامل کر دے گا
-              if 'layout_width' not in xml_content:
-                  xml_content = xml_content.replace('>', ' android:layout_width="match_parent" android:layout_height="match_parent">', 1)
-              with open(xml_path, "w") as f:
-                  f.write(xml_content)
+    <TextView
+        android:id="@+id/tvHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="System Pro Ultimate"
+        android:textColor="#00FFCC"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="20dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_centerInParent="true">
+
+        <Button
+            android:id="@+id/btnBuild"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="Start Engine"
+            android:backgroundTint="#00FFCC"
+            android:textColor="#000000"
+            android:layout_marginBottom="10dp"
+            style="@style/BuildButton"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Status: Engine Ready"
+            android:textColor="#FFFFFF"
+            android:textAlignment="center"
+            android:textSize="14sp"/>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_alignParentBottom="true"
+        android:weightSum="2">
+
+        <Button
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Settings"
+            style="@style/TabButton"/>
+
+        <Button
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Logs"
+            style="@style/TabButton"/>
+    </LinearLayout>
+
+</RelativeLayout>
