@@ -17,19 +17,21 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # Removed cache: 'gradle' to fix the error in screenshot
 
       - name: 3. Clone Base & Inject Logic
         shell: bash
         env:
           JAVA_CODE: ${{ github.event.client_payload.java }}
           XML_CODE: ${{ github.event.client_payload.xml }}
-          MANIFEST_CODE: ${{ github.event.client_payload.manifest }}
           PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
-          # Fresh start: clear current workspace
-          rm -rf * # Clone the reliable base repository
-          git clone https://github.com/JStumpp/android-simplest-java-app.git android_engine
+          # Safe Cleanup
+          find . -maxdepth 1 ! -name '.github' ! -name '.' -exec rm -rf {} +
+
+          # Using a direct zip download to avoid git authentication issues
+          curl -L https://github.com/JStumpp/android-simplest-java-app/archive/refs/heads/master.zip -o project.zip
+          unzip project.zip
+          mv android-simplest-java-app-master android_engine
           cd android_engine
           
           # Setup package identity
@@ -42,7 +44,7 @@ jobs:
           
           # Inject Java Source
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" == "null" ]; then
-            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); android.widget.Toast.makeText(this, \"Engine Ready\", 1).show(); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "package $FINAL_PKG; public class MainActivity extends android.app.Activity { protected void onCreate(android.os.Bundle s){ super.onCreate(s); android.widget.Toast.makeText(this, \"System Pro Ready\", 1).show(); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           else
             echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
