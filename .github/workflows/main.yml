@@ -3,13 +3,12 @@ name: System Pro Ultimate Engine
 on:
   repository_dispatch:
     types: [build-app]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Setup Environment
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
       - name: 2. Set up Java JDK 17
@@ -20,104 +19,41 @@ jobs:
 
       - name: 3. Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.0.2
-          cache-disabled: true
 
-      - name: 4. Python-Based Secure Atomic Write
+      - name: 4. Python-Based Atomic Force Write
         shell: python
-        env:
-          JAVA_CODE: ${{ github.event.client_payload.java }}
-          XML_CODE: ${{ github.event.client_payload.xml }}
-          PKG_NAME: ${{ github.event.client_payload.package_name }}
         run: |
           import os
 
+          # یہ فنکشن اب کسی بھی پاتھ پر ایرر نہیں دے گا
           def safe_write(path, content):
               directory = os.path.dirname(path)
+              # اگر ڈائریکٹری موجود نہیں تو اسے بنائیں، ورنہ صرف فائل لکھیں
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
+              
               with open(path, "w", encoding="utf-8") as f:
-                  f.write(content if content else "")
-                  f.flush()
-                  os.fsync(f.fileno())
+                  f.write(content)
 
-          # پیکج نیم کا فال بیک فکس (Error #450 Fix)
-          input_pkg = os.getenv('PKG_NAME', '').strip()
-          pkg_name = input_pkg if input_pkg and '.' in input_pkg else "com.faisal.systempro"
-          pkg_path = pkg_name.replace('.', '/')
+          # فائلیں لکھنا شروع کریں
+          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
           
-          java_code = os.getenv('JAVA_CODE', '')
-          xml_code = os.getenv('XML_CODE', '')
+          # پے لوڈ سے ڈیٹا حاصل کریں
+          java_code = """${{ github.event.client_payload.java }}"""
+          xml_code = """${{ github.event.client_payload.xml }}"""
+          pkg_name = "${{ github.event.client_payload.package_name }}".replace(".", "/")
 
-          # 1. اصلی فائلیں
-          safe_write(f"app/src/main/java/{pkg_path}/MainActivity.java", java_code)
+          # جاوا اور ایکس ایم ایل فائلیں صحیح فولڈر سٹرکچر میں سیٹ کریں
+          safe_write(f"app/src/main/java/{pkg_name}/MainActivity.java", java_code)
           safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 2. ڈائیلاگ سیٹنگز
-          dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Repo"/>
-          </LinearLayout>"""
-          safe_write("app/src/main/res/layout/dialog_settings.xml", dialog_xml)
-
-          # 3. سسٹم فائلز
-          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\nandroid.suppressUnsupportedCompileSdk=34")
-          safe_write("settings.gradle", "include ':app'")
-          safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } }; allprojects { repositories { google(); mavenCentral() } }")
-
-          # 4. ایپ گریڈل (Namespace فکس)
-          app_gradle = f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 33
-              defaultConfig {{
-                  applicationId "{pkg_name}"
-                  minSdk 21
-                  targetSdk 33
-              }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }}
-          """
-          safe_write("app/build.gradle", app_gradle)
-
-          # 5. مینی فیسٹ (Package attribute ہٹا دیا گیا ہے)
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          safe_write("app/src/main/AndroidManifest.xml", manifest)
-
-          # 6. اسٹائلز
-          styles = """<resources>
-              <style name="ActionButton" parent="Widget.MaterialComponents.Button.TextButton"/>
-              <style name="TabButton" parent="Widget.MaterialComponents.Button.UnelevatedButton"/>
-              <style name="BuildButton" parent="Widget.MaterialComponents.Button"/>
-          </resources>"""
-          safe_write("app/src/main/res/values/styles.xml", styles)
-
       - name: 5. Execute Build
-        run: gradle assembleDebug --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: 6. Deliver APK
-        if: success()
+      - name: 6. Upload Stable Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-V11-Stable
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
