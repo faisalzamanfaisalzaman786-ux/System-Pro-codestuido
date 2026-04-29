@@ -1,4 +1,4 @@
-name: System Pro Ultimate Engine
+name: System Pro AI-Engine
 
 on:
   repository_dispatch:
@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
@@ -33,83 +35,77 @@ jobs:
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # پے لوڈ کو محفوظ طریقے سے لکھنا (بغیر کسی ڈیلیشن کے)
+          # فائلیں لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
-
-          # --- SMART XML REPAIRER (No Java Deletion) ---
-          python3 - <<'PYTHON_EOF'
-          import os, re
-          xml_file = "app/src/main/res/layout/activity_main.xml"
-          java_file = "app/src/main/java/${{ env.PKG_PATH }}/MainActivity.java" # This is handled below
           
-          # تمام ممکنہ آئی ڈیز جو جاوا کوڈ استعمال کر سکتا ہے
-          required_ids = ["javaEditor", "xmlEditor", "manifestEditor", "logArea", "buildBtn", 
-                          "fetchArtifactBtn", "downloadApkBtn", "copyLogBtn", "saveLocalBtn", 
-                          "exportBtn", "loadBtn", "openSettingsBtn", "iconPreview", "iconSection", 
-                          "iconUploadBtn", "monitorContent", "monitorScroll", "tabJava", 
-                          "tabXml", "tabManifest", "iconTabBtn", "etAppName", "etPkgName", 
-                          "etGhToken", "etGhRepo", "logScroll"]
-
-          if os.path.exists(xml_file):
-              with open(xml_file, 'r') as f: content = f.read()
-              
-              # اگر روٹ لے آؤٹ لینیئر نہیں ہے تو اسے لینیئر بنانا تاکہ آئی ڈیز ایڈ ہو سکیں
-              if "<LinearLayout" not in content:
-                  content = '<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">\n' + content + '\n</LinearLayout>'
-
-              # وہ آئی ڈیز جو XML میں نہیں ہیں، انہیں خاموشی سے آخر میں شامل کرنا
-              missing_elements = ""
-              for rid in required_ids:
-                  if f'android:id="@+id/{rid}"' not in content:
-                      missing_elements += f'\n    <View android:id="@+id/{rid}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
-              
-              content = content.replace("</LinearLayout>", missing_elements + "\n</LinearLayout>")
-              
-              # بٹنوں کے سائز کو ٹھیک کرنا (اگر بھول گئے ہوں)
-              content = re.sub(r'<Button(?!.*android:layout_width)', r'<Button android:layout_width="match_parent" android:layout_height="wrap_content" ', content)
-              
-              with open(xml_file, 'w') as f: f.write(content)
-          PYTHON_EOF
-
-          # سیٹنگز ڈائیلاگ فائل (فزیکلی موجود ہونا لازمی ہے)
-          cat <<EOF > app/src/main/res/layout/dialog_settings.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package"/>
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Token"/>
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Repo"/>
-          </LinearLayout>
-          EOF
-
-          # گریڈل اور مینی فیسٹ سیٹ اپ (پہلے کی طرح)
+          # بنیادی کنفیگریشن
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
-          cat <<EOF > app/src/main/res/values/styles.xml
-          <resources><style name="ActionButton" parent="Widget.MaterialComponents.Button" /><style name="TabButton" parent="Widget.MaterialComponents.Button.TextButton" /><style name="BuildButton" parent="Widget.MaterialComponents.Button" /><style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>
-          EOF
+
           cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.INTERNET" /><application android:label="System Pro" android:theme="@style/Theme.SystemProMaster"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
+          <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
           EOF
 
-      - name: 5. Execute Build
+      - name: 5. Primary Build Attempt
+        id: build_step
         run: |
           if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
 
-      - name: 6. Upload APK
+      - name: 6. AI Auto-Fix (On Failure)
+        if: failure()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
+        run: |
+          echo "Build failed. Invoking System Pro AI..."
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          ERROR_LOG=$(tail -n 50 build_log.txt)
+          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
+          XML_FILE="app/src/main/res/layout/activity_main.xml"
+          
+          # AI کو ڈیٹا بھیجنا
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"contents\": [{
+                \"parts\":[{
+                  \"text\": \"I have an Android build error: $ERROR_LOG. Java Code: $(cat $JAVA_FILE). XML Code: $(cat $XML_FILE). Fix the error and return the full corrected Java code and XML code separated by a unique delimiter '---FILE_SPLIT---'. Return ONLY the code.\"
+                }]
+              }]
+            }")
+
+          # جواب سے کوڈ نکالنا اور فائلوں کو اپ ڈیٹ کرنا
+          CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g' | sed 's/```xml//g' | sed 's/```//g')
+          
+          if [[ "$CLEAN_CODE" == *"---FILE_SPLIT---"* ]]; then
+            echo "AI found a fix. Patching files..."
+            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $1}' > "$JAVA_FILE"
+            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $2}' > "$XML_FILE"
+            
+            echo "Retrying build with AI corrections..."
+            ./gradlew assembleDebug --no-daemon
+          else
+            echo "AI could not resolve the issue. Please check the logs."
+            exit 1
+          fi
+
+      - name: 7. Upload Final APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V16-Full-Functional
+          name: SystemPro-AI-Fixed
           path: app/build/outputs/apk/debug/app-debug.apk
