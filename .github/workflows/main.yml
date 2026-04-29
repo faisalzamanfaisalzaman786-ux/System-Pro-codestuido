@@ -33,11 +33,11 @@ jobs:
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # بنیادی فائلیں
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
+          # Build Files
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -65,7 +65,7 @@ jobs:
           }
           EOF
 
-          # Styles & Theme
+          # Styles
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="ActionButton" parent="Widget.MaterialComponents.Button" />
@@ -79,32 +79,33 @@ jobs:
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
 
-          # --- UNIVERSAL ID CLEANER & AUTO-FIXER ---
-          # 1. اگر XML میں بٹن کے سائز غائب ہیں تو ٹھیک کریں
-          python3 - <<'PYTHON_EOF'
-          import os
-          xml_file = "app/src/main/res/layout/activity_main.xml"
-          if os.path.exists(xml_file):
-              with open(xml_file, 'r') as f:
-                  content = f.read()
-              if '<Button' in content and 'layout_width' not in content:
-                  content = content.replace('<Button', '<Button android:layout_width="match_parent" android:layout_height="wrap_content" ')
-              with open(xml_file, 'w') as f:
-                  f.write(content)
-          PYTHON_EOF
-
-          # 2. جاوا کے وہ تمام حصے ڈیلیٹ کریں جن کی آئی ڈیز XML میں نہیں ہیں
-          # یہ ان تمام لائنوں کو صاف کرے گا جو آپ کو '19 errors' دے رہی تھیں
+          # --- سپر کلینر اسکرپٹ (Super Cleaner) ---
+          # یہ ان تمام لائنوں کو ڈیلیٹ کر دے گا جن کی آئی ڈیز XML میں نہیں ملتیں
+          sed -i '/tabJava/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/tabXml/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/tabManifest/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/iconTabBtn/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+          sed -i '/dialogView/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etAppName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etPkgName/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etGhToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etGhRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etToken/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
           sed -i '/etRepo/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
-          sed -i '/dialogView.findViewById/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
-          sed -i '/dialog_settings/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
-          
-          # 3. اینڈرائیڈ مینی فیسٹ
+          sed -i '/setView(dialogView)/d' "app/src/main/java/$PKG_PATH/MainActivity.java" || true
+
+          # اگر بٹنوں میں layout_width غائب ہے تو ٹھیک کرنا
+          python3 - <<'PYTHON_EOF'
+          import os
+          xml_path = "app/src/main/res/layout/activity_main.xml"
+          if os.path.exists(xml_path):
+              with open(xml_path, 'r') as f: content = f.read()
+              if '<Button' in content and 'layout_width' not in content:
+                  content = content.replace('<Button', '<Button android:layout_width="match_parent" android:layout_height="wrap_content" ')
+              with open(xml_path, 'w') as f: f.write(content)
+          PYTHON_EOF
+
+          # مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -122,14 +123,12 @@ jobs:
 
       - name: 5. Execute Build
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.5
-          fi
+          if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
       - name: 6. Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V13-Stable
+          name: SystemPro-V14-Final
           path: app/build/outputs/apk/debug/app-debug.apk
