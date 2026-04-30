@@ -12,75 +12,65 @@ jobs:
       - name: 🛠️ 1. Infrastructure Sync
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Setup
+      - name: ☕ 2. Java Setup (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect & Force-Build Engine
+      - name: 🧠 3. AI Architect (Auto-Version Repair)
         shell: python
         run: |
           import os, subprocess, json, shutil
 
-          # 1. فائلز جنریشن کا پکا انتظام
-          def setup_project(payload):
-              pkg_name = payload.get("package_name", "com.faisal.systempro")
-              pkg_path = pkg_name.replace('.', '/')
-              
-              # تمام پرانی چیزیں صاف کریں
-              for d in ['app', 'build', '.gradle']:
-                  if os.path.exists(d): shutil.rmtree(d)
-
-              os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-              os.makedirs("app/src/main/res/values", exist_ok=True)
-              
-              # ضروری فائلز لکھنا
-              with open("settings.gradle", "w") as f: f.write("include ':app'")
-              with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
-              
-              with open("build.gradle", "w") as f:
-                  f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
-
-              with open("app/build.gradle", "w") as f:
-                  f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.1' }} }}")
-
-              with open("app/src/main/AndroidManifest.xml", "w") as f:
-                  f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
-
-              java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V13.1 Active\"); setContentView(t); }} }}")
-              with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
-
-          # 2. بلڈ لوپ
+          # پے لوڈ حاصل کرنا
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload) if raw_payload != "null" else {}
-          setup_project(payload)
+          pkg_name = payload.get("package_name", "com.faisal.systempro")
+          pkg_path = pkg_name.replace('.', '/')
 
-          print("🚀 Starting Professional Build...")
-          # براہ راست سسٹم گریڈل کا استعمال
-          process = subprocess.run(['sudo', 'apt-get', 'update', '-y'], capture_output=True)
-          process = subprocess.run(['sudo', 'apt-get', 'install', '-y', 'gradle'], capture_output=True)
+          # 1. پروجیکٹ اسٹرکچر کی تیاری
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
+
+          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
           
-          # فائنل بلڈ کمانڈ
-          build = subprocess.run(['gradle', ':app:assembleDebug', '--no-daemon'], capture_output=True, text=True)
+          # جدید گریڈل ورژن کے مطابق build.gradle
+          with open("build.gradle", "w") as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.2' }} }}")
+
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V13.2 Stable\"); t.setGravity(17); setContentView(t); }} }}")
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
+
+          # 2. ورژن اپ گریڈ اور بلڈ
+          print("🚀 Upgrading Gradle to 8.5...")
+          # یہاں ہم ریپر کو اپ گریڈ کر رہے ہیں تاکہ ورژن 4.4 والا مسئلہ ختم ہو جائے
+          subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
+          
+          print("🏗️ Building APK with Wrapper...")
+          build = subprocess.run(['./gradlew', ':app:assembleDebug', '--no-daemon'], capture_output=True, text=True)
           
           print(build.stdout)
-          print(build.stderr)
-
           if build.returncode != 0:
-              print("❌ Build Failed in Python!")
-              exit(1) # اگر بلڈ فیل ہو تو ایکشن کو 'Fail' دکھانا ضروری ہے
+              print(f"❌ Build Failed Error:\n{build.stderr}")
+              exit(1)
           else:
-              print("✅ Build Success!")
+              print("✅ Success: System Pro Engine Ready!")
 
       - name: 📦 4. Capture APK
+        if: success()
         run: |
           mkdir -p output_apk
-          # تمام بننے والی APKs کو ڈھونڈ کر کاپی کریں
-          find . -name "*.apk" -exec cp {} output_apk/ \;
-          ls -R output_apk/
+          find . -name "*.apk" -exec cp {} output_apk/SystemPro_V13.apk \;
 
-      - name: 📤 5. Upload APK
+      - name: 📤 5. Delivery
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V13-Final
