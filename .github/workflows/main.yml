@@ -23,50 +23,52 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (Self-Healing)
+      - name: 🧠 3. Smart AI Logic Injection (Style-Healing)
         shell: python
         run: |
           import os, re, json
           
-          # Fix for Control Characters: Using strict=False to handle multiline code
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
-          
           try:
-              # پے لوڈ کو محفوظ طریقے سے لوڈ کریں
-              if raw_payload and raw_payload != "null":
-                  payload = json.loads(raw_payload, strict=False)
-              else:
-                  payload = {}
-          except Exception as e:
-              print(f"Payload Error: {e}")
+              payload = json.loads(raw_payload, strict=False) if raw_payload != "null" else {}
+          except:
               payload = {}
 
           pkg_name = payload.get("package_name", "com.faisal.systempro")
-          java_code = payload.get("java", "// System Pro Initialized")
+          java_code = payload.get("java", "// System Pro Active")
           xml_code = payload.get("xml", "")
           
-          # No Drinks Policy (سخت پابندی)
-          forbidden = ['drink', 'alcohol', 'beer', 'wine', 'ads']
-          for word in forbidden:
-              java_code = re.sub(word, "SystemProCore", java_code, flags=re.IGNORECASE)
-
-          # Auto-Package Injection
-          if java_code and "package" not in java_code:
-              java_code = f"package {pkg_name};\n\n" + java_code
+          # No Drinks Constraint
+          java_code = re.sub(r'drink|alcohol|beer', "SystemProCore", java_code, flags=re.IGNORECASE)
 
           pkg_path = pkg_name.replace('.', '/')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
-              f.write(java_code)
-          with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
-              f.write(xml_code)
+          # 1. Generate Missing Styles (ایرر حل کرنے کے لیے)
+          styles_xml = '''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="ActionButton" parent="Widget.AppCompat.Button">
+                  <item name="android:textAllCaps">false</item>
+                  <item name="android:textColor">#FFFFFF</item>
+              </style>
+              <style name="TabButton" parent="Widget.AppCompat.Button.Borderless">
+                  <item name="android:textColor">#00FF00</item>
+              </style>
+              <style name="BuildButton" parent="Widget.AppCompat.Button.Colored">
+                  <item name="android:textStyle">bold</item>
+              </style>
+          </resources>'''
+          
+          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
+          with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
 
+          # 2. Manifest with Theme Reference
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro AI" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -77,10 +79,9 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle & AndroidX Fix)
+      - name: 🚀 4. Build Engine (Gradle Optimizer)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
