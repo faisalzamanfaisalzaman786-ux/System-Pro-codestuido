@@ -21,13 +21,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ 3. Initial Assembly
+      - name: 🏗️ 3. Assembly & Folder Setup
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          # آؤٹ پٹ کے لیے مخصوص فولڈر بنانا
+          mkdir -p "SystemPro_Output"
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
-          # 'EOF' کو سنگل کوٹس میں بند کرنے سے باش ایرر ختم ہو جائے گا
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -36,31 +38,24 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-      - name: 🧠 3.5. AI Pre-Check (پہلی حفاظت)
-        id: pre_check
+      - name: 🧠 3.5. AI Pre-Check
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
           if [ -s "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
             RAW_JAVA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-            PROMPT="Fix syntax errors and missing imports: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
-            
+            PROMPT="Fix syntax/imports: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
             PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-              -H 'Content-Type: application/json' -d "$PAYLOAD")
-            
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" -H 'Content-Type: application/json' -d "$PAYLOAD")
             FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-            
             if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
                echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
             fi
           fi
 
       - name: 🚀 4. Smart Build
-        id: build_step
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "include ':app'" > settings.gradle
@@ -71,15 +66,25 @@ jobs:
           
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
+          android { 
+            namespace '$PKG_NAME'
+            compileSdk 34
+            defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
+            # APK کو مخصوص فولڈر میں بھیجنے کے لیے
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    outputFileName = "../../SystemPro_Output/SystemPro_v1.apk"
+                }
+            }
+          }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
           EOF
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1 || touch build_failed.flag
+          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1 || touch build_failed.flag
 
-      - name: 🩹 5. AI Auto-Repair (دوسری حفاظت)
+      - name: 🩹 5. AI Auto-Repair
         if: always() && hashFiles('build_failed.flag') != ''
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -88,15 +93,10 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ERROR_DATA=$(tail -n 100 build_log.txt | jq -sRr @json)
           JAVA_DATA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-          
           PROMPT="Fix build error: $ERROR_DATA. Code: $JAVA_DATA. Return ONLY Java code between [CODE_START] and [CODE_END]."
-          
           PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' -d "$PAYLOAD")
-          
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" -H 'Content-Type: application/json' -d "$PAYLOAD")
           FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-
           if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
              echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
              ./gradlew :app:assembleDebug --no-daemon
@@ -107,4 +107,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: SystemPro_Output/*.apk
