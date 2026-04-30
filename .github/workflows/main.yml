@@ -53,6 +53,8 @@ jobs:
               applicationId '$PKG_NAME'
               minSdk 24
               targetSdk 34
+              versionCode 1
+              versionName "1.0"
             }
           }
           dependencies { 
@@ -67,6 +69,7 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
+          # build_log میں تمام آؤٹ پٹ محفوظ کریں
           ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
@@ -74,14 +77,12 @@ jobs:
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Analyzing with System Pro AI..."
+          echo "Analyzing Errors..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
-          JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-          XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
-
-          PROMPT="Fix Android build error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Rules: Provide fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]. No talk."
+          
+          PROMPT="Fix Android build error: $ERROR_LOG. Provide only fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]."
           
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           
@@ -92,12 +93,10 @@ jobs:
           AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
           if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
-            echo "AI Fix found. Repairing..."
-            echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
-            ./gradlew assembleDebug --no-daemon
-          else
-            echo "No fix needed or AI failed."
+             echo "AI Fix found. Repairing..."
+             echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+             echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
+             ./gradlew assembleDebug --no-daemon
           fi
 
       - name: 📦 6. Final Export
@@ -105,4 +104,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-Build
-          path: app/build/outputs/apk/debug/*.apk
+          # پاتھ کو وائلڈ کارڈ کے ساتھ مزید لچکدار بنایا گیا ہے
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/*/*.apk
