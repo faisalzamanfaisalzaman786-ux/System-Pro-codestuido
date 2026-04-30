@@ -81,38 +81,35 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --info > build_log.txt 2>&1
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
-        # اہم تبدیلی: اگر سٹیپ 4 فیل ہو تو یہ لازمی چلے
         if: steps.build_step.outcome == 'failure'
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Build failed. Getting AI Solution..."
+          echo "Build failed. Starting AI Diagnosis..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # لاگز کو سکین کرنا
-          ERROR_LOG=$(tail -n 150 build_log.txt | jq -sRr @json)
+          ERROR_LOG=$(tail -n 200 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           
-          PROMPT="Android Build Error: $ERROR_LOG. Current Java Code: $JAVA_CODE. Fix the Java code. Return ONLY the code between [CODE_START] and [CODE_END]. No talking."
-          
-          JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
+          PROMPT="Fix Android error: $ERROR_LOG. Java: $JAVA_CODE. Return ONLY code between [CODE_START] and [CODE_END]."
           
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' -d "$JSON_DATA")
+            -H 'Content-Type: application/json' \
+            -d "{\"contents\": [{\"parts\": [{\"text\": $PROMPT}]}]}")
 
           AI_CONTENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
           
           if [[ "$AI_CONTENT" == *"[CODE_START]"* ]]; then
-             echo "AI Fix identified. Applying..."
+             echo "Applying Fix and Retrying Build..."
              echo "$AI_CONTENT" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
              ./gradlew :app:assembleDebug --no-daemon
           else
-             echo "AI could not provide a valid fix structure."
-             tail -n 50 build_log.txt
+             echo "AI fix failed or not structured. Check below logs:"
+             cat build_log.txt
              exit 1
           fi
 
@@ -120,5 +117,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-APK-Package
           path: app/build/outputs/apk/debug/*.apk
