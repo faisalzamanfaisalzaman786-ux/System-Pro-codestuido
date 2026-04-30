@@ -35,11 +35,9 @@ jobs:
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # فائلیں لکھنا
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
           
-          # بنیادی کنفیگریشن
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
           
@@ -73,33 +71,36 @@ jobs:
         run: |
           echo "Build failed. Invoking System Pro AI..."
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ERROR_LOG=$(tail -n 50 build_log.txt)
-          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
-          XML_FILE="app/src/main/res/layout/activity_main.xml"
           
-          # AI کو ڈیٹا بھیجنا
+          # ایرر لاگ، جاوا اور ایکس ایم ایل کو محفوظ طریقے سے انکوڈ کرنا تاکہ JSON خراب نہ ہو
+          ERROR_LOG=$(tail -n 30 build_log.txt | jq -sRr @json)
+          JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
+          XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
+          
+          PROMPT="The Android build failed with this error: $ERROR_LOG. Here is the Java code: $JAVA_CODE and XML: $XML_CODE. Please fix the error and return the full corrected Java and XML files. Use '---FILE_SPLIT---' as a separator between them. Return ONLY the code, no explanation."
+
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY" \
             -H 'Content-Type: application/json' \
             -d "{
               \"contents\": [{
                 \"parts\":[{
-                  \"text\": \"I have an Android build error: $ERROR_LOG. Java Code: $(cat $JAVA_FILE). XML Code: $(cat $XML_FILE). Fix the error and return the full corrected Java code and XML code separated by a unique delimiter '---FILE_SPLIT---'. Return ONLY the code.\"
+                  \"text\": $PROMPT
                 }]
               }]
             }")
 
-          # جواب سے کوڈ نکالنا اور فائلوں کو اپ ڈیٹ کرنا
-          CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g' | sed 's/```xml//g' | sed 's/```//g')
+          # ری اسپانس چیک کریں
+          CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g; s/```xml//g; s/```//g')
           
           if [[ "$CLEAN_CODE" == *"---FILE_SPLIT---"* ]]; then
             echo "AI found a fix. Patching files..."
-            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $1}' > "$JAVA_FILE"
-            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $2}' > "$XML_FILE"
+            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $1}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $2}' > "app/src/main/res/layout/activity_main.xml"
             
             echo "Retrying build with AI corrections..."
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI could not resolve the issue. Please check the logs."
+            echo "AI response was invalid or no fix found. Response was: $RESPONSE"
             exit 1
           fi
 
