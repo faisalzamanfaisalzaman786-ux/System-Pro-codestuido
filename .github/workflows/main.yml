@@ -25,16 +25,31 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout"
           
-          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          ${{ github.event.client_payload.java }}
+          # فولڈرز بنانا
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p "app/src/main/res/layout"
+          mkdir -p "app/src/main"
+
+          # مینی فیسٹ فائل بنانا (انتہائی ضروری)
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
+              <application android:label="SystemPro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
           EOF
+
+          # کوڈ فائلز بنانا
+          echo '${{ github.event.client_payload.java }}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '${{ github.event.client_payload.xml }}' > "app/src/main/res/layout/activity_main.xml"
           
-          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
-          ${{ github.event.client_payload.xml }}
-          EOF
-          
+          # گریڈل فائلز بنانا
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { 
@@ -62,16 +77,15 @@ jobs:
             implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
-          
-          # پریرمنشن پہلے ہی دے دیں
-          gradle wrapper --gradle-version 8.5
 
       - name: 🚀 4. Smart Build
         id: build_step
         continue-on-error: true
         run: |
+          # گریڈل انوائرنمنٹ سیٹ اپ
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
+          ./gradlew assembleDebug --stacktrace --no-daemon > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
         if: steps.build_step.outcome == 'failure'
@@ -81,14 +95,13 @@ jobs:
           echo "Analyzing with System Pro AI..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
+          ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
           
-          PROMPT="Fix Android build error: $ERROR_LOG. Provide only fixed Java code between [JAVA_FIX] and [JAVA_END]."
+          PROMPT="Fix this Android build error: $ERROR_LOG. Provide only the corrected Java code inside [JAVA_FIX] markers."
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' \
-            -d "$JSON_DATA")
+            -H 'Content-Type: application/json' -d "$JSON_DATA")
 
           AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
@@ -101,7 +114,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
-          # مخصوص پاتھ جہاں گریڈل فائلز رکھتا ہے
+          name: SystemPro-Final-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
