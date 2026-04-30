@@ -23,11 +23,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart Engine (V8.0 Master Link)
+      - name: 🧠 3. Smart Engine (Infrastructure & Crash Guard)
         shell: python
         run: |
           import os, re, json
           
+          # Payload Processing
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload, strict=False) if raw_payload != "null" else {}
 
@@ -40,7 +41,11 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # Auto-ID Injection (Preventing Symbol Not Found errors)
+          # CRASH FIX: Generate mandatory strings.xml
+          with open("app/src/main/res/values/strings.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
+
+          # UI FIX: ID Injection logic
           java_ids = set(re.findall(r'R\.id\.(\w+)', java_code))
           if len(xml_code) < 50:
               xml_code = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">'
@@ -54,22 +59,23 @@ jobs:
           elif "</LinearLayout>" in xml_code: xml_code = xml_code.replace("</LinearLayout>", f"{id_views}\n</LinearLayout>")
           else: xml_code += f"{id_views}\n</RelativeLayout>"
 
-          # Styles and Manifest Guard
+          # Theme Guard
           styles_xml = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
-          needed = set(re.findall(r'style/(\w+)', xml_code) + ["Theme.SystemPro", "ActionButton", "TabButton", "BuildButton"])
-          for s in needed:
+          needed_styles = set(re.findall(r'style/(\w+)', xml_code) + ["Theme.SystemPro", "ActionButton", "TabButton", "BuildButton"])
+          for s in needed_styles:
               styles_xml += f'    <style name="{s}" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="android:textAllCaps">false</item></style>\n'
           styles_xml += '</resources>'
 
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(xml_code)
           with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
+          
+          # Manifest Creation with String reference
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg_name}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="@string/app_name" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg_name}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🚀 4. Build APK (Direct Wrapper Fix)
+      - name: 🚀 4. Build APK (Direct Version Lock)
         run: |
-          # 1. انفراسٹرکچر سیٹ اپ
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
@@ -84,31 +90,29 @@ jobs:
           android { 
               namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
               compileSdk 34 
-              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "8.0" }
+              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "8.5" }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
           
-          # 2. زبردستی گریڈل 8.5 سیٹ کرنا (یہ پرانے 4.4.1 کو اوور رائڈ کرے گا)
-          # لاگ میں آنے والے ایرر کو ختم کرنے کے لیے یہ مرحلہ لازمی ہے
+          # Fix for Gradle 4.4.1 issue
           wget https://services.gradle.org/distributions/gradle-8.5-bin.zip -P /tmp
-          unzip -d /opt/gradle /tmp/gradle-8.5-bin.zip
+          sudo unzip -d /opt/gradle /tmp/gradle-8.5-bin.zip
           export PATH=$PATH:/opt/gradle/gradle-8.5/bin
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Universal Force Export
+      - name: 📦 5. Force Artifact Collection
         if: always()
         run: |
           mkdir -p final_zip
-          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V8_Stable.apk \;
-          # اگر APK نہیں بنتی تو ڈائریکٹری اسٹرکچر سیو کریں
-          ls -R > final_zip/Build_Details.txt
+          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V8_5.apk \;
+          ls -R > final_zip/SystemPro_Log.txt
 
       - name: 📤 6. Deployment
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V8-Final
+          name: SystemPro-Final-Build
           path: final_zip/
