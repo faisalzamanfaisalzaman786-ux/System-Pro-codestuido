@@ -8,6 +8,8 @@ on:
     branches: [ "main", "master" ]
 
 env:
+  # گریڈل کو آپ کی YAML کی بات ماننے پر مجبور کرنے کے لیے انوائرمنٹ ویری ایبلز
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.configureondemand=false"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -17,20 +19,20 @@ jobs:
       contents: write
 
     steps:
-      - name: 🛠️ 1. Infrastructure Sync
+      - name: 🛠️ 1. Environment Purge
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Environment Setup
+      - name: ☕ 2. Java Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Auto-Configuration Engine)
+      - name: 🧠 3. AI Architect (The Commander)
         shell: python
         run: |
           import os, json
-          
+          # پے لوڈ حاصل کرنا
           try:
               raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(raw_payload) if raw_payload != "null" else {}
@@ -40,79 +42,56 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
           
-          dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", "app/src/main/res/values"]
-          for d in dirs: os.makedirs(d, exist_ok=True)
+          # YAML کے حکم کے مطابق اسٹرکچر کی تیاری
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- پاور فل ڈسیژن: خودکار پراپرٹیز جنریشن ---
+          # --- گریڈل کو کنٹرول کرنے والی فائلز ---
+          # یہاں ہم گریڈل کو بتاتے ہیں کہ وہ صرف YAML کی بنائی ہوئی چیزیں دیکھے
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\n")
-              f.write("android.enableJetifier=true\n") # پرانی لائبریریز کو نئے میں بدلنے کے لیے
+              f.write("android.enableJetifier=true\n")
+              f.write("org.gradle.jvmargs=-Xmx2048m\n")
 
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          
+          with open("settings.gradle", "w") as f: 
+              f.write("include ':app'\n")
+
+          # مین بلڈ فائل (گریڈل کو YAML کے لاجک میں باندھنا)
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
               f.write("allprojects { repositories { google(); mavenCentral() } }")
 
-          # --- ایپ ماڈیول (AndroidX Ready) ---
-          app_gradle = f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "12.2"
-              }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }}
-          """
-          with open("app/build.gradle", "w") as f: f.write(app_gradle)
+          # ایپ ماڈیول (YAML کی ہدایات کے عین مطابق)
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\n")
+              f.write(f"android {{ namespace '{pkg_name}'\ncompileSdk 34\n")
+              f.write(f"defaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '12.4' }} }}\n")
+              f.write(f"dependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
 
-          # --- ریسورسز اور مینی فیسٹ ---
-          with open("app/src/main/res/values/strings.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>')
+          # مینی فیسٹ اور جاوا (جو YAML سے آرہا ہے)
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:allowBackup="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
-
-          # جاوا لاجک
-          java_code = payload.get("java", f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText(\"System Pro V12.2 Ready\"); tv.setGravity(17); tv.setTextSize(32); tv.setTextColor(android.graphics.Color.GREEN); setContentView(tv); }} }}")
+          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"YAML Master Control: Active\"); t.setGravity(17); t.setTextSize(25); t.setTextColor(android.graphics.Color.BLUE); setContentView(t); }} }}")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-      - name: 🚀 4. Final Build Execution
+      - name: 🚀 4. Execute YAML Commands
         run: |
+          # گریڈل کو یہاں صرف ایک آلے کے طور پر استعمال کیا جا رہا ہے
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
+          # '--no-build-cache' کا اضافہ کیا گیا ہے تاکہ گریڈل اپنی پرانی یادداشت استعمال نہ کرے
+          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      - name: 📦 5. Output Management
+      - name: 📦 5. Capture Result
         if: always()
         run: |
-          mkdir -p build_output
-          find . -name "*.apk" -type f -exec cp {} build_output/SystemPro_V12.apk \;
+          mkdir -p final_output
+          find . -name "*.apk" -type f -exec cp {} final_output/SystemPro_V12.apk \;
 
-      - name: 📤 6. Upload APK
+      - name: 📤 6. Deliver to User
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V12-Final-APK
-          path: build_output/
+          path: final_output/
