@@ -23,14 +23,12 @@ jobs:
 
       - name: 🏗️ 3. Assembly & Folder Setup
         run: |
-          # پے لوڈ سے ڈیٹا نکالنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
           mkdir -p "SystemPro_Output"
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
-          # جاوا اور ایکس ایم ایل ڈیٹا انجکشن
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -44,7 +42,6 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "include ':app'" > settings.gradle
           
-          # build.gradle کی تیاری
           cat <<'EOF' > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
@@ -64,14 +61,13 @@ jobs:
           }
           EOF
           
-          # بلڈ پروسیس
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1 || touch build_failed.flag
           
-          # آؤٹ پٹ فائل کی تلاش اور کاپی
+          # فائنل سرچ اور کاپی لاجک (پورے رنر میں تلاش)
           mkdir -p SystemPro_Output
-          find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
+          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
 
       - name: 🩹 5. AI Auto-Repair
         if: always() && hashFiles('build_failed.flag') != ''
@@ -94,7 +90,7 @@ jobs:
           if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
              echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
              ./gradlew :app:assembleDebug --no-daemon
-             find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
+             find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
           fi
 
       - name: 📦 6. Final Export
@@ -103,3 +99,4 @@ jobs:
         with:
           name: SystemPro-Final-APK
           path: SystemPro_Output/SystemPro_v1.apk
+          if-no-files-found: warn
