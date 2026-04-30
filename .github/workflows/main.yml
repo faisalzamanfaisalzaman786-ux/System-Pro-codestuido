@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (XML Shield Edition)
+      - name: 🧠 3. Self-Healing AI Compiler (Smart Resource Generator)
         shell: python
         run: |
           import os, re, json
@@ -46,46 +46,46 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- XML Repair Logic (Safe Injection) ---
-          ids_needed = re.findall(r'R\.id\.(\w+)', java_code)
-          if ids_needed:
-              dummy_elements = ""
-              for idx in set(ids_needed):
-                  if f'android:id="@+id/{idx}"' not in xml_code:
-                      dummy_elements += f'\n    <View android:id="@+id/{idx}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
-              
-              # آخری ٹیگ ڈھونڈ کر اس سے پہلے آئی ڈیز انجیکٹ کرنا
-              root_end_tags = ["</RelativeLayout>", "</LinearLayout>", "</ConstraintLayout>", "</FrameLayout>", "</androidx.constraintlayout.widget.ConstraintLayout>"]
-              repaired = False
-              for tag in root_end_tags:
-                  if tag in xml_code:
-                      xml_code = xml_code.replace(tag, f"{dummy_elements}\n{tag}")
-                      repaired = True
-                      break
-              
-              if not repaired:
-                  # اگر کوئی بھی روٹ ٹیگ نہ ملے تو لکیری لے آؤٹ میں ریپ کریں
-                  xml_code = f'<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">\n{xml_code}\n{dummy_elements}\n</LinearLayout>'
-
-          # Layouts & Styles
-          layouts_needed = re.findall(r'R\.layout\.(\w+)', java_code)
-          for lyt in set(layouts_needed):
-              f_path = f"app/src/main/res/layout/{lyt}.xml"
-              if not os.path.exists(f_path) and lyt != "activity_main":
-                  with open(f_path, "w") as f:
-                      f.write('<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>')
-
-          with open("app/src/main/res/values/styles.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="ActionButton" parent="Widget.AppCompat.Button"/><style name="TabButton" parent="Widget.AppCompat.Button.Borderless"/><style name="BuildButton" parent="Widget.AppCompat.Button.Colored"/><style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="colorPrimary">#00FF00</item></style></resources>')
+          # --- سمارٹ XML جنریشن (جاوا کوڈ کی بنیاد پر) ---
+          ids_in_java = set(re.findall(r'R\.id\.(\w+)', java_code))
           
+          # اگر XML خالی ہے یا بہت چھوٹی ہے، تو ایک بنیادی ڈھانچہ بنائیں
+          if len(xml_code) < 50:
+              xml_code = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="16dp">\n</RelativeLayout>'
+
+          # تمام مسنگ آئی ڈیز کے لیے موزوں ویجیٹس خودکار طور پر لکھنا
+          generated_views = ""
+          for idx in ids_in_java:
+              if f'android:id="@+id/{idx}"' not in xml_code:
+                  # آئی ڈی کے نام سے اندازہ لگانا کہ وہ کیا ہے (مثال: btn -> Button, et -> EditText)
+                  if idx.startswith("btn") or "button" in idx.lower():
+                      generated_views += f'\n    <Button android:id="@+id/{idx}" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="{idx}" />'
+                  elif idx.startswith("et") or "edit" in idx.lower():
+                      generated_views += f'\n    <EditText android:id="@+id/{idx}" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="{idx}" />'
+                  elif idx.startswith("tv") or "text" in idx.lower():
+                      generated_views += f'\n    <TextView android:id="@+id/{idx}" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="{idx}" />'
+                  else:
+                      generated_views += f'\n    <View android:id="@+id/{idx}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
+
+          # XML کو صاف ستھرا بند کرنا اور نئے ویوز شامل کرنا
+          if "</RelativeLayout>" in xml_code:
+              xml_code = xml_code.replace("</RelativeLayout>", f"{generated_views}\n</RelativeLayout>")
+          elif "</LinearLayout>" in xml_code:
+              xml_code = xml_code.replace("</LinearLayout>", f"{generated_views}\n</LinearLayout>")
+          else:
+              xml_code = xml_code + "\n" + generated_views
+
+          # لے آؤٹ اور اسٹائلز لکھنا
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
+          with open("app/src/main/res/values/styles.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="colorPrimary">#00FF00</item></style></resources>')
 
           # Manifest
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:hardwareAccelerated="true">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
@@ -93,7 +93,7 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Stabilized)
+      - name: 🚀 4. Build Engine (Professional Compilation)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
@@ -105,22 +105,30 @@ jobs:
           EOF
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "2.1" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
+          android { 
+              namespace '$PKG_NAME'
+              compileSdk 34 
+              defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "2.5" } 
+          }
+          dependencies { 
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Export Output
+      - name: 📦 5. Export Smart Output
         if: always()
         run: |
           mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_V2_1.apk \;
+          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_Smart.apk \;
 
       - name: 📤 6. Deployment
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
-          path: SystemPro_Output/SystemPro_AI_V2_1.apk
+          name: SystemPro-Smart-Build
+          path: SystemPro_Output/SystemPro_AI_Smart.apk
