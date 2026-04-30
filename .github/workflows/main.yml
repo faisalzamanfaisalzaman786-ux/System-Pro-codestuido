@@ -21,16 +21,26 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ 3. Initial Assembly (Base64 Secure)
+      - name: 🏗️ 3. Safe Assembly (Python)
+        shell: python
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
-          
-          # پے لوڈ کو محفوظ طریقے سے ڈیکوڈ کر کے فائلز بنانا
-          echo "${{ github.event.client_payload.java }}" | base64 -d > "app/src/main/java/$PKG_PATH/MainActivity.java" || echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" | base64 -d > "app/src/main/res/layout/activity_main.xml" || echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          import os
+          # پے لوڈ وصول کرنا
+          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
+          pkg_path = pkg_name.replace('.', '/')
+          java_code = """${{ github.event.client_payload.java }}"""
+          xml_code = """${{ github.event.client_payload.xml }}"""
+
+          # فولڈرز بنانا
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
+
+          # فائلز لکھنا
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
+              f.write(java_code)
+          with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
+              f.write(xml_code)
 
       - name: 🚀 4. Smart Build
         run: |
@@ -59,7 +69,8 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
           
-          # آپ کے فزیکل فولڈر میں فائل کاپی کرنا
+          # آپ کے فزیکل فولڈر میں کاپی کرنا
+          mkdir -p SystemPro_Output
           find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
 
       - name: 📦 6. Final Export
