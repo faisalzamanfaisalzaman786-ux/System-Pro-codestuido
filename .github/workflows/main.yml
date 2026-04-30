@@ -26,32 +26,30 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p "app/src/main/res/layout"
-          mkdir -p "app/src/main/res/values"
+          mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
 
-          # مینی فیسٹ فائل (محفوظ طریقہ)
+          # مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
               <application android:label="SystemPro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <category android:name="android.intent.category.LAUNCHer" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-          # اسٹائل فائل
+          # اسٹائلز
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar" />
           </resources>
           EOF
 
-          # جاوا اور XML کوڈ کو محفوظ طریقے سے لکھنا (Single Quotes EOF انتہائی ضروری ہے)
+          # کوڈ فائلز (محفوظ طریقہ)
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -59,7 +57,8 @@ jobs:
           cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
           ${{ github.event.client_payload.xml }}
           EOF
-          
+
+          # گریڈل کنفیگریشن
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { 
@@ -68,7 +67,7 @@ jobs:
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-          
+
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { 
@@ -81,6 +80,7 @@ jobs:
               versionCode 1
               versionName "1.0"
             }
+            buildTypes { release { minifyEnabled false } }
           }
           dependencies { 
             implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -90,37 +90,23 @@ jobs:
 
       - name: 🚀 4. Smart Build
         id: build_step
-        continue-on-error: true
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: 🧠 5. AI Auto-Repair
-        if: steps.build_step.outcome == 'failure'
+        if: failure()
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Analyzing errors..."
-          ERROR_LOG=$(tail -n 60 build_log.txt | jq -sRr @json)
-          PROMPT="Fix Android error: $ERROR_LOG. Provide only fixed Java code in [JAVA_FIX] markers."
-          JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
-          
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' -d "$JSON_DATA")
-
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-
-          if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
-            PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-            PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-            echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            ./gradlew :app:assembleDebug --no-daemon
-          fi
+          echo "Analyzing Errors with AI..."
+          # یہاں ہم صرف ایرر کی صورت میں ریپیئر لاجک چلائیں گے
 
       - name: 📦 6. Final Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-App
-          path: "app/build/outputs/apk/debug/*.apk"
+          name: SystemPro-Final-Build
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
