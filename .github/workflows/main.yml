@@ -20,6 +20,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
       - name: 🏗️ 3. Assembly
         run: |
@@ -28,28 +29,28 @@ jobs:
           
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
 
-          # مینی فیسٹ
+          # مینی فیسٹ فائل
           cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="SystemPro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHer" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>
           EOF
 
-          # اسٹائلز
+          # اسٹائلز (ایرر سے بچنے کے لیے ضروری)
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar" />
+              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar" />
           </resources>
           EOF
 
-          # کوڈ فائلز (محفوظ طریقہ)
+          # جاوا اور XML کوڈ (سخت فارمیٹ)
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -58,33 +59,34 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # گریڈل کنفیگریشن
+          # گریڈل کنفیگریشن فائلز
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
-          buildscript { 
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
           }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { 
-            namespace '$PKG_NAME'
-            compileSdk 34
-            defaultConfig { 
-              applicationId '$PKG_NAME'
-              minSdk 24
-              targetSdk 34
-              versionCode 1
-              versionName "1.0"
-            }
-            buildTypes { release { minifyEnabled false } }
+          android {
+              namespace '$PKG_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PKG_NAME'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
           }
-          dependencies { 
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
@@ -95,18 +97,10 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: 🧠 5. AI Auto-Repair
-        if: failure()
-        env:
-          AI_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "Analyzing Errors with AI..."
-          # یہاں ہم صرف ایرر کی صورت میں ریپیئر لاجک چلائیں گے
-
-      - name: 📦 6. Final Export
+      - name: 📦 5. Final Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
+          name: SystemPro-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
