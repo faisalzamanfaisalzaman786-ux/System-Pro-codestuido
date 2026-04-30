@@ -34,37 +34,33 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
-
           printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
-          
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
-
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
           EOF
 
       - name: 5. Primary Build Attempt
         id: build_step
+        continue-on-error: true
         run: |
           if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
+          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1 || echo "BUILD_FAILED" > status.txt
 
       - name: 6. AI Auto-Fix (On Failure)
-        if: failure()
+        if: steps.build_step.outcome == 'failure' || hashFiles('status.txt') != ''
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
@@ -72,14 +68,14 @@ jobs:
           echo "Build failed. Invoking System Pro AI..."
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          ERROR_LOG=$(tail -n 30 build_log.txt | jq -sRr @json)
+          ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
           
           echo "{
             \"contents\": [{
               \"parts\":[{
-                \"text\": \"The Android build failed with this error: $ERROR_LOG. Here is the Java code: $JAVA_CODE and XML: $XML_CODE. Please fix the error and return the full corrected Java and XML files. Use '---FILE_SPLIT---' as a separator between them. Return ONLY the code, no explanation.\"
+                \"text\": \"Fix this Android error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Return only fixed code separated by ---FILE_SPLIT---. No talk.\"
               }]
             }]
           }" > payload.json
@@ -91,14 +87,12 @@ jobs:
           CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g; s/```xml//g; s/```//g')
           
           if [[ "$CLEAN_CODE" == *"---FILE_SPLIT---"* ]]; then
-            echo "AI found a fix. Patching files..."
+            echo "AI Fix applied. Re-building..."
             echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $1}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
             echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $2}' > "app/src/main/res/layout/activity_main.xml"
-            
-            echo "Retrying build with AI corrections..."
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI error or invalid response."
+            echo "AI failed to provide a valid fix."
             exit 1
           fi
 
@@ -107,4 +101,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-AI-Fixed
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
