@@ -1,26 +1,3 @@
-name: System-Pro-AI-Engine
-
-on:
-  repository_dispatch:
-    types: [build-app]
-  push:
-    branches: [main]
-
-jobs:
-  System-Pro-Build-Job:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: 🛠️ 1. Setup Environment
-        uses: actions/checkout@v4
-
-      - name: ☕ 2. Java Configuration
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
       - name: 🏗️ 3. Assembly
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
@@ -53,8 +30,8 @@ jobs:
               applicationId '$PKG_NAME'
               minSdk 24
               targetSdk 34
-              versionCode 1
-              versionName "1.0"
+              versionCode 1            # یہ لائن لازمی ہے
+              versionName "1.0"        # یہ لائن لازمی ہے
             }
           }
           dependencies { 
@@ -65,46 +42,8 @@ jobs:
 
       - name: 🚀 4. Smart Build
         id: build_step
-        continue-on-error: true
         run: |
+          # گریڈل ریپر بنانا تاکہ ورژن فکس رہے
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # build_log میں تمام آؤٹ پٹ محفوظ کریں
-          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
-
-      - name: 🧠 5. AI Auto-Repair
-        if: steps.build_step.outcome == 'failure'
-        env:
-          AI_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "Analyzing Errors..."
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
-          
-          PROMPT="Fix Android build error: $ERROR_LOG. Provide only fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]."
-          
-          JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
-          
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' \
-            -d "$JSON_DATA")
-
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-
-          if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
-             echo "AI Fix found. Repairing..."
-             echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-             echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
-             ./gradlew assembleDebug --no-daemon
-          fi
-
-      - name: 📦 6. Final Export
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Final-Build
-          # پاتھ کو وائلڈ کارڈ کے ساتھ مزید لچکدار بنایا گیا ہے
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/*/*.apk
+          ./gradlew assembleDebug --no-daemon
