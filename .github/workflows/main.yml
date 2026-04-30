@@ -9,7 +9,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.vfs.watch=false"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.vfs.watch=false -Dorg.gradle.projectcachedir=/tmp/gradle-cache"
 
 jobs:
   Unified-AI-Build-Engine:
@@ -18,7 +18,7 @@ jobs:
       contents: write
 
     steps:
-      - name: 🛠️ 1. Environment Purge
+      - name: 🛠️ 1. Environment Prep
         uses: actions/checkout@v4
 
       - name: ☕ 2. Java Runtime Setup
@@ -27,11 +27,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Stable File System)
+      - name: 🧠 3. AI Architect (Sandbox Engine)
         shell: python
         run: |
-          import os, json, time
+          import os, json, shutil
           
+          # پے لوڈ پروسیسنگ
           try:
               raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(raw_payload) if raw_payload != "null" else {}
@@ -41,11 +42,15 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
           
-          # ڈائریکٹریز بنانا
-          dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", "app/src/main/res/values"]
-          for d in dirs: os.makedirs(d, exist_ok=True)
+          # تمام پرانی اسٹیٹ کو ختم کرنا
+          if os.path.exists('app'): shutil.rmtree('app')
+          
+          # نیا اسٹرکچر بنانا
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # فائلز لکھنا
+          # فائلز لکھنا (YAML کنٹرولڈ)
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
           
@@ -65,8 +70,9 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "12.5"
+                  versionName "12.6"
               }}
+              buildTypes {{ release {{ minifyEnabled false }} }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -80,37 +86,32 @@ jobs:
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
+                          <action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>"""
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V12.5 Stable\"); t.setGravity(17); t.setTextSize(30); setContentView(t); }} }}")
+          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V12.6 Sandbox\"); t.setGravity(17); t.setTextSize(30); setContentView(t); }} }}")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
-          
-          # سسٹم کو وقت دینا تاکہ فائلیں ڈسک پر سیٹ ہو جائیں
-          print("Stabilizing file system...")
 
-      - name: 🛡️ 4. Force Sync & Build
+      - name: 🛡️ 4. Forced Execution (No-Cache Mode)
         run: |
-          # سسٹم کو حکم دینا کہ تمام فائلیں سنک کرے
           sync
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # '--no-watch-fs' گریڈل کو فائل سسٹم مانیٹر کرنے سے روکتا ہے (جو کریش کی وجہ ہے)
-          ./gradlew clean :app:assembleDebug --no-daemon --no-watch-fs --stacktrace
+          # یہاں ہم گریڈل کو مجبور کر رہے ہیں کہ وہ اپنی یادداشت (Cache) کو بالکل استعمال نہ کرے
+          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --no-configuration-cache --stacktrace
 
-      - name: 📦 5. Output Management
+      - name: 📦 5. Delivery Management
         if: always()
         run: |
-          mkdir -p build_apk
-          find . -name "*.apk" -type f -exec cp {} build_apk/SystemPro_V12.apk \;
+          mkdir -p final_apk
+          find . -name "*.apk" -type f -exec cp {} final_apk/SystemPro_V12.apk \;
 
-      - name: 📤 6. Deliver
+      - name: 📤 6. Artifact Dispatch
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V12-Final-APK
-          path: build_apk/
+          path: final_apk/
