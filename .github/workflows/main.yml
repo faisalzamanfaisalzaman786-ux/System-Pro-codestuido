@@ -27,23 +27,26 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
-          # انجیکشن
-          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          # 'EOF' کو سنگل کوٹس میں بند کرنے سے باش ایرر ختم ہو جائے گا
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
+          
+          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
+          ${{ github.event.client_payload.xml }}
+          EOF
 
       - name: 🧠 3.5. AI Pre-Check (پہلی حفاظت)
         id: pre_check
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "AI analyzing initial code..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # اگر فائل خالی نہ ہو تب ہی AI چلے
           if [ -s "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
             RAW_JAVA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-            PROMPT="Fix any syntax errors or missing imports in this Android Java: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
+            PROMPT="Fix syntax errors and missing imports: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
             
             PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
@@ -53,7 +56,6 @@ jobs:
             
             if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
                echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-               echo "AI Pre-Check successfully updated the code."
             fi
           fi
 
@@ -62,17 +64,17 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
+          cat <<'EOF' > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
           EOF
           
-          # بلڈ لاجک - یہاں ہم '|| true' ہٹا رہے ہیں تاکہ ایرر پکڑا جائے
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1 || touch build_failed.flag
@@ -82,14 +84,12 @@ jobs:
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Build failed. AI is fixing the error..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
           ERROR_DATA=$(tail -n 100 build_log.txt | jq -sRr @json)
           JAVA_DATA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           
-          PROMPT="Fix this build error: $ERROR_DATA. Code: $JAVA_DATA. Return ONLY Java code between [CODE_START] and [CODE_END]."
+          PROMPT="Fix build error: $ERROR_DATA. Code: $JAVA_DATA. Return ONLY Java code between [CODE_START] and [CODE_END]."
           
           PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
