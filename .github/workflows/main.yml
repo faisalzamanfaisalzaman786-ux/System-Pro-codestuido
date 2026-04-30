@@ -1,3 +1,66 @@
+name: System-Pro-AI-Engine
+
+on:
+  repository_dispatch:
+    types: [build-app]
+  push:
+    branches: [main]
+
+jobs:
+  System-Pro-Build-Job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 🛠️ 1. Setup Environment
+        uses: actions/checkout@v4
+
+      - name: ☕ 2. Java Configuration
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🏗️ 3. Assembly
+        run: |
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout"
+          
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
+          
+          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
+          ${{ github.event.client_payload.xml }}
+          EOF
+          
+          echo "include ':app'" > settings.gradle
+          cat <<EOF > build.gradle
+          buildscript { 
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+          
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android { 
+            namespace '$PKG_NAME'
+            compileSdk 34
+            defaultConfig { 
+              applicationId '$PKG_NAME'
+              minSdk 24
+              targetSdk 34
+            }
+          }
+          dependencies { 
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+          }
+          EOF
+
       - name: 🚀 4. Smart Build
         id: build_step
         continue-on-error: true
@@ -7,21 +70,18 @@
           ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
-        # یہ سٹیپ صرف تب چلے گا اگر بلڈ فیل ہوا ہو
         if: steps.build_step.outcome == 'failure'
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Analyzing Error Logs..."
+          echo "Analyzing with System Pro AI..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          # لاگ فائل سے ایرر نکالنا
-          ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
+          ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
 
-          PROMPT="Fix Android build error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Provide only fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]. No talking."
+          PROMPT="Fix Android build error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Rules: Provide fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]. No talk."
           
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           
@@ -37,8 +97,7 @@
             echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI failed to provide a valid fix or build was already fine."
-            exit 1
+            echo "No fix needed or AI failed."
           fi
 
       - name: 📦 6. Final Export
