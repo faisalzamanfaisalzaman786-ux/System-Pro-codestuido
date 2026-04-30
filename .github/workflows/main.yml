@@ -12,21 +12,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 🛠️ 1. Setup Environment
+      - name: Setup Environment
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Configuration
+      - name: Java Configuration
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ 3. Assembly & Folder Setup
+      - name: Assembly and Folder Setup
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          # آؤٹ پٹ کے لیے مخصوص فولڈر بنانا
           mkdir -p "SystemPro_Output"
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
@@ -38,7 +36,7 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-      - name: 🧠 3.5. AI Pre-Check
+      - name: AI Pre-Check
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -46,7 +44,7 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           if [ -s "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
             RAW_JAVA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-            PROMPT="Fix syntax/imports: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
+            PROMPT="Fix syntax errors and missing imports in this Java code: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
             PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" -H 'Content-Type: application/json' -d "$PAYLOAD")
             FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
@@ -55,7 +53,7 @@ jobs:
             fi
           fi
 
-      - name: 🚀 4. Smart Build
+      - name: Smart Build
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           echo "include ':app'" > settings.gradle
@@ -70,21 +68,24 @@ jobs:
             namespace '$PKG_NAME'
             compileSdk 34
             defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
-            # APK کو مخصوص فولڈر میں بھیجنے کے لیے
             applicationVariants.all { variant ->
                 variant.outputs.all { output ->
                     outputFileName = "../../SystemPro_Output/SystemPro_v1.apk"
                 }
             }
           }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
+          dependencies { 
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1 || touch build_failed.flag
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1 || touch build_failed.flag
 
-      - name: 🩹 5. AI Auto-Repair
+      - name: AI Auto-Repair
         if: always() && hashFiles('build_failed.flag') != ''
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -93,7 +94,7 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ERROR_DATA=$(tail -n 100 build_log.txt | jq -sRr @json)
           JAVA_DATA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
-          PROMPT="Fix build error: $ERROR_DATA. Code: $JAVA_DATA. Return ONLY Java code between [CODE_START] and [CODE_END]."
+          PROMPT="The Android build failed. Error: $ERROR_DATA. Code: $JAVA_DATA. Fix it and return ONLY Java code between [CODE_START] and [CODE_END]."
           PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" -H 'Content-Type: application/json' -d "$PAYLOAD")
           FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
@@ -102,7 +103,7 @@ jobs:
              ./gradlew :app:assembleDebug --no-daemon
           fi
 
-      - name: 📦 6. Final Export
+      - name: Final Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
