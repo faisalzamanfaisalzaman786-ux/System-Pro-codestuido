@@ -22,23 +22,35 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # یہاں کیشے ہٹا دی گئی ہے تاکہ "No file matched" والا ایرر نہ آئے
 
       - name: 🧠 3. Smart AI Logic Injection (Self-Healing)
         shell: python
         run: |
           import os, re, json
-          raw_payload = """${{ toJson(github.event.client_payload) }}"""
-          payload = json.loads(raw_payload) if raw_payload and raw_payload != "null" else {}
+          
+          # Fix for Control Characters: Using strict=False to handle multiline code
+          raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
+          
+          try:
+              # پے لوڈ کو محفوظ طریقے سے لوڈ کریں
+              if raw_payload and raw_payload != "null":
+                  payload = json.loads(raw_payload, strict=False)
+              else:
+                  payload = {}
+          except Exception as e:
+              print(f"Payload Error: {e}")
+              payload = {}
+
           pkg_name = payload.get("package_name", "com.faisal.systempro")
-          java_code = payload.get("java", "// System Pro Core Active")
+          java_code = payload.get("java", "// System Pro Initialized")
           xml_code = payload.get("xml", "")
           
-          # No Drinks Policy Implementation
+          # No Drinks Policy (سخت پابندی)
           forbidden = ['drink', 'alcohol', 'beer', 'wine', 'ads']
           for word in forbidden:
               java_code = re.sub(word, "SystemProCore", java_code, flags=re.IGNORECASE)
 
+          # Auto-Package Injection
           if java_code and "package" not in java_code:
               java_code = f"package {pkg_name};\n\n" + java_code
 
@@ -69,11 +81,10 @@ jobs:
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           
-          # Create properties for AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript { 
             repositories { google(); mavenCentral() }
