@@ -18,60 +18,80 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Auto-Version Repair)
+      - name: 🧠 3. AI Architect (Auto-Resource Patching)
         shell: python
         run: |
           import os, subprocess, json, shutil
 
-          # پے لوڈ حاصل کرنا
+          # پے لوڈ پروسیسنگ
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload) if raw_payload != "null" else {}
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. پروجیکٹ اسٹرکچر کی تیاری
+          # 1. پروفیشنل پروجیکٹ اسٹرکچر
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
+          # --- XML فائلز کی تیاری (جو ایرر ختم کریں گی) ---
+          # 1. Dialog Settings Layout (جس کی وجہ سے ایرر آ رہا تھا)
+          dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content"
+              android:orientation="vertical" android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Repo Name" />
+          </LinearLayout>"""
+          with open("app/src/main/res/layout/dialog_settings.xml", "w") as f: f.write(dialog_xml)
+
+          # 2. اسٹرنگز فائل
+          with open("app/src/main/res/values/strings.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
+
+          # 3. گریڈل کنفیگریشن
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
-          
-          # جدید گریڈل ورژن کے مطابق build.gradle
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.2' }} }}")
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.3' }} }}")
+              f.write("\ndependencies { implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }")
 
+          # 4. مینی فیسٹ
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V13.2 Stable\"); t.setGravity(17); setContentView(t); }} }}")
+          # 5. جاوا کوڈ (پے لوڈ سے)
+          java_code = payload.get("java", "")
+          if not java_code:
+              java_code = f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(android.R.layout.simple_list_item_1); }} }}"
+          
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-          # 2. ورژن اپ گریڈ اور بلڈ
-          print("🚀 Upgrading Gradle to 8.5...")
-          # یہاں ہم ریپر کو اپ گریڈ کر رہے ہیں تاکہ ورژن 4.4 والا مسئلہ ختم ہو جائے
+          # --- بلڈ پروسیس ---
+          print("🚀 Upgrading Gradle & Starting Final Build...")
           subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
-          
-          print("🏗️ Building APK with Wrapper...")
           build = subprocess.run(['./gradlew', ':app:assembleDebug', '--no-daemon'], capture_output=True, text=True)
           
           print(build.stdout)
           if build.returncode != 0:
-              print(f"❌ Build Failed Error:\n{build.stderr}")
+              print(f"❌ Error Analysis:\n{build.stderr}")
               exit(1)
           else:
-              print("✅ Success: System Pro Engine Ready!")
+              print("✅ MISSION SUCCESS: APK GENERATED!")
 
-      - name: 📦 4. Capture APK
+      - name: 📦 4. Capture Result
         if: success()
         run: |
           mkdir -p output_apk
-          find . -name "*.apk" -exec cp {} output_apk/SystemPro_V13.apk \;
+          find . -name "*.apk" -exec cp {} output_apk/SystemPro_Final.apk \;
 
-      - name: 📤 5. Delivery
+      - name: 📤 5. Final Dispatch
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V13-Final
+          name: System-Pro-V13-APK
           path: output_apk/
