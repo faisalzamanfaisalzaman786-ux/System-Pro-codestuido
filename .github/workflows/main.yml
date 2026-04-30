@@ -1,125 +1,50 @@
 name: System-Pro-Master-Framework-V12
 
 on:
-  repository_dispatch:
-    types: [build-app]
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # دستی طور پر بلڈ رن کرنے کے لیے
 
 jobs:
   Unified-Build-Engine:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
+
     steps:
-      - name: 🛠️ 1. Global Setup
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java 17 Production Environment
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: 🧠 3. System-Pro AI Architect (Deep Scanning)
-        shell: python
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v2
+
+      # اگر آپ کے پاس کوئی سیکریٹ کیز ہیں تو یہاں انٹیگریٹ کی جا سکتی ہیں
+      - name: Prepare Environment
         run: |
-          import os, re, json
-          
-          # 1. Payload & Metadata
-          raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
-          payload = json.loads(raw_payload, strict=False) if raw_payload != "null" else {}
-          pkg_name = payload.get("package_name", "com.faisal.systempro")
-          java_code = payload.get("java", "")
-          xml_code = payload.get("xml", "").strip()
-          pkg_path = pkg_name.replace('.', '/')
+          echo "Setting up professional build environment..."
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
 
-          # 2. Universal Directory Structure
-          dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", 
-                  "app/src/main/res/values", "app/src/main/res/drawable", "app/src/main/res/xml"]
-          for d in dirs: os.makedirs(d, exist_ok=True)
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug --stacktrace
 
-          # 3. Intelligent Manifest Synthesis (Permissions & Features)
-          all_perms = {
-              "INTERNET": ["Http", "OkHttp", "Retrofit", "WebView", "socket"],
-              "READ_EXTERNAL_STORAGE": ["File", "path", "Uri", "upload"],
-              "WRITE_EXTERNAL_STORAGE": ["save", "download", "FileOutputStream"],
-              "CAMERA": ["Camera", "SurfaceView", "Capture"],
-              "ACCESS_FINE_LOCATION": ["Location", "GPS", "Maps"]
-          }
-          found_perms = [f'<uses-permission android:name="android.permission.{p}" />' for p, keys in all_perms.items() if any(k in java_code for k in keys)]
-          
-          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">\n'
-          manifest += "\n".join(found_perms) + '\n<application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:hardwareAccelerated="true" android:allowBackup="true">\n'
-          manifest += f'<activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity>\n'
-          manifest += '</application></manifest>'
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
-
-          # 4. Pro-Layout Engine (Logic-to-UI Sync)
-          java_ids = set(re.findall(r'R\.id\.(\w+)', java_code))
-          java_layouts = set(re.findall(r'R\.layout\.(\w+)', java_code)) or {"activity_main"}
-
-          for layout in java_layouts:
-              if layout == "activity_main" and xml_code:
-                  content = xml_code
-              else:
-                  # خودکار فنکشنل UI کی تخلیق
-                  content = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0A0A0A">\n'
-                  for jid in java_ids:
-                      content += f'    <View android:id="@+id/{jid}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />\n'
-                  content += '</RelativeLayout>'
-              with open(f"app/src/main/res/layout/{layout}.xml", "w") as f: f.write(content)
-
-          # 5. Global Styles & Theme (Glassmorphism Neon)
-          with open("app/src/main/res/values/colors.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><resources><color name="neon_green">#39FF14</color><color name="dark_bg">#050505</color></resources>')
-          
-          styles = '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="android:windowBackground">@color/dark_bg</item><item name="colorPrimary">@color/neon_green</item></style></resources>'
-          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles)
-          with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
-
-          # 6. Final Source Code Placement
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
-
-      - name: 🚀 4. Broad-Spectrum Build (Gradle Master)
-        run: |
-          printf "android.useAndroidX=true\nandroid.enableJetifier=true\n" > gradle.properties
-          echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
-          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android { 
-              namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
-              compileSdk 34
-              defaultConfig { minSdk 24; targetSdk 34; versionCode 1; versionName "12.0" }
-              buildFeatures { viewBinding true }
-          }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
-          wget https://services.gradle.org/distributions/gradle-8.5-bin.zip -P /tmp
-          sudo unzip -d /opt/gradle /tmp/gradle-8.5-bin.zip
-          export PATH=$PATH:/opt/gradle/gradle-8.5/bin
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
-
-      - name: 📦 5. Final Delivery
-        if: always()
-        run: |
-          mkdir -p final_output
-          find . -name "*.apk" -type f -exec cp {} final_output/System_Pro_Final_V12.apk \;
-
-      - name: 📤 6. Upload Stable Artifact
+      - name: Upload Professional APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V12-Foundation
-          path: final_output/
+          name: System-Pro-V12-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      - name: Build Summary
+        if: success()
+        run: echo "System Pro V12 Build Completed Successfully!"
