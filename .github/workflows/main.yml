@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (Final ID Healing)
+      - name: 🧠 3. Smart AI Logic Injection (Full Resource Healing)
         shell: python
         run: |
           import os, re, json
@@ -38,7 +38,7 @@ jobs:
           java_code = payload.get("java", "// System Pro Active")
           xml_code = payload.get("xml", "")
           
-          # No Drinks Constraint: ہم صرف ضروری پروفیشنل لاجک رکھ رہے ہیں
+          # No Drinks Constraint
           java_code = re.sub(r'drink|alcohol|beer', "SystemProCore", java_code, flags=re.IGNORECASE)
 
           pkg_path = pkg_name.replace('.', '/')
@@ -46,7 +46,7 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. Styles & Themes (Neon/Dark Mode Support)
+          # 1. Styles & Themes
           styles_xml = '''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="ActionButton" parent="Widget.AppCompat.Button"><item name="android:textAllCaps">false</item></style>
@@ -58,18 +58,23 @@ jobs:
               </style>
           </resources>'''
           
-          # 2. Layout Correction: Ensuring IDs exist
-          # اگر XML میں IDs نہیں ہیں تو ہم ڈیفالٹ Layout میں ان پٹ فیلڈز شامل کر رہے ہیں
-          missing_ids = ['etPkgName', 'etGhToken', 'etGhRepo', 'etAppName']
-          for mid in missing_ids:
-              if mid not in xml_code:
-                  # یہ لاجک XML کے آخر میں ان IDs کو "Hidden" یا "Dummy" فیلڈز کے طور پر ڈال دے گی تاکہ کمپائلر فیل نہ ہو
-                  dummy_field = f'\n    <EditText android:id="@+id/{mid}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
-                  xml_code = xml_code.replace('</RelativeLayout>', f'{dummy_field}\n</RelativeLayout>').replace('</ConstraintLayout>', f'{dummy_field}\n</ConstraintLayout>')
+          # 2. Dialog Settings Layout (مسنگ فائل بنانا)
+          dialog_xml = '''<?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:padding="16dp">
+              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
+              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
+              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
+              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Repo Name" />
+          </LinearLayout>'''
 
           # فائلیں لکھنا
           with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
           with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
+          with open("app/src/main/res/layout/dialog_settings.xml", "w") as f: f.write(dialog_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
 
@@ -87,7 +92,7 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle Optimizer)
+      - name: 🚀 4. Build Engine (Final Compilation)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
@@ -129,5 +134,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AI-Final-Build
+          name: SystemPro-AI-Package
           path: SystemPro_Output/SystemPro_AI_Final.apk
