@@ -23,14 +23,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (Final Resource Sync)
+      - name: 🧠 3. Smart AI Logic Injection (Crash-Proof Edition)
         shell: python
         run: |
           import os, re, json
           
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           try:
-              payload = json.loads(raw_payload, strict=False) if raw_payload != "null" else {}
+              # Handling 'null' error from your first screenshot
+              if not raw_payload or raw_payload.strip() == "" or raw_payload == "null":
+                  payload = {}
+              else:
+                  payload = json.loads(raw_payload, strict=False)
           except:
               payload = {}
 
@@ -38,17 +42,15 @@ jobs:
           java_code = payload.get("java", "// System Pro Active")
           xml_code = payload.get("xml", "")
           
-          # 1. No Drinks Policy
-          java_code = re.sub(r'drink|alcohol|beer', "SystemProCore", java_code, flags=re.IGNORECASE)
+          # 1. No Drinks Policy (Strict)
+          java_code = re.sub(r'drink|alcohol|beer|wine', "SystemProCore", java_code, flags=re.IGNORECASE)
 
           pkg_path = pkg_name.replace('.', '/')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- سمارٹ ریسورس ہینڈلنگ ---
-          
-          # مسنگ اسٹائلز کو ڈیفائن کرنا (لاگ کے مطابق)
+          # 2. Universal Styles (To prevent AAPT errors)
           styles_content = '''<?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="ActionButton" parent="Widget.AppCompat.Button"><item name="android:textAllCaps">false</item></style>
@@ -60,11 +62,11 @@ jobs:
               </style>
           </resources>'''
 
-          # ڈائنامک فائل اور آئی ڈی جنریشن
+          # 3. Future-Proof ID & Layout Generation
           layouts_needed = re.findall(r'R\.layout\.(\w+)', java_code)
           for lyt in set(layouts_needed):
               f_path = f"app/src/main/res/layout/{lyt}.xml"
-              if not os.path.exists(f_path) and lyt != "activity_main":
+              if not os.path.exists(f_path):
                   with open(f_path, "w") as f:
                       f.write('<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>')
 
@@ -75,19 +77,20 @@ jobs:
                   if f'android:id="@+id/{idx}"' not in xml_code:
                       dummy_elements += f'\n    <View android:id="@+id/{idx}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
               
-              if "</RelativeLayout>" in xml_code: xml_code = xml_code.replace("</RelativeLayout>", f"{dummy_elements}\n</RelativeLayout>")
-              elif "</LinearLayout>" in xml_code: xml_code = xml_code.replace("</LinearLayout>", f"{dummy_elements}\n</LinearLayout>")
+              xml_code = xml_code.replace("</RelativeLayout>", f"{dummy_elements}\n</RelativeLayout>") if "</RelativeLayout>" in xml_code else xml_code + dummy_elements
 
-          # فائلیں لکھنا
+          # Files Writing
           with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_content)
-          with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
+          with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro AI</string></resources>')
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
 
-          # Manifest
+          # 4. Manifest with Permissions (To prevent crashes)
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro" android:allowBackup="true" android:supportsRtl="true">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro" android:hardwareAccelerated="true">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
@@ -95,7 +98,7 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Stabilized)
+      - name: 🚀 4. Build Engine (Stabilized Build)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
@@ -107,22 +110,22 @@ jobs:
           EOF
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" } }
+          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "2.0" } }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
           EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Export Output
+      - name: 📦 5. Export Final APK
         if: always()
         run: |
           mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_Final.apk \;
+          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_V2.apk \;
 
       - name: 📤 6. Deployment
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-Build
-          path: SystemPro_Output/SystemPro_AI_Final.apk
+          path: SystemPro_Output/SystemPro_AI_V2.apk
