@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart Engine (V6.5 Path Recovery)
+      - name: 🧠 3. Smart Engine (Infrastructure V7.5)
         shell: python
         run: |
           import os, re, json
@@ -40,7 +40,7 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # Auto-Inject missing IDs into XML to prevent compilation errors
+          # Auto-Inject missing IDs into XML
           java_ids = set(re.findall(r'R\.id\.(\w+)', java_code))
           if len(xml_code) < 50:
               xml_code = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">'
@@ -54,7 +54,7 @@ jobs:
           elif "</LinearLayout>" in xml_code: xml_code = xml_code.replace("</LinearLayout>", f"{id_views}\n</LinearLayout>")
           else: xml_code += f"{id_views}\n</RelativeLayout>"
 
-          # Theme and Styles Guard
+          # Theme Guard
           styles_xml = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
           needed = set(re.findall(r'style/(\w+)', xml_code) + ["Theme.SystemPro", "ActionButton", "TabButton", "BuildButton"])
           for s in needed:
@@ -67,39 +67,45 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg_name}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🚀 4. Build APK
+      - name: 🚀 4. Build APK (Total Repair)
         run: |
+          # 1. انفراسٹرکچر بنانا
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; compileSdk 34; defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "6.5" } }
+          android { 
+              namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
+              compileSdk 34 
+              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "7.5" }
+          }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
+          
+          # 2. گریڈل کو انسٹال کرنا (Fixing Gradlew Missing)
+          # ہم اب سسٹم کا گریڈل استعمال کریں گے تاکہ فائل مسنگ کا مسئلہ ہی نہ رہے
+          sudo apt-get update && sudo apt-get install -y gradle
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Universal Force Export (Fix No Such File)
+      - name: 📦 5. Universal Force Export
         if: always()
         run: |
           mkdir -p final_zip
-          # پورے ورک سپیس میں کہیں بھی بننے والی APK کو تلاش کریں
-          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V6_5.apk \;
-          # چیک کریں کہ کیا فائل کاپی ہوئی ہے
-          if [ -f "final_zip/SystemPro_V6_5.apk" ]; then
-            echo "✓ APK Successfully Recovered." > final_zip/Status.txt
-          else
-            echo "✗ APK Build Failed to generate file." > final_zip/Status.txt
-            ls -R > final_zip/Directory_Structure.txt
-          fi
+          # تمام ممکنہ جگہوں سے APK ڈھونڈنا
+          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V7_5.apk \;
+          ls -R > final_zip/Log_Report.txt
 
       - name: 📤 6. Deployment
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V6-5-Final
+          name: SystemPro-V7-5-Final
           path: final_zip/
