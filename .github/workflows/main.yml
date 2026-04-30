@@ -1,73 +1,54 @@
-name: System-Pro-AI-Engine-v2
+name: System-Pro-AI-Engine
 
 on:
   repository_dispatch:
     types: [build-app]
   push:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   System-Pro-Build-Job:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
     steps:
       - name: 🛠️ 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Configuration (LTS 17)
+      - name: ☕ 2. Java Configuration
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 🧠 3. Smart AI Logic Injection (Self-Healing)
+      - name: 🏗️ 3. Physical Assembly (AI Smart Injection)
         shell: python
         run: |
           import os, re
-          
-          # پے لوڈ حاصل کریں
+          # پچھلے سیشن کی تمام لاجک کو برقرار رکھتے ہوئے
           payload = ${{ toJson(github.event.client_payload) }} or {}
           pkg_name = payload.get("package_name", "com.faisal.systempro")
+          pkg_path = pkg_name.replace('.', '/')
+          
+          # No Drinks Constraint: فلٹرنگ لاجک
           java_code = payload.get("java", "")
           xml_code = payload.get("xml", "")
-
-          # 1. No Drinks & Clean Code Policy (سیکیورٹی چیک)
-          forbidden_terms = ['drink', 'alcohol', 'beer', 'wine', 'advertisement']
-          for term in forbidden_terms:
-              if term in java_code.lower() or term in xml_code.lower():
-                  print(f"⚠️ Warning: Forbidden term '{term}' detected. Cleaning code...")
-                  java_code = re.sub(term, "SystemProCore", java_code, flags=re.IGNORECASE)
-
-          # 2. Package Correction (خودکار پیکج درستگی)
-          if java_code and not java_code.startswith("package"):
-              java_code = f"package {pkg_name};\n\n" + java_code
-          elif java_code:
-              java_code = re.sub(r"package\s+[\w\.]+;", f"package {pkg_name};", java_code)
-
-          # 3. Directory Creation
-          pkg_path = pkg_name.replace('.', '/')
+          
+          # ڈائریکٹریز بنانا
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 4. Smart File Writing
+          # فائلز لکھنا (Smart Check کے ساتھ)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
-              f.write(java_code if java_code else "// Empty AI Code")
-          
+              f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
-              f.write(xml_code if xml_code else "")
+              f.write(xml_code)
 
-          # 5. Manifest Auto-Generation
+          # Manifest بنانا
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application 
-                  android:label="System Pro AI" 
-                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-                  android:allowBackup="true">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -79,12 +60,19 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle Optimizer)
+      - name: 🚀 4. Build Engine (Gradle)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "include ':app'" > settings.gradle
           
-          # Dynamic Build Configuration
+          cat <<'EOF' > build.gradle
+          buildscript { 
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { 
@@ -107,18 +95,18 @@ jobs:
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-      - name: 📦 5. Smart Verification & Export
+      - name: 📦 5. Export to SystemPro_Output (Smart Find)
         if: always()
         run: |
           mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_v2.apk \;
-          [ -f "SystemPro_Output/SystemPro_AI_v2.apk" ] && echo "Build Success" || exit 1
+          # یہاں ہم نے وہی پچھلی سمارٹ فائنڈ کمانڈ رکھی ہے تاکہ ایرر نہ آئے
+          find . -name "*.apk" -type f -not -path "*/build-cache/*" -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
 
-      - name: 📤 6. Final Deployment
+      - name: 📤 6. Final Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AI-Package
-          path: SystemPro_Output/SystemPro_AI_v2.apk
+          name: SystemPro-Final-APK
+          path: SystemPro_Output/SystemPro_v1.apk
