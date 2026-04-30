@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Visibility & Launcher Repair Logic
+      - name: 🧠 3. Resource & Manifest Auto-Fixer (V4.5)
         shell: python
         run: |
           import os, re, json
@@ -46,13 +46,12 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. Layout & Resource Sync
-          if not xml_code or len(xml_code) < 50:
+          # 1. Layout Logic
+          if len(xml_code) < 50:
               xml_code = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"></RelativeLayout>'
-          
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(xml_code)
 
-          # 2. Styles & Strings Fix
+          # 2. Styles & Strings (Adding default theme support)
           with open("app/src/main/res/values/styles.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="colorPrimary">#00FF00</item></style></resources>')
           with open("app/src/main/res/values/strings.xml", "w") as f:
@@ -60,18 +59,17 @@ jobs:
 
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
 
-          # 3. Manifest Launcher Fix (یہاں ہم نے تبدیلی کی ہے)
+          # 3. Clean Manifest (Fixing ic_launcher error and package warning)
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application 
                   android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher"
-                  android:theme="@style/Theme.SystemPro" 
+                  android:theme="@style/Theme.SystemPro"
                   android:allowBackup="true"
                   android:supportsRtl="true">
                   <activity 
-                      android:name=".MainActivity" 
+                      android:name="{pkg_name}.MainActivity" 
                       android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -82,7 +80,7 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Production Build (Visibility Stabilized)
+      - name: 🚀 4. Production Build (Final Stabilization)
         run: |
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
@@ -96,7 +94,7 @@ jobs:
           android { 
               namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
               compileSdk 34 
-              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "4.2" }
+              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "4.5" }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
@@ -104,13 +102,13 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Final APK Export
+      - name: 📦 5. Export Output
         run: |
           mkdir -p output
-          find . -name "*.apk" -type f -exec cp {} output/SystemPro_V4_2.apk \;
+          find . -name "*.apk" -type f -exec cp {} output/SystemPro_Final_V4_5.apk \;
 
       - name: 📤 6. Deployment
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V4-Fixed
-          path: output/SystemPro_V4_2.apk
+          name: SystemPro-V4-5-Stable
+          path: output/SystemPro_Final_V4_5.apk
