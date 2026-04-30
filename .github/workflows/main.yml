@@ -9,6 +9,8 @@ on:
 jobs:
   System-Pro-Build-Job:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 🛠️ 1. Setup Environment
         uses: actions/checkout@v4
@@ -36,7 +38,7 @@ jobs:
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
               f.write(xml_code)
 
-      - name: 🚀 4. Smart Build with Error Catch
+      - name: 🚀 4. Smart Build (High Memory Mode)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "include ':app'" > settings.gradle
@@ -61,15 +63,16 @@ jobs:
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # یہاں ہم نے '--info' شامل کیا ہے تاکہ صحیح غلطی نظر آئے
-          ./gradlew :app:assembleDebug --no-daemon --info || (tail -n 200 build_log.txt && exit 1)
+          # میموری بڑھانے کے لیے -Xmx2048m کا استعمال
+          export GRADLE_OPTS="-Xmx2048m -Dorg.gradle.jvmargs='-Xmx2048m'"
+          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1 || (cat build_log.txt && exit 1)
           
           mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
+          find app/build/outputs/apk/debug/ -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
 
       - name: 📦 6. Final Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
-          path: SystemPro_Output/*.apk
+          path: SystemPro_Output/SystemPro_v1.apk
