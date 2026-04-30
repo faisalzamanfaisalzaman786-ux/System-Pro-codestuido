@@ -9,7 +9,13 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.vfs.watch=false -Dorg.gradle.projectcachedir=/tmp/gradle-cache"
+  # گریڈل کے تمام خودکار چیکس کو بند کرنے کے لیے انتہائی سخت پیرامیٹرز
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false 
+    -Dorg.gradle.parallel=false 
+    -Dorg.gradle.vfs.watch=false 
+    -Dorg.gradle.configureondemand=false 
+    -Dorg.gradle.cachedir=/tmp/gradle-cache
 
 jobs:
   Unified-AI-Build-Engine:
@@ -18,16 +24,16 @@ jobs:
       contents: write
 
     steps:
-      - name: 🛠️ 1. Environment Prep
+      - name: 🛠️ 1. Infrastructure Reset
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Runtime Setup
+      - name: ☕ 2. Java Runtime (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Sandbox Engine)
+      - name: 🧠 3. AI Architect (Atomic Injection)
         shell: python
         run: |
           import os, json, shutil
@@ -42,76 +48,52 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
           
-          # تمام پرانی اسٹیٹ کو ختم کرنا
-          if os.path.exists('app'): shutil.rmtree('app')
-          
-          # نیا اسٹرکچر بنانا
+          # مکمل صفائی: تاکہ گریڈل کو پرانی کوئی فائل نہ ملے
+          for item in ['app', 'build', '.gradle', 'settings.gradle', 'build.gradle', 'gradle.properties']:
+              if os.path.exists(item):
+                  if os.path.isdir(item): shutil.rmtree(item)
+                  else: os.remove(item)
+
+          # نیا اور کلین اسٹرکچر
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # فائلز لکھنا (YAML کنٹرولڈ)
+          # گریڈل کو YAML کے تابع کرنے والی فائلز
           with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
-          
+              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m\n")
+
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           
           with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
-              f.write("allprojects { repositories { google(); mavenCentral() } }")
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-          app_gradle = f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "12.6"
-              }}
-              buildTypes {{ release {{ minifyEnabled false }} }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }}
-          """
-          with open("app/build.gradle", "w") as f: f.write(app_gradle)
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\n")
+              f.write(f"defaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '12.7' }} }}\n")
+              f.write(f"dependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
 
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V12.6 Sandbox\"); t.setGravity(17); t.setTextSize(30); setContentView(t); }} }}")
+          java_code = payload.get("java", f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView t = new android.widget.TextView(this); t.setText(\"System Pro V12.7 Success\"); t.setGravity(17); t.setTextSize(30); setContentView(t); }} }}")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-      - name: 🛡️ 4. Forced Execution (No-Cache Mode)
+      - name: 🚀 4. Absolute Execution (Force YAML Logic)
         run: |
           sync
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # یہاں ہم گریڈل کو مجبور کر رہے ہیں کہ وہ اپنی یادداشت (Cache) کو بالکل استعمال نہ کرے
-          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --no-configuration-cache --stacktrace
+          # '--no-watch-fs' اور '--no-build-cache' کو یکجا کر کے گریڈل کے تمام 'بیک ڈورز' بند کر دیے گئے ہیں
+          ./gradlew :app:assembleDebug --no-daemon --no-build-cache --no-watch-fs --no-configuration-cache --stacktrace
 
-      - name: 📦 5. Delivery Management
+      - name: 📦 5. Final APK Capture
         if: always()
         run: |
-          mkdir -p final_apk
-          find . -name "*.apk" -type f -exec cp {} final_apk/SystemPro_V12.apk \;
+          mkdir -p build_output
+          find . -name "*.apk" -type f -exec cp {} build_output/SystemPro_V12.apk \;
 
-      - name: 📤 6. Artifact Dispatch
+      - name: 📤 6. Upload Result
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V12-Final-APK
-          path: final_apk/
+          path: build_output/
