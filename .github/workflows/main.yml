@@ -27,7 +27,6 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout"
           
-          # Use cat with heredoc to avoid printf shell injection/syntax issues
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -37,42 +36,65 @@ jobs:
           EOF
           
           echo "include ':app'" > settings.gradle
+          
+          # Stable Buildscript
           cat <<EOF > build.gradle
-          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
+          buildscript { 
+            repositories { google(); mavenCentral() }
+            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
           
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34 } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
+          android { 
+            namespace '$PKG_NAME'
+            compileSdk 34
+            defaultConfig { 
+              applicationId '$PKG_NAME'
+              minSdk 24
+              targetSdk 34
+              versionCode 1
+              versionName "1.0"
+            }
+          }
+          dependencies { 
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
           EOF
 
       - name: 🚀 4. Smart Build
         id: build_step
         continue-on-error: true
         run: |
-          if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
+          # Force a stable Gradle version to avoid 9.4.1 issues
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
+          ./gradlew assembleDebug --stacktrace --no-daemon > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
         if: steps.build_step.outcome == 'failure'
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Analyzing with System Pro AI..."
+          echo "Analyzing Error Logs..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # Properly escape logs and code for JSON payload
-          ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
+          # Capture more specific error info
+          ERROR_LOG=$(grep -A 20 "error:" build_log.txt | jq -sRr @json)
+          if [ "$ERROR_LOG" == "null" ] || [ -z "$ERROR_LOG" ]; then
+            ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
+          fi
+
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
 
-          PROMPT="Fix Android build error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Rules: Provide fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]. No talk."
+          PROMPT="Fix this Android build error: $ERROR_LOG. Provide only the corrected code for MainActivity.java inside [JAVA_FIX]...[JAVA_END] and activity_main.xml inside [XML_FIX]...[XML_END]. Do not include any drinks or ads. Just the logic."
           
-          # Using a cleaner JSON construction for curl
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
@@ -82,13 +104,12 @@ jobs:
           AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
           if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
-            echo "AI Fix found. Repairing..."
+            echo "AI Fix found. Re-applying..."
             echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
             echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI failed to provide a valid fix or API error occurred."
-            echo "Response: $AI_TEXT"
+            echo "AI could not find a fix. Check your GEMINI_API_KEY and Prompt."
             exit 1
           fi
 
