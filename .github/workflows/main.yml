@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (Style-Healing)
+      - name: 🧠 3. Smart AI Logic Injection (ID & Style Healing)
         shell: python
         run: |
           import os, re, json
@@ -46,29 +46,30 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. Generate Missing Styles (ایرر حل کرنے کے لیے)
+          # 1. Styles Healing (پچھلا ایرر حل کرنے کے لیے)
           styles_xml = '''<?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="ActionButton" parent="Widget.AppCompat.Button">
-                  <item name="android:textAllCaps">false</item>
-                  <item name="android:textColor">#FFFFFF</item>
-              </style>
-              <style name="TabButton" parent="Widget.AppCompat.Button.Borderless">
-                  <item name="android:textColor">#00FF00</item>
-              </style>
-              <style name="BuildButton" parent="Widget.AppCompat.Button.Colored">
-                  <item name="android:textStyle">bold</item>
-              </style>
+              <style name="ActionButton" parent="Widget.AppCompat.Button"><item name="android:textAllCaps">false</item></style>
+              <style name="TabButton" parent="Widget.AppCompat.Button.Borderless"></style>
+              <style name="BuildButton" parent="Widget.AppCompat.Button.Colored"></style>
           </resources>'''
           
+          # 2. String Resources (IDs کی کمی کو پورا کرنے کے لیے)
+          strings_xml = f'''<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">System Pro</string>
+          </resources>'''
+
+          # فائلیں لکھنا
           with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
+          with open("app/src/main/res/values/strings.xml", "w") as f: f.write(strings_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
 
-          # 2. Manifest with Theme Reference
+          # 3. Manifest Fix
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+              <application android:label="@string/app_name" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -79,7 +80,7 @@ jobs:
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle Optimizer)
+      - name: 🚀 4. Build Engine (System-Pro Compiler)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
@@ -104,21 +105,22 @@ jobs:
           dependencies { 
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Export Output
+      - name: 📦 5. Export Final APK
         if: always()
         run: |
           mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI.apk \;
+          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_Final.apk \;
 
-      - name: 📤 6. Deployment
+      - name: 📤 6. Secure Deployment
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AI-Package
-          path: SystemPro_Output/SystemPro_AI.apk
+          name: SystemPro-Final-Build
+          path: SystemPro_Output/SystemPro_AI_Final.apk
