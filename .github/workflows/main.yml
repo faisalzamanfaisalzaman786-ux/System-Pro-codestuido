@@ -23,7 +23,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart Engine (V9.0 Precision Build)
+      - name: 🧠 3. Smart Engine (V9.5 Universal Auto-Fix)
         shell: python
         run: |
           import os, re, json
@@ -40,46 +40,42 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # Mandatory Strings
+          # 1. Generate Mandatory strings.xml
           with open("app/src/main/res/values/strings.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
 
-          # Auto-Layout Synthesis (Fixes missing layout errors)
+          # 2. Auto-Layout Generation & ID Injection
           found_layouts = set(re.findall(r'R\.layout\.(\w+)', java_code))
           for layout in found_layouts:
-              if layout == "activity_main" and xml_code:
-                  content = xml_code
-              else:
-                  content = '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>'
-              with open(f"app/src/main/res/layout/{layout}.xml", "w") as f:
-                  f.write(content)
+              content = xml_code if (layout == "activity_main" and xml_code) else '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>'
+              with open(f"app/src/main/res/layout/{layout}.xml", "w") as f: f.write(content)
 
-          # ID Injection & Guard
+          # Inject IDs into activity_main.xml to prevent R.id errors
           java_ids = set(re.findall(r'R\.id\.(\w+)', java_code))
-          main_layout_path = "app/src/main/res/layout/activity_main.xml"
-          if not os.path.exists(main_layout_path):
-              with open(main_layout_path, "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>')
-          
-          with open(main_layout_path, "r") as f: current_xml = f.read()
+          with open("app/src/main/res/layout/activity_main.xml", "r") as f: current_xml = f.read()
           id_views = "".join([f'\n    <View android:id="@+id/{jid}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />' for jid in java_ids if f'id/+"{jid}"' not in current_xml])
           
           updated_xml = current_xml.replace("</RelativeLayout>", f"{id_views}\n</RelativeLayout>") if "</RelativeLayout>" in current_xml else current_xml.replace("</LinearLayout>", f"{id_views}\n</LinearLayout>")
-          with open(main_layout_path, "w") as f: f.write(updated_xml)
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(updated_xml)
 
-          # Styles
-          styles_xml = '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"></style></resources>'
-          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
+          # 3. Dynamic Styles Auto-Generation (Fixes ActionButton, TabButton etc.)
+          found_styles = set(re.findall(r'style/(\w+)', updated_xml))
+          styles_xml = '<?xml version="1.0" encoding="utf-8"?><resources>\n'
+          styles_xml += '    <style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"></style>\n'
+          for style in found_styles:
+              styles_xml += f'    <style name="{style}" parent="Widget.AppCompat.Button"><item name="android:textAllCaps">false</item></style>\n'
+          styles_xml += '</resources>'
           
-          # Files Save
+          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
+
+          # 4. Save Core Files
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="@string/app_name" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg_name}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🚀 4. Build APK (Final Syntax Fix)
+      - name: 🚀 4. Build APK (Direct Version Lock)
         run: |
-          # لائنوں کو واضح طور پر الگ کرنا (Fixing the parsing error)
           printf "android.useAndroidX=true\nandroid.enableJetifier=true\n" > gradle.properties
-          
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
@@ -90,7 +86,7 @@ jobs:
           android { 
               namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
               compileSdk 34
-              defaultConfig { minSdk 24; targetSdk 34; versionCode 1; versionName "9.0" }
+              defaultConfig { minSdk 24; targetSdk 34; versionCode 1; versionName "9.5" }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
@@ -106,10 +102,10 @@ jobs:
         if: always()
         run: |
           mkdir -p final_zip
-          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V9.apk \;
+          find . -name "*.apk" -type f -exec cp {} final_zip/SystemPro_V9_5.apk \;
 
       - name: 📤 6. Deployment
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V9-Final
+          name: SystemPro-Final
           path: final_zip/
