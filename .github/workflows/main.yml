@@ -21,19 +21,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ 3. Assembly & Logic
+      - name: 🏗️ 3. Initial Assembly
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          mkdir -p "SystemPro_Output"
+          
+          # ہم اب فولڈر نہیں بنائیں گے کیونکہ آپ مینول بنا چکے ہوں گے
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
           echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
 
-      - name: 🚀 4. Smart Build & Inspect
+      - name: 🚀 4. Smart Build
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "include ':app'" > settings.gradle
           cat <<'EOF' > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
@@ -56,13 +57,9 @@ jobs:
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # بلڈ کے ساتھ مکمل لسٹنگ
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          ./gradlew :app:assembleDebug --no-daemon
           
-          echo "--- Listing all files found ---"
-          find . -maxdepth 10 -not -path '*/.*'
-          
-          mkdir -p SystemPro_Output
+          # آپ کے فزیکل فولڈر میں فائل کاپی کرنا
           find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
 
       - name: 📦 6. Final Export
@@ -70,4 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
-          path: SystemPro_Output/
+          # اب یہ براہ راست آپ کے بنائے ہوئے فولڈر سے فائل اٹھائے گا
+          path: SystemPro_Output/SystemPro_v1.apk
