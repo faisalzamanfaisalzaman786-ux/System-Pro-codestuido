@@ -1,4 +1,4 @@
-      - name: 6. AI Auto-Fix (On Failure)
+        name: 6. AI Auto-Fix (On Failure)
         if: failure()
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
