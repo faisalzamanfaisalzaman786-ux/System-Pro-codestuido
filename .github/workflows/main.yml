@@ -30,7 +30,7 @@ jobs:
           mkdir -p "app/src/main/res/layout"
           mkdir -p "app/src/main/res/values"
 
-          # مینی فیسٹ فائل (درست فارمیٹ میں)
+          # مینی فیسٹ فائل (محفوظ طریقہ)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$PKG_NAME">
               <application android:label="SystemPro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -44,18 +44,22 @@ jobs:
           </manifest>
           EOF
 
-          # اسٹائل فائل (تاکہ بلڈ فیل نہ ہو)
+          # اسٹائل فائل
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar" />
           </resources>
           EOF
 
-          # کوڈ فائلز کو محفوظ کرنا
-          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          # جاوا اور XML کوڈ کو محفوظ طریقے سے لکھنا (Single Quotes EOF انتہائی ضروری ہے)
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
+
+          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
+          ${{ github.event.client_payload.xml }}
+          EOF
           
-          # مین گریڈل فائل
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { 
@@ -65,7 +69,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
           
-          # ایپ لیول گریڈل
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { 
@@ -98,10 +101,9 @@ jobs:
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "Analyzing Errors..."
-          ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
-          
-          PROMPT="Fix this Android error: $ERROR_LOG. Only provide fixed Java code in [JAVA_FIX]...[JAVA_END]."
+          echo "Analyzing errors..."
+          ERROR_LOG=$(tail -n 60 build_log.txt | jq -sRr @json)
+          PROMPT="Fix Android error: $ERROR_LOG. Provide only fixed Java code in [JAVA_FIX] markers."
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
@@ -120,6 +122,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-APK
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          name: System-Pro-App
+          path: "app/build/outputs/apk/debug/*.apk"
