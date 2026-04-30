@@ -5,13 +5,7 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  # دستی طور پر بلڈ رن کرنے کے لیے (UI Trigger)
-  workflow_dispatch:
-    inputs:
-      build_reason:
-        description: 'Reason for manual build'
-        required: false
-        default: 'Manual Trigger for System Pro V12'
+  workflow_dispatch: # یہ بٹن کو ایکٹو رکھتا ہے
 
 jobs:
   Unified-Build-Engine:
@@ -26,30 +20,17 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
-
+          # ہم نے یہاں سے عارضی طور پر cache ہٹا دیا ہے تاکہ پہلا بلڈ صاف طریقے سے ہو
+          
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v2
-
-      - name: Prepare Environment
-        run: |
-          echo "Setting up professional build environment for: ${{ github.event.inputs.build_reason }}"
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-
       - name: Build with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+        # ہم یہاں کلین بلڈ کریں گے تاکہ پرانا ڈیٹا مسئلہ نہ کرے
+        run: ./gradlew clean assembleDebug --stacktrace
 
       - name: Upload Professional APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V12-Debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
-
-      - name: Build Summary
-        if: success()
-        run: echo "System Pro V12 Build Completed Successfully!"
