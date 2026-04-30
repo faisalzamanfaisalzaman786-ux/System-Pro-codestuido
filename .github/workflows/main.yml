@@ -7,6 +7,10 @@ on:
   push:
     branches: [ "main", "master" ]
 
+env:
+  # گٹ ہب کی نئی وارننگ کو ختم کرنے کے لیے
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   Unified-AI-Build-Engine:
     runs-on: ubuntu-latest
@@ -23,7 +27,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Self-Healing Logic)
+      - name: 🧠 3. AI Architect (Atomic Engine)
         shell: python
         run: |
           import os, json
@@ -38,19 +42,19 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
           
-          # ڈائریکٹری اسٹرکچر کی مضبوط بنیاد
+          # ڈائریکٹری اسٹرکچر
           dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", "app/src/main/res/values", "app/src/main/res/mipmap-mdpi"]
           for d in dirs: os.makedirs(d, exist_ok=True)
 
-          # --- اے آئی فائل جنریشن (بغیر کسی ایرر کے) ---
-          
-          # 1. Settings & Root Build
+          # 1. Root Configuration
           with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("local.properties", "w") as f: f.write(f"sdk.dir=/usr/lib/android-sdk") # پاتھ فکس
+          
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
               f.write("allprojects { repositories { google(); mavenCentral() } }")
 
-          # 2. App Module (AI Optimized)
+          # 2. App Module (Strong Sync)
           app_gradle = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -61,29 +65,27 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "12.0"
+                  versionName "12.1"
               }}
-              buildFeatures {{ viewBinding true }}
+              buildTypes {{ release {{ minifyEnabled false }} }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }}
           """
           with open("app/build.gradle", "w") as f: f.write(app_gradle)
 
-          # 3. Intelligent Resource Sync (Fixing previous fails)
+          # 3. Essential Resources
           with open("app/src/main/res/values/strings.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro V12</string></resources>')
-
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
           with open("app/src/main/res/values/themes.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>')
 
-          # 4. Manifest with Auto-Permissions
+          # 4. Professional Manifest
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:allowBackup="true">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -94,18 +96,18 @@ jobs:
           </manifest>"""
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-          # 5. Java Code Implementation
-          java_code = payload.get("java", f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText(\"AI Engine V12 Active\"); tv.setGravity(android.view.Gravity.CENTER); tv.setTextSize(24); tv.setTextColor(android.graphics.Color.GREEN); setContentView(tv); }} }}")
+          # 5. Java Implementation
+          java_code = payload.get("java", f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText(\"System Pro V12.1 Online\"); tv.setGravity(17); tv.setTextSize(30); tv.setTextColor(android.graphics.Color.GREEN); setContentView(tv); }} }}")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-      - name: 🚀 4. Professional Build (Automated Error Handling)
+      - name: 🚀 4. Production Build (Clean Execution)
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # یہاں ہم نے 'lint' کو سکپ نہیں کیا بلکہ 'abortOnError false' کی لاجک اپنائی ہے تاکہ AI خود مینیج کرے
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          # 'clean' کا اضافہ کیا گیا ہے تاکہ پرانی اسٹیٹ کا مسئلہ نہ آئے
+          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
 
-      - name: 📦 5. Output Collection
+      - name: 📦 5. Output Management
         if: always()
         run: |
           mkdir -p build_output
