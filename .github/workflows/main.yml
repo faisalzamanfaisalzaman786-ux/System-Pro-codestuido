@@ -1,4 +1,69 @@
-        name: 6. AI Auto-Fix (On Failure)
+name: System Pro AI-Engine
+
+on:
+  repository_dispatch:
+    types: [build-app]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 3. Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 4. Build Project Structure
+        env:
+          JAVA_PAYLOAD: ${{ github.event.client_payload.java }}
+          XML_PAYLOAD: ${{ github.event.client_payload.xml }}
+          PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
+        run: |
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p "app/src/main/res/layout"
+          mkdir -p "app/src/main/res/values"
+
+          printf "%s" "$JAVA_PAYLOAD" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          printf "%s" "$XML_PAYLOAD" > "app/src/main/res/layout/activity_main.xml"
+          
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "include ':app'" > settings.gradle
+          
+          cat <<EOF > build.gradle
+          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
+          EOF
+
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
+          EOF
+
+      - name: 5. Primary Build Attempt
+        id: build_step
+        run: |
+          if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
+
+      - name: 6. AI Auto-Fix (On Failure)
         if: failure()
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -7,12 +72,10 @@
           echo "Build failed. Invoking System Pro AI..."
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # ڈیٹا کو انکوڈ کرنا
           ERROR_LOG=$(tail -n 30 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
           
-          # محفوظ طریقے سے JSON پیلوڈ تیار کرنا
           echo "{
             \"contents\": [{
               \"parts\":[{
@@ -21,12 +84,10 @@
             }]
           }" > payload.json
 
-          # اب فائل کے ذریعے ڈیٹا بھیجنا
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY" \
             -H 'Content-Type: application/json' \
             -d @payload.json)
 
-          # جواب کو کلین کرنا
           CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g; s/```xml//g; s/```//g')
           
           if [[ "$CLEAN_CODE" == *"---FILE_SPLIT---"* ]]; then
@@ -37,7 +98,13 @@
             echo "Retrying build with AI corrections..."
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI error or invalid response. Full response logged below:"
-            echo "$RESPONSE" | jq .
+            echo "AI error or invalid response."
             exit 1
           fi
+
+      - name: 7. Upload Final APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-AI-Fixed
+          path: app/build/outputs/apk/debug/app-debug.apk
