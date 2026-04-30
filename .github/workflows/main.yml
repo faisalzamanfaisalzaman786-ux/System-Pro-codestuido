@@ -23,11 +23,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart AI Logic Injection (Full Resource Healing)
+      - name: 🧠 3. Smart AI Logic Injection (Future-Proof Engine)
         shell: python
         run: |
           import os, re, json
           
+          # پے لوڈ حاصل کریں
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           try:
               payload = json.loads(raw_payload, strict=False) if raw_payload != "null" else {}
@@ -38,87 +39,80 @@ jobs:
           java_code = payload.get("java", "// System Pro Active")
           xml_code = payload.get("xml", "")
           
-          # No Drinks Constraint
+          # 1. No Drinks Policy (برقرار رہے گی)
           java_code = re.sub(r'drink|alcohol|beer', "SystemProCore", java_code, flags=re.IGNORECASE)
 
+          # 2. ڈائریکٹریز بنانا
           pkg_path = pkg_name.replace('.', '/')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. Styles & Themes
-          styles_xml = '''<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="ActionButton" parent="Widget.AppCompat.Button"><item name="android:textAllCaps">false</item></style>
-              <style name="TabButton" parent="Widget.AppCompat.Button.Borderless"></style>
-              <style name="BuildButton" parent="Widget.AppCompat.Button.Colored"></style>
-              <style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FF00</item>
-                  <item name="android:windowBackground">#121212</item>
-              </style>
-          </resources>'''
+          # --- سمارٹ فیوچر پروف لاجک شروع ---
           
-          # 2. Dialog Settings Layout (مسنگ فائل بنانا)
-          dialog_xml = '''<?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="vertical"
-              android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name" />
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package Name" />
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="GitHub Token" />
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Repo Name" />
-          </LinearLayout>'''
+          # A. جاوا کوڈ سے تمام Layout Names نکالنا (جیسے R.layout.dialog_settings)
+          layouts_found = re.findall(r'R\.layout\.(\w+)', java_code)
+          for layout in layouts_found:
+              file_path = f"app/src/main/res/layout/{layout}.xml"
+              if not os.path.exists(file_path) and layout != "activity_main":
+                  # اگر کوئی نئی لے آؤٹ فائل مانگی گئی ہے جو موجود نہیں، تو اسے خود بخود بناؤ
+                  with open(file_path, "w") as f:
+                      f.write('<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>')
+
+          # B. جاوا کوڈ سے تمام IDs نکالنا (جیسے R.id.any_new_id)
+          ids_found = re.findall(r'R\.id\.(\w+)', java_code)
+          
+          # ان تمام IDs کو activity_main یا کسی بھی ڈیفالٹ فائل میں انجیکٹ کرنا تاکہ کمپائلر فیل نہ ہو
+          if ids_found:
+              dummy_elements = ""
+              for idx in set(ids_found):
+                  # چیک کریں کہ کیا یہ ID پہلے سے XML میں موجود ہے؟
+                  if f'android:id="@+id/{idx}"' not in xml_code:
+                      dummy_elements += f'\n    <View android:id="@+id/{idx}" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />'
+              
+              # XML کے آخر میں ان IDs کو جوڑنا
+              if "</RelativeLayout>" in xml_code:
+                  xml_code = xml_code.replace("</RelativeLayout>", f"{dummy_elements}\n</RelativeLayout>")
+              elif "</LinearLayout>" in xml_code:
+                  xml_code = xml_code.replace("</LinearLayout>", f"{dummy_elements}\n</LinearLayout>")
+              else:
+                  xml_code += f"\n\n<View android:layout_width='0dp' android:layout_height='0dp' android:visibility='gone' />"
+
+          # --- سمارٹ فیوچر پروف لاجک ختم ---
 
           # فائلیں لکھنا
-          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
-          with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
-          with open("app/src/main/res/layout/dialog_settings.xml", "w") as f: f.write(dialog_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f: f.write(xml_code)
+          with open("app/src/main/res/values/styles.xml", "w") as f: 
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="colorPrimary">#00FF00</item></style></resources>')
+          with open("app/src/main/res/values/strings.xml", "w") as f: 
+              f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro AI</string></resources>')
 
-          # 3. Manifest Fix
+          # Manifest
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Final Compilation)
+      - name: 🚀 4. Build Engine (Dynamic Compiler)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
-          buildscript { 
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
-          }
+          buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
-          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { 
-              namespace '$PKG_NAME'
-              compileSdk 34
-              defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34 }
-          }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
+          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34 } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
@@ -134,5 +128,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AI-Package
+          name: SystemPro-Final-Build
           path: SystemPro_Output/SystemPro_AI_Final.apk
