@@ -1,52 +1,74 @@
-name: System-Pro-AI-Engine
+name: System-Pro-AI-Engine-v2
 
 on:
   repository_dispatch:
     types: [build-app]
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   System-Pro-Build-Job:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    
     steps:
       - name: 🛠️ 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Configuration
+      - name: ☕ 2. Java Configuration (LTS 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 🏗️ 3. Physical Assembly (Python Injection)
+      - name: 🧠 3. Smart AI Logic Injection (Self-Healing)
         shell: python
         run: |
           import os, re
-          # Extract data from payload or use defaults
-          pkg_name = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
-          pkg_path = pkg_name.replace('.', '/')
-          java_code = """${{ github.event.client_payload.java }}"""
-          xml_code = """${{ github.event.client_payload.xml }}"""
+          
+          # پے لوڈ حاصل کریں
+          payload = ${{ toJson(github.event.client_payload) }} or {}
+          pkg_name = payload.get("package_name", "com.faisal.systempro")
+          java_code = payload.get("java", "")
+          xml_code = payload.get("xml", "")
 
-          # Create Directory Structure
+          # 1. No Drinks & Clean Code Policy (سیکیورٹی چیک)
+          forbidden_terms = ['drink', 'alcohol', 'beer', 'wine', 'advertisement']
+          for term in forbidden_terms:
+              if term in java_code.lower() or term in xml_code.lower():
+                  print(f"⚠️ Warning: Forbidden term '{term}' detected. Cleaning code...")
+                  java_code = re.sub(term, "SystemProCore", java_code, flags=re.IGNORECASE)
+
+          # 2. Package Correction (خودکار پیکج درستگی)
+          if java_code and not java_code.startswith("package"):
+              java_code = f"package {pkg_name};\n\n" + java_code
+          elif java_code:
+              java_code = re.sub(r"package\s+[\w\.]+;", f"package {pkg_name};", java_code)
+
+          # 3. Directory Creation
+          pkg_path = pkg_name.replace('.', '/')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # Write Source Files
+          # 4. Smart File Writing
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f:
-              f.write(java_code)
+              f.write(java_code if java_code else "// Empty AI Code")
+          
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding="utf-8") as f:
-              f.write(xml_code)
+              f.write(xml_code if xml_code else "")
 
-          # Generate Mandatory AndroidManifest.xml
+          # 5. Manifest Auto-Generation
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg_name}">
-              <application android:label="System Pro App" android:theme="@style/Theme.AppCompat.Light">
-                  <activity android:name=".MainActivity" android:exported="true">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application 
+                  android:label="System Pro AI" 
+                  android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+                  android:allowBackup="true">
+                  <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -57,19 +79,12 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle)
+      - name: 🚀 4. Build Engine (Gradle Optimizer)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "include ':app'" > settings.gradle
           
-          cat <<'EOF' > build.gradle
-          buildscript { 
-            repositories { google(); mavenCentral() }
-            dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } 
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-          
+          # Dynamic Build Configuration
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { 
@@ -92,17 +107,18 @@ jobs:
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Export to SystemPro_Output
+      - name: 📦 5. Smart Verification & Export
         if: always()
         run: |
           mkdir -p SystemPro_Output
-          find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} SystemPro_Output/SystemPro_v1.apk \;
+          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_v2.apk \;
+          [ -f "SystemPro_Output/SystemPro_AI_v2.apk" ] && echo "Build Success" || exit 1
 
-      - name: 📦 6. Final Artifact
-        if: always()
+      - name: 📤 6. Final Deployment
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
-          path: SystemPro_Output/SystemPro_v1.apk
+          name: SystemPro-AI-Package
+          path: SystemPro_Output/SystemPro_AI_v2.apk
