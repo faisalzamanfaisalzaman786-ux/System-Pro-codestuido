@@ -22,7 +22,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # یہاں کیشے ہٹا دی گئی ہے تاکہ "No file matched" والا ایرر نہ آئے
 
       - name: 🧠 3. Smart AI Logic Injection (Self-Healing)
         shell: python
@@ -31,11 +31,14 @@ jobs:
           raw_payload = """${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload) if raw_payload and raw_payload != "null" else {}
           pkg_name = payload.get("package_name", "com.faisal.systempro")
-          java_code = payload.get("java", "// System Pro Initialized")
+          java_code = payload.get("java", "// System Pro Core Active")
           xml_code = payload.get("xml", "")
           
-          # No Drinks Policy
-          java_code = re.sub(r'drink|alcohol|beer', "SystemProCore", java_code, flags=re.IGNORECASE)
+          # No Drinks Policy Implementation
+          forbidden = ['drink', 'alcohol', 'beer', 'wine', 'ads']
+          for word in forbidden:
+              java_code = re.sub(word, "SystemProCore", java_code, flags=re.IGNORECASE)
+
           if java_code and "package" not in java_code:
               java_code = f"package {pkg_name};\n\n" + java_code
 
@@ -54,18 +57,19 @@ jobs:
               <application android:label="System Pro AI" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" />
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Build Engine (Gradle with AndroidX Fix)
+      - name: 🚀 4. Build Engine (Gradle & AndroidX Fix)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           
-          # FIX: Enable AndroidX
+          # Create properties for AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
