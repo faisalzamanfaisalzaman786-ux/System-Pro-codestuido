@@ -20,18 +20,16 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # کیش ہٹا دیا گیا ہے تاکہ ایرر نہ آئے
 
       - name: 🏗️ 3. Assembly
         run: |
-          # پیکیج نیم سیٹ کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # ڈائریکٹریز بنانا
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
 
-          # مینی فیسٹ بنانا
+          # مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.Light.NoActionBar">
@@ -45,14 +43,14 @@ jobs:
           </manifest>
           EOF
 
-          # اسٹائلز کنفیگریشن
+          # اسٹائلز
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.MaterialComponents.Light.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar" />
           </resources>
           EOF
 
-          # کوڈ فائلز انجیکشن
+          # کوڈ انجیکشن
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -61,7 +59,7 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # پروجیکٹ لیول فائلز
+          # گریڈل فائلز
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript {
@@ -92,14 +90,17 @@ jobs:
           EOF
 
       - name: 🚀 4. Smart Build
+        id: build_step
         run: |
+          # گریڈل ریپر بنانا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: 📦 5. Final Export
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-APK
+          name: SystemPro-Build-Package
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
