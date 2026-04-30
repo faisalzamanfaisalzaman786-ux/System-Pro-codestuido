@@ -14,16 +14,16 @@ jobs:
       contents: write
     
     steps:
-      - name: 🛠️ 1. Environment Setup
+      - name: 🛠️ 1. Setup Environment
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Setup
+      - name: ☕ 2. Java 17 Configuration
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. Smart Self-Healing Engine (Crash-Shield V3.8)
+      - name: 🧠 3. Final Crash-Proof Logic Injection
         shell: python
         run: |
           import os, re, json
@@ -38,7 +38,7 @@ jobs:
           java_code = payload.get("java", "// System Pro Active")
           xml_code = payload.get("xml", "").strip()
           
-          # No Drinks Policy
+          # No Drinks Constraint
           java_code = re.sub(r'drink|alcohol|beer|wine', "SystemProCore", java_code, flags=re.IGNORECASE)
 
           pkg_path = pkg_name.replace('.', '/')
@@ -46,28 +46,17 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- 1. Smart Multi-Layout & Dialog Repair ---
-          # جاوا کوڈ سے تمام لے آؤٹ نام نکالنا
+          # 1. Multi-Layout Fix (Recursive Layout Generation)
           layouts_needed = set(re.findall(r'R\.layout\.(\w+)', java_code))
           for lyt in layouts_needed:
               f_path = f"app/src/main/res/layout/{lyt}.xml"
               if lyt == "activity_main":
                   content = xml_code if len(xml_code) > 50 else '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>'
               else:
-                  # ڈائیلاگز کے لیے سمارٹ کنٹینر بنانا
-                  content = '<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp" android:background="#1E1E1E"></LinearLayout>'
-              
+                  content = '<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"></LinearLayout>'
               with open(f_path, "w") as f: f.write(content)
 
-          # --- 2. Smart Style & Theme Protection ---
-          styles_needed = re.findall(r'style/(\w+)', xml_code)
-          styles_xml = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
-          for s in set(styles_needed + ["Theme.SystemPro", "ActionButton", "TabButton", "BuildButton"]):
-              parent = "Theme.AppCompat.DayNight.NoActionBar" if "Theme" in s else "Widget.AppCompat.Button"
-              styles_xml += f'    <style name="{s}" parent="{parent}"><item name="android:textAllCaps">false</item><item name="android:textColor">#00FF00</item></style>\n'
-          styles_xml += '</resources>'
-
-          # --- 3. Dynamic ID Injection (Prevents Runtime Crash) ---
+          # 2. Strict ID Recovery (Prevent NullPointerException)
           ids_in_java = set(re.findall(r'R\.id\.(\w+)', java_code))
           with open("app/src/main/res/layout/activity_main.xml", "r") as f: main_xml = f.read()
           
@@ -76,30 +65,38 @@ jobs:
               if f'android:id="@+id/{idx}"' not in main_xml:
                   dummy_views += f'\n    <View android:id="@+id/{idx}" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />'
           
+          # Injecting inside the root tag safely
           if "</RelativeLayout>" in main_xml: main_xml = main_xml.replace("</RelativeLayout>", f"{dummy_views}\n</RelativeLayout>")
           elif "</LinearLayout>" in main_xml: main_xml = main_xml.replace("</LinearLayout>", f"{dummy_views}\n</LinearLayout>")
           
-          # فائلیں فائنل کرنا
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(main_xml)
+
+          # 3. Automatic Style Guard
+          styles_xml = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
+          styles_needed = set(re.findall(r'style/(\w+)', main_xml) + ["Theme.SystemPro", "ActionButton", "TabButton", "BuildButton"])
+          for s in styles_needed:
+              parent = "Theme.AppCompat.DayNight.NoActionBar" if "Theme" in s else "Widget.AppCompat.Button"
+              styles_xml += f'    <style name="{s}" parent="{parent}"><item name="android:textAllCaps">false</item></style>\n'
+          styles_xml += '</resources>'
+
           with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles_xml)
           with open("app/src/main/res/values/strings.xml", "w") as f: f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding="utf-8") as f: f.write(java_code)
 
-          # --- 4. Manifest (Permissions & Stability) ---
+          # 4. Manifest Fix
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:hardwareAccelerated="true">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHer" /></intent-filter>
                   </activity>
               </application>
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: 🚀 4. Production Build
+      - name: 🚀 4. Production Build (Deep Scan Mode)
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
@@ -109,22 +106,25 @@ jobs:
           EOF
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "3.8" } }
-          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
+          android { 
+              namespace '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'
+              compileSdk 34 
+              defaultConfig { applicationId '${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}'; minSdk 24; targetSdk 34; versionCode 1; versionName "4.0" }
+          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }
           EOF
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 📦 5. Export APK
-        if: always()
+      - name: 📦 5. Force Export Output
         run: |
-          mkdir -p SystemPro_Output
-          find . -name "*.apk" -type f -exec cp {} SystemPro_Output/SystemPro_AI_V3_8.apk \;
+          mkdir -p final_apk
+          find . -name "*.apk" -type f -exec cp {} final_apk/SystemPro_Final.apk \;
 
-      - name: 📤 6. Deployment
-        if: success()
+      - name: 📤 6. Deployment (Upload Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
-          path: SystemPro_Output/SystemPro_AI_V3_8.apk
+          name: SystemPro-V4-Build
+          path: final_apk/SystemPro_Final.apk
+          retention-days: 7
