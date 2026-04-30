@@ -1,36 +1,45 @@
 name: System-Pro-Master-Framework-V12
 
 on:
+  # 1. بیرونی ایپ یا API سے ٹرگر کرنے کے لیے (یہ وہی ڈسپیچ ہے جو آپ چاہ رہے ہیں)
+  repository_dispatch:
+    types: [build-app]
+  
+  # 2. گٹ ہب ویب سائٹ (UI) سے دستی طور پر ٹرگر کرنے کے لیے
+  workflow_dispatch:
+    inputs:
+      build_reason:
+        description: 'Manual Trigger Reason'
+        default: 'Forced Build'
+
+  # 3. کوڈ پش کرنے پر خودکار بلڈ
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # یہ بٹن کو ایکٹو رکھتا ہے
 
 jobs:
   Unified-Build-Engine:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout Repository
+      - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: ☕ Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          # ہم نے یہاں سے عارضی طور پر cache ہٹا دیا ہے تاکہ پہلا بلڈ صاف طریقے سے ہو
-          
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+          cache: gradle
 
-      - name: Build with Gradle
-        # ہم یہاں کلین بلڈ کریں گے تاکہ پرانا ڈیٹا مسئلہ نہ کرے
-        run: ./gradlew clean assembleDebug --stacktrace
+      - name: 🔧 Build Execution
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Professional APK
+      - name: 📦 Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V12-Debug-APK
+          name: System-Pro-V12-Final
           path: app/build/outputs/apk/debug/app-debug.apk
