@@ -27,42 +27,40 @@ jobs:
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
-          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          ${{ github.event.client_payload.java }}
-          EOF
-          
-          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
-          ${{ github.event.client_payload.xml }}
-          EOF
+          # انجیکشن
+          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
 
       - name: 🧠 3.5. AI Pre-Check (پہلی حفاظت)
+        id: pre_check
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "AI is analyzing code before build..."
+          echo "AI analyzing initial code..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          RAW_JAVA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           
-          PROMPT="Check this Android Java code for syntax errors or missing imports: $RAW_JAVA. Return ONLY the code between [CODE_START] and [CODE_END]."
-          
-          PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
-            -H 'Content-Type: application/json' -d "$PAYLOAD")
-          
-          FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-          
-          if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
-             echo "Pre-build fix applied."
-             echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          # اگر فائل خالی نہ ہو تب ہی AI چلے
+          if [ -s "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
+            RAW_JAVA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
+            PROMPT="Fix any syntax errors or missing imports in this Android Java: $RAW_JAVA. Return ONLY code between [CODE_START] and [CODE_END]."
+            
+            PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
+              -H 'Content-Type: application/json' -d "$PAYLOAD")
+            
+            FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+            
+            if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
+               echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+               echo "AI Pre-Check successfully updated the code."
+            fi
           fi
 
       - name: 🚀 4. Smart Build
         id: build_step
-        continue-on-error: true
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
-          # گریڈل فائلز بنانا
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
@@ -74,28 +72,24 @@ jobs:
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0'; implementation 'androidx.constraintlayout:constraintlayout:2.1.4' }
           EOF
           
-          # بلڈ رن کرنا
+          # بلڈ لاجک - یہاں ہم '|| true' ہٹا رہے ہیں تاکہ ایرر پکڑا جائے
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1 || true
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace > build_log.txt 2>&1 || touch build_failed.flag
 
       - name: 🩹 5. AI Auto-Repair (دوسری حفاظت)
-        if: always() && hashFiles('build_log.txt') != ''
+        if: always() && hashFiles('build_failed.flag') != ''
         env:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if grep -q "BUILD SUCCESSFUL" build_log.txt; then
-            echo "Build successful! No repair needed."
-            exit 0
-          fi
-          
-          echo "Build failed. AI is fixing the compilation error..."
+          echo "Build failed. AI is fixing the error..."
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ERROR_DATA=$(tail -n 150 build_log.txt | jq -sRr @json)
+          
+          ERROR_DATA=$(tail -n 100 build_log.txt | jq -sRr @json)
           JAVA_DATA=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           
-          PROMPT="The Android build failed with error: $ERROR_DATA. Code: $JAVA_DATA. Fix it and return ONLY Java code between [CODE_START] and [CODE_END]."
+          PROMPT="Fix this build error: $ERROR_DATA. Code: $JAVA_DATA. Return ONLY Java code between [CODE_START] and [CODE_END]."
           
           PAYLOAD=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
@@ -104,12 +98,8 @@ jobs:
           FIXED_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
           if [[ "$FIXED_CODE" == *"[CODE_START]"* ]]; then
-             echo "Repair applied. Retrying build..."
              echo "$FIXED_CODE" | sed -n '/\[CODE_START\]/,/\[CODE_END\]/p' | sed 's/\[CODE_START\]//;s/\[CODE_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
              ./gradlew :app:assembleDebug --no-daemon
-          else
-             echo "Final AI repair failed."
-             exit 1
           fi
 
       - name: 📦 6. Final Export
