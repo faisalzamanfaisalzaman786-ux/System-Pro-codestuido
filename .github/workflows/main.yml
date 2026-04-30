@@ -1,18 +1,9 @@
 name: System-Pro-Master-Framework-V12
 
 on:
-  # 1. بیرونی ایپ یا API سے ٹرگر کرنے کے لیے (یہ وہی ڈسپیچ ہے جو آپ چاہ رہے ہیں)
   repository_dispatch:
     types: [build-app]
-  
-  # 2. گٹ ہب ویب سائٹ (UI) سے دستی طور پر ٹرگر کرنے کے لیے
   workflow_dispatch:
-    inputs:
-      build_reason:
-        description: 'Manual Trigger Reason'
-        default: 'Forced Build'
-
-  # 3. کوڈ پش کرنے پر خودکار بلڈ
   push:
     branches: [ "main", "master" ]
 
@@ -23,23 +14,34 @@ jobs:
       contents: write
 
     steps:
-      - name: 🛠️ Checkout
+      - name: 🛠️ 1. Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: ☕ Setup JDK 17
+      - name: ☕ 2. Setup Java Runtime
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+          # ہم نے cache ہٹا دیا ہے تاکہ پہلا 'Fresh' بلڈ کامیاب ہو سکے
 
-      - name: 🔧 Build Execution
+      - name: 🔍 3. AI Reliability Check (File Verification)
         run: |
+          if [ ! -f "gradlew" ]; then
+            echo "Gradle Wrapper missing. Initializing new wrapper..."
+            gradle wrapper --gradle-version 8.5
+          fi
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
 
-      - name: 📦 Delivery
+      - name: 🚀 4. Automated Build Execution
+        run: |
+          # آٹومیشن کے لیے ہم clean کے ساتھ assemble کریں گے
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
+
+      - name: 📦 5. Artifact Delivery
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V12-Final
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
