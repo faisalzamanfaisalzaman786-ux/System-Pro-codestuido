@@ -51,42 +51,44 @@ jobs:
           EOF
 
           cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
+          <?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="[http://schemas.android.com/apk/res/android](http://schemas.android.com/apk/res/android)"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>
           EOF
 
       - name: 5. Build Attempt
         id: build_step
+        continue-on-error: true
         run: |
           if [ ! -f gradlew ]; then gradle wrapper --gradle-version 8.5; fi
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
 
       - name: 6. AI Auto-Fix (On Failure)
-        if: failure()
+        if: steps.build_step.outcome == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PKG_NAME: ${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}
         run: |
-          echo "Invoking AI..."
+          echo "AI Fix starting..."
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          ERROR_LOG=$(tail -n 50 build_log.txt | jq -sRr @json)
+          ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
+
+          # پیلوڈ کو سادہ رکھا گیا ہے
+          PROMPT="Fix Android error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Rules: Provide ONLY raw code. Format: [JAVA_START] code [JAVA_END] and [XML_START] code [XML_END]. No talk."
           
-          echo "{\"contents\": [{\"parts\":[{\"text\": \"Fix Android build error: \$ERROR_LOG. Java: \$JAVA_CODE, XML: \$XML_CODE. Return ONLY Java code, then '---FILE_SPLIT---', then XML code. No talk.\"}]}]}" > payload.json
-          
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY" -H 'Content-Type: application/json' -d @payload.json)
-          
-          CLEAN_CODE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | sed 's/```java//g; s/```xml//g; s/```//g')
-          
-          if [[ "$CLEAN_CODE" == *"---FILE_SPLIT---"* ]]; then
-            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $1}' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            echo "$CLEAN_CODE" | awk -F'---FILE_SPLIT---' '{print $2}' > "app/src/main/res/layout/activity_main.xml"
-            ./gradlew assembleDebug --no-daemon
-          else
-            echo "AI Fix Failed."
-            exit 1
-          fi
+          RESPONSE=$(curl -s -X POST "[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY)" \
+            -H 'Content-Type: application/json' \
+            -d "{\"contents\": [{\"parts\":[{\"text\": \"$PROMPT\"}]}]}")
+
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+
+          # نئے ٹیگز کے ذریعے کوڈ نکالنا (یہ زیادہ محفوظ طریقہ ہے)
+          echo "$AI_TEXT" | sed -n '/\[JAVA_START\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_START\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo "$AI_TEXT" | sed -n '/\[XML_START\]/,/\[XML_END\]/p' | sed 's/\[XML_START\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
+
+          echo "Retrying build with AI fix..."
+          ./gradlew assembleDebug --no-daemon
 
       - name: 7. Upload APK
         if: always()
