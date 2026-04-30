@@ -20,7 +20,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # کیش ہٹا دیا گیا ہے تاکہ ایرر نہ آئے
 
       - name: 🏗️ 3. Assembly
         run: |
@@ -50,7 +49,7 @@ jobs:
           </resources>
           EOF
 
-          # کوڈ انجیکشن
+          # کوڈ انجیکشن (محفوظ ترین طریقہ)
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -91,16 +90,48 @@ jobs:
 
       - name: 🚀 4. Smart Build
         id: build_step
+        # یہاں ہم continue-on-error استعمال کریں گے تاکہ AI اپنا کام کر سکے
+        continue-on-error: true
         run: |
-          # گریڈل ریپر بنانا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1
 
-      - name: 📦 5. Final Export
+      - name: 🧠 5. AI Auto-Repair
+        if: steps.build_step.outcome == 'failure'
+        env:
+          AI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "Build failed. Invoking System Pro AI..."
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          # لاگ کا وہ حصہ نکالنا جہاں ایرر ہے
+          ERROR_LOG=$(tail -n 100 build_log.txt | jq -sRr @json)
+          JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
+          
+          PROMPT="The Android build failed with this error: $ERROR_LOG. Here is the Java code: $JAVA_CODE. Fix the Java code and provide ONLY the corrected code inside [JAVA_FIX] and [JAVA_END] markers."
+          
+          JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
+          
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
+            -H 'Content-Type: application/json' -d "$JSON_DATA")
+
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+
+          if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
+            echo "AI Fix received. Re-building..."
+            echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+            ./gradlew :app:assembleDebug --no-daemon
+          else
+            echo "AI could not provide a fix. Check logs."
+            exit 1
+          fi
+
+      - name: 📦 6. Final Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-Package
+          name: SystemPro-Final-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
