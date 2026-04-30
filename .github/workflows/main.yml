@@ -21,16 +21,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏗️ 3. Initial Assembly
+      - name: 🏗️ 3. Initial Assembly (Base64 Secure)
         run: |
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          # ہم اب فولڈر نہیں بنائیں گے کیونکہ آپ مینول بنا چکے ہوں گے
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
           
-          echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          # پے لوڈ کو محفوظ طریقے سے ڈیکوڈ کر کے فائلز بنانا
+          echo "${{ github.event.client_payload.java }}" | base64 -d > "app/src/main/java/$PKG_PATH/MainActivity.java" || echo "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo "${{ github.event.client_payload.xml }}" | base64 -d > "app/src/main/res/layout/activity_main.xml" || echo "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
 
       - name: 🚀 4. Smart Build
         run: |
@@ -67,5 +67,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-APK
-          # اب یہ براہ راست آپ کے بنائے ہوئے فولڈر سے فائل اٹھائے گا
           path: SystemPro_Output/SystemPro_v1.apk
