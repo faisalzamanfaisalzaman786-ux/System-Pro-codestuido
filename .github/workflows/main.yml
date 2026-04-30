@@ -5,7 +5,13 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # دستی طور پر بلڈ رن کرنے کے لیے
+  # دستی طور پر بلڈ رن کرنے کے لیے (UI Trigger)
+  workflow_dispatch:
+    inputs:
+      build_reason:
+        description: 'Reason for manual build'
+        required: false
+        default: 'Manual Trigger for System Pro V12'
 
 jobs:
   Unified-Build-Engine:
@@ -28,10 +34,9 @@ jobs:
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v2
 
-      # اگر آپ کے پاس کوئی سیکریٹ کیز ہیں تو یہاں انٹیگریٹ کی جا سکتی ہیں
       - name: Prepare Environment
         run: |
-          echo "Setting up professional build environment..."
+          echo "Setting up professional build environment for: ${{ github.event.inputs.build_reason }}"
           mkdir -p ~/.android
           touch ~/.android/repositories.cfg
 
