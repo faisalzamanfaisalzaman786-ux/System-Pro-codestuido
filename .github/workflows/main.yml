@@ -62,14 +62,16 @@ jobs:
             implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
+          
+          # پریرمنشن پہلے ہی دے دیں
+          gradle wrapper --gradle-version 8.5
 
       - name: 🚀 4. Smart Build
         id: build_step
         continue-on-error: true
         run: |
-          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon > build_log.txt 2>&1
+          ./gradlew assembleDebug --no-daemon > build_log.txt 2>&1
 
       - name: 🧠 5. AI Auto-Repair
         if: steps.build_step.outcome == 'failure'
@@ -80,7 +82,6 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
-          JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           
           PROMPT="Fix Android build error: $ERROR_LOG. Provide only fixed Java code between [JAVA_FIX] and [JAVA_END]."
           JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
@@ -93,7 +94,7 @@ jobs:
 
           if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
             echo "$AI_TEXT" | sed -n '/\[JAVA_FIX\]/,/\[JAVA_END\]/p' | sed 's/\[JAVA_FIX\]//;s/\[JAVA_END\]//' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-            ./gradlew :app:assembleDebug --no-daemon
+            ./gradlew assembleDebug --no-daemon
           fi
 
       - name: 📦 6. Final Export
@@ -101,5 +102,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-Final-Build
-          path: "**/build/outputs/apk/**/*.apk"
-          if-no-files-found: error
+          # مخصوص پاتھ جہاں گریڈل فائلز رکھتا ہے
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
