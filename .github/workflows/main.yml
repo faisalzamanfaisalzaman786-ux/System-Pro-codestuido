@@ -8,7 +8,6 @@ on:
     branches: [ "main", "master" ]
 
 env:
-  # گٹ ہب کی نئی وارننگ کو ختم کرنے کے لیے
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -27,12 +26,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Atomic Engine)
+      - name: 🧠 3. AI Architect (Auto-Configuration Engine)
         shell: python
         run: |
           import os, json
           
-          # پے لوڈ پروسیسنگ
           try:
               raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(raw_payload) if raw_payload != "null" else {}
@@ -42,19 +40,21 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
           
-          # ڈائریکٹری اسٹرکچر
-          dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", "app/src/main/res/values", "app/src/main/res/mipmap-mdpi"]
+          dirs = [f"app/src/main/java/{pkg_path}", "app/src/main/res/layout", "app/src/main/res/values"]
           for d in dirs: os.makedirs(d, exist_ok=True)
 
-          # 1. Root Configuration
+          # --- پاور فل ڈسیژن: خودکار پراپرٹیز جنریشن ---
+          with open("gradle.properties", "w") as f:
+              f.write("android.useAndroidX=true\n")
+              f.write("android.enableJetifier=true\n") # پرانی لائبریریز کو نئے میں بدلنے کے لیے
+
           with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("local.properties", "w") as f: f.write(f"sdk.dir=/usr/lib/android-sdk") # پاتھ فکس
           
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
               f.write("allprojects { repositories { google(); mavenCentral() } }")
 
-          # 2. App Module (Strong Sync)
+          # --- ایپ ماڈیول (AndroidX Ready) ---
           app_gradle = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -65,27 +65,26 @@ jobs:
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "12.1"
+                  versionName "12.2"
               }}
-              buildTypes {{ release {{ minifyEnabled false }} }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }}
           """
           with open("app/build.gradle", "w") as f: f.write(app_gradle)
 
-          # 3. Essential Resources
+          # --- ریسورسز اور مینی فیسٹ ---
           with open("app/src/main/res/values/strings.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>')
           with open("app/src/main/res/values/themes.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"></style></resources>')
 
-          # 4. Professional Manifest
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro" android:allowBackup="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -96,15 +95,14 @@ jobs:
           </manifest>"""
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-          # 5. Java Implementation
-          java_code = payload.get("java", f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText(\"System Pro V12.1 Online\"); tv.setGravity(17); tv.setTextSize(30); tv.setTextColor(android.graphics.Color.GREEN); setContentView(tv); }} }}")
+          # جاوا لاجک
+          java_code = payload.get("java", f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText(\"System Pro V12.2 Ready\"); tv.setGravity(17); tv.setTextSize(32); tv.setTextColor(android.graphics.Color.GREEN); setContentView(tv); }} }}")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-      - name: 🚀 4. Production Build (Clean Execution)
+      - name: 🚀 4. Final Build Execution
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # 'clean' کا اضافہ کیا گیا ہے تاکہ پرانی اسٹیٹ کا مسئلہ نہ آئے
           ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
 
       - name: 📦 5. Output Management
