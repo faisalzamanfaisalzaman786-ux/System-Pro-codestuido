@@ -24,15 +24,17 @@ jobs:
 
       - name: 🏗️ 3. Assembly
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          # پیکیج نیم سیٹ کرنا
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.systempro.app' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          # ڈائریکٹریز بنانا
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout" "app/src/main/res/values"
 
-          # مینی فیسٹ فائل
+          # مینی فیسٹ بنانا
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="SystemPro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -43,14 +45,14 @@ jobs:
           </manifest>
           EOF
 
-          # اسٹائلز (ایرر سے بچنے کے لیے ضروری)
+          # اسٹائلز کنفیگریشن
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar" />
+              <style name="Theme.MaterialComponents.Light.NoActionBar" parent="Theme.MaterialComponents.Light.NoActionBar" />
           </resources>
           EOF
 
-          # جاوا اور XML کوڈ (سخت فارمیٹ)
+          # کوڈ فائلز انجیکشن
           cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
           ${{ github.event.client_payload.java }}
           EOF
@@ -59,9 +61,8 @@ jobs:
           ${{ github.event.client_payload.xml }}
           EOF
 
-          # گریڈل کنفیگریشن فائلز
+          # پروجیکٹ لیول فائلز
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -91,16 +92,14 @@ jobs:
           EOF
 
       - name: 🚀 4. Smart Build
-        id: build_step
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --stacktrace
 
       - name: 📦 5. Final Export
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Debug-APK
+          name: SystemPro-Final-APK
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
