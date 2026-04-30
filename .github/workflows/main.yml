@@ -26,13 +26,22 @@ jobs:
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH" "app/src/main/res/layout"
-          printf "%s" "${{ github.event.client_payload.java }}" > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          printf "%s" "${{ github.event.client_payload.xml }}" > "app/src/main/res/layout/activity_main.xml"
+          
+          # Use cat with heredoc to avoid printf shell injection/syntax issues
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          ${{ github.event.client_payload.java }}
+          EOF
+          
+          cat <<'EOF' > "app/src/main/res/layout/activity_main.xml"
+          ${{ github.event.client_payload.xml }}
+          EOF
+          
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }
           allprojects { repositories { google(); mavenCentral() } }
           EOF
+          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android { namespace '$PKG_NAME'; compileSdk 34; defaultConfig { applicationId '$PKG_NAME'; minSdk 24; targetSdk 34 } }
@@ -53,18 +62,24 @@ jobs:
           AI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           echo "Analyzing with System Pro AI..."
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}" | tr '.' '/')
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.faisal.systempro' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          # Properly escape logs and code for JSON payload
           ERROR_LOG=$(tail -n 40 build_log.txt | jq -sRr @json)
           JAVA_CODE=$(cat "app/src/main/java/$PKG_PATH/MainActivity.java" | jq -sRr @json)
           XML_CODE=$(cat "app/src/main/res/layout/activity_main.xml" | jq -sRr @json)
 
           PROMPT="Fix Android build error: $ERROR_LOG. Files: Java: $JAVA_CODE, XML: $XML_CODE. Rules: Provide fixed code between [JAVA_FIX] code [JAVA_END] and [XML_FIX] code [XML_END]. No talk."
           
+          # Using a cleaner JSON construction for curl
+          JSON_DATA=$(jq -n --arg p "$PROMPT" '{contents: [{parts: [{text: $p}]}]}')
+          
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$AI_KEY" \
             -H 'Content-Type: application/json' \
-            -d "{\"contents\": [{\"parts\":[{\"text\": \"$PROMPT\"}]}]}")
+            -d "$JSON_DATA")
 
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
           if [[ "$AI_TEXT" == *"[JAVA_FIX]"* ]]; then
             echo "AI Fix found. Repairing..."
@@ -72,7 +87,8 @@ jobs:
             echo "$AI_TEXT" | sed -n '/\[XML_FIX\]/,/\[XML_END\]/p' | sed 's/\[XML_FIX\]//;s/\[XML_END\]//' > "app/src/main/res/layout/activity_main.xml"
             ./gradlew assembleDebug --no-daemon
           else
-            echo "AI failed. Response: $AI_TEXT"
+            echo "AI failed to provide a valid fix or API error occurred."
+            echo "Response: $AI_TEXT"
             exit 1
           fi
 
