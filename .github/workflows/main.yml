@@ -1,4 +1,4 @@
-name: System-Pro-V17-8-Debug-Master
+name: System-Pro-V17-9-Ultra-Light
 
 on:
   repository_dispatch:
@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  Deep-Build:
+  Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ Checkout
+      - name: 🛠️ Setup
         uses: actions/checkout@v4
 
       - name: ☕ Java 17
@@ -18,12 +18,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Debug Engine (V17.8)
+      - name: 🧠 AI Clean Engine (V17.9)
         shell: python
         run: |
           import os, json, re, shutil
           
-          # مکمل ری سیٹ
           if os.path.exists('app'): shutil.rmtree('app')
           
           try:
@@ -31,52 +30,47 @@ jobs:
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
           except: payload = {}
 
-          raw_java = payload.get("java", "")
+          java_code = payload.get("java", "")
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. اسمارٹ جاوا ری پیئر
-          # کلاس کا نام اور پیکیج ہر حال میں فکس کرنا
-          sanitized_java = re.sub(r'public\s+class\s+\w+', 'public class MainActivity', raw_java)
-          if f"package {pkg_name};" not in sanitized_java:
-              sanitized_java = f"package {pkg_name};\n\n" + sanitized_java
-
-          # 2. ڈائریکٹریز کی تیاری
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 3. ضروری فائلز کا اندراج
+          # جاوا فائل لکھنا
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
-              f.write(sanitized_java)
+              f.write(java_code)
           
+          # سادہ لے آؤٹ
           with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#FFFFFF"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Debug Mode" android:layout_centerInParent="true"/></RelativeLayout>')
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro 17.9"/></LinearLayout>')
 
           with open("app/src/main/res/values/themes.xml", "w") as f:
               f.write('<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>')
           
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.8" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.9" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 4. گریڈل کی مکمل ترتیب
+          # گریڈل کنفیگریشن - بالکل سادہ (No complex strings)
+          with open("settings.gradle", "w") as f:
+              f.write("rootProject.name='SystemPro'\ninclude ':app'")
+
+          with open("build.gradle", "w") as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
 
-      - name: 🏗️ Build with Deep Logs
+      - name: 🏗️ Final Build Effort
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace --info --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📤 Export (Always)
+      - name: 📤 Export
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V17-8-LOGS
-          path: |
-            app/build/outputs/apk/debug/
-            app/src/main/java/
-            app/src/main/res/layout/
+          name: System-Pro-V17-9-RESULT
+          path: app/build/outputs/apk/debug/
