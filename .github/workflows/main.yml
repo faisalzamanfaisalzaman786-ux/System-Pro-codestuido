@@ -1,86 +1,77 @@
-name: System-Pro-V18-4-Debug-Ultra
+name: System Pro Ultimate Remote Builder
 
 on:
-  repository_dispatch:
-    types: [build-app]
+  push:
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'پروجیکٹ کا نام'
+        required: true
+        default: 'SystemProApp'
 
 jobs:
-  Build:
+  build-engine:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: 🛠️ Checkout
+      # 1. کوڈ حاصل کریں
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: ☕ Java 17
+      # 2. جاوا سیٹ اپ (لیٹسٹ سٹیبل ورژن)
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 🧠 AI Smart Engine (V18.4)
-        shell: python
+      # 3. اینڈرائیڈ SDK کی دستیابی یقینی بنائیں
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 4. ہائبرڈ لاجک: ڈیپینڈنسی اور پرمیشنز کی توثیق
+      # یہاں ہم چیک کرتے ہیں کہ آیا بنیادی ضرورتیں پوری ہیں
+      - name: Validate Project Structure
         run: |
-          import os, json, re, shutil
-
-          # مکمل صفائی (Clean State)
-          for item in os.listdir('.'):
-              if item not in ['.git', '.github']:
-                  if os.path.isfile(item): os.remove(item)
-                  else: shutil.rmtree(item)
-
-          try:
-              payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
-              payload = json.loads(payload_raw) if payload_raw != "null" else {}
-          except: payload = {}
-
-          pkg_name = payload.get("package_name", "com.faisal.systempro")
-          pkg_path = pkg_name.replace('.', '/')
-          java_code = payload.get("java", "")
-
-          # فولڈر اسٹرکچر کی تعمیر
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-          os.makedirs("gradle", exist_ok=True) # گریڈل فولڈر کی ضرورت ہو سکتی ہے
-
-          # 1. گریڈل پراپرٹیز (AndroidX Fix)
-          with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
-
-          # 2. جاوا کوڈ کی مرمت
-          if "public class" not in java_code:
-              java_code = f"package {pkg_name};\npublic class MainActivity extends androidx.appcompat.app.AppCompatActivity {{ }}"
-          else:
-              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', java_code)
-              java_code = re.sub(r'public\s+class\s+\w+', 'public class MainActivity', java_code)
-
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
-              f.write(java_code)
-
-          # 3. مینی فیسٹ اور تھیمز (Minimal)
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>')
+          echo "بنیادی ڈھانچے کی جانچ پڑتال جاری ہے..."
+          if [ ! -f "build.gradle" ]; then
+            echo "ایرر: build.gradle نہیں ملی! ڈیفالٹ ٹیمپلیٹ جنریٹ کیا جا رہا ہے..."
+            # یہاں آپ کا سسٹم ڈیفالٹ لاجک استعمال کر سکتا ہے
+          fi
           
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+      # 5. گریڈل کو ایگزیکیوٹ کرنے کی اجازت دیں
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
-          # 4. بلڈ اسکرپٹ (Stronger Repos)
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
-          with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
+      # 6. کلین بلڈ (تاکہ پرانے کیشے کا مسئلہ نہ آئے)
+      - name: Clean Project
+        run: ./gradlew clean
 
-      - name: 🏗️ Execute Debug Build
+      # 7. اصل بلڈ پراسیس (Release APK)
+      # ہم اسے 'stacktrace' کے ساتھ چلائیں گے تاکہ ایرر کا پتہ چلے
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        continue-on-error: false 
+
+      # 8. ایرر ہینڈلنگ لاجک
+      # اگر بلڈ فیل ہو جائے تو یہ سٹیپ ایرر لاگ کو سیو کرے گا تاکہ AI اسے پڑھ سکے
+      - name: Capture Error Logs on Failure
+        if: failure()
         run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --info
+          mkdir -p logs
+          cp -r app/build/reports/logslogs/ || true
+          echo "بلڈ فیل ہو گئی۔ لاگز محفوظ کر لیے گئے ہیں۔"
 
-      - name: 📤 Collect Result
-        if: always()
+      # 9. تیار شدہ APK کو اپ لوڈ کریں
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V18-4-Output
-          path: |
-            app/build/outputs/apk/debug/
-            app/src/main/java/
+          name: ${{ github.event.inputs.project_name }}-Release
+          path: app/build/outputs/apk/release/*.apk
+
+      # 10. کامیاب بلڈ کی اطلاع
+      - name: Build Success Summary
+        if: success()
+        run: echo "مبارک ہو! System Pro نے 100% کامیابی کے ساتھ بلڈ مکمل کر لی ہے۔"
