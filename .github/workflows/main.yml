@@ -1,27 +1,12 @@
-name: System-Pro-V51-Resource-Fix
+name: System-Pro-V55-Autonomous
 on:
   workflow_dispatch:
     inputs:
-      app_name:
-        description: 'ایپ کا نام'
-        required: true
-        default: 'System Pro'
-      package_name:
-        description: 'پیکج نیم'
-        required: true
-        default: 'com.system.pro'
-      java_code:
-        description: 'MainActivity.java کا کوڈ'
-        required: true
-        type: string
-      xml_code:
-        description: 'activity_main.xml کا کوڈ'
-        required: true
-        type: string
-      manifest_code:
-        description: 'مینی فیسٹ کوڈ (اگر ہے، ورنہ خالی چھوڑ دیں)'
-        required: false
-        type: string
+      app_name: { description: 'App Name', required: true, default: 'System Pro' }
+      package_name: { description: 'Package Name', required: true, default: 'com.faisal.systempro' }
+      java_code: { description: 'Java Code', required: true, type: string }
+      xml_code: { description: 'XML Layout', required: true, type: string }
+      manifest_code: { description: 'Manifest XML', required: true, type: string }
 
 jobs:
   Build-Engine:
@@ -30,7 +15,7 @@ jobs:
       - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: 🧬 1. Sync & Fix Resources
+      - name: 🧬 1. Universal Resource Binder
         shell: python
         run: |
           import os, re, base64
@@ -41,67 +26,65 @@ jobs:
           xml_raw = """${{ github.event.inputs.xml_code }}"""
           manifest_raw = """${{ github.event.inputs.manifest_code }}"""
 
-          # درست ڈائریکٹریز بنانا
-          j_path = f"app/src/main/java/{pkg.replace('.', '/')}"
-          os.makedirs(j_path, exist_ok=True)
+          # ڈھانچہ بنانا
+          os.makedirs(f"app/src/main/java/{pkg.replace('.', '/')}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
-          os.makedirs("app/src/main/res/drawable", exist_ok=True) # Drawable Folder شامل کیا
+          os.makedirs("app/src/main/res/drawable", exist_ok=True)
 
-          # جاوا کوڈ انجکشن
-          java_final = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_raw)
-          with open(f"{j_path}/MainActivity.java", 'w', encoding='utf-8') as f:
+          # --- خود مختار جاوا انجکشن ---
+          java_final = re.sub(r'^[Pp]ackage\s+[\w\.]+;', f'package {pkg};', java_raw.strip(), flags=re.MULTILINE)
+          with open(f"app/src/main/java/{pkg.replace('.', '/')}/MainActivity.java", 'w', encoding='utf-8') as f:
               f.write(java_final)
 
-          # ایکس ایم ایل انجکشن
-          xml_clean = re.sub(r'<\?xml.*?\?>', '', xml_raw).strip()
+          # --- خود مختار XML اور اسٹائل ڈیٹیکشن ---
           with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?>\n' + xml_clean)
+              f.write(xml_raw)
 
-          # --- 🚨 تھیم اور آئیکن کا حل ---
-          # ہم مینی فیسٹ میں معیاری نام استعمال کریں گے جو ہر جگہ چلیں
-          if len(manifest_raw.strip()) < 20:
-              manifest_raw = f'''<?xml version="1.0" encoding="utf-8"?>
-              <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
-                  <application android:label="{app_name}" android:theme="@style/Theme.AppCompat" android:icon="@drawable/ic_launcher">
-                      <activity android:name=".MainActivity" android:exported="true">
-                          <intent-filter>
-                              <action android:name="android.intent.action.MAIN" />
-                              <category android:name="android.intent.category.LAUNCHER" />
-                          </intent-filter>
-                      </activity>
-                  </application>
-              </manifest>'''
-          
+          # یہ لاجک XML سے تمام کسٹم اسٹائلز نکال کر انہیں ڈیفائن کر دے گی تاکہ بلڈ کبھی نہ رکے
+          styles_found = re.findall(r'@style/(\w+)', xml_raw)
+          style_entries = ""
+          for s in set(styles_found):
+              if s not in ["Theme.AppCompat", "Theme.MaterialComponents"]:
+                  style_entries += f'<style name="{s}" parent="Widget.MaterialComponents.Button"/>\n'
+
+          with open('app/src/main/res/values/styles.xml', 'w') as f:
+              f.write(f'''<resources>
+                  <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
+                  {style_entries}
+              </resources>''')
+
+          # --- مینی فیسٹ اور آئیکن ---
           with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
               f.write(manifest_raw)
 
-          # Styles.xml بنانا تاکہ تھیم ایرر ختم ہو
-          with open('app/src/main/res/values/styles.xml', 'w') as f:
-              f.write(f'''<resources>
-                  <style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>
-                  <style name="Theme.SystemProMaster" parent="Theme.AppCompat"/> 
-              </resources>''')
-
-          # آئیکن کو drawable میں رکھنا (کیونکہ مینی فیسٹ وہاں ڈھونڈ رہا ہے)
-          icon_data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          # ڈیفالٹ آئیکن (اگر کوئی اور نہیں دیا گیا)
           with open('app/src/main/res/drawable/ic_launcher.png', 'wb') as f:
-              f.write(base64.b64decode(icon_data))
+              f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
 
-          # کنفیگریشن فائلز
-          with open('gradle.properties', 'w') as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
+          # اینڈرائیڈ کی تمام جدید لائبریریز کو جوڑنا
+          with open('gradle.properties', 'w') as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
           with open('settings.gradle', 'w') as f: f.write("include ':app'")
           with open('build.gradle', 'w') as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
           with open('app/build.gradle', 'w') as f:
-              f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
+              f.write(f"""apply plugin: 'com.android.application'
+              android {{ 
+                  namespace '{pkg}'
+                  compileSdk 34
+                  defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} 
+              }}
+              dependencies {{ 
+                  implementation 'androidx.appcompat:appcompat:1.6.1'
+                  implementation 'com.google.android.material:material:1.11.0'
+                  implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              }}""")
 
-      - name: ☕ 2. Setup Java
+      - name: ☕ 2. Setup Build Environment
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
 
-      - name: 🛠️ 3. Compilation
+      - name: 🛠️ 3. Start Autonomous Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
@@ -109,6 +92,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
 
-      - name: 📤 4. Final APK
+      - name: 📤 4. Deliver APK
         uses: actions/upload-artifact@v4
-        with: { name: System-Pro-Fixed-Build, path: app/build/outputs/apk/debug/*.apk }
+        with: { name: System-Pro-Master-Package, path: app/build/outputs/apk/debug/*.apk }
