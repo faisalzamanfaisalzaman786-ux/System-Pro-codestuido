@@ -1,4 +1,4 @@
-name: System-Pro-V16-8-Functional-Injection
+name: System-Pro-V16-9-Final-Alpha
 
 on:
   repository_dispatch:
@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 Functional Resource Engine (V16.8)
+      - name: 🧠 Robust Resource Engine (V16.9)
         shell: python
         run: |
           import os, json, re
@@ -35,45 +35,44 @@ jobs:
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
 
-          # 1. فنکشنل لے آؤٹ جنریٹر
-          def create_functional_layout(name, is_main=False):
-              # اگر نام میں 'dialog' یا 'settings' ہے تو اس کے مطابق ویجیٹس ڈالنا
+          # 1. اسمارٹ اینڈ سیف لے آؤٹ جنریٹر
+          def create_safe_layout(name, is_main=False):
               if "dialog" in name or "settings" in name:
+                  # "&" کو "and" سے بدل دیا تاکہ XML پارسنگ ایرر نہ آئے
                   content_body = """
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Settings & Configuration" android:textStyle="bold" android:textSize="18sp" android:layout_marginBottom="10dp"/>
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Settings and Config" android:textStyle="bold" android:textSize="18sp" android:layout_marginBottom="10dp" android:textColor="#1B4F72"/>
                   <CheckBox android:id="@+id/enable_feature" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Enable Advanced AI Mode" android:checked="true"/>
-                  <EditText android:id="@+id/config_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Enter API Key or Config" android:padding="10dp" android:layout_marginTop="5dp"/>
-                  <Button android:id="@+id/save_btn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Save Changes" android:layout_gravity="right" android:layout_marginTop="10dp"/>
+                  <EditText android:id="@+id/config_input" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Configuration Key" android:padding="10dp"/>
+                  <Button android:id="@+id/save_btn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Save" android:layout_gravity="right"/>
                   """
               else:
-                  # مین لے آؤٹ کے لیے تمام IDs کو فنکشنل بنانا
                   all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
                   content_body = ""
                   for wid in all_ids:
                       if any(x in wid.lower() for x in ["editor", "code", "input", "text"]):
-                          content_body += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="300dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="[System Pro Editor: {wid}]" android:textColor="#000000" android:inputType="textMultiLine" android:elevation="3dp"/>\n'
+                          content_body += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="300dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="Editor: {wid}" android:textColor="#000000" android:inputType="textMultiLine" android:elevation="2dp"/>\n'
                       else:
                           content_body += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="72dp" android:text="{wid}" android:layout_margin="8dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false" android:elevation="4dp"/>\n'
 
               final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
               <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
                   android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
-                  <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="15dp" android:background="#F8F9F9">
+                  <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="15dp">
                       {content_body}
                   </LinearLayout>
               </androidx.core.widget.NestedScrollView>"""
               
               with open(f"app/src/main/res/layout/{name}.xml", "w", encoding='utf-8') as f: f.write(final_xml)
 
-          # تمام ضروری فائلز کو فنکشنل طریقے سے بنانا
+          # فائلز کی تیاری
           required_layouts = set(re.findall(r"R\.layout\.([a-zA-Z0-9_]+)", java_code))
           for layout in required_layouts:
-              create_functional_layout(layout, is_main=(layout == "activity_main"))
+              create_safe_layout(layout, is_main=(layout == "activity_main"))
           
           if "activity_main" not in required_layouts:
-              create_functional_layout("activity_main", is_main=True)
+              create_safe_layout("activity_main", is_main=True)
 
-          # 2. فائنل فائلز کی رائٹنگ
+          # جاوا اور گریڈل رائٹنگ
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f: f.write(java_code)
           with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
           with open("app/build.gradle", "w") as f:
@@ -81,17 +80,17 @@ jobs:
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript {{ repositories {{ google(); mavenCentral() }}; dependencies {{ classpath 'com.android.tools.build:gradle:8.2.2' }} }}\nallprojects {{ repositories {{ google(); mavenCentral() }} }}")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro Functional" android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V16.9" android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🏗️ Execute Functional Build
+      - name: 🏗️ Execute Stable Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Export Functional APK
+      - name: 📤 Final Success APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V16-8-FUNCTIONAL
+          name: System-Pro-V16-9-STABLE
           path: app/build/outputs/apk/debug/*.apk
