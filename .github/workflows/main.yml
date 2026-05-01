@@ -1,4 +1,4 @@
-name: System-Pro-V18-2-Hammer
+name: System-Pro-V18-3-Final-Fix
 
 on:
   repository_dispatch:
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Hammer Engine (V18.2)
+      - name: 🧠 AI Engine (V18.3)
         shell: python
         run: |
           import os, json, re, shutil
 
-          # مکمل صفائی (Fresh Start)
+          # مکمل صفائی
           for item in os.listdir('.'):
               if item not in ['.git', '.github']:
                   if os.path.isfile(item): os.remove(item)
@@ -38,20 +38,22 @@ jobs:
           pkg_path = pkg_name.replace('.', '/')
           java_code = payload.get("java", "")
 
-          # 1. کوڈ ری پیئر لاجک (The Fix)
-          if len(java_code) < 10 or "public class" not in java_code:
-              # اگر کوڈ بہت چھوٹا ہے یا خراب ہے تو ڈیفالٹ کوڈ ڈالیں
-              java_code = f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {{\n        super.onCreate(savedInstanceState);\n        android.widget.TextView tv = new android.widget.TextView(this);\n        tv.setText(\"System Pro V18.2 Build Successful!\");\n        setContentView(tv);\n    }}\n}}"
-          else:
-              # پیکیج اور کلاس نیم زبردستی فکس کرنا
-              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', java_code)
-              java_code = re.sub(r'public\s+class\s+\w+', 'public class MainActivity', java_code)
-
-          # 2. اسٹرکچر بنانا
+          # 1. فولڈر اسٹرکچر
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 3. فائلیں لکھنا
+          # 2. گریڈل پراپرٹیز (یہی وہ فائل ہے جو مسنگ تھی)
+          with open("gradle.properties", "w") as f:
+              f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
+
+          # 3. جاوا کوڈ سیٹ اپ
+          if "public class" not in java_code:
+              java_code = f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {{\n        super.onCreate(savedInstanceState);\n        android.widget.TextView tv = new android.widget.TextView(this);\n        tv.setText(\"System Pro V18.3 - Success!\");\n        setContentView(tv);\n    }}\n}}"
+          else:
+              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', java_code)
+              java_code = re.sub(r'public\s+class\s+\w+', 'public class MainActivity', java_code)
+
+          # 4. مینی فیسٹ اور تھیمز
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
               f.write(java_code)
           
@@ -61,21 +63,21 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 4. گریڈل فائلیں (سادہ ترین شکل)
+          # 5. بلڈ کنفیگریشن
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
 
-      - name: 🏗️ Execute Build
+      - name: 🏗️ Execute Final Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Export
+      - name: 📤 Get My APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V18-2-STABLE
+          name: System-Pro-V18-3-APK
           path: app/build/outputs/apk/debug/
