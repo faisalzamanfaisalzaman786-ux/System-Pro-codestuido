@@ -41,8 +41,12 @@ jobs:
           <resources><string name="app_name">$APP_NAME</string></resources>
           EOF
 
-      - name: 🏗️ Auto-Generate Build Scripts & Gradle Fix
+      - name: 🏗️ Auto-Generate Build Scripts & AndroidX Fix
         run: |
+          # 🚀 FIX: Create gradle.properties and enable AndroidX
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          
           # Create settings.gradle
           echo "include ':app'" > settings.gradle
           
@@ -68,14 +72,18 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              buildFeatures {
+                  viewBinding true
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-          # 🚀 FIX: Auto-setup Gradle Wrapper if missing
+          # Setup Gradle Wrapper
           gradle wrapper --gradle-version 8.5
 
       - name: 🚀 Execute Production Build
