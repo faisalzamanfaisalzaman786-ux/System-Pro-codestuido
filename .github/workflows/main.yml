@@ -32,13 +32,42 @@ jobs:
           echo "rootProject.name='$PROJECT_NAME'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # Official Manifest
+          # 1. Root build.gradle (پلگ انز کی تعریف)
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:8.0.2" }
+          }
+          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
+          EOF
+
+          # 2. App-level build.gradle (یہ وہ فائل ہے جو مسنگ تھی)
+          cat <<EOF > app/build.gradle
+          apply plugin: 'com.android.application'
+          android {
+              namespace 'com.system.pro'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+          # 3. Official Manifest, Activity, and Layout (پہلے والا لاجک)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.system.pro">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="$PROJECT_NAME" android:theme="@style/Theme.AppCompat">
-                  <activity android:name=".MainActivity" android:exported="true">
+                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -48,14 +77,12 @@ jobs:
           </manifest>
           EOF
 
-          # Default Activity & Layout
           cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
           public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
+              @Override protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
               }
@@ -65,22 +92,14 @@ jobs:
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#000000">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="System Pro: Master Build Success"
-                  android:textColor="#00FF00"
-                  android:layout_centerInParent="true"
-                  android:textSize="20sp" />
+              android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="System Pro Master: Build Success" android:textColor="#00FF00"
+                  android:layout_centerInParent="true" android:textSize="20sp" />
           </RelativeLayout>
           EOF
 
-          # Themes & Strings
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.DarkActionBar" /></resources>' > app/src/main/res/values/themes.xml
-          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
@@ -95,12 +114,10 @@ jobs:
 
       - name: 📦 Official Assembly Build
         run: |
-          echo "Compiling APK..."
-          # اب ہم اصل بلڈ رن کر رہے ہیں
-          ./gradlew assembleDebug
+          ./gradlew :app:assembleDebug
 
       - name: 📤 Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V18-6-Final
+          name: System-Pro-V18-6-APK
           path: app/build/outputs/apk/debug/*.apk
