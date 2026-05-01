@@ -1,4 +1,4 @@
-name: System-Pro-V18.6-Final-Master
+name: System-Pro-V18.7-Payload-Master
 on:
   workflow_dispatch:
     inputs:
@@ -16,22 +16,73 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Android Official Structure
+      - name: 🏗️ Setup Template Structure
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout/
           mkdir -p app/src/main/res/values/
           mkdir -p gradle/wrapper
 
-          # 1. Settings & Properties (AndroidX Fix)
-          echo "rootProject.name='SystemPro_App'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
-          
-          # یہ وہ فائل ہے جس کی وجہ سے ایرر آ رہا تھا
+          # بنیادی ترتیبات
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "include ':app'" > settings.gradle
 
-          # 2. Root build.gradle
+      - name: 🧬 Integrate Payload with Template
+        shell: python
+        run: |
+          import os
+          import json
+
+          # گٹ ہب ایونٹ کا ڈیٹا حاصل کرنا
+          event_path = os.getenv('GITHUB_EVENT_PATH')
+          with open(event_path, 'r') as f:
+              event_data = json.load(f)
+          
+          payload = event_data.get('client_payload', {})
+          
+          # 1. Project Name Handling
+          proj_name = payload.get('project_name', 'SystemPro_App')
+          with open('settings.gradle', 'w') as f:
+              f.write(f"rootProject.name='{proj_name}'\ninclude ':app'")
+
+          # 2. Java Code Integration (Payload vs Template)
+          java_code = payload.get('java_code', """
+          package com.system.pro;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+          """)
+          
+          # 3. XML Layout Integration (Payload vs Template)
+          xml_code = payload.get('xml_code', """
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="System Pro: Payload Success" android:textColor="#00FF00"
+                  android:layout_centerInParent="true" />
+          </RelativeLayout>
+          """)
+
+          # فائلوں میں کوڈ لکھنا
+          os.makedirs('app/src/main/java/com/system/pro', exist_ok=True)
+          with open('app/src/main/java/com/system/pro/MainActivity.java', 'w') as f:
+              f.write(java_code)
+          
+          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
+              f.write(xml_code)
+          
+          print(f"Integration Complete: Project '{proj_name}' is ready with payload data.")
+
+      - name: 📝 Finalizing Build Files
+        run: |
+          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -40,7 +91,7 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 3. App-level build.gradle
+          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -58,7 +109,7 @@ jobs:
           }
           EOF
 
-          # 4. Manifest & Java (کامیاب ڈیفالٹ لاجک)
+          # Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -72,20 +123,6 @@ jobs:
               </application>
           </manifest>
           EOF
-
-          cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
-          package com.system.pro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-
-          echo '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Build Success" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
       - name: ☕ Setup Java 17
@@ -104,8 +141,8 @@ jobs:
       - name: 📦 Official Build
         run: ./gradlew :app:assembleDebug
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload Payload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-Payload-APK
           path: app/build/outputs/apk/debug/*.apk
