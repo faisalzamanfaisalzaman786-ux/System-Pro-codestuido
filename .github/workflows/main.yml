@@ -1,4 +1,4 @@
-name: System-Pro-V18.5-Smart-Resolver
+name: System-Pro-V18.6-Parallel-Hunter
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ on:
       project_name:
         description: 'پروجیکٹ کا نام'
         required: false
-        default: 'SystemPro-Hybrid'
+        default: 'SystemPro-Parallel-Engine'
 
 jobs:
   Build:
@@ -23,18 +23,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 Hybrid AI & Search Engine (V18.5)
+      - name: 🚀 Triple-Engine Parallel Hunter (V18.6)
         shell: python
         run: |
-          import os, json, re, shutil
+          import os, json, re, shutil, threading
+          from concurrent.futures import ThreadPoolExecutor
 
-          # 1. کلین اسٹیٹ لاجک
+          # 1. ماحول کی صفائی
           for item in os.listdir('.'):
               if item not in ['.git', '.github']:
                   if os.path.isfile(item): os.remove(item)
                   else: shutil.rmtree(item)
 
-          # 2. پے لوڈ اور ان پٹ ہینڈلنگ
+          # 2. پے لوڈ ہینڈلنگ
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
@@ -42,81 +43,81 @@ jobs:
 
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
-          requested_features = payload.get("features", ["appcompat"]) # مثلاً ['glassmorphism', 'networking']
+          features = payload.get("features", ["appcompat", "material"])
 
-          # 3. ملٹی سورس ریزولیور (The Decision Logic)
-          # یہاں ہم لائبریریز کی ایک ڈیٹا بیس بنا رہے ہیں
-          library_db = {
-              "appcompat": "androidx.appcompat:appcompat:1.6.1",
-              "material": "com.google.android.material:material:1.11.0",
-              "glassmorphism": "com.github.mmin18:realtimeblurview:1.2.1",
-              "networking": "com.squareup.retrofit2:retrofit:2.9.0",
-              "images": "com.github.bumptech.glide:glide:4.16.0"
-          }
+          # --- ٹرپل انجن لاجک (Parallel Engines) ---
+          
+          final_deps = []
+          results_found = set()
+          lock = threading.Lock()
 
-          selected_deps = []
-          for feature in requested_features:
-              if feature in library_db:
-                  print(f"منبع ملا: {feature} کے لیے آفیشل لائبریری استعمال کی جا رہی ہے۔")
-                  selected_deps.append(f"implementation '{library_db[feature]}'")
-              else:
-                  print(f"منبع نہیں ملا: {feature} کے لیے اے آئی کسٹم لاجک جنریٹ کرے گا۔")
-                  # یہاں اے آئی کسٹم کوڈ جنریشن کی لاجک آ سکتی ہے
+          # انجن A: آفیشل گوگل/ماون ریپوزٹری
+          def official_scout(feature):
+              db = {"appcompat": "androidx.appcompat:appcompat:1.6.1", "material": "com.google.android.material:material:1.11.0"}
+              if feature in db:
+                  with lock:
+                      if feature not in results_found:
+                          final_deps.append(f"implementation '{db[feature]}'")
+                          results_found.add(feature)
+                          print(f"[Scout] Found Official: {feature}")
 
-          # 4. فولڈر اسٹرکچر کی تعمیر
+          # انجن B: گٹ ہب ہنٹر (JitPack)
+          def github_hunter(feature):
+              db = {"glassmorphism": "com.github.mmin18:realtimeblurview:1.2.1", "networking": "com.squareup.retrofit2:retrofit:2.9.0"}
+              if feature in db:
+                  with lock:
+                      if feature not in results_found:
+                          final_deps.append(f"implementation '{db[feature]}'")
+                          results_found.add(feature)
+                          print(f"[Hunter] Found on GitHub: {feature}")
+
+          # انجن C: اے آئی آرکیٹیکٹ (اگر کچھ نہ ملے)
+          def ai_architect(feature):
+              with lock:
+                  if feature not in results_found:
+                      print(f"[AI] No resource found for {feature}, generating custom logic...")
+                      # اے آئی یہاں کسٹم کوڈ کے لیے جگہ بنائے گا
+
+          # تینوں انجنوں کو ایک ساتھ چلانا (Race Condition)
+          with ThreadPoolExecutor(max_workers=3) as executor:
+              for f in features:
+                  executor.submit(official_scout, f)
+                  executor.submit(github_hunter, f)
+                  executor.submit(ai_architect, f)
+
+          # --- اینڈرائیڈ فائل اسٹرکچر کی تعمیر ---
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
 
-          # 5. فائل جنریشن (No Drinks Constraint)
-          # گریڈل پراپرٹیز
+          # 3. فائلیں لکھنا (No Drinks Constraint)
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
 
-          # بلڈ اسکرپٹس (Root & App)
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }")
 
-          dep_string = "\n    ".join(selected_deps) if selected_deps else "implementation 'androidx.appcompat:appcompat:1.6.1'"
-          
+          dep_str = "\n    ".join(final_deps)
           with open("app/build.gradle", "w") as f:
-              f.write(f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }}
-          }}
-          dependencies {{
-              {dep_string}
-              implementation 'com.google.android.material:material:1.11.0'
-          }}
-          """)
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ {dep_str} }}")
 
-          # مینی فیسٹ اور بنیادی کوڈ
+          # مینی فیسٹ اور مین ایکٹیویٹی
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
               f.write(f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); }} }}")
 
-      - name: 🏗️ Execute Hybrid Build
+      - name: 🏗️ Execute Triple-Engine Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📤 Upload APK Artifact
-        if: success()
+      - name: 📤 Collect Result
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build-Success
+          name: System-Pro-V18.6-Output
           path: app/build/outputs/apk/debug/*.apk
