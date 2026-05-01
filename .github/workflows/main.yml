@@ -1,4 +1,4 @@
-name: System-Pro-V16-1-Final
+name: System-Pro-V16-2-Industrial
 
 on:
   repository_dispatch:
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Ultra-Dynamic Engine (V16.1)
+      - name: 🧠 AI Ultra-Dynamic Engine (V16.2)
         shell: python
         run: |
           import os, json, re
 
-          # ڈیٹا لوڈنگ
+          # ڈیٹا لوڈنگ اور پے لوڈ ہینڈلنگ
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
@@ -33,7 +33,7 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. آئی ڈی اسکینر
+          # 1. آئی ڈی اور ویجیٹ اسکیننگ
           all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
           
           # 2. اسمارٹ یو آئی (72dp Buttons for Adjustment)
@@ -44,23 +44,24 @@ jobs:
               else:
                   widgets_xml += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="72dp" android:text="{wid}" android:layout_margin="8dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false" android:elevation="6dp"/>\n'
 
-          # 3. کریش پروف XML
+          # 3. کریش پروف ہائبرڈ لے آؤٹ
+          # ہم نے یہاں NestedScrollView کو ایٹریبیوٹس کے ساتھ فکس کر دیا ہے تاکہ ClassCastException نہ آئے
           final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
           <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
               <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro: Final Fixed" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold" android:textColor="#1B4F72"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro v16.2" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold" android:textColor="#1B4F72"/>
                   {widgets_xml}
               </LinearLayout>
           </androidx.core.widget.NestedScrollView>"""
 
-          # 4. فائلیں تیار کرنا
+          # 4. فائل رائٹنگ
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f: f.write(final_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f: f.write(java_code)
           
-          # بلڈ پراپرٹیز
+          # بلڈ کنفیگریشن
           with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
@@ -69,15 +70,16 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🏗️ Initialize & Build APK
+      - name: 🏗️ Fix Gradlew & Build
         run: |
+          # گریڈل فائلز کو ری-جنریٹ کرنا تاکہ 'No such file' کا مسئلہ ختم ہو
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Upload APK
+      - name: 📤 Upload Success APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-APK
+          name: System-Pro-V16-2-APK
           path: app/build/outputs/apk/debug/*.apk
