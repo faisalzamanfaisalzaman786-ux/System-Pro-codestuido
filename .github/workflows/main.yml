@@ -1,4 +1,27 @@
-        name: 🧬 AI Guardian: Icon & Package Master
+name: System-Pro-V19.5-Final-Master
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [build-app]
+
+jobs:
+  Build-Engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛠️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Android Official Structure
+        run: |
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p gradle/wrapper
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "include ':app'" > settings.gradle
+
+      - name: 🧬 AI Guardian: Icon & Package Master
         shell: python
         run: |
           import os, json, re, base64
@@ -10,7 +33,6 @@
           payload = event_data.get('client_payload', {})
 
           # 1. Global Package Name Sync
-          # اگر پے لوڈ میں پیکج نیم ہے تو وہ استعمال ہوگا، ورنہ ڈیفالٹ
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
 
@@ -25,44 +47,46 @@
                       os.makedirs(path, exist_ok=True)
                       with open(f'{path}/ic_launcher.png', 'wb') as f:
                           f.write(img_data)
-                  print(f"AI Success: App icon processed and placed in all resource folders.")
+                  print("AI Success: Icon processed.")
               except Exception as e:
-                  print(f"AI Warning: Icon processing failed: {e}")
+                  print(f"AI Warning: Icon failed: {e}")
 
-          # 3. Java Code & Package Fixer
-          raw_java = payload.get('java_code', "")
-          # AI Logic: پے لوڈ والے پیکج نیم کو جاوا کوڈ میں زبردستی سیٹ کرنا
+          # 3. Java Purification (Syntax & Package Guardian)
+          raw_java = payload.get('java_code', "").strip()
           if raw_java:
-              java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java.strip())
-              # بریکٹ بیلنسنگ
+              # پیکج نیم درست کرنا
+              java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java)
+              # بریکٹ بیلنسنگ (Braces Fixer)
               open_b = java_purified.count('{')
               close_b = java_purified.count('}')
               if open_b > close_b: java_purified += "\n" + ("}" * (open_b - close_b))
           else:
               java_purified = f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}"
 
-          # 4. XML Layout Cleanup
-          xml_purified = re.sub(r'^[^<]+', '', payload.get('xml_code', "").strip())
-          if not xml_purified.startswith('<?xml'): xml_purified = '<?xml version="1.0" encoding="utf-8"?>\n' + xml_purified
+          # 4. XML Layout Cleanup (Header & Tags Guardian)
+          xml_raw = payload.get('xml_code', "").strip()
+          if xml_raw:
+              xml_purified = re.sub(r'^[^<]+', '', xml_raw)
+              if not xml_purified.startswith('<?xml'):
+                  xml_purified = '<?xml version="1.0" encoding="utf-8"?>\n' + xml_purified
+          else:
+              xml_purified = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Build Success" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>'
 
-          # فائلیں لکھنا (متحرک راستوں کے ساتھ)
+          # فائلیں محفوظ کرنا
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
-          os.makedirs('app/src/main/res/layout', exist_ok=True)
-          
           with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f:
               f.write(java_purified)
           with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f:
               f.write(xml_purified)
 
-          # پیکیج نیم کو انوائرنمنٹ میں محفوظ کرنا تاکہ گریڈل استعمال کر سکے
+          # پیکیج نیم کو انوائرنمنٹ میں منتقل کرنا
           with open('env_vars.sh', 'w') as f:
               f.write(f"export TARGET_PKG='{target_pkg}'")
 
       - name: 📝 Sync Build Configurations
         run: |
           source env_vars.sh
-          # App build.gradle میں پیکیج نیم اپ ڈیٹ کرنا
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -82,11 +106,10 @@
           }
           EOF
 
-          # مینی فیسٹ میں آٹو پیکج سنک
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -96,3 +119,26 @@
               </application>
           </manifest>
           EOF
+          echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🛠️ Setup Gradle Wrapper
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.0-bin.zip
+          unzip -q gradle-8.0-bin.zip
+          ./gradle-8.0/bin/gradle wrapper --gradle-version 8.0
+          chmod +x gradlew
+
+      - name: 📦 AI-Validated Official Build
+        run: ./gradlew :app:assembleDebug
+
+      - name: 📤 Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V19-Final-APK
+          path: app/build/outputs/apk/debug/*.apk
