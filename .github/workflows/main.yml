@@ -1,4 +1,4 @@
-name: System-Pro-V19.0-Stable-Official-Sync
+name: System-Pro-V19.1-AI-Inspector
 
 on:
   repository_dispatch:
@@ -18,101 +18,70 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 Auto-Sync & Fix Engine (V19.0)
+      - name: 🧠 AI Master Inspector & Code Fixer
         shell: python
         run: |
           import os, json, re, shutil
 
-          # مکمل صفائی
-          for item in os.listdir('.'):
-              if item not in ['.git', '.github']:
-                  if os.path.isfile(item): os.remove(item)
-                  else: shutil.rmtree(item)
+          # 1. پے لوڈ وصول کرنا اور ابتدائی تجزیہ
+          try:
+              payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
+              payload = json.loads(payload_raw) if payload_raw != "null" else {}
+          except: payload = {}
 
-          pkg_name = "com.faisal.systempro"
-          pkg_path = pkg_name.replace('.', '/')
-          
-          # فولڈر اسٹرکچر کی درست تعمیر
+          # AI کا پہلا کام: پیکیج نیم کا اتحاد (Unified Package Name)
+          # اگر پے لوڈ میں نام ہے تو وہ، ورنہ ڈیفالٹ
+          fixed_pkg = payload.get("package_name", "com.faisal.systempro").strip().lower()
+          fixed_pkg = re.sub(r'[^a-z0-9.]', '', fixed_pkg) # صرف درست حروف
+          pkg_path = fixed_pkg.replace('.', '/')
+
+          print(f"AI Inspector: Unifying all code under package -> {fixed_pkg}")
+
+          # 2. انوائرنمنٹ سیٹ اپ (AI Placement Logic)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. تھیم فائل (میٹریل 3 کے لیے لازمی)
+          # 3. کوڈ کی درستگی اور پلیسمنٹ (AI Refactoring)
+          # یہاں AI پے لوڈ سے ملنے والے جاوا کوڈ کو ٹھیک کر کے پلیس کرے گا
+          raw_java = payload.get("java_code", "")
+          if not raw_java:
+              raw_java = f"package {fixed_pkg};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
+          
+          # AI Correction: پیکیج نیم کو زبردستی درست کرنا
+          corrected_java = re.sub(r'^package\s+[\w.]+;', f'package {fixed_pkg};', raw_java, flags=re.MULTILINE)
+
+          # 4. لے اؤٹ کی چیکنگ اور میچنگ
+          raw_xml = payload.get("layout_xml", "")
+          if not raw_xml:
+              raw_xml = '<?xml version="1.0" encoding="utf-8"?><androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"><com.google.android.material.textview.MaterialTextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro: Fixed by AI" android:textColor="#FFFFFF" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintLeft_toLeftOf="parent" app:layout_constraintRight_toRightOf="parent" app:layout_constraintTop_toTopOf="parent" /></androidx.constraintlayout.widget.ConstraintLayout>'
+
+          # فائلوں کو ان کی جگہ پر محفوظ کرنا
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(corrected_java)
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(raw_xml)
+          
+          # تھیم اور مینی فیسٹ کی خودکار درستگی
           with open("app/src/main/res/values/themes.xml", "w") as f:
               f.write('<resources><style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar"/></resources>')
-
-          # 2. آفیشل لے آؤٹ (ConstraintLayout کے ساتھ)
-          xml_layout = """<?xml version="1.0" encoding="utf-8"?>
-          <androidx.constraintlayout.widget.ConstraintLayout 
-              xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#121212">
-              <com.google.android.material.textview.MaterialTextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="System Pro: Official Engine V19.0"
-                  android:textColor="#FFFFFF"
-                  android:textSize="20sp"
-                  app:layout_constraintBottom_toBottomOf="parent"
-                  app:layout_constraintLeft_toLeftOf="parent"
-                  app:layout_constraintRight_toRightOf="parent"
-                  app:layout_constraintTop_toTopOf="parent" />
-          </androidx.constraintlayout.widget.ConstraintLayout>"""
-
-          # 3. جاوا کوڈ (آفیشل لائبریری امپورٹس کے ساتھ)
-          java_code = f"""package {pkg_name};
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {{
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {{
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }}
-          }}"""
-
-          # فائلیں محفوظ کرنا
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(xml_layout)
-
-          # 4. بلڈ گریڈل (Namespace فکس کے ساتھ)
-          with open("app/build.gradle", "w") as f:
-              f.write(f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }}
-              buildTypes {{ release {{ minifyEnabled false }} }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }}""")
-
+          
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+          # 5. آفیشل گریڈل کنفیگریشن
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{fixed_pkg}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{fixed_pkg}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.11.0'\nimplementation 'androidx.constraintlayout:constraintlayout:2.1.4' }}")
 
-      - name: 🏗️ Final Stable Build
+          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }")
+
+      - name: 🏗️ Execute Build with AI Oversight
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Collect Stable APK
+      - name: 📤 Collect Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V19.0-Stable-APK
+          name: System-Pro-V19.1-Inspected-APK
           path: app/build/outputs/apk/debug/*.apk
