@@ -1,4 +1,4 @@
-name: System-Pro-V22.1-Final
+name: System-Pro-V24.0-Clean-Build
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -11,7 +11,16 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Advanced Android Structure
+      - name: 🧼 Pre-Build Deep Clean
+        run: |
+          # پچھلے کسی بھی بلڈ کے نشانات مٹانا
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/build/
+          rm -f env_vars.sh
+          echo "Workspace is now clean for a fresh build."
+
+      - name: 🏗️ Setup Official Structure
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
@@ -20,40 +29,57 @@ jobs:
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 Triple-Engine AI Discovery & Guardian
+      - name: 🧬 AI Template & Payload Merger
         shell: python
         run: |
-          import os, json, re, base64
+          import os, json, re, shutil
 
-          try:
-              event_path = os.getenv('GITHUB_EVENT_PATH')
-              with open(event_path, 'r') as f:
-                  event_data = json.load(f)
-              payload = event_data.get('client_payload', {})
-          except:
-              payload = {}
+          # پے لوڈ حاصل کرنا
+          event_path = os.getenv('GITHUB_EVENT_PATH')
+          with open(event_path, 'r') as f:
+              event_data = json.load(f)
+          payload = event_data.get('client_payload', {})
 
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
 
-          raw_java = payload.get('java_code', "").strip()
-          if raw_java:
-              java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java)
-              open_b, close_b = java_purified.count('{'), java_purified.count('}')
-              if open_b > close_b: java_purified += "\n" + ("}" * (open_b - close_b))
-          else:
-              java_purified = f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}"
+          # فائلیں اٹھانے کا عمل (اگر ٹیمپلیٹ فولڈر موجود ہے)
+          java_tmpl = 'templates/app_logic.java'
+          xml_tmpl = 'templates/app_ui.xml'
+          man_tmpl = 'templates/app_manifest.xml'
 
+          # جاوا کی تیاری
+          if os.path.exists(java_tmpl):
+              with open(java_tmpl, 'r') as f: java_content = f.read()
+          else:
+              java_content = payload.get('java_code', '')
+
+          if java_content:
+              java_content = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_content.strip())
+          
+          # ایکس ایم ایل کی تیاری
+          xml_content = ""
+          if os.path.exists(xml_tmpl):
+              with open(xml_tmpl, 'r') as f: xml_content = f.read()
+          else:
+              xml_content = payload.get('xml_code', '')
+
+          # مینی فیسٹ کی تیاری
+          if os.path.exists(man_tmpl):
+              with open(man_tmpl, 'r') as f: manifest_content = f.read()
+          else:
+              manifest_content = '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+
+          # فائلوں کو فائنل پاتھ پر لکھنا
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
-          with open(f'{java_dir}/MainActivity.java', 'w') as f: f.write(java_purified)
-          
-          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro V22.1 Ready" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
+          with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f: f.write(java_content)
+          with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f: f.write(xml_content)
+          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f: f.write(manifest_content)
 
           with open('env_vars.sh', 'w') as f: f.write(f"export TARGET_PKG='{target_pkg}'")
 
-      - name: 📝 Forced SDK & Dependency Sync
+      - name: 📝 Build Config Sync
         run: |
           source env_vars.sh
           cat <<EOF > build.gradle
@@ -73,40 +99,12 @@ jobs:
                   applicationId "$TARGET_PKG"
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          configurations.all {
-              resolutionStrategy.eachDependency { details ->
-                  if (details.requested.group == 'com.android.support') {
-                      details.useByCapability("androidx.appcompat:appcompat:1.6.1")
-                  }
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
-          EOF
-
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
           EOF
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
@@ -116,18 +114,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Setup Gradle 8.2
+      - name: 🛠️ Build & Clean Execution
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
           ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-
-      - name: 📦 Final AI Validated Build
-        run: ./gradlew :app:assembleDebug
+          ./gradlew clean assembleDebug  # یہاں clean کمانڈ ڈیٹا واش کرے گی
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V22.1-APK
+          name: System-Pro-V24-Clean
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: 🚿 Post-Build Data Wash
+        if: always()  # یہ قدم ہمیشہ چلے گا، چاہے بلڈ فیل ہو یا پاس
+        run: |
+          echo "Washing temporary files..."
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/layout/*
+          rm -f env_vars.sh
+          echo "Workspace washed and ready for next build."
