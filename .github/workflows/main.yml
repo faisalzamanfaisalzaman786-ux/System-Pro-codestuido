@@ -1,4 +1,4 @@
-name: System-Pro-V18.9-Official-Sync
+name: System-Pro-V19.0-Stable-Official-Sync
 
 on:
   repository_dispatch:
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🔍 Official Resource Hunter (V18.9)
+      - name: 🧠 Auto-Sync & Fix Engine (V19.0)
         shell: python
         run: |
           import os, json, re, shutil
 
-          # پرانا ڈیٹا صاف کرنا
+          # مکمل صفائی
           for item in os.listdir('.'):
               if item not in ['.git', '.github']:
                   if os.path.isfile(item): os.remove(item)
@@ -32,82 +32,87 @@ jobs:
           pkg_name = "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
           
+          # فولڈر اسٹرکچر کی درست تعمیر
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # آفیشل لائبریری ڈیٹا بیس (صرف مستند ذرائع)
-          official_libraries = {
-              "ui_components": "com.google.android.material:material:1.11.0",
-              "app_compat": "androidx.appcompat:appcompat:1.6.1",
-              "constraint_layout": "androidx.constraintlayout:constraintlayout:2.1.4"
-          }
+          # 1. تھیم فائل (میٹریل 3 کے لیے لازمی)
+          with open("app/src/main/res/values/themes.xml", "w") as f:
+              f.write('<resources><style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar"/></resources>')
 
-          # جاوا کوڈ کا اسکین اور آفیشل ریسورس سے میچنگ
-          java_code = """
-          package com.faisal.systempro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          import com.google.android.material.button.MaterialButton;
-
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          """
-
-          # گریڈل میں صرف وہی ڈالنا جو آفیشل ہے
-          dependencies = []
-          for key, value in official_libraries.items():
-              dependencies.append(f"implementation '{value}'")
-
-          # لے آؤٹ کو آفیشل میٹریل ڈیزائن کے مطابق مکمل کرنا
+          # 2. آفیشل لے آؤٹ (ConstraintLayout کے ساتھ)
           xml_layout = """<?xml version="1.0" encoding="utf-8"?>
           <androidx.constraintlayout.widget.ConstraintLayout 
               xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res/shortcut"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:background="#121212">
-              
               <com.google.android.material.textview.MaterialTextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Official Resources Integrated"
-                  android:textColor="#00FF00"
+                  android:text="System Pro: Official Engine V19.0"
+                  android:textColor="#FFFFFF"
+                  android:textSize="20sp"
                   app:layout_constraintBottom_toBottomOf="parent"
                   app:layout_constraintLeft_toLeftOf="parent"
                   app:layout_constraintRight_toRightOf="parent"
                   app:layout_constraintTop_toTopOf="parent" />
-
           </androidx.constraintlayout.widget.ConstraintLayout>"""
+
+          # 3. جاوا کوڈ (آفیشل لائبریری امپورٹس کے ساتھ)
+          java_code = f"""package {pkg_name};
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {{
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {{
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }}
+          }}"""
 
           # فائلیں محفوظ کرنا
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(xml_layout)
 
-          # بلڈ کنفیگریشن
-          dep_str = "\n    ".join(dependencies)
+          # 4. بلڈ گریڈل (Namespace فکس کے ساتھ)
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{\n    {dep_str}\n}}")
+              f.write(f"""
+          plugins {{ id 'com.android.application' }}
+          android {{
+              namespace '{pkg_name}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId '{pkg_name}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+              buildTypes {{ release {{ minifyEnabled false }} }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }}""")
 
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.Material3.Dark.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-      - name: 🏗️ Execute Official Build
+      - name: 🏗️ Final Stable Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📤 Collect Official APK
+      - name: 📤 Collect Stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V18.9-Official-APK
+          name: System-Pro-V19.0-Stable-APK
           path: app/build/outputs/apk/debug/*.apk
