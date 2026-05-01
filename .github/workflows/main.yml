@@ -1,4 +1,4 @@
-name: System-Pro-V17-9-Ultra-Light
+name: System-Pro-V18-1-Structure-Fix
 
 on:
   repository_dispatch:
@@ -6,25 +6,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  Build:
+  Build-Process:
     runs-on: ubuntu-latest
     steps:
       - name: 🛠️ Setup
         uses: actions/checkout@v4
 
-      - name: ☕ Java 17
+      - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Clean Engine (V17.9)
+      - name: 🧠 AI Structure Engine (V18.1)
         shell: python
         run: |
-          import os, json, re, shutil
-          
-          if os.path.exists('app'): shutil.rmtree('app')
-          
+          import os, json, shutil
+
+          # پرانی تمام فائلوں کو صاف کریں تاکہ گریڈل کنفیوز نہ ہو
+          for item in os.listdir('.'):
+              if item not in ['.git', '.github']:
+                  if os.path.isfile(item): os.remove(item)
+                  else: shutil.rmtree(item)
+
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
@@ -34,43 +38,66 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
+          # 1. اینڈرائیڈ فولڈر سٹرکچر کی تعمیر
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # جاوا فائل لکھنا
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
-              f.write(java_code)
-          
-          # سادہ لے آؤٹ
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro 17.9"/></LinearLayout>')
-
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('<resources><style name="Theme.SystemPro" parent="Theme.AppCompat.Light.NoActionBar"/></resources>')
-          
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.9" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
-
-          # گریڈل کنفیگریشن - بالکل سادہ (No complex strings)
+          # 2. روٹ لیول کی فائلیں (Root Level)
           with open("settings.gradle", "w") as f:
-              f.write("rootProject.name='SystemPro'\ninclude ':app'")
+              f.write(f"rootProject.name='SystemPro'\ninclude ':app'")
 
           with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+              f.write("""
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          """)
 
+          # 3. ایپ لیول کی فائلیں (App Level)
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
+              f.write(f"""
+          plugins {{ id 'com.android.application' }}
+          android {{
+              namespace '{pkg_name}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId '{pkg_name}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }}
+          """)
 
-      - name: 🏗️ Final Build Effort
+          # 4. سورس کوڈ اور مینی فیسٹ
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
+              f.write(java_code)
+
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Stable"/></LinearLayout>')
+
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+      - name: 🏗️ Compiling APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Export
+      - name: 📤 Exporting Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V17-9-RESULT
+          name: System-Pro-V18-1-APK
           path: app/build/outputs/apk/debug/
