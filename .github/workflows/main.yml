@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect & Force-Build Engine
+      - name: 🧠 3. AI Architect & Resource Injector
         shell: python
         run: |
           import os, subprocess, json, shutil
@@ -29,53 +29,57 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. مکمل ری سیٹ (Full Reset)
-          for folder in ['.gradle', 'build', 'app', 'gradle']:
-              if os.path.exists(folder): shutil.rmtree(folder)
-
-          # 2. اسٹرکچر کی تعمیر
+          # 1. اسٹرکچر کی تیاری
+          for f in ['app', 'build', '.gradle', 'gradle']:
+              if os.path.exists(f): shutil.rmtree(f)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 3. گریڈل کی بنیادی فائلز (Modern Setup)
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("gradle.properties", "w") as f: 
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m\n")
-          
-          # مین بلڈ اسکرپٹ
-          with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
-              f.write("allprojects { repositories { google(); mavenCentral() } }")
+          # 2. ان تمام آئی ڈیز کا انجکشن جو 17 ایررز ختم کریں گی
+          # یہاں ہم ایک مکمل ڈیش بورڈ لے آؤٹ بنا رہے ہیں
+          main_layout = """<?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent">
+              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+                      <Button android:id="@+id/tabJava" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Java" />
+                      <Button android:id="@+id/tabXml" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="XML" />
+                      <Button android:id="@+id/tabManifest" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Manifest" />
+                      <Button android:id="@+id/iconTabBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Icon" />
+                  </LinearLayout>
+                  
+                  <EditText android:id="@+id/etEditor" android:layout_width="match_parent" android:layout_height="200dp" android:hint="Editor" />
+                  
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+                      <Button android:id="@+id/saveLocalBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Save" />
+                      <Button android:id="@+id/exportBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Export" />
+                      <Button android:id="@+id/loadBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Load" />
+                  </LinearLayout>
 
-          # ایپ ماڈیول (تمام آئی ڈیز کے ساتھ)
-          app_gradle = f"""
-          plugins {{ id 'com.android.application' }}
-          android {{
-              namespace '{pkg_name}'
-              compileSdk 34
-              defaultConfig {{
-                  applicationId '{pkg_name}'
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "13.6"
-              }}
-          }}
-          dependencies {{
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }}
-          """
-          with open("app/build.gradle", "w") as f: f.write(app_gradle)
+                  <Button android:id="@+id/openSettingsBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Settings" />
+                  <LinearLayout android:id="@+id/iconSection" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                      <ImageView android:id="@+id/iconPreview" android:layout_width="100dp" android:layout_height="100dp" />
+                      <Button android:id="@+id/iconUploadBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Upload Icon" />
+                  </LinearLayout>
 
-          # مینی فیسٹ اور لے آؤٹس
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><Button android:id="@+id/tabJava" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/tabXml" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/tabManifest" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/iconTabBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" /><EditText android:id="@+id/etEditor" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>')
-          
+                  <ScrollView android:id="@+id/monitorScroll" android:layout_width="match_parent" android:layout_height="150dp">
+                      <TextView android:id="@+id/monitorContent" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Build Monitor Ready..." />
+                  </ScrollView>
+              </LinearLayout>
+          </ScrollView>"""
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(main_layout)
+
+          # (باقی فائلز جیسے ڈائیلاگ سیٹنگز اور گریڈل کی تیاری)
           with open("app/src/main/res/layout/dialog_settings.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"><EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" /></LinearLayout>')
-
+          
+          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
+          with open("build.gradle", "w") as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.7' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
@@ -83,30 +87,24 @@ jobs:
           java_code = payload.get("java", "")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-          # 4. براہِ راست "Shell Execution" (گریڈل ورژن فکسنگ)
-          print("🚀 Injecting Fresh Gradle Wrapper 8.5...")
-          try:
-              # پہلے پرانے گریڈل سے نیا ریپر بنوائیں گے
-              subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
-              # اب اس ریپر کو ایگزیکیوٹ کریں گے
-              print("🏗️ Running Build via Local Wrapper...")
-              build = subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon', '--no-build-cache'], capture_output=True, text=True)
-              
-              if build.returncode != 0:
-                  print(f"❌ Build Error Log:\n{build.stderr}")
-                  exit(1)
-              print("✅ BUILD SUCCESSFUL!")
-          except Exception as e:
-              print(f"💀 System Error: {str(e)}")
+          # 3. بلڈ ایگزیکیوشن
+          print("🚀 Initiating Build Engine V13.7...")
+          subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
+          build = subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon'], capture_output=True, text=True)
+          
+          if build.returncode != 0:
+              print(f"❌ Error Log:\n{build.stderr}")
               exit(1)
+          else:
+              print("✅ MISSION SUCCESS: APK GENERATED!")
 
-      - name: 📦 4. Capture Final APK
+      - name: 📦 4. Capture APK
         if: success()
         run: |
           mkdir -p build_output
-          find . -name "*.apk" -exec cp {} build_output/SystemPro_Final.apk \;
+          find . -name "*.apk" -exec cp {} build_output/SystemPro_V13_7.apk \;
 
-      - name: 📤 5. Final Dispatch
+      - name: 📤 5. Dispatch
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V13-APK
