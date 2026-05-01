@@ -1,13 +1,21 @@
-name: System Pro Remote Builder V12
+name: System Pro Remote Builder V13
 
 on:
-  push:
-    branches: [ main ]
+  # اس سیکشن کو مزید بہتر کیا گیا ہے تاکہ یو آئی کال میں مسئلہ نہ ہو
   workflow_dispatch:
+    inputs:
+      client_payload:
+        description: 'Payload from UI'
+        required: false
+        default: '{}'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # نیٹ ورک کے مسائل سے بچنے کے لیے پرمیشنز کا اضافہ
+    permissions:
+      contents: write
+      actions: write
 
     steps:
       - name: Checkout Repository
@@ -23,26 +31,24 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # پے لوڈ پروسیسنگ اور فائل پلیسمنٹ کا اہم مرحلہ
-      - name: AI Resource Placement & Manifest Sync
+      # پے لوڈ اور ریسورسز کی درستگی
+      - name: Sync UI Resources & Fix Package
         run: |
-          echo "Starting AI-driven file placement..."
-          # یہاں وہ منطق ہے جو پے لوڈ سے آنے والے آئیکن کو ڈیفالٹ سے بدل دے گی
-          if [ -f "payload/icon.png" ]; then
-            cp -rf payload/icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            cp -rf payload/icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-            echo "Icon updated successfully."
+          echo "Syncing UI data..."
+          # اگر پے لوڈ سے آئیکن آرہا ہے تو اسے ریپلیس کریں
+          if [ -d "payload" ]; then
+            find payload -name "*.png" -exec cp {} app/src/main/res/mipmap-xxxhdpi/ic_launcher.png \;
+            find payload -name "*.png" -exec cp {} app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png \;
           fi
           
-          # پیکج نیم کی درستگی (Conflicts resolve)
+          # پیکج نیم کا کنفلکٹ ختم کرنا
           find app/src/main/java -name "*.java" -exec sed -i 's/package .*/package com.faisal.systempro;/g' {} +
-          echo "Package names synchronized."
 
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload System Pro APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: System-Pro-Build
           path: app/build/outputs/apk/debug/app-debug.apk
