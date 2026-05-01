@@ -1,4 +1,4 @@
-name: System-Pro-V43-Final
+name: System-Pro-V45-Final
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -11,98 +11,72 @@ jobs:
       - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: 🧼 1. Reset
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/build/
-          echo "REPORT: Environment Reset."
+      - name: 🧼 1. Cleanup
+        run: rm -rf app/src/main/java/* app/src/main/res/layout/* app/build/
 
       - name: 🏗️ 2. Structure
         run: |
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-mdpi
-          echo "android.useAndroidX=true" > gradle.properties
+          mkdir -p app/src/main/java app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-mdpi
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 3. AI Manifest & Logic Sync
+      - name: 🧬 3. Payload Linker (Debug Mode)
         shell: python
         run: |
           import os, json, re, base64
-          try:
-            with open(os.getenv('GITHUB_EVENT_PATH'), 'r') as f:
-              payload = json.load(f).get('client_payload', {})
-          except: payload = {}
+          # پے لوڈ کو حاصل کرنا
+          with open(os.getenv('GITHUB_EVENT_PATH'), 'r') as f:
+              event = json.load(f)
+              payload = event.get('client_payload', {})
 
-          pkg = payload.get('target_package', 'com.system.pro').strip()
-          
-          # Loading Code
-          java_raw = payload.get('java_code', "").strip()
-          xml_raw = payload.get('xml_code', "").strip()
+          # --- KEYS SYNC ---
+          # یہاں میں نے وہ تمام ممکنہ نام لکھ دیے ہیں جو ہم نے پہلے ڈسکس کیے تھے
+          java_raw = payload.get('java_code') or payload.get('code_java') or ""
+          xml_raw = payload.get('xml_code') or payload.get('code_xml') or ""
+          pkg = payload.get('target_package') or payload.get('package_name') or "com.system.pro"
 
-          if not java_raw and os.path.exists('templates/app_logic.java'):
-            with open('templates/app_logic.java', 'r') as f: java_raw = f.read()
-          if not xml_raw and os.path.exists('templates/app_ui.xml'):
-            with open('templates/app_ui.xml', 'r') as f: xml_raw = f.read()
+          # اگر پے لوڈ سے کچھ نہیں ملا تو یہاں بلڈ رک جائے گا
+          if not java_raw or not xml_raw:
+              print("CRITICAL: Payload empty! Checking Templates as fallback...")
+              if os.path.exists('templates/app_logic.java'):
+                  with open('templates/app_logic.java', 'r') as f: java_raw = f.read()
+              if os.path.exists('templates/app_ui.xml'):
+                  with open('templates/app_ui.xml', 'r') as f: xml_raw = f.read()
+              
+          if not java_raw or not xml_raw:
+              print("FATAL ERROR: No code found anywhere!"); exit(1)
 
-          # XML Header & Namespace Fix (To prevent hide/crash)
+          # Sanitation & Deployment
           xml_raw = re.sub(r'<\?xml.*?\?>', '', xml_raw).strip()
           final_xml = '<?xml version="1.0" encoding="utf-8"?>\n' + xml_raw
           if 'xmlns:android' not in final_xml:
-            final_xml = final_xml.replace('>', ' xmlns:android="http://schemas.android.com/apk/res/android">', 1)
+              final_xml = final_xml.replace('>', ' xmlns:android="http://schemas.android.com/apk/res/android">', 1)
 
-          # Java Package Fix
           java_final = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_raw)
-
-          # Deployment
+          
           j_dir = f"app/src/main/java/{pkg.replace('.', '/')}"
           os.makedirs(j_dir, exist_ok=True)
           with open(f"{j_dir}/MainActivity.java", 'w', encoding='utf-8') as f: f.write(java_final)
           with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f: f.write(final_xml)
 
-          # --- CRITICAL MANIFEST FIX ---
-          # یہاں ہم نے 'LAUNCHER' کو درست کیا ہے تاکہ ایپ مینو میں نظر آئے
-          manifest_content = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
-              <application
-                  android:label="System Pro"
-                  android:theme="@style/Theme.AppCompat"
-                  android:icon="@mipmap/ic_launcher"
-                  android:allowBackup="true"
-                  android:supportsRtl="true">
-                  <activity 
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>'''
-          
-          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f: f.write(manifest_content)
-          
-          # Build Files
+          # Finalizing Manifest for Visibility
+          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
           with open('app/build.gradle', 'w') as f:
-            f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
+              f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
+          
           with open('build.gradle', 'w') as f:
-            f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
           with open('app/src/main/res/mipmap-mdpi/ic_launcher.png', 'wb') as f:
-            f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+              f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
 
-      - name: 📝 4. Style Sync
-        run: |
-          echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
+      - name: 📝 4. Style Fix
+        run: echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
       - name: ☕ 5. Setup Java
         uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+        with: { java-version: '17', distribution: 'temurin' }
 
       - name: 🛠️ 6. Build
         run: |
@@ -114,6 +88,4 @@ jobs:
 
       - name: 📤 7. Deploy
         uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Visible-APK
-          path: app/build/outputs/apk/debug/*.apk
+        with: { name: System-Pro-Master-APK, path: app/build/outputs/apk/debug/*.apk }
