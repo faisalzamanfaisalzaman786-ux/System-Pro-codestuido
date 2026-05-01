@@ -32,37 +32,46 @@ jobs:
           echo "rootProject.name='$PROJECT_NAME'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # 1. Root build.gradle (پلگ انز کی تعریف)
+          # 1. Root build.gradle (Modern Syntax)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.0.2" }
+              dependencies { classpath "com.android.tools.build:gradle:8.1.0" }
           }
-          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
+          allprojects {
+              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
+          }
           EOF
 
-          # 2. App-level build.gradle (یہ وہ فائل ہے جو مسنگ تھی)
+          # 2. App-level build.gradle (Fixed Dependency Handling)
           cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
+          plugins {
+              id 'com.android.application'
+          }
           android {
               namespace 'com.system.pro'
               compileSdk 33
               defaultConfig {
                   applicationId "com.system.pro"
-                  minSdk 21
+                  minSdk 24
                   targetSdk 33
                   versionCode 1
                   versionName "1.0"
               }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
           }
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation "androidx.appcompat:appcompat:1.6.1"
+              implementation "com.google.android.material:material:1.9.0"
+              implementation "androidx.constraintlayout:constraintlayout:2.1.4"
           }
           EOF
 
-          # 3. Official Manifest, Activity, and Layout (پہلے والا لاجک)
+          # 3. Official Files
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -109,7 +118,7 @@ jobs:
 
       - name: 🛠️ Gradle Auto-Setup
         run: |
-          gradle wrapper --gradle-version 8.0
+          gradle wrapper --gradle-version 8.1
           chmod +x gradlew
 
       - name: 📦 Official Assembly Build
