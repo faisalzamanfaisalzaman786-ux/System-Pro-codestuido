@@ -1,4 +1,4 @@
-name: System-Pro-Master-Framework-V14-2
+name: System-Pro-Smart-UI-V15-1
 
 on:
   repository_dispatch:
@@ -9,100 +9,97 @@ jobs:
   Self-Healing-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ 1. Infrastructure Sync
+      - name: 🛠️ Sync
         uses: actions/checkout@v4
 
-      - name: ☕ 2. Java Runtime (JDK 17)
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 🧠 3. AI Architect (Detailed Error Reporting)
+      - name: 🧠 AI Smart-Size Designer
         shell: python
         run: |
-          import os, subprocess, json, shutil
+          import os, subprocess, json, re
 
-          # پے لوڈ پروسیسنگ
+          # ڈیٹا حاصل کرنا
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload) if raw_payload != "null" else {}
+          java_code = payload.get("java", "")
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
-          java_code = payload.get("java", "")
 
-          # 1. اسٹرکچر کی تیاری
-          for f in ['app', 'build', '.gradle', 'gradle']:
-              if os.path.exists(f): shutil.rmtree(f)
+          # 1. آئی ڈیز نکالنا
+          found_ids = list(set(re.findall(r"R\.id\.(\w+)", java_code)))
+
+          # 2. اسمارٹ ڈیزائن لاجک (Size & Alignment)
+          widgets_xml = ""
+          
+          # کیلکولیٹر کے لیے بٹنز کو گرڈ میں رکھنے کی کوشش
+          is_calc = any(x in java_code.lower() for x in ["calc", "math", "digit"])
+          
+          if is_calc:
+              # کیلکولیٹر کے لیے ہم ہر 4 بٹن کے بعد ایک نئی 'Row' بنائیں گے
+              widgets_xml += '<GridLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:columnCount="4" android:rowCount="5">\n'
+              for wid in found_ids:
+                  widgets_xml += f"""
+                  <Button
+                      android:id="@+id/{wid}"
+                      android:layout_width="0dp"
+                      android:layout_height="80dp"
+                      android:layout_columnWeight="1"
+                      android:text="{wid.replace('btn', '')}"
+                      android:layout_margin="2dp"
+                      android:backgroundTint="#3F51B5"
+                      android:textColor="#FFFFFF"
+                      android:textSize="18sp" />\n"""
+              widgets_xml += '</GridLayout>'
+          else:
+              # ایڈیٹر یا ٹارچ کے لیے لینیئر ڈیزائن
+              for wid in found_ids:
+                  if "Editor" in wid or "content" in wid.lower():
+                      widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="300dp" android:gravity="top" android:background="#F5F5F5" android:padding="10dp" android:layout_margin="5dp" android:hint="{wid}"/>\n'
+                  elif "Preview" in wid or "Image" in wid:
+                      widgets_xml += f'<ImageView android:id="@+id/{wid}" android:layout_width="200dp" android:layout_height="200dp" android:layout_gravity="center" android:src="@android:drawable/ic_menu_report_image"/>\n'
+                  else:
+                      # عام بٹنز کے لیے خوبصورت اسٹائل اور متناسب سائز
+                      widgets_xml += f"""
+                      <Button
+                          android:id="@+id/{wid}"
+                          android:layout_width="match_parent"
+                          android:layout_height="65dp"
+                          android:text="{wid}"
+                          android:layout_margin="8dp"
+                          android:backgroundTint="#2196F3"
+                          android:textColor="#FFFFFF"
+                          android:textAllCaps="false"
+                          android:textSize="16sp" />\n"""
+
+          # 3. فائنل XML
+          final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:background="#FFFFFF">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro Smart UI" android:textSize="22sp" android:gravity="center" android:padding="15dp" android:textStyle="bold"/>
+                  {widgets_xml}
+              </LinearLayout>
+          </ScrollView>"""
+
+          # فائلز بنانا (باقی کوڈ وہی ہے جو بلڈ کرتا ہے)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-
-          # 2. یونیورسل لے آؤٹ (Visible IDs to avoid 'cannot find symbol')
-          # ہم نے آئی ڈیز کو 'invisible' کے بجائے '1dp' سائز دیا ہے تاکہ کمپائلر انہیں ڈھونڈ سکے
-          main_layout = f"""<?xml version="1.0" encoding="utf-8"?>
-          <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/monitorScroll"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:fillViewport="true">
-              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
-                  <TextView android:id="@+id/monitorContent" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro Running..." />
-                  
-                  <View android:id="@+id/tabJava" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/tabXml" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/tabManifest" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/iconTabBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/saveLocalBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/exportBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/loadBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/openSettingsBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/buildBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/fetchArtifactBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/downloadApkBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/copyLogBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/iconUploadBtn" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/javaEditor" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/xmlEditor" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/manifestEditor" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/logArea" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/iconSection" android:layout_width="1dp" android:layout_height="1dp" />
-                  <View android:id="@+id/iconPreview" android:layout_width="1dp" android:layout_height="1dp" />
-              </LinearLayout>
-          </androidx.core.widget.NestedScrollView>"""
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(main_layout)
-
-          # 3. مینی فیسٹ اور گریڈل
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(final_xml)
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
+          
+          # بلڈ کنفیگریشن
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
+          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
-          with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '14.2' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
-
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
-
-          # 4. اسمارٹ بلڈ (Catch Errors)
-          print("🚀 Starting Build...")
+          # بلڈ شروع
           subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
-          result = subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon'], capture_output=True, text=True)
-          
-          if result.returncode != 0:
-              print("❌ ERROR DETECTED IN CODE!")
-              print(result.stdout) # یہ ہمیں بتائے گا کہ اصل غلطی کہاں ہے
-              print(result.stderr)
-              exit(1)
-          else:
-              print("✅ BUILD SUCCESSFUL!")
+          subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon'], check=True)
 
-      - name: 📦 4. Capture APK
-        if: success()
-        run: |
-          mkdir -p build_output
-          find . -name "*.apk" -exec cp {} build_output/SystemPro_V14_2.apk \;
-
-      - name: 📤 5. Final Dispatch
+      - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V14-2-APK
-          path: build_output/
+          name: System-Pro-Smart-Sized-App
+          path: app/build/outputs/apk/debug/*.apk
