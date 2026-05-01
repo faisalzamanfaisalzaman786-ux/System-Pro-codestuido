@@ -1,4 +1,4 @@
-name: System-Pro-Ultra-Fix-V15-6
+name: System-Pro-Ultra-Fix-V15-7
 
 on:
   repository_dispatch:
@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI AndroidX-Pro Engine
+      - name: 🧠 AI Debug-Pro Engine
         shell: python
         run: |
           import os, subprocess, json, re
@@ -30,74 +30,67 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. آئی ڈیز نکالنا
-          all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z_][a-zA-Z0-9_]*)", java_code)))
+          # 1. آئی ڈیز کا اخراج (صرف حروف اور نمبرز، کوئی اسپیشل کریکٹر نہیں)
+          all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
           
           # 2. اسمارٹ ڈیزائن (Size Adjusted)
           widgets_xml = ""
           for wid in all_ids:
               if any(x in wid.lower() for x in ["editor", "code", "input"]):
-                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="320dp" android:background="#FDFEFE" android:gravity="top" android:padding="12dp" android:layout_margin="8dp" android:hint="{wid}" android:textColor="#1B2631" android:inputType="textMultiLine"/>\n'
-              elif any(x in wid.lower() for x in ["img", "icon", "view"]):
-                  widgets_xml += f'<ImageView android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="220dp" android:layout_margin="10dp" android:src="@android:drawable/ic_menu_gallery"/>\n'
+                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="320dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="8dp" android:hint="{wid}" android:textColor="#000000" android:inputType="textMultiLine"/>\n'
               else:
-                  # فکسڈ پروفیشنل سائز: 70dp height
+                  # فکسڈ سائز بٹن (70dp)
                   widgets_xml += f"""
                   <Button
                       android:id="@+id/{wid}"
                       android:layout_width="match_parent"
                       android:layout_height="70dp"
                       android:text="{wid}"
-                      android:layout_margin="8dp"
-                      android:backgroundTint="#2471A3"
+                      android:layout_margin="6dp"
+                      android:backgroundTint="#154360"
                       android:textColor="#FFFFFF"
-                      android:textSize="17sp"
-                      android:textAllCaps="false"
-                      android:elevation="8dp"/>\n"""
+                      android:textSize="16sp"
+                      android:textAllCaps="false"/>\n"""
 
-          # 3. مین لے آؤٹ
+          # 3. لے آؤٹ جنریٹر
           final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
           <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#F2F4F4">
-              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro v15.6" android:textSize="22sp" android:gravity="center" android:padding="15dp" android:textColor="#154360" android:textStyle="bold"/>
+              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#D5DBDB">
+              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro Debug Mode" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold"/>
                   {widgets_xml}
               </LinearLayout>
           </androidx.core.widget.NestedScrollView>"""
 
-          # 4. فائل رائٹنگ (مع تمام ضروری سیٹنگز)
+          # 4. فائلیں تیار کرنا
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(final_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
-          
-          # کرٹیکل فکس: gradle.properties بنانا تاکہ AndroidX کام کرے
-          with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
+          with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
 
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
-          
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript {{ repositories {{ google(); mavenCentral() }}; dependencies {{ classpath 'com.android.tools.build:gradle:8.2.2' }} }}\nallprojects {{ repositories {{ google(); mavenCentral() }} }}")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 5. بلڈ پروسیس
+          # 5. بلڈ اور ایرر ٹریپنگ
           subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
-          subprocess.run(['./gradlew', 'clean'], check=True)
           result = subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon'], capture_output=True, text=True)
           
           if result.returncode != 0:
-              print("❌ BUILD FAILED. LOG:")
-              print(result.stdout[-3000:]) 
+              print("🔍 --- JAVA COMPILATION ERROR --- 🔍")
+              # ہم صرف وہ حصہ دکھائیں گے جہاں جاوا کی غلطی ہے
+              print(result.stdout if "compileDebugJavaWithJavac" in result.stdout else result.stderr)
               exit(1)
           else:
-              print("✅ SUCCESS! APK GENERATED.")
+              print("✅ SUCCESS!")
 
-      - name: 📦 Final APK Dispatch
-        if: success()
+      - name: 📦 Final Dispatch
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V15-6-Success
+          name: System-Pro-Build-V15-7
           path: app/build/outputs/apk/debug/*.apk
