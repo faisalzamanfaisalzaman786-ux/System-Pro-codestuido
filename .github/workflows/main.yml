@@ -1,4 +1,4 @@
-name: System-Pro-V16-Final
+name: System-Pro-V16-1-Final
 
 on:
   repository_dispatch:
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Ultra-Dynamic Engine (V16)
+      - name: 🧠 AI Ultra-Dynamic Engine (V16.1)
         shell: python
         run: |
           import os, json, re
 
-          # ہیوی پے لوڈ سیف ہینڈلنگ
+          # ڈیٹا لوڈنگ
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
@@ -33,51 +33,51 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. اسمارٹ آئی ڈی اسکینر
+          # 1. آئی ڈی اسکینر
           all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
           
-          # 2. کریش پروف ڈیزائن (ScrollView Fix)
+          # 2. اسمارٹ یو آئی (72dp Buttons for Adjustment)
           widgets_xml = ""
           for wid in all_ids:
               if any(x in wid.lower() for x in ["editor", "code", "input"]):
-                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="350dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="{wid}" android:textColor="#000000"/>\n'
+                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="350dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="{wid}" android:textColor="#000000" android:inputType="textMultiLine"/>\n'
               else:
-                  # ہائی کوالٹی بٹن (72dp height)
                   widgets_xml += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="72dp" android:text="{wid}" android:layout_margin="8dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false" android:elevation="6dp"/>\n'
 
-          # 3. میگا لے آؤٹ (NestedScrollView + ScrollView compatibility)
-          # ہم نے یہاں ٹیگ کو اینڈرائیڈ ایکس کے مطابق فکس کر دیا ہے
+          # 3. کریش پروف XML
           final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
           <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:id="@+id/main_scroll">
-              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp" android:background="#F2F3F4">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro: Industrial Edition" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold" android:textColor="#1B4F72"/>
+              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro: Final Fixed" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold" android:textColor="#1B4F72"/>
                   {widgets_xml}
               </LinearLayout>
           </androidx.core.widget.NestedScrollView>"""
 
-          # 4. انفراسٹرکچر رائٹنگ
+          # 4. فائلیں تیار کرنا
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f: f.write(final_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f: f.write(java_code)
+          
+          # بلڈ پراپرٹیز
           with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
-
-          # بلڈ فائلز
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript {{ repositories {{ google(); mavenCentral() }}; dependencies {{ classpath 'com.android.tools.build:gradle:8.2.2' }} }}\nallprojects {{ repositories {{ google(); mavenCentral() }} }}")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHer" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 📦 Build APK
+      - name: 🏗️ Initialize & Build APK
         run: |
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
       - name: 📤 Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V16-Success
+          name: System-Pro-Success-APK
           path: app/build/outputs/apk/debug/*.apk
