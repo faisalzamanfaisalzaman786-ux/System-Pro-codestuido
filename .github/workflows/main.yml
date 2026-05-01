@@ -1,38 +1,7 @@
-name: System-Pro-V24.5-Final-Master
-on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [build-app]
-
-jobs:
-  Build-Engine:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🛠️ Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 🧼 Deep Clean Workspace
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/mipmap-*
-          rm -rf app/build/
-          echo "Workspace washed."
-
-      - name: 🏗️ Setup Android Structure
-        run: |
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "include ':app'" > settings.gradle
-
-      - name: 🧬 AI Template, Payload & Icon Merger
+      - name: 🧬 AI Hybrid Engine (First-Time & Payload Sync)
         shell: python
         run: |
-          import os, json, re, base64, shutil
+          import os, json, re, base64, shutil, urllib.request
 
           # پے لوڈ حاصل کرنا
           event_path = os.getenv('GITHUB_EVENT_PATH')
@@ -42,90 +11,53 @@ jobs:
 
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
+          res_folders = ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi']
 
-          # مددگار فنکشن
-          def get_content(file_path, payload_key, default):
+          # 1. URL Icon Logic (ماسٹر ڈیفالٹ لنک)
+          # یہاں آپ اپنا کوئی بھی مستقل امیج لنک ڈال سکتے ہیں
+          default_icon_url = "https://raw.githubusercontent.com/faisalzaman/System-Pro-codestuido/main/templates/app_icon.png" 
+          icon_url = payload.get('icon_url', default_icon_url)
+          
+          icon_success = False
+          if icon_url and icon_url.startswith('http'):
+              try:
+                  urllib.request.urlretrieve(icon_url, 'temp_icon.png')
+                  for folder in res_folders:
+                      dest_dir = f'app/src/main/res/{folder}'
+                      os.makedirs(dest_dir, exist_ok=True)
+                      shutil.copy('temp_icon.png', f'{dest_dir}/ic_launcher.png')
+                  icon_success = True
+                  print("AI: Icon synced via URL.")
+              except:
+                  print("AI: URL failed, checking local template...")
+
+          # 2. Local Fallback (اگر لنک کام نہ کرے تو ٹیمپلیٹ سے اٹھائے)
+          if not icon_success and os.path.exists('templates/app_icon.png'):
+              for folder in res_folders:
+                  os.makedirs(f'app/src/main/res/{folder}', exist_ok=True)
+                  shutil.copy('templates/app_icon.png', f'app/src/main/res/{folder}/ic_launcher.png')
+              icon_success = True
+
+          # 3. Java, XML & Manifest Merger
+          # یہ فنکشن پے لوڈ کو چیک کرے گا، اگر خالی ہوا تو ٹیمپلیٹ فائل سے ڈیٹا لے گا
+          def get_valid_code(file_path, payload_key, fallback_text):
               if os.path.exists(file_path) and os.path.getsize(file_path) > 10:
                   with open(file_path, 'r') as f: return f.read()
-              return payload.get(payload_key, default)
+              return payload.get(payload_key, fallback_text)
 
-          # 1. Java, XML & Manifest Sync
-          java_content = get_content('templates/app_logic.java', 'java_code', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
+          java_content = get_valid_code('templates/app_logic.java', 'java_code', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
           java_content = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_content.strip())
-          
-          xml_content = get_content('templates/app_ui.xml', 'xml_code', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro V24.5" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
-          
-          manifest_content = get_content('templates/app_manifest.xml', 'manifest_code', '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 2. Image/Icon Processing (The "Wash & Replace" Logic)
-          icon_tmpl = 'templates/app_icon.png'
-          icon_dest = 'app/src/main/res/mipmap-hdpi/ic_launcher.png'
-          icon_payload = payload.get('icon_base64')
+          xml_content = get_valid_code('templates/app_ui.xml', 'xml_code', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Ready" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
 
-          if icon_payload and len(icon_payload) > 100:
-              with open(icon_dest, 'wb') as f:
-                  f.write(base64.b64decode(icon_payload))
-              print("AI: Icon replaced from Payload.")
-          elif os.path.exists(icon_tmpl):
-              shutil.copy(icon_tmpl, icon_dest)
-              print("AI: Icon replaced from Template.")
-
-          # فائلیں لکھنا
+          # فائلیں لکھنا (Fresh Build کے لیے)
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
           with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f: f.write(java_content)
           with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f: f.write(xml_content)
-          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f: f.write(manifest_content)
+          
+          # مینی فیسٹ مینوئل لکھنا تاکہ کوئی غلطی نہ ہو
+          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
           with open('env_vars.sh', 'w') as f: f.write(f"export TARGET_PKG='{target_pkg}'")
-
-      - name: 📝 Final Build Configuration
-        run: |
-          source env_vars.sh
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
-          EOF
-
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
-          android {
-              namespace '$TARGET_PKG'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "$TARGET_PKG"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-          echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
-
-      - name: ☕ Setup Java & Gradle
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 🛠️ Build APK (With Auto-Clean)
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
-          unzip -q gradle-8.2-bin.zip
-          ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
-          ./gradlew clean assembleDebug
-
-      - name: 📤 Upload Optimized APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V24.5-Final
-          path: app/build/outputs/apk/debug/*.apk
