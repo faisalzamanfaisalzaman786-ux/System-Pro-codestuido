@@ -1,14 +1,9 @@
-name: System-Pro-V18.6-Parallel-Hunter
+name: System-Pro-V18.9-Official-Sync
 
 on:
   repository_dispatch:
     types: [build-app]
   workflow_dispatch:
-    inputs:
-      project_name:
-        description: 'پروجیکٹ کا نام'
-        required: false
-        default: 'SystemPro-Parallel-Engine'
 
 jobs:
   Build:
@@ -23,101 +18,96 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🚀 Triple-Engine Parallel Hunter (V18.6)
+      - name: 🔍 Official Resource Hunter (V18.9)
         shell: python
         run: |
-          import os, json, re, shutil, threading
-          from concurrent.futures import ThreadPoolExecutor
+          import os, json, re, shutil
 
-          # 1. ماحول کی صفائی
+          # پرانا ڈیٹا صاف کرنا
           for item in os.listdir('.'):
               if item not in ['.git', '.github']:
                   if os.path.isfile(item): os.remove(item)
                   else: shutil.rmtree(item)
 
-          # 2. پے لوڈ ہینڈلنگ
-          try:
-              payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
-              payload = json.loads(payload_raw) if payload_raw != "null" else {}
-          except: payload = {}
-
-          pkg_name = payload.get("package_name", "com.faisal.systempro")
+          pkg_name = "com.faisal.systempro"
           pkg_path = pkg_name.replace('.', '/')
-          features = payload.get("features", ["appcompat", "material"])
-
-          # --- ٹرپل انجن لاجک (Parallel Engines) ---
           
-          final_deps = []
-          results_found = set()
-          lock = threading.Lock()
-
-          # انجن A: آفیشل گوگل/ماون ریپوزٹری
-          def official_scout(feature):
-              db = {"appcompat": "androidx.appcompat:appcompat:1.6.1", "material": "com.google.android.material:material:1.11.0"}
-              if feature in db:
-                  with lock:
-                      if feature not in results_found:
-                          final_deps.append(f"implementation '{db[feature]}'")
-                          results_found.add(feature)
-                          print(f"[Scout] Found Official: {feature}")
-
-          # انجن B: گٹ ہب ہنٹر (JitPack)
-          def github_hunter(feature):
-              db = {"glassmorphism": "com.github.mmin18:realtimeblurview:1.2.1", "networking": "com.squareup.retrofit2:retrofit:2.9.0"}
-              if feature in db:
-                  with lock:
-                      if feature not in results_found:
-                          final_deps.append(f"implementation '{db[feature]}'")
-                          results_found.add(feature)
-                          print(f"[Hunter] Found on GitHub: {feature}")
-
-          # انجن C: اے آئی آرکیٹیکٹ (اگر کچھ نہ ملے)
-          def ai_architect(feature):
-              with lock:
-                  if feature not in results_found:
-                      print(f"[AI] No resource found for {feature}, generating custom logic...")
-                      # اے آئی یہاں کسٹم کوڈ کے لیے جگہ بنائے گا
-
-          # تینوں انجنوں کو ایک ساتھ چلانا (Race Condition)
-          with ThreadPoolExecutor(max_workers=3) as executor:
-              for f in features:
-                  executor.submit(official_scout, f)
-                  executor.submit(github_hunter, f)
-                  executor.submit(ai_architect, f)
-
-          # --- اینڈرائیڈ فائل اسٹرکچر کی تعمیر ---
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 3. فائلیں لکھنا (No Drinks Constraint)
-          with open("gradle.properties", "w") as f:
-              f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
+          # آفیشل لائبریری ڈیٹا بیس (صرف مستند ذرائع)
+          official_libraries = {
+              "ui_components": "com.google.android.material:material:1.11.0",
+              "app_compat": "androidx.appcompat:appcompat:1.6.1",
+              "constraint_layout": "androidx.constraintlayout:constraintlayout:2.1.4"
+          }
+
+          # جاوا کوڈ کا اسکین اور آفیشل ریسورس سے میچنگ
+          java_code = """
+          package com.faisal.systempro;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          import com.google.android.material.button.MaterialButton;
+
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+          """
+
+          # گریڈل میں صرف وہی ڈالنا جو آفیشل ہے
+          dependencies = []
+          for key, value in official_libraries.items():
+              dependencies.append(f"implementation '{value}'")
+
+          # لے آؤٹ کو آفیشل میٹریل ڈیزائن کے مطابق مکمل کرنا
+          xml_layout = """<?xml version="1.0" encoding="utf-8"?>
+          <androidx.constraintlayout.widget.ConstraintLayout 
+              xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res/shortcut"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#121212">
+              
+              <com.google.android.material.textview.MaterialTextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Official Resources Integrated"
+                  android:textColor="#00FF00"
+                  app:layout_constraintBottom_toBottomOf="parent"
+                  app:layout_constraintLeft_toLeftOf="parent"
+                  app:layout_constraintRight_toRightOf="parent"
+                  app:layout_constraintTop_toTopOf="parent" />
+
+          </androidx.constraintlayout.widget.ConstraintLayout>"""
+
+          # فائلیں محفوظ کرنا
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(xml_layout)
+
+          # بلڈ کنفیگریشن
+          dep_str = "\n    ".join(dependencies)
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{\n    {dep_str}\n}}")
+
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.Material3.Dark.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
           with open("settings.gradle", "w") as f: f.write("include ':app'")
-          
-          with open("build.gradle", "w") as f:
-              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }")
+          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-          dep_str = "\n    ".join(final_deps)
-          with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ {dep_str} }}")
-
-          # مینی فیسٹ اور مین ایکٹیویٹی
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
-
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
-              f.write(f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); }} }}")
-
-      - name: 🏗️ Execute Triple-Engine Build
+      - name: 🏗️ Execute Official Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Collect Result
-        if: always()
+      - name: 📤 Collect Official APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V18.6-Output
+          name: System-Pro-V18.9-Official-APK
           path: app/build/outputs/apk/debug/*.apk
