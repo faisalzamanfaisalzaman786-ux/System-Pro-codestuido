@@ -11,7 +11,7 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Android Official Structure
+      - name: 🏗️ Setup Android Structure
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
@@ -21,61 +21,39 @@ jobs:
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 AI Guardian: Icon & Package Master
+      - name: 🧬 AI Guardian & Package Master
         shell: python
         run: |
           import os, json, re, base64
 
-          event_path = os.getenv('GITHUB_EVENT_PATH')
-          with open(event_path, 'r') as f:
-              event_data = json.load(f)
-          payload = event_data.get('client_payload', {})
+          # پے لوڈ حاصل کرنا
+          try:
+              event_path = os.getenv('GITHUB_EVENT_PATH')
+              with open(event_path, 'r') as f:
+                  event_data = json.load(f)
+              payload = event_data.get('client_payload', {})
+          except:
+              payload = {}
 
+          # 1. Package Sync
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
 
-          icon_data = payload.get('icon_base64')
-          if icon_data:
-              try:
-                  img_data = base64.b64decode(icon_data)
-                  icon_dirs = ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi']
-                  for d in icon_dirs:
-                      path = f'app/src/main/res/{d}'
-                      os.makedirs(path, exist_ok=True)
-                      with open(f'{path}/ic_launcher.png', 'wb') as f:
-                          f.write(img_data)
-                  print("AI Success: Icon processed.")
-              except Exception as e:
-                  print(f"AI Warning: Icon failed: {e}")
-
+          # 2. Java & XML Logic
           raw_java = payload.get('java_code', "").strip()
-          if raw_java:
-              java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java)
-              open_b = java_purified.count('{')
-              close_b = java_purified.count('}')
-              if open_b > close_b: java_purified += "\n" + ("}" * (open_b - close_b))
-          else:
-              java_purified = f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}"
-
-          xml_raw = payload.get('xml_code', "").strip()
-          if xml_raw:
-              xml_purified = re.sub(r'^[^<]+', '', xml_raw)
-              if not xml_purified.startswith('<?xml'):
-                  xml_purified = '<?xml version="1.0" encoding="utf-8"?>\n' + xml_purified
-          else:
-              xml_purified = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Build Success" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>'
-
+          java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java) if raw_java else f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}"
+          
+          # 3. File Writing
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
-          with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f:
-              f.write(java_purified)
-          with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f:
-              f.write(xml_purified)
+          with open(f'{java_dir}/MainActivity.java', 'w') as f: f.write(java_purified)
+          
+          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Build Success" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
 
-          with open('env_vars.sh', 'w') as f:
-              f.write(f"export TARGET_PKG='{target_pkg}'")
+          with open('env_vars.sh', 'w') as f: f.write(f"export TARGET_PKG='{target_pkg}'")
 
-      - name: 📝 Sync Build Configurations
+      - name: 📝 Build Config Sync
         run: |
           source env_vars.sh
           cat <<EOF > app/build.gradle
@@ -87,8 +65,6 @@ jobs:
                   applicationId "$TARGET_PKG"
                   minSdk 24
                   targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
               }
           }
           dependencies {
@@ -100,7 +76,7 @@ jobs:
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -110,7 +86,6 @@ jobs:
               </application>
           </manifest>
           EOF
-          echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
@@ -125,11 +100,11 @@ jobs:
           ./gradle-8.0/bin/gradle wrapper --gradle-version 8.0
           chmod +x gradlew
 
-      - name: 📦 AI-Validated Official Build
+      - name: 📦 AI-Validated Build
         run: ./gradlew :app:assembleDebug
 
-      - name: 📤 Upload Build Artifact
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V19-Final-APK
+          name: System-Pro-V19-Success
           path: app/build/outputs/apk/debug/*.apk
