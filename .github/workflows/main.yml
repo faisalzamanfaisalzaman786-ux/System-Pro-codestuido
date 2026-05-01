@@ -26,17 +26,14 @@ jobs:
         run: |
           import os, json, re, base64
 
-          # پے لوڈ حاصل کرنا
           event_path = os.getenv('GITHUB_EVENT_PATH')
           with open(event_path, 'r') as f:
               event_data = json.load(f)
           payload = event_data.get('client_payload', {})
 
-          # 1. Global Package Name Sync
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
 
-          # 2. Icon Processing (Base64 to Image)
           icon_data = payload.get('icon_base64')
           if icon_data:
               try:
@@ -51,19 +48,15 @@ jobs:
               except Exception as e:
                   print(f"AI Warning: Icon failed: {e}")
 
-          # 3. Java Purification (Syntax & Package Guardian)
           raw_java = payload.get('java_code', "").strip()
           if raw_java:
-              # پیکج نیم درست کرنا
               java_purified = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', raw_java)
-              # بریکٹ بیلنسنگ (Braces Fixer)
               open_b = java_purified.count('{')
               close_b = java_purified.count('}')
               if open_b > close_b: java_purified += "\n" + ("}" * (open_b - close_b))
           else:
               java_purified = f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}"
 
-          # 4. XML Layout Cleanup (Header & Tags Guardian)
           xml_raw = payload.get('xml_code', "").strip()
           if xml_raw:
               xml_purified = re.sub(r'^[^<]+', '', xml_raw)
@@ -72,7 +65,6 @@ jobs:
           else:
               xml_purified = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Build Success" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>'
 
-          # فائلیں محفوظ کرنا
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
           with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f:
@@ -80,7 +72,6 @@ jobs:
           with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f:
               f.write(xml_purified)
 
-          # پیکیج نیم کو انوائرنمنٹ میں منتقل کرنا
           with open('env_vars.sh', 'w') as f:
               f.write(f"export TARGET_PKG='{target_pkg}'")
 
