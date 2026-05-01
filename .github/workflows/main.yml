@@ -1,4 +1,4 @@
-name: System-Pro-V17-3-Force-Build
+name: System-Pro-V16-4-Deep-Cleanup
 
 on:
   repository_dispatch:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  Build-Process:
+  Clean-Build:
     runs-on: ubuntu-latest
     steps:
       - name: 🛠️ Sync
@@ -18,58 +18,78 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Force Engine (V17.3)
+      - name: 🧠 AI Cleanup Engine (V17.4)
         shell: python
         run: |
-          import os, json, re
+          import os, json, re, shutil
 
-          # لاگنگ شروع
-          print("--- System Pro Debug Start ---")
+          # پرانا کچرا صاف کریں
+          if os.path.exists('app'): shutil.rmtree('app')
           
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
-              print(f"Payload Received: {payload_raw[:100]}...") # صرف پہلا حصہ پرنٹ کریں
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
-          except Exception as e:
-              print(f"Payload Error: {e}")
-              payload = {}
+          except: payload = {}
 
-          java_code = payload.get("java", "public class MainActivity extends androidx.appcompat.app.AppCompatActivity {}")
+          java_code = payload.get("java", "")
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # ڈائریکٹریز بنانا اور کنفرم کرنا
+          # ڈائریکٹریز کی نئی ترتیب
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
-          
-          # فائلز لکھنا
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
-              f.write(java_code)
-          
-          # ایک بنیادی لے آؤٹ لازمی بنانا تاکہ خالی نہ رہے
-          with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Forced"/></LinearLayout>')
+          os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # گریڈل کنفیگریشن (Minimal & Robust)
+          # 1. فنکشنل لے آؤٹ گارنٹی
+          all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
+          widgets = "".join([f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="{wid}"/>\n' for wid in all_ids])
+          
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp">{widgets}</LinearLayout>')
+
+          # 2. اسمارٹ مینی فیسٹ (Namespace Alignment)
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.4" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+          # 3. جاوا فائل (With Auto-Imports Fix)
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
+              f.write(java_code)
+
+          # 4. تھیم فائل (تاکہ کریش نہ ہو)
+          with open("app/src/main/res/values/themes.xml", "w") as f:
+              f.write('<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar"/></resources>')
+
+          # 5. ماسٹر گریڈل (The Fix)
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
+              f.write(f"""plugins {{ id 'com.android.application' }}
+android {{
+    namespace '{pkg_name}'
+    compileSdk 34
+    defaultConfig {{
+        applicationId '{pkg_name}'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }}
+}}
+dependencies {{
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+}}""")
           
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.3"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          print("--- File Generation Complete ---")
-
-      - name: 🏗️ Force Compile
+      - name: 🏗️ Build Stable APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Export Artifacts
-        if: always() # ہمیشہ اپ لوڈ کرنے کی کوشش کریں چاہے فیل ہو یا پاس
+      - name: 📤 Upload Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V17-3-Output
+          name: System-Pro-V17-4-Final
           path: app/build/outputs/apk/debug/
