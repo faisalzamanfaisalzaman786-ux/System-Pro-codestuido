@@ -18,59 +18,64 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect & Resource Injector
+      - name: 🧠 3. AI Architect & Logic Sync
         shell: python
         run: |
           import os, subprocess, json, shutil
 
-          # پے لوڈ پروسیسنگ
           raw_payload = r"""${{ toJson(github.event.client_payload) }}"""
           payload = json.loads(raw_payload) if raw_payload != "null" else {}
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. اسٹرکچر کی تیاری
+          # 1. کلیئر ری سیٹ
           for f in ['app', 'build', '.gradle', 'gradle']:
               if os.path.exists(f): shutil.rmtree(f)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 2. ان تمام آئی ڈیز کا انجکشن جو 17 ایررز ختم کریں گی
-          # یہاں ہم ایک مکمل ڈیش بورڈ لے آؤٹ بنا رہے ہیں
+          # 2. فائنل لے آؤٹ (Fixing the last 8 errors)
           main_layout = """<?xml version="1.0" encoding="utf-8"?>
           <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="match_parent">
               <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
-                      <Button android:id="@+id/tabJava" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Java" />
-                      <Button android:id="@+id/tabXml" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="XML" />
-                      <Button android:id="@+id/tabManifest" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Manifest" />
-                      <Button android:id="@+id/iconTabBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Icon" />
-                  </LinearLayout>
                   
-                  <EditText android:id="@+id/etEditor" android:layout_width="match_parent" android:layout_height="200dp" android:hint="Editor" />
+                  <Button android:id="@+id/tabJava" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/javaEditor" android:layout_width="match_parent" android:layout_height="100dp" />
                   
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
-                      <Button android:id="@+id/saveLocalBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Save" />
-                      <Button android:id="@+id/exportBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Export" />
-                      <Button android:id="@+id/loadBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Load" />
+                  <Button android:id="@+id/tabXml" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/xmlEditor" android:layout_width="match_parent" android:layout_height="100dp" />
+                  
+                  <Button android:id="@+id/tabManifest" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <EditText android:id="@+id/manifestEditor" android:layout_width="match_parent" android:layout_height="100dp" />
+
+                  <Button android:id="@+id/iconTabBtn" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                  <Button android:id="@+id/buildBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Build" />
+                  <Button android:id="@+id/fetchArtifactBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Fetch" />
+                  <Button android:id="@+id/downloadApkBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download" />
+                  <Button android:id="@+id/copyLogBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Copy Log" />
+                  
+                  <Button android:id="@+id/saveLocalBtn" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <Button android:id="@+id/exportBtn" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <Button android:id="@+id/loadBtn" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <Button android:id="@+id/openSettingsBtn" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                  <LinearLayout android:id="@+id/iconSection" android:layout_width="match_parent" android:layout_height="wrap_content">
+                      <ImageView android:id="@+id/iconPreview" android:layout_width="50dp" android:layout_height="50dp" />
+                      <Button android:id="@+id/iconUploadBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                   </LinearLayout>
 
-                  <Button android:id="@+id/openSettingsBtn" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Settings" />
-                  <LinearLayout android:id="@+id/iconSection" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-                      <ImageView android:id="@+id/iconPreview" android:layout_width="100dp" android:layout_height="100dp" />
-                      <Button android:id="@+id/iconUploadBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Upload Icon" />
-                  </LinearLayout>
-
-                  <ScrollView android:id="@+id/monitorScroll" android:layout_width="match_parent" android:layout_height="150dp">
-                      <TextView android:id="@+id/monitorContent" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Build Monitor Ready..." />
+                  <TextView android:id="@+id/logArea" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  <ScrollView android:id="@+id/monitorScroll" android:layout_width="match_parent" android:layout_height="100dp">
+                      <TextView android:id="@+id/monitorContent" android:layout_width="match_parent" android:layout_height="wrap_content" />
                   </ScrollView>
               </LinearLayout>
           </ScrollView>"""
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(main_layout)
 
-          # (باقی فائلز جیسے ڈائیلاگ سیٹنگز اور گریڈل کی تیاری)
+          # (Dialog & Build Configs)
           with open("app/src/main/res/layout/dialog_settings.xml", "w") as f:
               f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"><EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" /></LinearLayout>')
           
@@ -79,32 +84,32 @@ jobs:
           with open("build.gradle", "w") as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.7' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.8' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # جاوا کوڈ
+          # جاوا کوڈ انجکشن
           java_code = payload.get("java", "")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
           # 3. بلڈ ایگزیکیوشن
-          print("🚀 Initiating Build Engine V13.7...")
+          print("🚀 Final Sprint: V13.8...")
           subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
           build = subprocess.run(['./gradlew', 'assembleDebug', '--no-daemon'], capture_output=True, text=True)
           
           if build.returncode != 0:
-              print(f"❌ Error Log:\n{build.stderr}")
+              print(f"❌ Error Analysis:\n{build.stderr}")
               exit(1)
           else:
-              print("✅ MISSION SUCCESS: APK GENERATED!")
+              print("✅ MISSION COMPLETE: APK IS READY!")
 
       - name: 📦 4. Capture APK
         if: success()
         run: |
           mkdir -p build_output
-          find . -name "*.apk" -exec cp {} build_output/SystemPro_V13_7.apk \;
+          find . -name "*.apk" -exec cp {} build_output/SystemPro_V13_8.apk \;
 
-      - name: 📤 5. Dispatch
+      - name: 📤 5. Final Dispatch
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V13-APK
