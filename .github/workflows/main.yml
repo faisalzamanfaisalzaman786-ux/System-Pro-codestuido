@@ -21,14 +21,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Analysis & Offline Resource Bundling
+      - name: 🧠 AI Analysis & Resource Discovery
         shell: bash
         run: |
-          # آف لائن بنڈل فولڈرز کی تیاری
-          mkdir -p system_pro_offline_bundle/libraries
+          # آف لائن بنڈل اور بنیادی فولڈرز
           mkdir -p system_pro_offline_bundle/res_templates
-          
-          # پراجیکٹ اسٹرکچر
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
@@ -41,22 +38,22 @@ jobs:
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
-          # ڈیفالٹ آئیکن چیک (Offline Placeholder)
+          # آئیکن مینجمنٹ
           if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
             echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           else
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # AI Resource Generation
+          # AI Resource Logic
           python3 -c "
           import re, os
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
           required_styles = re.findall(r'@style/(\w+)', xml_content)
-          
           kb_path = 'system_pro_offline_bundle/res_templates/master_styles.xml'
+          
+          initial = '<resources>\n    <style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\">\n        <item name=\"colorPrimary\">#00FFCC</item>\n    </style>\n</resources>'
           if not os.path.exists(kb_path):
-              initial = '<resources>\n    <style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\">\n        <item name=\"colorPrimary\">#00FFCC</item>\n    </style>\n</resources>'
               with open(kb_path, 'w') as f: f.write(initial)
           
           existing = open(kb_path).read()
@@ -69,21 +66,20 @@ jobs:
           with open('app/src/main/res/values/styles.xml', 'w') as f: f.write(final)
           with open(kb_path, 'w') as f: f.write(final)
           "
+          echo \"<resources><string name='app_name'>${{ github.event.client_payload.app_name }}</string></resources>\" > app/src/main/res/values/strings.xml
 
-      - name: 🏗️ Smart Build & Library Archiving
+      - name: 🏗️ Smart Build Configuration
         run: |
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "include ':app'" > settings.gradle
           
-          # گریڈل کو کہنا کہ وہ تمام ڈاؤن لوڈ شدہ فائلوں کو لوکل فولڈر میں بھی رکھے
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
           }
-          allprojects { 
-              repositories { google(); mavenCentral() } 
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           EOF
 
           cat <<EOF > app/build.gradle
@@ -95,30 +91,35 @@ jobs:
                   applicationId '${{ github.event.client_payload.package_name }}'
                   minSdk 24
                   targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
           
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # بلڈ کے ساتھ ساتھ تمام ڈیپینڈنسیز کو لوکل کیش میں لانا
-          ./gradlew assembleDebug --quiet
 
-      - name: 💾 Localize & Save Offline Bundle
+      - name: 🚀 Execute Production Build
+        run: |
+          # یہاں ہم مخصوص کر رہے ہیں کہ :app ماڈیول کا ٹاسک چلایا جائے
+          ./gradlew :app:assembleDebug --quiet
+
+      - name: 💾 Save Offline Resources
         if: always()
         run: |
           git config --global user.name "System-Pro-AI"
           git config --global user.email "ai-engine@systempro.pk"
-          
-          # تمام ڈاؤن لوڈ شدہ لائبریریز کو لوکل فولڈر میں کاپی کرنا (اگر ضرورت ہو)
-          # نوٹ: مکمل گریڈل کیش بہت بڑا ہو سکتا ہے، ہم صرف ضروری نالج بیس سیو کر رہے ہیں
-          git add system_pro_offline_bundle/
-          git commit -m "Offline Bundle Update: Build #${{ github.run_number }}" || exit 0
-          git push origin main
+          if [ -d "system_pro_offline_bundle" ] && [ -n "$(git status --porcelain system_pro_offline_bundle)" ]; then
+            git add system_pro_offline_bundle/
+            git commit -m "AI: Offline resources updated [Build #${{ github.run_number }}]"
+            git push origin main
+          fi
 
       - name: 📤 Deliver APK
         uses: actions/upload-artifact@v4
