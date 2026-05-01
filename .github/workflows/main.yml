@@ -1,4 +1,4 @@
-name: System-Pro-V19.3-Fix-Engine
+name: System-Pro-V19.4-Ultra-Clean-Build
 
 on:
   repository_dispatch:
@@ -18,54 +18,56 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 اے آئی ماسٹر انسپکٹر (تصویر، کوڈ اور ایرر فکسر)
+      - name: 🧠 اے آئی ماسٹر انسپکٹر (الٹرا کلین اینڈ فکس)
         shell: python
         run: |
           import os, json, re, shutil, base64
 
-          # 1. ڈیٹا وصول کرنا
+          # 1. ماحول کی مکمل صفائی (Force Wipe)
+          dirs_to_clean = ['app', 'gradle', 'build', '.gradle']
+          for d in dirs_to_clean:
+              if os.path.exists(d): shutil.rmtree(d)
+          
+          # دوبارہ فولڈر بنانا
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
           except: payload = {}
 
-          # پیکیج کا نام ایک کرنا (سب سے اہم)
           pkg_name = payload.get("package_name", "com.faisal.systempro").strip().lower()
           pkg_path = pkg_name.replace('.', '/')
 
-          # فولڈرز کی ترتیب
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/drawable", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 2. تصویر کا انتظام (Image Handling)
+          # 2. تصویر کا انتظام (Enhanced Image Handling)
           img_data = payload.get("app_image_base64", "")
           img_xml = ""
           if img_data:
               try:
                   with open("app/src/main/res/drawable/app_logo.png", "wb") as f:
                       f.write(base64.b64decode(img_data))
-                  img_xml = '<ImageView android:id="@+id/main_image" android:layout_width="250dp" android:layout_height="250dp" android:src="@drawable/app_logo" android:layout_centerInParent="true" android:scaleType="centerInside"/>'
+                  img_xml = '<ImageView android:id="@+id/main_image" android:layout_width="match_parent" android:layout_height="300dp" android:src="@drawable/app_logo" android:layout_centerInParent="true" android:scaleType="fitCenter" android:padding="20dp"/>'
               except: pass
 
-          # 3. لے آؤٹ کی درستگی (Self-Healing Layout)
+          # 3. مستحکم لے آؤٹ
           layout_content = f"""<?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:background="#121212">
-              {img_xml if img_xml else '<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Ready" android:textColor="#FFFFFF" android:layout_centerInParent="true"/>'}
+              {img_xml if img_xml else '<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro: Stable V19.4" android:textColor="#FFFFFF" android:layout_centerInParent="true"/>'}
           </RelativeLayout>"""
 
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(layout_content)
 
-          # 4. جاوا کوڈ کی اصلاح (AI Logic)
-          java_code = f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
+          # 4. جاوا اور گریڈل کی اصلاح (The Fix)
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
+              f.write(f"package {pkg_name};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}")
 
-          # 5. گریڈل کنفیگریشن (Conflict Fixer)
-          # یہاں ہم نے 'resolutionStrategy' ڈالی ہے تاکہ ایرر نہ آئے
+          # یہاں ہم نے 'namespace' اور 'targetSdk' کو بالکل آفیشل رکھا ہے
           gradle_build = f"""
           plugins {{ id 'com.android.application' }}
           android {{
@@ -78,9 +80,7 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }}
-              configurations.all {{
-                  resolutionStrategy.force 'androidx.core:core:1.9.0'
-              }}
+              buildFeatures {{ viewBinding false }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -90,24 +90,21 @@ jobs:
 
           with open("app/build.gradle", "w") as f: f.write(gradle_build)
 
-          # 6. دیگر ضروری فائلیں
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('<resources><style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar"/></resources>')
-          
+          # مینی فیسٹ کی صفائی
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.Material3.Dark.NoActionBar" android:icon="@drawable/app_logo" android:allowBackup="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-      - name: 🏗️ بلڈ کا عمل (Build APK)
+      - name: 🏗️ کلین بلڈ شروع کریں (Force Clean Build)
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
 
       - name: 📤 اے پی کے حاصل کریں
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V19.3-Fixed-APK
+          name: System-Pro-V19.4-Final-APK
           path: app/build/outputs/apk/debug/*.apk
