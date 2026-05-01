@@ -37,20 +37,28 @@ jobs:
             echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 --decode > app/src/main/res/drawable-xxhdpi/ic_launcher.png
           fi
 
+          # 🚀 FIX: Creating strings.xml
           cat <<EOF > app/src/main/res/values/strings.xml
           <resources><string name="app_name">$APP_NAME</string></resources>
           EOF
 
-      - name: 🏗️ Auto-Generate Build Scripts & AndroidX Fix
+          # 🚀 FIX: Creating styles.xml with EXACT theme name requested by Manifest
+          cat <<EOF > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#00FFCC</item>
+                  <item name="colorPrimaryVariant">#00CCaa</item>
+                  <item name="colorOnPrimary">#000000</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: 🏗️ Auto-Generate Build Scripts
         run: |
-          # 🚀 FIX: Create gradle.properties and enable AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          
-          # Create settings.gradle
           echo "include ':app'" > settings.gradle
           
-          # Create root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -59,7 +67,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # Create app build.gradle
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -72,9 +79,6 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildFeatures {
-                  viewBinding true
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -83,7 +87,6 @@ jobs:
           }
           EOF
 
-          # Setup Gradle Wrapper
           gradle wrapper --gradle-version 8.5
 
       - name: 🚀 Execute Production Build
