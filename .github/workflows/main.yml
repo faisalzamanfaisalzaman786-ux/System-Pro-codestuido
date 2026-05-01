@@ -19,37 +19,48 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Analysis & Resource Discovery
+      - name: 🧠 AI Analysis & Triple Search (Logic + Permissions)
         shell: bash
         run: |
-          # فولڈرز کی تیزی سے تیاری
           mkdir -p app/src/main/res/{layout,values,drawable}
           mkdir -p system_pro_offline_bundle/res_templates
           
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
 
-          # پے لوڈ پروسیسنگ
+          # پے لوڈ ڈی کوڈنگ
           echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
-          # ڈیفالٹ ریسورسز
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
-
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>
-          EOF
-
-          # Triple Search Engine Logic
+          # 🚀 AI PERMISSION & RESOURCE MONITOR
           python3 -c "
           import re, os
+          
+          # 1. Permission Discovery
+          java_code = open('app/src/main/java/$PKG_PATH/MainActivity.java').read()
+          manifest_path = 'app/src/main/AndroidManifest.xml'
+          manifest_content = open(manifest_path).read()
+          
+          needed_permissions = []
+          if 'Camera' in java_code or 'camera' in java_code: needed_permissions.append('android.permission.CAMERA')
+          if 'Location' in java_code or 'GPS' in java_code: needed_permissions.append('android.permission.ACCESS_FINE_LOCATION')
+          if 'Storage' in java_code or 'File' in java_code: needed_permissions.append('android.permission.WRITE_EXTERNAL_STORAGE')
+          
+          for perm in needed_permissions:
+              if perm not in manifest_content:
+                  perm_tag = f'    <uses-permission android:name=\"{perm}\" />\n'
+                  manifest_content = manifest_content.replace('<application', perm_tag + '<application')
+          
+          with open(manifest_path, 'w') as f: f.write(manifest_content)
+
+          # 2. Triple Search Engine (Styles)
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
           required_styles = re.findall(r'@style/(\w+)', xml_content)
           kb_path = 'system_pro_offline_bundle/res_templates/master_styles.xml'
           
           if not os.path.exists(kb_path):
-              with open(kb_path, 'w') as f: f.write('<resources>\n    <style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\">\n        <item name=\"colorPrimary\">#00FFCC</item>\n    </style>\n</resources>')
+              with open(kb_path, 'w') as f: f.write('<resources><style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">#00FFCC</item></style></resources>')
           
           existing = open(kb_path).read()
           new_entries = ''
@@ -62,9 +73,9 @@ jobs:
           with open(kb_path, 'w') as f: f.write(final)
           "
 
-      - name: 🏗️ Smart Config (Gradle 8.5)
+      - name: 🏗️ Smart Build Config (Gradle 8.5)
         run: |
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
+          echo "org.gradle.jvmargs=-Xmx3072m" > gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
@@ -94,19 +105,19 @@ jobs:
           }
           EOF
 
-      - name: 🚀 Final Speed Build
+      - name: 🚀 Execute Production Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --parallel --build-cache
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
-      - name: 💾 Save Intelligence
+      - name: 💾 AI Persistence Sync
         if: always()
         run: |
           git config --global user.name "System-Pro-AI"
           git config --global user.email "ai-engine@systempro.pk"
           git add system_pro_offline_bundle/ || true
-          git commit -m "AI Persistence Sync" || true
+          git commit -m "AI Intelligence Update [Build #${{ github.run_number }}]" || true
           git push origin main || true
 
       - name: 📤 Deliver APK
