@@ -1,8 +1,27 @@
-name: System-Pro-V47-Final-Fix
+name: System-Pro-V49-Manual-Input
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [build-app]
+    inputs:
+      app_name:
+        description: 'ایپ کا نام (App Name)'
+        required: true
+        default: 'System Pro'
+      package_name:
+        description: 'پیکج نیم (Package Name)'
+        required: true
+        default: 'com.system.pro'
+      java_code:
+        description: 'جاوا کوڈ یہاں پیسٹ کریں (Java Code)'
+        required: true
+        type: string
+      xml_code:
+        description: 'ایکس ایم ایل کوڈ یہاں پیسٹ کریں (XML Code)'
+        required: true
+        type: string
+      manifest_code:
+        description: 'مینی فیسٹ کوڈ (اختیاری - ورنہ انجن خود بنائے گا)'
+        required: false
+        type: string
 
 jobs:
   Build-Engine:
@@ -11,61 +30,55 @@ jobs:
       - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: 🧬 1. Smart Extraction & Properties Setup
+      - name: 🧬 1. Manual Data Processing
         shell: python
         run: |
-          import os, json, re, base64
-          
-          # پے لوڈ حاصل کرنا
-          try:
-              with open(os.getenv('GITHUB_EVENT_PATH'), 'r') as f:
-                  payload = json.load(f).get('client_payload', {})
-          except: payload = {}
+          import os, re, base64
 
-          # پے لوڈ ویلیڈیشن (اگر خالی ہے تو بلڈ روک دیں)
-          java_code = payload.get('java_code', "").strip()
-          xml_code = payload.get('xml_code', "").strip()
-          pkg = payload.get('target_package', 'com.system.pro').strip()
+          # Inputs سے ڈیٹا لینا
+          pkg = "${{ github.event.inputs.package_name }}"
+          app_name = "${{ github.event.inputs.app_name }}"
+          java_raw = """${{ github.event.inputs.java_code }}"""
+          xml_raw = """${{ github.event.inputs.xml_code }}"""
+          manifest_raw = """${{ github.event.inputs.manifest_code }}"""
 
-          if not java_code or not xml_code:
-              print("FATAL ERROR: Payload is EMPTY! Please check your HTML/JS source.")
-              exit(1)
-
-          # سٹرکچر بنانا
+          # ڈائریکٹریز بنانا
           j_dir = f"app/src/main/java/{pkg.replace('.', '/')}"
           os.makedirs(j_dir, exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
           os.makedirs("app/src/main/res/mipmap-mdpi", exist_ok=True)
 
-          # --- 🚨 FIXED PROPERTIES (The Root Cause) ---
+          # --- Java Injection ---
+          # پیکیج نیم کو کوڈ کے اندر درست کرنا
+          java_final = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_raw)
+          with open(f"{j_dir}/MainActivity.java", 'w', encoding='utf-8') as f:
+              f.write(java_final)
+
+          # --- XML Injection ---
+          xml_clean = re.sub(r'<\?xml.*?\?>', '', xml_raw).strip()
+          with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?>\n' + xml_clean)
+
+          # --- Manifest Logic ---
+          if len(manifest_raw.strip()) > 10:
+              final_manifest = manifest_raw
+          else:
+              final_manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}"><application android:label="{app_name}" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher" android:allowBackup="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+          
+          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
+              f.write(final_manifest)
+
+          # --- Config Files ---
           with open('gradle.properties', 'w') as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
-          
           with open('settings.gradle', 'w') as f: f.write("include ':app'")
-
-          # فائلز لکھنا
-          with open(f"{j_dir}/MainActivity.java", 'w', encoding='utf-8') as f:
-              f.write(re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_code))
-          
-          xml_final = re.sub(r'<\?xml.*?\?>', '', xml_code).strip()
-          with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?>\n' + xml_final)
-
-          # مینی فیسٹ (بہتر ورژن)
-          with open('app/src/main/AndroidManifest.xml', 'w') as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:supportsRtl="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
-          
-          # گریڈل فائلز
           with open('build.gradle', 'w') as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
-          
           with open('app/build.gradle', 'w') as f:
               f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
-
           with open('app/src/main/res/values/themes.xml', 'w') as f:
               f.write('<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>')
-          
           with open('app/src/main/res/mipmap-mdpi/ic_launcher.png', 'wb') as f:
               f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
 
@@ -73,7 +86,7 @@ jobs:
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
 
-      - name: 🛠️ 3. Build APK
+      - name: 🛠️ 3. Assemble Master APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
@@ -81,6 +94,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
 
-      - name: 📤 4. Deploy
+      - name: 📤 4. Upload Result
         uses: actions/upload-artifact@v4
-        with: { name: System-Pro-Master-APK, path: app/build/outputs/apk/debug/*.apk }
+        with: { name: System-Pro-Manual-Build, path: app/build/outputs/apk/debug/*.apk }
