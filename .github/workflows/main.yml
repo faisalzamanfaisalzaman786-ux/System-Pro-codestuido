@@ -24,7 +24,7 @@ jobs:
       - name: 🧠 AI Analysis & Resource Discovery
         shell: bash
         run: |
-          # آف لائن بنڈل اور بنیادی فولڈرز
+          # فولڈرز کی تیاری
           mkdir -p system_pro_offline_bundle/res_templates
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -45,15 +45,22 @@ jobs:
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # AI Resource Logic
+          # 🚀 FIX: Strings.xml generation without syntax errors
+          cat <<EOF > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">${{ github.event.client_payload.app_name }}</string>
+          </resources>
+          EOF
+
+          # AI Resource Logic (Python is safer for complex XML)
           python3 -c "
           import re, os
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
           required_styles = re.findall(r'@style/(\w+)', xml_content)
           kb_path = 'system_pro_offline_bundle/res_templates/master_styles.xml'
           
-          initial = '<resources>\n    <style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\">\n        <item name=\"colorPrimary\">#00FFCC</item>\n    </style>\n</resources>'
           if not os.path.exists(kb_path):
+              initial = '<resources>\n    <style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\">\n        <item name=\"colorPrimary\">#00FFCC</item>\n    </style>\n</resources>'
               with open(kb_path, 'w') as f: f.write(initial)
           
           existing = open(kb_path).read()
@@ -66,7 +73,6 @@ jobs:
           with open('app/src/main/res/values/styles.xml', 'w') as f: f.write(final)
           with open(kb_path, 'w') as f: f.write(final)
           "
-          echo \"<resources><string name='app_name'>${{ github.event.client_payload.app_name }}</string></resources>\" > app/src/main/res/values/strings.xml
 
       - name: 🏗️ Smart Build Configuration
         run: |
@@ -106,9 +112,7 @@ jobs:
           chmod +x gradlew
 
       - name: 🚀 Execute Production Build
-        run: |
-          # یہاں ہم مخصوص کر رہے ہیں کہ :app ماڈیول کا ٹاسک چلایا جائے
-          ./gradlew :app:assembleDebug --quiet
+        run: ./gradlew :app:assembleDebug --quiet
 
       - name: 💾 Save Offline Resources
         if: always()
