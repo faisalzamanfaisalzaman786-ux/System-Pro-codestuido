@@ -27,20 +27,17 @@ jobs:
           mkdir -p app/src/main/jniLibs/{arm64-v8a,armeabi-v7a}
           mkdir -p gradle/wrapper
 
-          # 1. Project Name Fix (یہاں ہم نے نام کو محفوظ بنایا ہے)
           PROJECT_NAME="${{ github.event.inputs.project_name }}"
           if [ -z "$PROJECT_NAME" ]; then PROJECT_NAME="SystemPro_App"; fi
           echo "rootProject.name='$PROJECT_NAME'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # 2. Official Manifest
+          # Official Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.system.pro">
-              <application 
-                  android:label="$PROJECT_NAME" 
-                  android:theme="@style/Theme.AppCompat">
+              <application android:label="$PROJECT_NAME" android:theme="@style/Theme.AppCompat">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -51,7 +48,7 @@ jobs:
           </manifest>
           EOF
 
-          # 3. Default Activity & Layout
+          # Default Activity & Layout
           cat <<EOF > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.os.Bundle;
@@ -81,7 +78,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 4. Themes & Strings
+          # Themes & Strings
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.DarkActionBar" /></resources>' > app/src/main/res/values/themes.xml
           echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
 
@@ -91,20 +88,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🚀 AI Purification & Triple-Engine Search
-        shell: python
-        run: |
-          import os
-          print("AI: Verifying Android standards and project naming...")
-          print("Triple-Engine: Syncing official repositories...")
-
       - name: 🛠️ Gradle Auto-Setup
         run: |
-          # یہاں ہم گریڈل ریپر کو زبردستی انیشلائز کر رہے ہیں
           gradle wrapper --gradle-version 8.0
           chmod +x gradlew
 
       - name: 📦 Official Assembly Build
         run: |
-          echo "Compiling System Pro Master APK..."
-          # ./gradlew assembleDebug
+          echo "Compiling APK..."
+          # اب ہم اصل بلڈ رن کر رہے ہیں
+          ./gradlew assembleDebug
+
+      - name: 📤 Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V18-6-Final
+          path: app/build/outputs/apk/debug/*.apk
