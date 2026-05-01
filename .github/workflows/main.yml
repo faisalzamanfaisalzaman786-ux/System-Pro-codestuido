@@ -1,4 +1,4 @@
-name: System-Pro-V24.0-Clean-Build
+name: System-Pro-V24.5-Final-Master
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -11,28 +11,28 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🧼 Pre-Build Deep Clean
+      - name: 🧼 Deep Clean Workspace
         run: |
-          # پچھلے کسی بھی بلڈ کے نشانات مٹانا
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/mipmap-*
           rm -rf app/build/
-          rm -f env_vars.sh
-          echo "Workspace is now clean for a fresh build."
+          echo "Workspace washed."
 
-      - name: 🏗️ Setup Official Structure
+      - name: 🏗️ Setup Android Structure
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 AI Template & Payload Merger
+      - name: 🧬 AI Template, Payload & Icon Merger
         shell: python
         run: |
-          import os, json, re, shutil
+          import os, json, re, base64, shutil
 
           # پے لوڈ حاصل کرنا
           event_path = os.getenv('GITHUB_EVENT_PATH')
@@ -43,34 +43,34 @@ jobs:
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
 
-          # فائلیں اٹھانے کا عمل (اگر ٹیمپلیٹ فولڈر موجود ہے)
-          java_tmpl = 'templates/app_logic.java'
-          xml_tmpl = 'templates/app_ui.xml'
-          man_tmpl = 'templates/app_manifest.xml'
+          # مددگار فنکشن
+          def get_content(file_path, payload_key, default):
+              if os.path.exists(file_path) and os.path.getsize(file_path) > 10:
+                  with open(file_path, 'r') as f: return f.read()
+              return payload.get(payload_key, default)
 
-          # جاوا کی تیاری
-          if os.path.exists(java_tmpl):
-              with open(java_tmpl, 'r') as f: java_content = f.read()
-          else:
-              java_content = payload.get('java_code', '')
-
-          if java_content:
-              java_content = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_content.strip())
+          # 1. Java, XML & Manifest Sync
+          java_content = get_content('templates/app_logic.java', 'java_code', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
+          java_content = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_content.strip())
           
-          # ایکس ایم ایل کی تیاری
-          xml_content = ""
-          if os.path.exists(xml_tmpl):
-              with open(xml_tmpl, 'r') as f: xml_content = f.read()
-          else:
-              xml_content = payload.get('xml_code', '')
+          xml_content = get_content('templates/app_ui.xml', 'xml_code', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro V24.5" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
+          
+          manifest_content = get_content('templates/app_manifest.xml', 'manifest_code', '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # مینی فیسٹ کی تیاری
-          if os.path.exists(man_tmpl):
-              with open(man_tmpl, 'r') as f: manifest_content = f.read()
-          else:
-              manifest_content = '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+          # 2. Image/Icon Processing (The "Wash & Replace" Logic)
+          icon_tmpl = 'templates/app_icon.png'
+          icon_dest = 'app/src/main/res/mipmap-hdpi/ic_launcher.png'
+          icon_payload = payload.get('icon_base64')
 
-          # فائلوں کو فائنل پاتھ پر لکھنا
+          if icon_payload and len(icon_payload) > 100:
+              with open(icon_dest, 'wb') as f:
+                  f.write(base64.b64decode(icon_payload))
+              print("AI: Icon replaced from Payload.")
+          elif os.path.exists(icon_tmpl):
+              shutil.copy(icon_tmpl, icon_dest)
+              print("AI: Icon replaced from Template.")
+
+          # فائلیں لکھنا
           java_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(java_dir, exist_ok=True)
           with open(f'{java_dir}/MainActivity.java', 'w', encoding='utf-8') as f: f.write(java_content)
@@ -79,7 +79,7 @@ jobs:
 
           with open('env_vars.sh', 'w') as f: f.write(f"export TARGET_PKG='{target_pkg}'")
 
-      - name: 📝 Build Config Sync
+      - name: 📝 Final Build Configuration
         run: |
           source env_vars.sh
           cat <<EOF > build.gradle
@@ -99,6 +99,8 @@ jobs:
                   applicationId "$TARGET_PKG"
                   minSdk 24
                   targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
               }
           }
           dependencies {
@@ -108,31 +110,22 @@ jobs:
           EOF
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
-      - name: ☕ Setup Java 17
+      - name: ☕ Setup Java & Gradle
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Build & Clean Execution
+      - name: 🛠️ Build APK (With Auto-Clean)
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
           ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          ./gradlew clean assembleDebug  # یہاں clean کمانڈ ڈیٹا واش کرے گی
+          ./gradlew clean assembleDebug
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload Optimized APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V24-Clean
+          name: System-Pro-V24.5-Final
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: 🚿 Post-Build Data Wash
-        if: always()  # یہ قدم ہمیشہ چلے گا، چاہے بلڈ فیل ہو یا پاس
-        run: |
-          echo "Washing temporary files..."
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -f env_vars.sh
-          echo "Workspace washed and ready for next build."
