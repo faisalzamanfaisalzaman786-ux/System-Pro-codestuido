@@ -1,4 +1,4 @@
-name: System-Pro-V17-2-No-Keys-Required
+name: System-Pro-V17-3-Force-Build
 
 on:
   repository_dispatch:
@@ -6,43 +6,70 @@ on:
   workflow_dispatch:
 
 jobs:
-  Independent-Build:
+  Build-Process:
     runs-on: ubuntu-latest
     steps:
       - name: 🛠️ Sync
         uses: actions/checkout@v4
 
-      - name: 🧠 Local Logic Injection (V17.2)
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🧠 AI Force Engine (V17.3)
         shell: python
         run: |
           import os, json, re
 
-          # ڈیٹا لوڈنگ
+          # لاگنگ شروع
+          print("--- System Pro Debug Start ---")
+          
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
+              print(f"Payload Received: {payload_raw[:100]}...") # صرف پہلا حصہ پرنٹ کریں
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
-          except: payload = {}
+          except Exception as e:
+              print(f"Payload Error: {e}")
+              payload = {}
 
-          java_code = payload.get("java", "")
-          
-          # 1. API Key Removal Guard
-          # اگر کوڈ میں کہیں 'API_KEY' یا 'Gemini' کا ذکر ہے تو یہ اسے بلاک یا نیوٹرل کر دے گا
-          java_code = re.sub(r'String\s+.*API_KEY\s*=.*;', 'String API_KEY = "LOCAL_SYSTEM_PRO";', java_code)
-          
-          # 2. Local Error Handling (No Cloud Needed)
-          # ہم ایک ایسا بلاک ڈالیں گے جو صرف لوکل ریسورسز استعمال کرے
-          safe_wrapper = """
-          // Injected Local Engine
-          private void initializeLocalEngine() {
-              try {
-                  android.util.Log.d("SystemPro", "Local Engine Started - No Keys Required");
-              } catch (Exception e) {}
-          }
-          """
-          
-          # جاوا کوڈ میں انجن انجیکٹ کرنا
-          if "public class" in java_code:
-              java_code = java_code.replace("{", "{\n" + safe_wrapper, 1)
+          java_code = payload.get("java", "public class MainActivity extends androidx.appcompat.app.AppCompatActivity {}")
+          pkg_name = payload.get("package_name", "com.faisal.systempro")
+          pkg_path = pkg_name.replace('.', '/')
 
-          # باقی فائلز کی تیاری (پچھلے کامیاب ورژنز کی طرح)
-          # ... (XML اور Manifest کی تیاری)
+          # ڈائریکٹریز بنانا اور کنفرم کرنا
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          
+          # فائلز لکھنا
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
+              f.write(java_code)
+          
+          # ایک بنیادی لے آؤٹ لازمی بنانا تاکہ خالی نہ رہے
+          with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Forced"/></LinearLayout>')
+
+          # گریڈل کنفیگریشن (Minimal & Robust)
+          with open("app/build.gradle", "w") as f:
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1' }}")
+          
+          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.3"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+          print("--- File Generation Complete ---")
+
+      - name: 🏗️ Force Compile
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 📤 Export Artifacts
+        if: always() # ہمیشہ اپ لوڈ کرنے کی کوشش کریں چاہے فیل ہو یا پاس
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V17-3-Output
+          path: app/build/outputs/apk/debug/
