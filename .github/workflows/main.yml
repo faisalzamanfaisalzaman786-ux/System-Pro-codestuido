@@ -1,8 +1,11 @@
 name: System Pro Ultimate Remote Builder
 
 on:
+  # یہ کسی بھی برانچ پر پش کرنے سے ورک فلو کو چلا دے گا
   push:
-    branches: [ main ]
+    branches:
+      - '**' 
+  # یہ UI پر "Run workflow" کا بٹن دکھائے گا
   workflow_dispatch:
     inputs:
       project_name:
@@ -15,45 +18,49 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. کوڈ حاصل کریں (اسے سب سے پہلے ہونا چاہیے)
+      # 1. کوڈ حاصل کریں
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # 2. جاوا سیٹ اپ (بغیر کیشے کے تاکہ ایرر ختم ہو)
+      # 2. جاوا سیٹ اپ (بغیر کیشے کے، تاکہ فائل میچ والا ایرر نہ آئے)
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          # ہم نے cache ہٹا دیا ہے تاکہ "No file matched" کا ایرر نہ آئے
-          overwrite-settings: true
 
       # 3. اینڈرائیڈ SDK سیٹ اپ
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4. چیک کریں کہ فائلیں موجود ہیں (ڈیبگنگ کے لیے)
-      - name: Verify Repository Content
-        run: ls -R
-
-      # 5. اگر 'gradlew' نہیں ہے تو اسے جنریٹ کریں
-      - name: Ensure Gradle Wrapper
+      # 4. فائل اسٹرکچر کی جانچ (یہ بہت ضروری ہے تاکہ ہمیں پتا چلے فائلیں کہاں ہیں)
+      - name: Check File Structure
         run: |
-          if [ ! -f "gradlew" ]; then
-            echo "gradlew نہیں ملا، نیا جنریٹ کیا جا رہا ہے..."
-            gradle wrapper
+          echo "موجودہ فائلوں کی لسٹ:"
+          ls -R
+
+      # 5. گریڈل ایگزیکیوشن کی اجازت
+      - name: Grant Execute Permission
+        run: |
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+          else
+            echo "gradlew نہیں ملا، مینوئل بلڈ کی کوشش کی جائے گی"
           fi
-          chmod +x gradlew
 
-      # 6. بلڈ پراسیس
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
-        continue-on-error: false 
+      # 6. بلڈ رن کریں (اگر کوئی ایرر آئے گا تو یہ مکمل رپورٹ دے گا)
+      - name: Build with Gradle
+        run: |
+          if [ -f "gradlew" ]; then
+            ./gradlew assembleRelease --stacktrace
+          else
+            gradle assembleRelease --stacktrace
+          fi
 
-      # 7. آرٹیکٹ اپ لوڈ (کامیابی کی صورت میں)
-      - name: Upload Build Artifact
+      # 7. آرٹیکٹ اپ لوڈ کریں
+      - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.project_name }}-Release
-          path: "**/*.apk" # یہ تمام فولڈرز میں APK ڈھونڈے گا
+          name: ${{ github.event.inputs.project_name || 'SystemPro-Build' }}
+          path: "**/*.apk"
