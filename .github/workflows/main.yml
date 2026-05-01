@@ -16,18 +16,22 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Universal Android Structure Setup
+      - name: 🏗️ Setup Android Official Structure
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout/
           mkdir -p app/src/main/res/values/
           mkdir -p gradle/wrapper
 
-          # 1. Settings Fixed
+          # 1. Settings & Properties (AndroidX Fix)
           echo "rootProject.name='SystemPro_App'" > settings.gradle
           echo "include ':app'" >> settings.gradle
+          
+          # یہ وہ فائل ہے جس کی وجہ سے ایرر آ رہا تھا
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
 
-          # 2. Root build.gradle (Modern & Clean)
+          # 2. Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -36,11 +40,9 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 3. App-level build.gradle (No DependencyHandler Conflict)
+          # 3. App-level build.gradle
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
               compileSdk 33
@@ -52,6 +54,7 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
 
@@ -91,8 +94,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Force Gradle 8.0 Initialization
-        # یہاں ہم سسٹم کے گریڈل کو ہٹا کر زبردستی 8.0 انسٹال کر رہے ہیں
+      - name: 🛠️ Setup Gradle Wrapper
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle-8.0-bin.zip
