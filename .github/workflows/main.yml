@@ -1,4 +1,4 @@
-name: System-Pro-V34-Final
+name: System-Pro-V35-Final
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -15,6 +15,7 @@ jobs:
         run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/mipmap-*
           rm -rf app/build/
           echo "REPORT: Sanitized."
 
@@ -23,10 +24,11 @@ jobs:
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 3. AI Logic
+      - name: 🧬 3. AI Logic & Icon Fix
         shell: python
         run: |
           import os, json, re, shutil, urllib.request
@@ -45,7 +47,23 @@ jobs:
           with open('app/build.gradle', 'w') as f:
             f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
 
-          # Write Manifest
+          # --- AI ICON SAFEGUARD ---
+          icon_url = payload.get('icon_url')
+          icon_path = 'app/src/main/res/mipmap-mdpi/ic_launcher.png'
+          if icon_url:
+            try:
+              urllib.request.urlretrieve(icon_url, 'icon.png')
+              shutil.copy('icon.png', icon_path)
+              print("REPORT: Custom icon linked.")
+            except: icon_url = None
+          
+          if not icon_url:
+            # Create a simple 1x1 pixel fallback if icon fails
+            with open(icon_path, 'wb') as f:
+              f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+            print("REPORT: Placeholder icon generated to prevent build failure.")
+
+          # Manifest Fix (Removed unnecessary mipmap references if not needed)
           with open('app/src/main/AndroidManifest.xml', 'w') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
@@ -80,5 +98,5 @@ jobs:
       - name: 📤 7. Deploy
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-Master-APK
           path: app/build/outputs/apk/debug/*.apk
