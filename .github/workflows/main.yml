@@ -1,25 +1,25 @@
-name: System-Pro-V49-Manual-Input
+name: System-Pro-V50-Direct-Input
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: 'ایپ کا نام (App Name)'
+        description: 'ایپ کا نام (مثلاً: System Pro)'
         required: true
         default: 'System Pro'
       package_name:
-        description: 'پیکج نیم (Package Name)'
+        description: 'پیکج نیم (مثلاً: com.system.pro)'
         required: true
         default: 'com.system.pro'
       java_code:
-        description: 'جاوا کوڈ یہاں پیسٹ کریں (Java Code)'
+        description: 'جاوا کوڈ (MainActivity.java)'
         required: true
         type: string
       xml_code:
-        description: 'ایکس ایم ایل کوڈ یہاں پیسٹ کریں (XML Code)'
+        description: 'ایکس ایم ایل کوڈ (activity_main.xml)'
         required: true
         type: string
       manifest_code:
-        description: 'مینی فیسٹ کوڈ (اختیاری - ورنہ انجن خود بنائے گا)'
+        description: 'مینی فیسٹ کوڈ (اگر آپ اپنا مینی فیسٹ دینا چاہیں)'
         required: false
         type: string
 
@@ -30,48 +30,49 @@ jobs:
       - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: 🧬 1. Manual Data Processing
+      - name: 🧬 1. Direct Code Processing
         shell: python
         run: |
           import os, re, base64
 
-          # Inputs سے ڈیٹا لینا
+          # ان پٹس کا ڈیٹا لینا
           pkg = "${{ github.event.inputs.package_name }}"
           app_name = "${{ github.event.inputs.app_name }}"
           java_raw = """${{ github.event.inputs.java_code }}"""
           xml_raw = """${{ github.event.inputs.xml_code }}"""
           manifest_raw = """${{ github.event.inputs.manifest_code }}"""
 
-          # ڈائریکٹریز بنانا
-          j_dir = f"app/src/main/java/{pkg.replace('.', '/')}"
-          os.makedirs(j_dir, exist_ok=True)
+          # ڈھانچہ بنانا
+          j_path = f"app/src/main/java/{pkg.replace('.', '/')}"
+          os.makedirs(j_path, exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
           os.makedirs("app/src/main/res/mipmap-mdpi", exist_ok=True)
 
-          # --- Java Injection ---
-          # پیکیج نیم کو کوڈ کے اندر درست کرنا
+          # جاوا فائل لکھنا اور پیکج نیم درست کرنا
           java_final = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_raw)
-          with open(f"{j_dir}/MainActivity.java", 'w', encoding='utf-8') as f:
+          with open(f"{j_path}/MainActivity.java", 'w', encoding='utf-8') as f:
               f.write(java_final)
 
-          # --- XML Injection ---
+          # ایکس ایم ایل فائل لکھنا
           xml_clean = re.sub(r'<\?xml.*?\?>', '', xml_raw).strip()
           with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f:
               f.write('<?xml version="1.0" encoding="utf-8"?>\n' + xml_clean)
 
-          # --- Manifest Logic ---
-          if len(manifest_raw.strip()) > 10:
+          # مینی فیسٹ کی تیاری
+          if len(manifest_raw.strip()) > 20:
               final_manifest = manifest_raw
           else:
-              final_manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}"><application android:label="{app_name}" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher" android:allowBackup="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+              final_manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}"><application android:label="{app_name}" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher" android:allowBackup="true" android:supportsRtl="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
           
           with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
               f.write(final_manifest)
 
-          # --- Config Files ---
+          # لازمی پراپرٹیز (جو پچھلی بار فیل ہوئی تھیں)
           with open('gradle.properties', 'w') as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true\n")
+          
+          # بلڈ فائلز
           with open('settings.gradle', 'w') as f: f.write("include ':app'")
           with open('build.gradle', 'w') as f:
               f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
@@ -86,7 +87,7 @@ jobs:
         uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
 
-      - name: 🛠️ 3. Assemble Master APK
+      - name: 🛠️ 3. Final Compilation
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
@@ -94,6 +95,6 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
 
-      - name: 📤 4. Upload Result
+      - name: 📤 4. Upload APK
         uses: actions/upload-artifact@v4
         with: { name: System-Pro-Manual-Build, path: app/build/outputs/apk/debug/*.apk }
