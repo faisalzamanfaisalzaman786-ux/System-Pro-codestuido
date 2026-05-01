@@ -1,4 +1,4 @@
-name: System-Pro-V32-Final
+name: System-Pro-V33-Final
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -11,35 +11,39 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🧼 1. Deep Wash
+      - name: 🧼 1. AI Workspace Wash
         run: |
           echo "REPORT: Cleaning workspace..."
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
-          echo "REPORT: Cleaned."
+          echo "REPORT: Sanitized."
 
       - name: 🏗️ 2. Structure Setup
         run: |
-          echo "REPORT: Creating Directories..."
+          echo "REPORT: Mapping Directories..."
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 3. AI Hybrid Logic
+      - name: 🧬 3. AI Hybrid Logic (Verified)
         shell: python
         run: |
           import os, json, re, base64, shutil, urllib.request
-          event_path = os.getenv('GITHUB_EVENT_PATH')
-          with open(event_path, 'r') as f:
-              event_data = json.load(f)
-          payload = event_data.get('client_payload', {})
+          try:
+              event_path = os.getenv('GITHUB_EVENT_PATH')
+              with open(event_path, 'r') as f:
+                  event_data = json.load(f)
+              payload = event_data.get('client_payload', {})
+          except: payload = {}
+
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
-          print(f"REPORT: AI Processing for {target_pkg}")
+          print(f"REPORT: Target Package: {target_pkg}")
 
+          # Icon Logic
           icon_url = payload.get('icon_url')
           if icon_url:
               try:
@@ -47,17 +51,18 @@ jobs:
                   for r in ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi']:
                       os.makedirs(f'app/src/main/res/{r}', exist_ok=True)
                       shutil.copy('icon.png', f'app/src/main/res/{r}/ic_launcher.png')
-              except: print("REPORT: Icon Fetch Failed")
+                  print("REPORT: Icon Placed.")
+              except: print("REPORT: Icon Failed.")
 
-          def get_code(key, path, fallback):
-              c = payload.get(key, "").strip()
-              if not c and os.path.exists(path):
-                  with open(path, 'r') as f: c = f.read().strip()
-              return c if c else fallback
+          def get_val(k, p, d):
+              v = payload.get(k, "").strip()
+              if not v and os.path.exists(p):
+                  with open(p, 'r') as f: v = f.read().strip()
+              return v if v else d
 
-          java_c = get_code('java_code', 'templates/app_logic.java', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
+          java_c = get_val('java_code', 'templates/app_logic.java', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
           java_c = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_c)
-          xml_c = get_code('xml_code', 'templates/app_ui.xml', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro: Engine Master" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
+          xml_c = get_val('xml_code', 'templates/app_ui.xml', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Master V33" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
 
           j_dir = f'app/src/main/java/{pkg_path}'
           os.makedirs(j_dir, exist_ok=True)
@@ -71,7 +76,7 @@ jobs:
           with open('app/build.gradle', 'w') as f:
               f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{target_pkg}'; compileSdk 34; defaultConfig {{ applicationId '{target_pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
 
-      - name: 📋 4. Themes Sync
+      - name: 📝 4. Final Theme Fix
         run: |
           echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
 
@@ -81,14 +86,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ 6. Build APK
+      - name: 🛠️ 6. Build Master APK
         run: |
+          echo "REPORT: Compiling Build..."
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
           ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
-          echo "REPORT: Compilation Success."
+          echo "REPORT: Success."
 
       - name: 📤 7. Deployment
         uses: actions/upload-artifact@v4
@@ -98,4 +104,4 @@ jobs:
 
       - name: 🚿 8. Post-Build
         if: always()
-        run: echo "REPORT: Process Finished."
+        run: echo "REPORT: Master Build Finished."
