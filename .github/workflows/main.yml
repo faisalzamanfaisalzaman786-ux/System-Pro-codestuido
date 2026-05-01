@@ -7,26 +7,29 @@ on:
     inputs:
       package_name:
         description: 'App Package Name'
-        required: true
+        required: false
+        default: 'com.systempro.master'
       ui_payload:
-        description: 'AI Generated Payload (UI/Logic)'
-        required: true
+        description: 'AI Generated Payload (UI/Logic/Styles)'
+        required: false
+        default: '{}'
 
 jobs:
-  unified-build:
+  unified-ai-process:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python environment
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Run Unified AI Build Engine
+      - name: Execute AI Build Engine
         shell: python
         env:
+          # یہ ڈیٹا آپ کے UI ڈسپیچ سے آئے گا
           PKG_NAME: ${{ github.event.inputs.package_name }}
           PAYLOAD: ${{ github.event.inputs.ui_payload }}
         run: |
@@ -34,25 +37,30 @@ jobs:
           import json
           import sys
 
-          # پچھلے تمام مسئلوں کا حل: پیکیج اور پاتھ کی خودکار میچنگ
-          pkg = os.getenv("PKG_NAME", "com.systempro.default")
-          payload_str = os.getenv("PAYLOAD", "{}")
+          # 1. ان پٹ ہینڈلنگ (Error Control)
+          pkg = os.getenv("PKG_NAME") or "com.systempro.master"
+          payload_str = os.getenv("PAYLOAD") or "{}"
 
           try:
               data = json.loads(payload_str)
-              
-              # فولڈرز کی درست ترتیب (Image and Source Protection)
+              print(f"Starting System Pro Build for: {pkg}")
+
+              # 2. خودکار پاتھ مینجمنٹ (Image & File Protection)
               pkg_path = pkg.replace('.', '/')
               java_dir = f"app/src/main/java/{pkg_path}"
-              res_dir = "app/src/main/res/values"
+              res_values = "app/src/main/res/values"
+              res_layout = "app/src/main/res/layout"
               
-              os.makedirs(java_dir, exist_ok=True)
-              os.makedirs(res_dir, exist_ok=True)
+              for directory in [java_dir, res_values, res_layout]:
+                  os.makedirs(directory, exist_ok=True)
 
-              # مینی فیسٹ فکس (ID Matching)
-              manifest = f"""<?xml version="1.0" encoding="utf-8"?>
+              # 3. مینی فیسٹ اور آئی ڈی سنکنگ (No more conflicts)
+              manifest_content = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
-              <application android:theme="@style/Theme.SystemPro" android:label="System Pro">
+              <application 
+                  android:allowBackup="true"
+                  android:label="System Pro"
+                  android:theme="@style/Theme.SystemPro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -61,10 +69,11 @@ jobs:
                   </activity>
               </application>
           </manifest>"""
-              with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
+              with open("app/src/main/AndroidManifest.xml", "w") as f:
+                  f.write(manifest_content)
 
-              # گریڈل فکس (Fast Search libraries integration)
-              gradle = f"""
+              # 4. گریڈل اور لائبریری انجن (Fast Search Implementation)
+              build_gradle = f"""
           plugins {{ id 'com.android.application' version '8.2.2' }}
           android {{
               namespace '{pkg}'
@@ -81,10 +90,18 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
           }}"""
-              with open("app/build.gradle", "w") as f: f.write(gradle)
+              with open("app/build.gradle", "w") as f:
+                  f.write(build_gradle)
 
-              print("BUILD ENGINE SUCCESS: All systems synchronized.")
+              # 5. اضافی فائلیں (gradle.properties & settings)
+              with open("gradle.properties", "w") as f:
+                  f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
+              
+              with open("settings.gradle", "w") as f:
+                  f.write("include ':app'\nrootProject.name='System Pro'")
+
+              print("SUCCESS: System Pro Engine has placed all files correctly.")
 
           except Exception as e:
-              print(f"CRITICAL ERROR: {e}")
+              print(f"CRITICAL ERROR: {str(e)}")
               sys.exit(1)
