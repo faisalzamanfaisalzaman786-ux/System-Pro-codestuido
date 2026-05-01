@@ -1,127 +1,79 @@
 name: System-Pro-V62-Engine
-on:
-  repository_dispatch:
-    types: [build-app]
 
-permissions:
-  contents: write
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Target Package Name'
+        required: true
+      app_name:
+        description: 'App Display Name'
+        required: true
+      app_icon_base64:
+        description: 'Base64 encoded App Icon'
+        required: false
+        default: ''
 
 jobs:
-  Build-Binary:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ Checkout Knowledge Base
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: 🧠 AI Analysis & Triple Search (Logic + Permissions)
-        shell: bash
+      - name: Handle App Icon (Base64 vs Template)
         run: |
-          mkdir -p app/src/main/res/{layout,values,drawable}
-          mkdir -p system_pro_offline_bundle/res_templates
+          mkdir -p app/src/main/res/drawable
           
-          PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-
-          # پے لوڈ ڈی کوڈنگ
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
-          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
-
-          # 🚀 AI PERMISSION & RESOURCE MONITOR
+          # Python script to handle the priority logic
           python3 -c "
-          import re, os
-          
-          # 1. Permission Discovery
-          java_code = open('app/src/main/java/$PKG_PATH/MainActivity.java').read()
-          manifest_path = 'app/src/main/AndroidManifest.xml'
-          manifest_content = open(manifest_path).read()
-          
-          needed_permissions = []
-          if 'Camera' in java_code or 'camera' in java_code: needed_permissions.append('android.permission.CAMERA')
-          if 'Location' in java_code or 'GPS' in java_code: needed_permissions.append('android.permission.ACCESS_FINE_LOCATION')
-          if 'Storage' in java_code or 'File' in java_code: needed_permissions.append('android.permission.WRITE_EXTERNAL_STORAGE')
-          
-          for perm in needed_permissions:
-              if perm not in manifest_content:
-                  perm_tag = f'    <uses-permission android:name=\"{perm}\" />\n'
-                  manifest_content = manifest_content.replace('<application', perm_tag + '<application')
-          
-          with open(manifest_path, 'w') as f: f.write(manifest_content)
+          import base64
+          import os
 
-          # 2. Triple Search Engine (Styles)
-          xml_content = open('app/src/main/res/layout/activity_main.xml').read()
-          required_styles = re.findall(r'@style/(\w+)', xml_content)
-          kb_path = 'system_pro_offline_bundle/res_templates/master_styles.xml'
-          
-          if not os.path.exists(kb_path):
-              with open(kb_path, 'w') as f: f.write('<resources><style name=\"Theme.SystemProMaster\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">#00FFCC</item></style></resources>')
-          
-          existing = open(kb_path).read()
-          new_entries = ''
-          for style in set(required_styles):
-              if f'name=\"{style}\"' not in existing:
-                  new_entries += f'    <style name=\"{style}\" parent=\"Widget.MaterialComponents.Button\"><item name=\"android:layout_width\">wrap_content</item></style>\n'
-          
-          final = existing.replace('</resources>', new_entries + '</resources>')
-          with open('app/src/main/res/values/styles.xml', 'w') as f: f.write(final)
-          with open(kb_path, 'w') as f: f.write(final)
+          b64_data = '${{ github.event.inputs.app_icon_base64 }}'
+          target_path = 'app/src/main/res/drawable/ic_launcher.png'
+          template_path = 'templates/ic_launcher.png'
+
+          if b64_data and len(b64_data) > 10:
+              print('Priority: Using Base64 icon from payload...')
+              try:
+                  with open(target_path, 'wb') as f:
+                      f.write(base64.b64decode(b64_data))
+                  print('Base64 icon decoded successfully.')
+              except Exception as e:
+                  print(f'Error decoding base64: {e}. Falling back to template.')
+                  os.system(f'cp {template_path} {target_path}')
+          else:
+              print('No Base64 data found. Using template icon...')
+              if os.path.exists(template_path):
+                  os.system(f'cp {template_path} {target_path}')
+              else:
+                  print('Warning: Template icon not found!')
           "
 
-      - name: 🏗️ Smart Build Config (Gradle 8.5)
+      - name: Update Package and App Name
         run: |
-          echo "org.gradle.jvmargs=-Xmx3072m" > gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "include ':app'" > settings.gradle
-          
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
+          # پیکیج نیم اور ایپ نیم کی ڈائنامک تبدیلی
+          NEW_PKG="${{ github.event.inputs.package_name }}"
+          sed -i "s/com.system.pro/$NEW_PKG/g" app/build.gradle
+          sed -i "s/com.system.pro/$NEW_PKG/g" app/src/main/AndroidManifest.xml
+          # ایپ نیم اپ ڈیٹ
+          sed -i "s/String app_name = \".*\"/String app_name = \"${{ github.event.inputs.app_name }}\"/g" app/src/main/res/values/strings.xml || true
 
-          cat <<EOF > app/build.gradle
-          apply plugin: 'com.android.application'
-          android {
-              namespace '${{ github.event.client_payload.package_name }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '${{ github.event.client_payload.package_name }}'
-                  minSdk 24
-                  targetSdk 34
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-
-      - name: 🚀 Execute Production Build
+      - name: Build with Gradle
         run: |
-          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug
 
-      - name: 💾 AI Persistence Sync
-        if: always()
-        run: |
-          git config --global user.name "System-Pro-AI"
-          git config --global user.email "ai-engine@systempro.pk"
-          git add system_pro_offline_bundle/ || true
-          git commit -m "AI Intelligence Update [Build #${{ github.run_number }}]" || true
-          git push origin main || true
-
-      - name: 📤 Deliver APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build
+          name: ${{ github.event.inputs.app_name }}-V62
           path: app/build/outputs/apk/debug/*.apk
