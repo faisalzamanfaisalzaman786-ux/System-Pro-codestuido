@@ -1,4 +1,4 @@
-name: System-Pro-V41-Master
+name: System-Pro-V42-Final
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -8,18 +8,17 @@ jobs:
   Build-Engine:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ Checkout Code
+      - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
-      - name: 🧹 1. Total Wipeout
+      - name: 🧼 1. Clean
         run: |
-          # پرانے تمام نشانات مٹانا تاکہ صرف نیا ڈیٹا رہے
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/build/
-          echo "REPORT: Absolute Clean."
+          echo "REPORT: Sanitized."
 
-      - name: 🏗️ 2. Structure Rebuild
+      - name: 🏗️ 2. Structure
         run: |
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
@@ -28,50 +27,47 @@ jobs:
           echo "android.useAndroidX=true" > gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 3. AI Payload Extraction (Final Stand)
+      - name: 🧬 3. AI Smart-Extraction
         shell: python
         run: |
           import os, json, re, base64
-          # پے لوڈ کو ہر ممکن طریقے سے حاصل کرنے کی کوشش
-          event_path = os.getenv('GITHUB_EVENT_PATH')
           try:
-              with open(event_path, 'r') as f:
-                  event_data = json.load(f)
-                  payload = event_data.get('client_payload', {})
+            with open(os.getenv('GITHUB_EVENT_PATH'), 'r') as f:
+              payload = json.load(f).get('client_payload', {})
           except: payload = {}
 
           pkg = payload.get('target_package', 'com.system.pro').strip()
-          print(f"REPORT: Target Package is {pkg}")
-
-          # ڈیٹا حاصل کرنے کا سخت طریقہ (Payload Only)
-          java_code = payload.get('java_code', "").strip()
-          xml_code = payload.get('xml_code', "").strip()
-
-          # اگر پے لوڈ خالی ہے تو ٹیمپلیٹ سے اٹھاؤ، ورنہ بلڈ فیل کر دو
-          if not java_code:
-              if os.path.exists('templates/app_logic.java'):
-                  with open('templates/app_logic.java', 'r') as f: java_code = f.read()
-              else:
-                  print("ERROR: Java code missing in Payload and Templates!"); exit(1)
-
-          if not xml_code:
-              if os.path.exists('templates/app_ui.xml'):
-                  with open('templates/app_ui.xml', 'r') as f: xml_code = f.read()
-              else:
-                  print("ERROR: XML code missing in Payload and Templates!"); exit(1)
-
-          # پیکیج نیم کی انجکشن (Strict Replacement)
-          java_code = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_code)
           
-          # فائلز لکھنا (UTF-8 کے ساتھ)
-          j_path = f"app/src/main/java/{pkg.replace('.', '/')}"
-          os.makedirs(j_path, exist_ok=True)
-          with open(f"{j_path}/MainActivity.java", 'w', encoding='utf-8') as f: f.write(java_code)
-          with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f: f.write(xml_code)
+          # Loading Logic
+          java_raw = payload.get('java_code', "").strip()
+          xml_raw = payload.get('xml_code', "").strip()
 
-          # مینی فیسٹ اور گریڈل کی تیاری
+          if not java_raw and os.path.exists('templates/app_logic.java'):
+            with open('templates/app_logic.java', 'r') as f: java_raw = f.read()
+          if not xml_raw and os.path.exists('templates/app_ui.xml'):
+            with open('templates/app_ui.xml', 'r') as f: xml_raw = f.read()
+
+          # --- XML HEADER PROTECTION ---
+          # اگر کوڈ میں پہلے سے XML ٹیگ ہے تو اسے صاف کرنا تاکہ ڈپلیکیٹ نہ ہو
+          xml_raw = re.sub(r'<\?xml.*?\?>', '', xml_raw).strip()
+          final_xml = '<?xml version="1.0" encoding="utf-8"?>\n' + xml_raw
+
+          # Auto-inject Namespace if missing
+          if 'xmlns:android' not in final_xml:
+            final_xml = final_xml.replace('>', ' xmlns:android="http://schemas.android.com/apk/res/android">', 1)
+
+          # Java Package Fix
+          java_final = re.sub(r'package\s+[\w\.]+;', f'package {pkg};', java_raw)
+
+          # File Writing
+          j_dir = f"app/src/main/java/{pkg.replace('.', '/')}"
+          os.makedirs(j_dir, exist_ok=True)
+          with open(f"{j_dir}/MainActivity.java", 'w', encoding='utf-8') as f: f.write(java_final)
+          with open("app/src/main/res/layout/activity_main.xml", 'w', encoding='utf-8') as f: f.write(final_xml)
+
+          # Manifest & Build Fix
           with open('app/src/main/AndroidManifest.xml', 'w') as f:
-            f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+            f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHer" /></intent-filter></activity></application></manifest>')
           
           with open('app/build.gradle', 'w') as f:
             f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
@@ -79,9 +75,8 @@ jobs:
           with open('build.gradle', 'w') as f:
             f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-          # Placeholder Icon
           with open('app/src/main/res/mipmap-mdpi/ic_launcher.png', 'wb') as f:
-              f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+            f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
 
       - name: 📝 4. Final Theme Sync
         run: |
@@ -93,7 +88,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ 6. Build APK
+      - name: 🛠️ 6. Build
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
@@ -101,8 +96,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
 
-      - name: 📤 7. Upload Master APK
+      - name: 📤 7. Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-APK
+          name: System-Pro-Master-APK
           path: app/build/outputs/apk/debug/*.apk
