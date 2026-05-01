@@ -1,4 +1,4 @@
-name: System-Pro-V16-4-Deep-Cleanup
+name: System-Pro-V17-5-Final
 
 on:
   repository_dispatch:
@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  Clean-Build:
+  Self-Healing-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ Sync
+      - name: 🛠️ Checkout
         uses: actions/checkout@v4
 
       - name: ☕ Setup Java 17
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Cleanup Engine (V17.4)
+      - name: 🧠 AI Engine (V17.5)
         shell: python
         run: |
           import os, json, re, shutil
-
-          # پرانا کچرا صاف کریں
+          
+          # پرانی ڈائریکٹری صاف کریں
           if os.path.exists('app'): shutil.rmtree('app')
           
           try:
@@ -35,61 +35,42 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # ڈائریکٹریز کی نئی ترتیب
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # 1. فنکشنل لے آؤٹ گارنٹی
-          all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
-          widgets = "".join([f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="{wid}"/>\n' for wid in all_ids])
-          
+          # 1. لے آؤٹ جنریٹر
           with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp">{widgets}</LinearLayout>')
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Ready"/></LinearLayout>')
 
-          # 2. اسمارٹ مینی فیسٹ (Namespace Alignment)
+          # 2. مینی فیسٹ
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.4" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.5" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 3. جاوا فائل (With Auto-Imports Fix)
+          # 3. جاوا فائل
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
               f.write(java_code)
 
-          # 4. تھیم فائل (تاکہ کریش نہ ہو)
+          # 4. تھیم فائل
           with open("app/src/main/res/values/themes.xml", "w") as f:
               f.write('<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar"/></resources>')
 
-          # 5. ماسٹر گریڈل (The Fix)
+          # 5. گریڈل فائلز
           with open("app/build.gradle", "w") as f:
-              f.write(f"""plugins {{ id 'com.android.application' }}
-android {{
-    namespace '{pkg_name}'
-    compileSdk 34
-    defaultConfig {{
-        applicationId '{pkg_name}'
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }}
-}}
-dependencies {{
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-}}""")
+              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
           
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-      - name: 🏗️ Build Stable APK
+      - name: 🏗️ Build APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V17-4-Final
+          name: System-Pro-V17-5-FINAL
           path: app/build/outputs/apk/debug/
