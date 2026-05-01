@@ -1,4 +1,4 @@
-name: System-Pro-V19.7-AndroidX-Fixed
+name: System-Pro-V19.8-Payload-Master
 
 on:
   repository_dispatch:
@@ -18,18 +18,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 اے آئی ماسٹر فکسر (AndroidX & Properties)
+      - name: 🧠 اے آئی پے لوڈ ایکسٹریکٹر (V19.8)
         shell: python
         run: |
           import os, json, re, shutil, base64
 
-          # ماحول کی صفائی
-          for d in ['app', '.gradle', 'build']:
-              if os.path.exists(d): shutil.rmtree(d)
-          
-          payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
-          payload = json.loads(payload_raw) if payload_raw != "null" else {}
+          # پے لوڈ کو محفوظ طریقے سے حاصل کرنا
+          try:
+              payload = json.loads('''${{ toJson(github.event.client_payload) }}''')
+          except:
+              payload = {}
 
+          # پیکیج اور راستوں کا تعین
           pkg_name = payload.get("package_name", "com.faisal.systempro").strip().lower()
           pkg_path = pkg_name.replace('.', '/')
           
@@ -38,11 +38,10 @@ jobs:
           os.makedirs("app/src/main/res/drawable", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- سب سے اہم فکس: gradle.properties فائل بنانا ---
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
 
-          # تصویر کا انتظام
+          # 1. تصویر کا انتظام (لوگو اور وال پیپر)
           img_data = payload.get("app_image_base64", "")
           has_icon = False
           if img_data:
@@ -52,36 +51,30 @@ jobs:
                   has_icon = True
               except: pass
 
-          # مینی فیسٹ (Merger Fix کے ساتھ)
-          manifest_content = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:tools="http://schemas.android.com/tools">
-              <application 
-                  android:label="System Pro" 
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-                  android:icon="{'@drawable/app_logo' if has_icon else '@android:drawable/sym_def_app_icon'}"
-                  tools:replace="android:icon">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest_content)
+          # 2. مینی فیسٹ کی تیاری
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar" android:icon="{"@drawable/app_logo" if has_icon else "@android:drawable/sym_def_app_icon"}" tools:replace="android:icon"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # جاوا کوڈ
-          java_code = payload.get("java_code", "")
-          if not java_code:
-              java_code = f"package {pkg_name}; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
+          # 3. جاوا کوڈ: یہاں ہم پے لوڈ کو ترجیح دے رہے ہیں
+          user_java = payload.get("java_code", "")
+          if user_java:
+              # اگر صارف نے پیکیج نہیں لکھا تو اے آئی اسے ٹھیک کرے گا
+              if "package" not in user_java:
+                  user_java = f"package {pkg_name};\n" + user_java
+              final_java = user_java
+          else:
+              final_java = f"package {pkg_name}; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
 
-          # لے آؤٹ
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212">{"<ImageView android:layout_width=\"match_parent\" android:layout_height=\"match_parent\" android:src=\"@drawable/app_logo\" android:scaleType=\"centerInside\" android:padding=\"50dp\" />" if has_icon else "<TextView android:layout_width=\"wrap_content\" android:layout_height=\"wrap_content\" android:text=\"V19.7 Stable\" android:textColor=\"#FFFFFF\" android:layout_centerInParent=\"true\"/>"}</RelativeLayout>')
+          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(final_java)
 
-          # بلڈ سیٹنگز
+          # 4. ایکس ایم ایل لے آؤٹ: پے لوڈ سے اٹھانا
+          user_xml = payload.get("layout_xml", "")
+          if not user_xml:
+              user_xml = f'<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212">{"<ImageView android:layout_width=\"match_parent\" android:layout_height=\"match_parent\" android:src=\"@drawable/app_logo\" android:scaleType=\"centerInside\" android:padding=\"50dp\" />" if has_icon else "<TextView android:layout_width=\"wrap_content\" android:layout_height=\"wrap_content\" android:text=\"Payload Connection Fixed\" android:textColor=\"#FFFFFF\" android:layout_centerInParent=\"true\"/>"}</RelativeLayout>'
+
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(user_xml)
+
+          # 5. بلڈ سیٹنگز
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.11.0' }}")
           
@@ -97,5 +90,5 @@ jobs:
       - name: 📤 اے پی کے حاصل کریں
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V19.7-Final-APK
+          name: System-Pro-V19.8-Payload-APK
           path: app/build/outputs/apk/debug/*.apk
