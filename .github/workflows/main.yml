@@ -22,24 +22,26 @@ jobs:
       - name: 🧠 AI Analysis & Resource Discovery
         shell: bash
         run: |
-          mkdir -p app/src/main/res/layout app/src/main/res/values app/src/main/res/drawable
+          # فولڈرز کی تیزی سے تیاری
+          mkdir -p app/src/main/res/{layout,values,drawable}
           mkdir -p system_pro_offline_bundle/res_templates
           
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
 
+          # پے لوڈ پروسیسنگ
           echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
+          # ڈیفالٹ ریسورسز
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
 
           cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">${{ github.event.client_payload.app_name }}</string>
-          </resources>
+          <resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>
           EOF
 
+          # Triple Search Engine Logic
           python3 -c "
           import re, os
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
@@ -60,9 +62,10 @@ jobs:
           with open(kb_path, 'w') as f: f.write(final)
           "
 
-      - name: 🏗️ Configure Gradle 8.5 Environment
+      - name: 🏗️ Smart Config (Gradle 8.5)
         run: |
-          echo "android.useAndroidX=true" > gradle.properties
+          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" > gradle.properties
+          echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
           
@@ -91,19 +94,19 @@ jobs:
           }
           EOF
 
-      - name: 🚀 Run Build (Gradle 8.5)
+      - name: 🚀 Final Speed Build
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          ./gradlew :app:assembleDebug --parallel --build-cache
 
-      - name: 💾 Sync Offline Knowledge
+      - name: 💾 Save Intelligence
         if: always()
         run: |
           git config --global user.name "System-Pro-AI"
           git config --global user.email "ai-engine@systempro.pk"
           git add system_pro_offline_bundle/ || true
-          git commit -m "AI: Persistence Update" || true
+          git commit -m "AI Persistence Sync" || true
           git push origin main || true
 
       - name: 📤 Deliver APK
