@@ -1,51 +1,58 @@
-name: System Pro Unified AI Build Engine
+name: System Pro Master Framework V12 - AI Build Engine
 
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'App Package Name'
+        required: true
+      ui_payload:
+        description: 'AI Generated Payload (UI/Logic)'
+        required: true
 
 jobs:
-  ai-orchestrator:
+  unified-build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Initialize AI Search & Build Engine
+      - name: Setup Python environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run Unified AI Build Engine
         shell: python
+        env:
+          PKG_NAME: ${{ github.event.inputs.package_name }}
+          PAYLOAD: ${{ github.event.inputs.ui_payload }}
         run: |
           import os
+          import json
+          import sys
 
-          # 1. AI Engine Configuration (پچھلے تینوں انجنوں کی انٹیگریشن)
-          # یہ انجن گریڈل، تھیمز اور کلرز کو متوازی (Parallel) سرچ کرتے ہیں
-          pkg_name = "com.systempro.master"
-          
-          def ai_resource_manager():
-              # انجن 1: گریڈل لائبریریز سنکنگ
-              # انجن 2: میٹریل ڈیزائن اور گلاس مورفزم تھیمز
-              # انجن 3: مینی فیسٹ اور جاوا آئی ڈی میچنگ
+          # پچھلے تمام مسئلوں کا حل: پیکیج اور پاتھ کی خودکار میچنگ
+          pkg = os.getenv("PKG_NAME", "com.systempro.default")
+          payload_str = os.getenv("PAYLOAD", "{}")
+
+          try:
+              data = json.loads(payload_str)
               
-              # فولڈر اسٹرکچر کی درستگی (Image & Resource handling)
-              dirs = [
-                  "app/src/main/java/com/systempro/master",
-                  "app/src/main/res/values",
-                  "app/src/main/res/drawable",
-                  "app/src/main/res/layout"
-              ]
-              for d in dirs:
-                  os.makedirs(d, exist_ok=True)
+              # فولڈرز کی درست ترتیب (Image and Source Protection)
+              pkg_path = pkg.replace('.', '/')
+              java_dir = f"app/src/main/java/{pkg_path}"
+              res_dir = "app/src/main/res/values"
+              
+              os.makedirs(java_dir, exist_ok=True)
+              os.makedirs(res_dir, exist_ok=True)
 
-          # 2. Manifest & Package Sync (ایرر کنٹرول)
-          def sync_manifest_logic():
+              # مینی فیسٹ فکس (ID Matching)
               manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="{pkg_name}">
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.SystemPro">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
+              <application android:theme="@style/Theme.SystemPro" android:label="System Pro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -54,20 +61,16 @@ jobs:
                   </activity>
               </application>
           </manifest>"""
-              with open("app/src/main/AndroidManifest.xml", "w") as f:
-                  f.write(manifest)
+              with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-          # 3. Fast-Search Gradle Implementation
-          def build_gradle_engine():
-              gradle_logic = f"""
-          plugins {{
-              id 'com.android.application' version '8.2.2'
-          }}
+              # گریڈل فکس (Fast Search libraries integration)
+              gradle = f"""
+          plugins {{ id 'com.android.application' version '8.2.2' }}
           android {{
-              namespace '{pkg_name}'
+              namespace '{pkg}'
               compileSdk 34
               defaultConfig {{
-                  applicationId '{pkg_name}'
+                  applicationId '{pkg}'
                   minSdk 24
                   targetSdk 34
                   versionCode 1
@@ -75,18 +78,13 @@ jobs:
               }}
           }}
           dependencies {{
-              // AI انجن سے حاصل کردہ تیز ترین لائبریریز
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }}
-          """
-              with open("app/build.gradle", "w") as f:
-                  f.write(gradle_logic)
+          }}"""
+              with open("app/build.gradle", "w") as f: f.write(gradle)
 
-          # ایگزیکیوشن
-          ai_resource_manager()
-          sync_manifest_logic()
-          build_gradle_engine()
-          
-          print("AI Build Engine: تمام فائلیں انٹیگریٹ ہو چکی ہیں اور پیکیج کنفلکٹ ختم کر دیا گیا ہے۔")
+              print("BUILD ENGINE SUCCESS: All systems synchronized.")
+
+          except Exception as e:
+              print(f"CRITICAL ERROR: {e}")
+              sys.exit(1)
