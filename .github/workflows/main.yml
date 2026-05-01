@@ -4,7 +4,7 @@ on:
     types: [build-app]
 
 permissions:
-  contents: write # ریپوزٹری میں نالج بیس سیو کرنے کے لیے ضروری ہے
+  contents: write
 
 jobs:
   Build-Binary:
@@ -20,26 +20,22 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # کیش ہٹا دیا گیا ہے تاکہ خالی ریپوزٹری پر ایرر نہ آئے
 
       - name: 🧠 AI Analysis & Resource Discovery
         shell: bash
         run: |
-          # ضروری فولڈرز بنانا
           mkdir -p .ai_knowledge_base/styles
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           
-          # پیکیج پاتھ سیٹ کرنا
           PKG_PATH=$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
 
-          # پے لوڈ ڈی کوڈنگ
           echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
-          # 🚀 AI Style Engine: خودکار اسٹائل جنریشن
           python3 -c "
           import re, os
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
@@ -64,7 +60,6 @@ jobs:
           with open(kb_path, 'w') as f: f.write(final_styles)
           "
 
-          # ایپ کا نام سیٹ کرنا
           echo "<resources><string name='app_name'>${{ github.event.client_payload.app_name }}</string></resources>" > app/src/main/res/values/strings.xml
 
       - name: 🏗️ Smart Build Configuration
@@ -111,13 +106,10 @@ jobs:
           git config --global user.name "System-Pro-AI"
           git config --global user.email "ai-engine@systempro.pk"
           
-          # 🚀 FIX: صرف تب پش کریں جب کوئی تبدیلی ہو تاکہ Error 128 نہ آئے
           if [ -d ".ai_knowledge_base" ] && [ -n "$(git status --porcelain .ai_knowledge_base)" ]; then
             git add .ai_knowledge_base/
             git commit -m "AI Intelligence Update: Build #${{ github.run_number }}"
             git push origin main
-          else
-            echo "No new intelligence to save. Skipping Git push."
           fi
 
       - name: 📤 Deliver APK
