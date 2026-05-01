@@ -15,63 +15,45 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. کوڈ حاصل کریں
+      # 1. کوڈ حاصل کریں (اسے سب سے پہلے ہونا چاہیے)
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # 2. جاوا سیٹ اپ (لیٹسٹ سٹیبل ورژن)
+      # 2. جاوا سیٹ اپ (بغیر کیشے کے تاکہ ایرر ختم ہو)
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+          # ہم نے cache ہٹا دیا ہے تاکہ "No file matched" کا ایرر نہ آئے
+          overwrite-settings: true
 
-      # 3. اینڈرائیڈ SDK کی دستیابی یقینی بنائیں
+      # 3. اینڈرائیڈ SDK سیٹ اپ
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4. ہائبرڈ لاجک: ڈیپینڈنسی اور پرمیشنز کی توثیق
-      # یہاں ہم چیک کرتے ہیں کہ آیا بنیادی ضرورتیں پوری ہیں
-      - name: Validate Project Structure
+      # 4. چیک کریں کہ فائلیں موجود ہیں (ڈیبگنگ کے لیے)
+      - name: Verify Repository Content
+        run: ls -R
+
+      # 5. اگر 'gradlew' نہیں ہے تو اسے جنریٹ کریں
+      - name: Ensure Gradle Wrapper
         run: |
-          echo "بنیادی ڈھانچے کی جانچ پڑتال جاری ہے..."
-          if [ ! -f "build.gradle" ]; then
-            echo "ایرر: build.gradle نہیں ملی! ڈیفالٹ ٹیمپلیٹ جنریٹ کیا جا رہا ہے..."
-            # یہاں آپ کا سسٹم ڈیفالٹ لاجک استعمال کر سکتا ہے
+          if [ ! -f "gradlew" ]; then
+            echo "gradlew نہیں ملا، نیا جنریٹ کیا جا رہا ہے..."
+            gradle wrapper
           fi
-          
-      # 5. گریڈل کو ایگزیکیوٹ کرنے کی اجازت دیں
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x gradlew
+          chmod +x gradlew
 
-      # 6. کلین بلڈ (تاکہ پرانے کیشے کا مسئلہ نہ آئے)
-      - name: Clean Project
-        run: ./gradlew clean
-
-      # 7. اصل بلڈ پراسیس (Release APK)
-      # ہم اسے 'stacktrace' کے ساتھ چلائیں گے تاکہ ایرر کا پتہ چلے
+      # 6. بلڈ پراسیس
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
         continue-on-error: false 
 
-      # 8. ایرر ہینڈلنگ لاجک
-      # اگر بلڈ فیل ہو جائے تو یہ سٹیپ ایرر لاگ کو سیو کرے گا تاکہ AI اسے پڑھ سکے
-      - name: Capture Error Logs on Failure
-        if: failure()
-        run: |
-          mkdir -p logs
-          cp -r app/build/reports/logslogs/ || true
-          echo "بلڈ فیل ہو گئی۔ لاگز محفوظ کر لیے گئے ہیں۔"
-
-      # 9. تیار شدہ APK کو اپ لوڈ کریں
+      # 7. آرٹیکٹ اپ لوڈ (کامیابی کی صورت میں)
       - name: Upload Build Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.project_name }}-Release
-          path: app/build/outputs/apk/release/*.apk
-
-      # 10. کامیاب بلڈ کی اطلاع
-      - name: Build Success Summary
-        if: success()
-        run: echo "مبارک ہو! System Pro نے 100% کامیابی کے ساتھ بلڈ مکمل کر لی ہے۔"
+          path: "**/*.apk" # یہ تمام فولڈرز میں APK ڈھونڈے گا
