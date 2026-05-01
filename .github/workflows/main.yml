@@ -1,76 +1,88 @@
-name: System-Pro-V17-5-Final
-
-on:
-  repository_dispatch:
-    types: [build-app]
-  workflow_dispatch:
-
-jobs:
-  Self-Healing-Build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🛠️ Checkout
-        uses: actions/checkout@v4
-
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 🧠 AI Engine (V17.5)
-        shell: python
-        run: |
-          import os, json, re, shutil
-          
-          # پرانی ڈائریکٹری صاف کریں
-          if os.path.exists('app'): shutil.rmtree('app')
-          
-          try:
-              payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
-              payload = json.loads(payload_raw) if payload_raw != "null" else {}
-          except: payload = {}
-
-          java_code = payload.get("java", "")
-          pkg_name = payload.get("package_name", "com.faisal.systempro")
-          pkg_path = pkg_name.replace('.', '/')
-
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-
-          # 1. لے آؤٹ جنریٹر
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Ready"/></LinearLayout>')
-
-          # 2. مینی فیسٹ
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro V17.5" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
-
-          # 3. جاوا فائل
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f:
-              f.write(java_code)
-
-          # 4. تھیم فائل
-          with open("app/src/main/res/values/themes.xml", "w") as f:
-              f.write('<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar"/></resources>')
-
-          # 5. گریڈل فائلز
-          with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
-          
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
-
-      - name: 🏗️ Build APK
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: 📤 Upload
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V17-5-FINAL
-          path: app/build/outputs/apk/debug/
+Skip to content
+System-Pro-codestuido
+Repository navigation
+Code
+Issues
+1
+ (1)
+Actions
+System-Pro-V17-5-Final
+build-app #698
+Self-Healing-Build
+failed 1 minute ago in 1m 18s
+2s
+1s
+0s
+0s
+1m 11s
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.core:core:1.9.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.annotation:annotation-experimental:1.3.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.core:core:1.9.0 -> androidx.concurrent:concurrent-futures:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.lifecycle:lifecycle-runtime:2.5.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.lifecycle:lifecycle-runtime:2.5.1 -> androidx.arch.core:core-common:2.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.lifecycle:lifecycle-runtime:2.5.1 -> androidx.arch.core:core-runtime:2.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.lifecycle:lifecycle-runtime:2.5.1 -> androidx.lifecycle:lifecycle-common:2.5.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.core:core:1.9.0 -> androidx.versionedparcelable:versionedparcelable:1.1.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.core:core-ktx:1.9.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.lifecycle:lifecycle-viewmodel:2.5.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6 -> androidx.lifecycle:lifecycle-viewmodel-savedstate:2.5.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6 -> androidx.lifecycle:lifecycle-livedata-core:2.5.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.savedstate:savedstate:1.2.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.activity:activity:1.6.0 -> androidx.tracing:tracing:1.0.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.vectordrawable:vectordrawable:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1 -> androidx.vectordrawable:vectordrawable-animated:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.appcompat:appcompat-resources:1.6.1 -> androidx.vectordrawable:vectordrawable-animated:1.1.0 -> androidx.interpolator:interpolator:1.0.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.cursoradapter:cursoradapter:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.drawerlayout:drawerlayout:1.1.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.drawerlayout:drawerlayout:1.1.1 -> androidx.customview:customview:1.1.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0 -> androidx.lifecycle:lifecycle-process:2.4.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2:1.2.0 -> androidx.startup:startup-runtime:1.1.1
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.emoji2:emoji2-views-helper:1.2.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6 -> androidx.viewpager:viewpager:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6 -> androidx.loader:loader:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.fragment:fragment:1.3.6 -> androidx.loader:loader:1.0.0 -> androidx.lifecycle:lifecycle-livedata:2.0.0
+  :app:debugRuntimeClasspath -> androidx.appcompat:appcompat:1.6.1 -> androidx.resourceinspection:resourceinspection-annotation:1.0.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.cardview:cardview:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.coordinatorlayout:coordinatorlayout:1.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.constraintlayout:constraintlayout:2.0.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.constraintlayout:constraintlayout:2.0.1 -> androidx.constraintlayout:constraintlayout-solver:2.0.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.documentfile:documentfile:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.localbroadcastmanager:localbroadcastmanager:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.print:print:1.0.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.recyclerview:recyclerview:1.1.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.transition:transition:1.2.0
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.9.0 -> androidx.viewpager2:viewpager2:1.0.0
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+BUILD FAILED in 31s
+Error: Process completed with exit code 1.
+0s
+Run actions/upload-artifact@v4
+Warning: No files were found with the provided path: app/build/outputs/apk/debug/. No artifacts will be uploaded.
+0s
+Post job cleanup.
+0s
+Post job cleanup.
+/usr/bin/git version
+git version 2.53.0
+Temporarily overriding HOME='/home/runner/work/_temp/bd94195f-8ddc-4c72-8a60-345a9f1df422' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /home/runner/work/System-Pro-codestuido/System-Pro-codestuido
+/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+0s
