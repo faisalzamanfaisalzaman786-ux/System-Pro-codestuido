@@ -1,72 +1,78 @@
-name: System-Pro-V62-Engine
+name: System-Pro-V65-Autonomous-Engine
 on:
   repository_dispatch:
     types: [build-app]
 
+permissions:
+  contents: write # ریپوزٹری میں ڈیٹا سیو کرنے کے لیے ضروری ہے
+
 jobs:
-  Build-Binary:
+  AI-Architect-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ Checkout Code
+      - name: 🛠️ Checkout Knowledge Base
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: ☕ Setup Java 17
+      - name: ☕ Setup Environment (Java 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 🧬 Resource Injection (Base64 Shield)
+      - name: 🧠 AI Analysis & Resource Discovery
         shell: bash
         run: |
-          APP_NAME="${{ github.event.client_payload.app_name }}"
-          PKG_ID="${{ github.event.client_payload.package_name }}"
-          PKG_PATH=$(echo "$PKG_ID" | tr '.' '/')
-
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable-xxhdpi
+          # فولڈر اسٹرکچر تیار کرنا
+          mkdir -p .ai_knowledge_base/styles
+          mkdir -p .ai_knowledge_base/libraries
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/java/$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/')
 
-          # Decoding UI Payload
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          # پے لوڈ کو ڈی کوڈ کرنا
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 --decode > "app/src/main/java/$(echo "${{ github.event.client_payload.package_name }}" | tr '.' '/执/MainActivity.java"
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 --decode > "app/src/main/res/layout/activity_main.xml"
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 --decode > "app/src/main/AndroidManifest.xml"
 
-          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 --decode > app/src/main/res/drawable-xxhdpi/ic_launcher.png
-          fi
+          # 🚀 AI SEARCH & GENERATION LOGIC
+          python3 -c "
+          import re, os
+          xml_content = open('app/src/main/res/layout/activity_main.xml').read()
+          
+          # 1. اسٹائلز کی تلاش (Styles Scanner)
+          required_styles = re.findall(r'@style/(\w+)', xml_content)
+          
+          # 2. نالج بیس سے پرانے اسٹائلز لوڈ کرنا
+          kb_path = '.ai_knowledge_base/styles/master_styles.xml'
+          existing_content = open(kb_path).read() if os.path.exists(kb_path) else '<resources>\n</resources>'
+          
+          # 3. نئے اسٹائلز جنریٹ کرنا (For Games/Calculators)
+          new_styles = ''
+          for style in set(required_styles):
+              if style not in existing_content:
+                  print(f'AI: Generating new logic for {style}')
+                  new_styles += f'    <style name=\"{style}\" parent=\"Widget.MaterialComponents.Button\">\n'
+                  new_styles += f'        <item name=\"android:insetTop\">0dp</item>\n'
+                  new_styles += f'        <item name=\"android:insetBottom\">0dp</item>\n'
+                  new_styles += f'        <item name=\"cornerRadius\">8dp</item>\n'
+                  new_styles += f'    </style>\n'
+          
+          # فائل اپ ڈیٹ کرنا
+          final_styles = existing_content.replace('</resources>', new_styles + '</resources>')
+          with open('app/src/main/res/values/styles.xml', 'w') as f: f.write(final_styles)
+          with open(kb_path, 'w') as f: f.write(final_styles)
+          "
 
-          # 🚀 FIX: Creating strings.xml
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources><string name="app_name">$APP_NAME</string></resources>
-          EOF
-
-          # 🚀 FIX: Creating styles.xml with EXACT theme name requested by Manifest
-          cat <<EOF > app/src/main/res/values/styles.xml
-          <resources>
-              <style name="Theme.SystemProMaster" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-                  <item name="colorPrimaryVariant">#00CCaa</item>
-                  <item name="colorOnPrimary">#000000</item>
-              </style>
-          </resources>
-          EOF
-
-      - name: 🏗️ Auto-Generate Build Scripts
+      - name: 🏗️ Smart Build Configuration
         run: |
+          # AndroidX اور Jetifier سیٹ اپ
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
           
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
+          # خودکار گریڈل اسکرپٹ (Calculators & Games Support)
           cat <<EOF > app/build.gradle
           apply plugin: 'com.android.application'
           android {
@@ -84,18 +90,25 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              // AI can inject more libraries here based on search
           }
           EOF
-
+          
           gradle wrapper --gradle-version 8.5
-
-      - name: 🚀 Execute Production Build
-        run: |
           chmod +x gradlew
           ./gradlew assembleDebug --quiet
 
-      - name: 📤 Deliver APK
+      - name: 💾 AI Persistent Learning (Sync to Repo)
+        if: always()
+        run: |
+          git config --global user.name "System-Pro-AI"
+          git config --global user.email "ai-engine@systempro.pk"
+          git add .ai_knowledge_base/
+          git commit -m "AI Intelligence Update: Build #${{ github.run_number }} [Learned New Resources]" || exit 0
+          git push origin main
+
+      - name: 📤 APK Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: APK-Build
+          name: System-Pro-Build-${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk
