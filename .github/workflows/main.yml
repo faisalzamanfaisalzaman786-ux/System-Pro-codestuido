@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 3. AI Architect (Main UI Injection)
+      - name: 🧠 3. AI Architect (Zero-Conflict Engine)
         shell: python
         run: |
           import os, subprocess, json, shutil
@@ -29,73 +29,77 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. پروفیشنل پروجیکٹ اسٹرکچر
+          # 1. پروجیکٹ اسٹرکچر کی مکمل صفائی اور تیاری
+          if os.path.exists('app'): shutil.rmtree('app')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
 
-          # --- 2. XML Resource Patching (Fixing 26 Errors) ---
-          
-          # Main Activity Layout (جس میں وہ تمام ٹیب بٹنز ہوں گے جو مسنگ ہیں)
-          main_layout = """<?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:orientation="vertical">
-              <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                  <Button android:id="@+id/tabJava" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Java" />
-                  <Button android:id="@+id/tabXml" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="XML" />
-                  <Button android:id="@+id/tabManifest" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Manifest" />
-                  <Button android:id="@+id/iconTabBtn" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Icon" />
-              </LinearLayout>
-              <EditText android:id="@+id/etEditor" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="top" />
-          </LinearLayout>"""
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(main_layout)
-
-          # Dialog Settings Layout
-          dialog_xml = """<?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="wrap_content"
-              android:orientation="vertical" android:padding="16dp">
-              <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" />
-              <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" />
-              <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" />
-              <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" />
-          </LinearLayout>"""
-          with open("app/src/main/res/layout/dialog_settings.xml", "w") as f: f.write(dialog_xml)
-
-          # 3. گریڈل اور مینی فیسٹ (Updated for Professional UI)
+          # 2. ان تمام فائلز کا انجکشن جو بلڈ کو کامیاب بنائیں گی
           with open("settings.gradle", "w") as f: f.write("include ':app'")
-          with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
           
-          with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34\nversionCode 1\nversionName '13.4' }} }}\n")
-              f.write("dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }")
+          # جدید ترین پلگ ان اور ورژن کنفیگریشن
+          with open("build.gradle", "w") as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\n")
+              f.write("allprojects { repositories { google(); mavenCentral() } }")
+
+          app_gradle = f"""
+          plugins {{ id 'com.android.application' }}
+          android {{
+              namespace '{pkg_name}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId '{pkg_name}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "13.5"
+              }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }}
+          """
+          with open("app/build.gradle", "w") as f: f.write(app_gradle)
+
+          # مینی فیسٹ اور لے آؤٹ (تمام مسنگ آئی ڈیز کے ساتھ)
+          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><Button android:id="@+id/tabJava" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/tabXml" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/tabManifest" android:layout_width="wrap_content" android:layout_height="wrap_content" /><Button android:id="@+id/iconTabBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" /><EditText android:id="@+id/etEditor" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>')
+          
+          with open("app/src/main/res/layout/dialog_settings.xml", "w") as f:
+              f.write('<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"><EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" /><EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" /></LinearLayout>')
 
           with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-          # 4. جاوا کوڈ
+          # جاوا کوڈ
           java_code = payload.get("java", "")
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(java_code)
 
-          # --- 5. بلڈ پروسیس (With Auto-Upgrade) ---
-          print("🚀 Final Build Kickoff...")
-          subprocess.run(['gradle', 'wrapper', '--gradle-version', '8.5'], check=True)
-          build = subprocess.run(['./gradlew', ':app:assembleDebug', '--no-daemon'], capture_output=True, text=True)
-          
-          if build.returncode != 0:
-              print(f"❌ Error Analysis:\n{build.stderr}")
+          # 3. بلڈ ایگزیکیوشن (بغیر ریپر کے، براہِ راست گٹ ہب کے ڈیفالٹ گریڈل سے)
+          print("🚀 Initiating Professional Build Engine...")
+          # ہم پہلے گریڈل کو کلین کریں گے تاکہ کوئی پرانا ورژن بوجھ نہ بنے
+          try:
+              # گریڈل کو بتائیں کہ ہم 'Wrapper' کے بجائے ڈیفالٹ 'gradle' کمانڈ استعمال کریں گے
+              # لیکن اینڈرائیڈ پلگ ان کے لیے ورژن مینجمنٹ ہم خود کریں گے
+              build = subprocess.run(['gradle', ':app:assembleDebug', '--no-daemon', '--stacktrace'], capture_output=True, text=True)
+              print(build.stdout)
+              if build.returncode != 0:
+                  print(f"❌ Build Error:\n{build.stderr}")
+                  exit(1)
+              print("✅ MISSION SUCCESS!")
+          except Exception as e:
+              print(f"💀 Engine Crash: {str(e)}")
               exit(1)
-          else:
-              print("✅ MISSION SUCCESS: SYSTEM PRO APK READY!")
 
       - name: 📦 4. Capture APK
         if: success()
         run: |
           mkdir -p output_apk
-          find . -name "*.apk" -exec cp {} output_apk/SystemPro_V13_4.apk \;
+          find . -name "*.apk" -exec cp {} output_apk/SystemPro_V13_5.apk \;
 
-      - name: 📤 5. Final Dispatch
+      - name: 📤 5. Dispatch
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-V13-APK
