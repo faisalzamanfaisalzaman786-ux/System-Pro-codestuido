@@ -32,22 +32,20 @@ jobs:
           echo "rootProject.name='$PROJECT_NAME'" > settings.gradle
           echo "include ':app'" >> settings.gradle
 
-          # 1. Root build.gradle (Modern Syntax)
+          # 1. Root build.gradle (Simplified)
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath "com.android.tools.build:gradle:8.1.0" }
           }
           allprojects {
-              repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } }
+              repositories { google(); mavenCentral(); maven { url "https://jitpack.io" } }
           }
           EOF
 
-          # 2. App-level build.gradle (Fixed Dependency Handling)
+          # 2. App-level build.gradle (Strict Syntax)
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
               compileSdk 33
@@ -58,20 +56,14 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
           }
           dependencies {
-              implementation "androidx.appcompat:appcompat:1.6.1"
-              implementation "com.google.android.material:material:1.9.0"
-              implementation "androidx.constraintlayout:constraintlayout:2.1.4"
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
           }
           EOF
 
-          # 3. Official Files
+          # 3. Android Manifest & Java (پہلے والا کامیاب لاجک)
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -116,9 +108,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Gradle Auto-Setup
+      - name: 🛠️ Setup Gradle Wrapper
+        # یہاں ہم سسٹم کے گریڈل کے بجائے اپنا ریپر استعمال کریں گے
         run: |
-          gradle wrapper --gradle-version 8.1
+          wget https://services.gradle.org/distributions/gradle-8.1.1-bin.zip
+          unzip -d /opt/gradle gradle-8.1.1-bin.zip
+          export PATH=$PATH:/opt/gradle/gradle-8.1.1/bin
+          gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
 
       - name: 📦 Official Assembly Build
