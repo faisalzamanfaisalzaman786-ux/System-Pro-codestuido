@@ -1,4 +1,4 @@
-name: System-Pro-V29.0-RealTime-Logs
+name: System-Pro-V30.0-Final-Stable
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -8,41 +8,36 @@ jobs:
   Build-Engine:
     runs-on: ubuntu-latest
     steps:
-      - name: 🚀 Start AI Build Process
-        run: |
-          echo "REPORT_START: Initializing System Pro AI Engine..."
-          echo "TIME: $(date +%H:%M:%S)"
+      - name: 🚀 Start AI Engine
+        run: echo "REPORT: System Pro V30 Starting..."
 
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
         
-      - name: 🧼 1. Deep Wash Phase
+      - name: 🧼 1. Deep Wash
         run: |
           echo "REPORT: Cleaning workspace..."
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/mipmap-*
           rm -rf app/build/
-          sleep 2
-          echo "REPORT: Workspace sanitized. [Success]"
+          echo "REPORT: Cleaned."
 
       - name: 🏗️ 2. Structure Setup
         run: |
-          echo "REPORT: Mapping Android directories..."
+          echo "REPORT: Creating Official Directories..."
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          echo "REPORT: Directories mapped. Building Gradle files..."
-          sleep 2
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "include ':app'" > settings.gradle
+          echo "REPORT: Structure Ready."
 
-      - name: 🧬 3. AI Logic Merger (Fast-Sync)
+      - name: 🧬 3. AI Logic Merger
         shell: python
         run: |
           import os, json, re, base64, shutil, urllib.request, time
           
-          def send_log(msg):
-              print(f"REPORT: {msg}")
-              time.sleep(1) # 3-5 سیکنڈ کے ڈیلے کو مینیج کرنے کے لیے
+          def send_log(msg): print(f"REPORT: {msg}")
 
           event_path = os.getenv('GITHUB_EVENT_PATH')
           with open(event_path, 'r') as f:
@@ -52,51 +47,69 @@ jobs:
           target_pkg = payload.get('target_package', 'com.system.pro').strip()
           pkg_path = target_pkg.replace('.', '/')
           
-          send_log("AI Engine identifying Payload data...")
+          send_log("AI processing Payload data...")
           
-          # Icon Logic
+          # Icon
           icon_url = payload.get('icon_url')
           if icon_url:
-              send_log(f"Downloading icon from URL...")
               try:
                   urllib.request.urlretrieve(icon_url, 'icon.png')
-                  send_log("Icon downloaded successfully.")
-              except: send_log("URL Icon failed, switching to backup.")
-          
-          # Code Sync
-          send_log("Merging Java and XML layers...")
-          # [Previous logic for file writing goes here]
-          send_log(f"Package fixed to: {target_pkg}")
-          
-          with open('env_vars.sh', 'w') as f: f.write(f"export TARGET_PKG='{target_pkg}'")
-          send_log("AI Logic Merger complete. Moving to Compiler.")
+                  send_log("Icon fetched from URL.")
+                  for r in ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi']:
+                      os.makedirs(f'app/src/main/res/{r}', exist_ok=True)
+                      shutil.copy('icon.png', f'app/src/main/res/{r}/ic_launcher.png')
+              except: send_log("Icon download failed.")
 
-      - name: ☕ 4. Java Environment Setup
-        uses: actions/setup-java@v4
-        with: { java-version: '17', distribution: 'temurin' }
+          # Java & XML
+          def get_code(key, path, fallback):
+              c = payload.get(key, "").strip()
+              if not c and os.path.exists(path):
+                  with open(path, 'r') as f: c = f.read().strip()
+              return c if c else fallback
 
-      - name: 🛠️ 5. APK Compilation (Live Updates)
+          java_c = get_code('java_code', 'templates/app_logic.java', f"package {target_pkg};\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle savedInstanceState) {{ super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); }} }}")
+          java_c = re.sub(r'^package\s+[\w\.]+;', f'package {target_pkg};', java_c)
+          
+          xml_c = get_code('xml_code', 'templates/app_ui.xml', '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro AI Active" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>')
+
+          j_dir = f'app/src/main/java/{pkg_path}'
+          os.makedirs(j_dir, exist_ok=True)
+          with open(f'{j_dir}/MainActivity.java', 'w', encoding='utf-8') as f: f.write(java_c)
+          with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f: f.write(xml_c)
+          with open('app/src/main/AndroidManifest.xml', 'w', encoding='utf-8') as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat" android:icon="@mipmap/ic_launcher"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+          # Write build.gradle INSIDE python to be safe
+          with open('build.gradle', 'w') as f:
+              f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }")
+          
+          with open('app/build.gradle', 'w') as f:
+              f.write(f"apply plugin: 'com.android.application'\nandroid {{ namespace '{target_pkg}'; compileSdk 34; defaultConfig {{ applicationId '{target_pkg}'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }}")
+
+          print(f"REPORT: Build files generated for {target_pkg}")
+
+      - name: 📝 4. Final Theme Fix
         run: |
-          echo "REPORT: Preparing Gradle Wrapper..."
+          echo '<resources><style name="Theme.AppCompat" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
+          echo "REPORT: Themes synced."
+
+      - name: 🛠️ 5. Build APK
+        run: |
+          echo "REPORT: Initializing Gradle..."
           wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle-8.2-bin.zip
           ./gradle-8.2/bin/gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          echo "REPORT: Compilation started. This may take 20-30 seconds..."
+          echo "REPORT: Compiling (AI Optimization)..."
           ./gradlew assembleDebug --quiet
-          echo "REPORT: Compilation Finished. [Success]"
+          echo "REPORT: APK Compiled Successfully."
 
-      - name: 📤 6. Artifact Deployment
+      - name: 📤 6. Deployment
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V29-Final
+          name: System-Pro-V30-Final
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: 🚿 7. Post-Build Auto-Wash
+      - name: 🚿 7. Post-Build
         if: always()
-        run: |
-          STATUS="${{ job.status }}"
-          echo "REPORT_FINAL: Build finished with status: $STATUS"
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          echo "REPORT: System Pro Ready for next task."
+        run: echo "REPORT: Process Finished. Status: ${{ job.status }}"
