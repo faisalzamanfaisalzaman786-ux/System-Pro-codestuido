@@ -1,11 +1,6 @@
-name: System-Pro-V18.7-Payload-Master
+name: System-Pro-V19.0-AI-Guardian
 on:
   workflow_dispatch:
-    inputs:
-      project_name:
-        description: 'پروجیکٹ کا نام'
-        required: false
-        default: 'SystemPro_Universal_App'
   repository_dispatch:
     types: [build-app]
 
@@ -16,82 +11,84 @@ jobs:
       - name: 🛠️ Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Template Structure
+      - name: 🏗️ Setup Core Structure
         run: |
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout/
           mkdir -p app/src/main/res/values/
-          mkdir -p gradle/wrapper
-
-          # بنیادی ترتیبات
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "include ':app'" > settings.gradle
 
-      - name: 🧬 Integrate Payload with Template
+      - name: 🧬 AI Guardian & Syntax Purifier
         shell: python
         run: |
-          import os
-          import json
+          import os, json, re
 
-          # گٹ ہب ایونٹ کا ڈیٹا حاصل کرنا
+          def ai_syntax_guardian(raw_code, file_type):
+              if not raw_code: return ""
+              code = raw_code.strip()
+              
+              if file_type == "xml":
+                  # 1. XML Header Correction
+                  code = re.sub(r'^[^<]+', '', code)
+                  if not code.startswith('<?xml'):
+                      code = '<?xml version="1.0" encoding="utf-8"?>\n' + code
+                  # 2. Auto-Close Tags (Tags Guardian)
+                  open_tags = re.findall(r'<([a-zA-Z0-9]+)(?![^>]*/>)', code)
+                  close_tags = re.findall(r'</([a-zA-Z0-9]+)>', code)
+                  if len(open_tags) > len(close_tags):
+                      # AI logic to find missing closing tags
+                      for tag in reversed(open_tags):
+                          if code.count(f'<{tag}') > code.count(f'</{tag}>'):
+                              code += f"\n</{tag}>"
+              
+              elif file_type == "java":
+                  # 1. Package Enforcement
+                  if "package com.system.pro;" not in code:
+                      code = "package com.system.pro;\n" + re.sub(r'^package\s+[\w\.]+;', '', code)
+                  # 2. Bracket Balance (Braces Guardian)
+                  open_b = code.count('{')
+                  close_b = code.count('}')
+                  if open_b > close_b:
+                      code += "\n" + ("}" * (open_b - close_b))
+                  # 3. Library Auditor (Preferring AndroidX)
+                  if "import android.support" in code:
+                      code = code.replace("android.support", "androidx")
+              
+              return code
+
+          # پے لوڈ پروسیسنگ
           event_path = os.getenv('GITHUB_EVENT_PATH')
           with open(event_path, 'r') as f:
               event_data = json.load(f)
           
           payload = event_data.get('client_payload', {})
           
-          # 1. Project Name Handling
-          proj_name = payload.get('project_name', 'SystemPro_App')
-          with open('settings.gradle', 'w') as f:
-              f.write(f"rootProject.name='{proj_name}'\ninclude ':app'")
+          # AI Purification Process
+          final_xml = ai_syntax_guardian(payload.get('xml_code', ""), "xml")
+          final_java = ai_syntax_guardian(payload.get('java_code', ""), "java")
 
-          # 2. Java Code Integration (Payload vs Template)
-          java_code = payload.get('java_code', """
-          package com.system.pro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          """)
-          
-          # 3. XML Layout Integration (Payload vs Template)
-          xml_code = payload.get('xml_code', """
-          <?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="System Pro: Payload Success" android:textColor="#00FF00"
-                  android:layout_centerInParent="true" />
-          </RelativeLayout>
-          """)
+          # Default Fallbacks if Payload is Corrupt
+          if not final_xml: final_xml = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro AI: Safe Build" android:textColor="#00FF00" android:layout_centerInParent="true" /></RelativeLayout>'
+          if not final_java: final_java = "package com.system.pro;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n@Override protected void onCreate(Bundle savedInstanceState) {\nsuper.onCreate(savedInstanceState);\nsetContentView(R.layout.activity_main);\n}\n}"
 
-          # فائلوں میں کوڈ لکھنا
-          os.makedirs('app/src/main/java/com/system/pro', exist_ok=True)
-          with open('app/src/main/java/com/system/pro/MainActivity.java', 'w') as f:
-              f.write(java_code)
-          
-          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
-              f.write(xml_code)
-          
-          print(f"Integration Complete: Project '{proj_name}' is ready with payload data.")
+          # محفوظ کرنا
+          with open('app/src/main/res/layout/activity_main.xml', 'w', encoding='utf-8') as f:
+              f.write(final_xml)
+          with open('app/src/main/java/com/system/pro/MainActivity.java', 'w', encoding='utf-8') as f:
+              f.write(final_java)
 
-      - name: 📝 Finalizing Build Files
+      - name: 📝 Build Config Auditor
         run: |
-          # Root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.0.2' }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects { repositories { google(); mavenCentral(); maven { url 'https://jitpack.io' } } }
           EOF
 
-          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -109,7 +106,6 @@ jobs:
           }
           EOF
 
-          # Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -138,11 +134,11 @@ jobs:
           ./gradle-8.0/bin/gradle wrapper --gradle-version 8.0
           chmod +x gradlew
 
-      - name: 📦 Official Build
+      - name: 📦 AI-Validated Assembly
         run: ./gradlew :app:assembleDebug
 
-      - name: 📤 Upload Payload APK
+      - name: 📤 Upload Clean Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Payload-APK
+          name: System-Pro-V19-Validated
           path: app/build/outputs/apk/debug/*.apk
