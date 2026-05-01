@@ -21,15 +21,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup Java (For APK Build)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Execute AI Build Engine
+      - name: Execute AI Build Engine & File Placement
         shell: python
         env:
-          # یہ ڈیٹا آپ کے UI ڈسپیچ سے آئے گا
           PKG_NAME: ${{ github.event.inputs.package_name }}
           PAYLOAD: ${{ github.event.inputs.ui_payload }}
         run: |
@@ -37,30 +42,22 @@ jobs:
           import json
           import sys
 
-          # 1. ان پٹ ہینڈلنگ (Error Control)
           pkg = os.getenv("PKG_NAME") or "com.systempro.master"
           payload_str = os.getenv("PAYLOAD") or "{}"
 
           try:
-              data = json.loads(payload_str)
-              print(f"Starting System Pro Build for: {pkg}")
-
-              # 2. خودکار پاتھ مینجمنٹ (Image & File Protection)
+              # 1. Directory Structure (Auto-Matching)
               pkg_path = pkg.replace('.', '/')
               java_dir = f"app/src/main/java/{pkg_path}"
               res_values = "app/src/main/res/values"
-              res_layout = "app/src/main/res/layout"
               
-              for directory in [java_dir, res_values, res_layout]:
-                  os.makedirs(directory, exist_ok=True)
+              os.makedirs(java_dir, exist_ok=True)
+              os.makedirs(res_values, exist_ok=True)
 
-              # 3. مینی فیسٹ اور آئی ڈی سنکنگ (No more conflicts)
-              manifest_content = f"""<?xml version="1.0" encoding="utf-8"?>
+              # 2. Manifest Creation (Conflict Fix)
+              manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{pkg}">
-              <application 
-                  android:allowBackup="true"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.SystemPro">
+              <application android:theme="@style/Theme.SystemPro" android:label="System Pro">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -69,11 +66,10 @@ jobs:
                   </activity>
               </application>
           </manifest>"""
-              with open("app/src/main/AndroidManifest.xml", "w") as f:
-                  f.write(manifest_content)
+              with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-              # 4. گریڈل اور لائبریری انجن (Fast Search Implementation)
-              build_gradle = f"""
+              # 3. Build Gradle (Unified Logic)
+              gradle = f"""
           plugins {{ id 'com.android.application' version '8.2.2' }}
           android {{
               namespace '{pkg}'
@@ -82,26 +78,31 @@ jobs:
                   applicationId '{pkg}'
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
               }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
           }}"""
-              with open("app/build.gradle", "w") as f:
-                  f.write(build_gradle)
+              with open("app/build.gradle", "w") as f: f.write(gradle)
 
-              # 5. اضافی فائلیں (gradle.properties & settings)
-              with open("gradle.properties", "w") as f:
-                  f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
-              
-              with open("settings.gradle", "w") as f:
-                  f.write("include ':app'\nrootProject.name='System Pro'")
+              # 4. Mandatory Files
+              with open("settings.gradle", "w") as f: f.write("include ':app'")
+              with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
 
-              print("SUCCESS: System Pro Engine has placed all files correctly.")
+              print("FILE PLACEMENT SUCCESSFUL")
 
           except Exception as e:
-              print(f"CRITICAL ERROR: {str(e)}")
+              print(f"ERROR: {str(e)}")
               sys.exit(1)
+
+      - name: Build APK (Auto-Compile)
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: SystemPro-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
