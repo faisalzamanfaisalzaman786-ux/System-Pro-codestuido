@@ -1,94 +1,57 @@
-name: System-Pro-V18-5-Fixed-Dispatch
-
-on:
-  repository_dispatch:
-    types: [build-app]
-  workflow_dispatch: # مینوئل رن کے لیے
-
-jobs:
-  Build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-      
-    steps:
-      - name: 🛠️ Checkout Source
-        uses: actions/checkout@v4
-
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 🧠 AI Smart Engine (Fixed Payload)
-        shell: python
-        run: |
-          import os, json, re, shutil
-
-          # مکمل کلین اپ (صرف ضروری گٹ فائلوں کو چھوڑ کر)
-          for item in os.listdir('.'):
-              if item not in ['.git', '.github']:
-                  if os.path.isfile(item): os.remove(item)
-                  else: shutil.rmtree(item)
-
-          # پے لوڈ کو حاصل کرنے کا درست طریقہ (repository_dispatch اور workflow_dispatch دونوں کے لیے)
-          try:
-              # گٹ ہب ایونٹ سے ڈیٹا نکالنا
-              event_data = json.loads(r"""${{ toJson(github.event.client_payload) }}""")
-              payload = event_data if event_data else {}
-          except:
-              payload = {}
-
-          pkg_name = payload.get("package_name", "com.faisal.systempro")
-          pkg_path = pkg_name.replace('.', '/')
-          java_code = payload.get("java", "")
-          xml_layout = payload.get("xml", "")
-
-          # ڈائریکٹریز کی تیاری
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-
-          # 1. جاوا کوڈ کی درستگی (Muzammil AI Logic)
-          if not java_code or "public class" not in java_code:
-              java_code = f"package {pkg_name};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\n\npublic class MainActivity extends AppCompatActivity {{\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {{\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n    }}\n}}"
-          else:
-              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', java_code)
-              java_code = re.sub(r'public\s+class\s+\w+', 'public class MainActivity', java_code)
-
-          with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f:
-              f.write(java_code)
-
-          # 2. لے آؤٹ کی فائل (وائٹ اسکرین سے بچنے کے لیے)
-          if not xml_layout:
-              xml_layout = '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Running" android:textColor="#ffffff" android:layout_centerInParent="true"/></RelativeLayout>'
-          
-          with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-              f.write(xml_layout)
-
-          # 3. گریڈل اور مینی فیسٹ کنفیگریشن
+          # 3. گریڈل اور مینی فیسٹ کنفیگریشن (مکمل فکس)
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
           
-          with open("settings.gradle", "w") as f: f.write("include ':app'")
+          # settings.gradle میں ریپوزٹریز کا ہونا لازمی ہے
+          with open("settings.gradle", "w") as f:
+              f.write("""
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+include ':app'
+""")
           
+          # روٹ build.gradle (خالی یا بنیادی)
+          with open("build.gradle", "w") as f:
+              f.write("// Top-level build file")
+
+          # ایپ لیول build.gradle (ورژن کے ساتھ)
           with open("app/build.gradle", "w") as f:
-              f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
+              f.write(f"""
+plugins {{
+    id 'com.android.application' version '8.2.2' 
+}}
 
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+android {{
+    namespace '{pkg_name}'
+    compileSdk 34
+    defaultConfig {{
+        applicationId '{pkg_name}'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }}
+    buildTypes {{
+        release {{
+            minifyEnabled false
+        }}
+    }}
+}}
 
-      - name: 🏗️ Build APK
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: 📤 Upload Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Final-Build
-          path: app/build/outputs/apk/debug/*.apk
+dependencies {{
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+}}
+""")
