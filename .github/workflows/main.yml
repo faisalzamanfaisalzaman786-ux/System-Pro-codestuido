@@ -1,4 +1,4 @@
-name: System-Pro-V16-3-Final-Fix
+name: System-Pro-V16-4-Crash-Shield
 
 on:
   repository_dispatch:
@@ -18,7 +18,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Auto-Resource Engine (V16.3)
+      - name: 🧠 AI Crash-Shield Engine (V16.4)
         shell: python
         run: |
           import os, json, re
@@ -33,67 +33,66 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. تمام مطلوبہ لے آؤٹ فائلز کا پتہ لگانا
-          # اگر کوڈ میں R.layout.something ہے، تو یہ 'something' کو نکال لے گا
+          # 1. ڈیپ اسکیننگ (IDs اور Layouts)
           required_layouts = set(re.findall(r"R\.layout\.([a-zA-Z0-9_]+)", java_code))
           all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
           
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
 
-          # 2. ڈیفالٹ لے آؤٹ جنریٹر (تاکہ 'missing symbol' ایرر نہ آئے)
-          def create_basic_layout(layout_name):
-              content = f"""<?xml version="1.0" encoding="utf-8"?>
-              <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                  android:layout_width="match_parent" android:layout_height="match_parent"
-                  android:orientation="vertical" android:padding="16dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" 
-                  android:text="System Pro: {layout_name}" android:textSize="18sp" android:gravity="center"/>
-              </LinearLayout>"""
-              with open(f"app/src/main/res/layout/{layout_name}.xml", "w", encoding='utf-8') as f:
+          # 2. کریش پروف لے آؤٹ جنریٹر
+          def create_smart_layout(name, is_main=False):
+              if is_main:
+                  # مین لے آؤٹ میں تمام IDs کا ہونا لازمی ہے تاکہ NullPointerException نہ آئے
+                  widgets = ""
+                  for wid in all_ids:
+                      if any(x in wid.lower() for x in ["editor", "code", "input", "text"]):
+                          widgets += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="250dp" android:background="#FFFFFF" android:gravity="top" android:padding="10dp" android:layout_margin="8dp" android:hint="{wid}" android:textColor="#000000" android:inputType="textMultiLine"/>\n'
+                      else:
+                          widgets += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="70dp" android:text="{wid}" android:layout_margin="6dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false"/>\n'
+                  
+                  content = f"""<?xml version="1.0" encoding="utf-8"?>
+                  <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+                      android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+                      <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp">
+                          {widgets}
+                      </LinearLayout>
+                  </androidx.core.widget.NestedScrollView>"""
+              else:
+                  content = f'<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="System Pro Dynamic Dialog"/></LinearLayout>'
+              
+              with open(f"app/src/main/res/layout/{name}.xml", "w", encoding='utf-8') as f:
                   f.write(content)
 
           for layout in required_layouts:
-              if layout != "activity_main": # activity_main ہم خود بنائیں گے
-                  create_basic_layout(layout)
+              create_smart_layout(layout, is_main=(layout == "activity_main"))
+          
+          # اگر activity_main لسٹ میں نہیں تھی، تو اسے لازمی بنائیں
+          if "activity_main" not in required_layouts:
+              create_smart_layout("activity_main", is_main=True)
 
-          # 3. مین یو آئی بلڈر (72dp Buttons for Adjustment)
-          widgets_xml = ""
-          for wid in all_ids:
-              if any(x in wid.lower() for x in ["editor", "code", "input"]):
-                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="350dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="{wid}" android:textColor="#000000"/>\n'
-              else:
-                  widgets_xml += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="72dp" android:text="{wid}" android:layout_margin="8dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false" android:elevation="6dp"/>\n'
-
-          main_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-          <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
-              <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp">
-                  {widgets_xml}
-              </LinearLayout>
-          </androidx.core.widget.NestedScrollView>"""
-
-          with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f: f.write(main_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f: f.write(java_code)
           
-          # بلڈ کنفیگریشن
+          # 3. میگا مینی فیسٹ (تھیم فکس کے ساتھ)
+          with open("app/src/main/AndroidManifest.xml", "w", encoding='utf-8') as f:
+              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
+
+          # گریڈل کنفیگ
           with open("gradle.properties", "w") as f: f.write("android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.9.0' }}")
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript {{ repositories {{ google(); mavenCentral() }}; dependencies {{ classpath 'com.android.tools.build:gradle:8.2.2' }} }}\nallprojects {{ repositories {{ google(); mavenCentral() }} }}")
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🏗️ Final Build Execution
+      - name: 🏗️ Build Protected APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Export System Pro APK
+      - name: 📤 Upload Final Shielded APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V16-3-FINAL
+          name: System-Pro-V16-4-SHIELDED
           path: app/build/outputs/apk/debug/*.apk
