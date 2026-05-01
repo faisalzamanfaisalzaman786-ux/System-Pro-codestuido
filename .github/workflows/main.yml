@@ -45,14 +45,14 @@ jobs:
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" | base64 --decode > app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # 🚀 FIX: Strings.xml generation without syntax errors
+          # Strings.xml کی تیاری
           cat <<EOF > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">${{ github.event.client_payload.app_name }}</string>
           </resources>
           EOF
 
-          # AI Resource Logic (Python is safer for complex XML)
+          # AI Resource Logic
           python3 -c "
           import re, os
           xml_content = open('app/src/main/res/layout/activity_main.xml').read()
@@ -112,7 +112,7 @@ jobs:
           chmod +x gradlew
 
       - name: 🚀 Execute Production Build
-        run: ./gradlew :app:assembleDebug --quiet
+        run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: 💾 Save Offline Resources
         if: always()
