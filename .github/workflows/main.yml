@@ -1,57 +1,80 @@
-          # 3. گریڈل اور مینی فیسٹ کنفیگریشن (مکمل فکس)
+name: Configure Android Project
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  setup-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Create Gradle Files
+        shell: python
+        run: |
+          import os
+          
+          # پیکیج کا نام یہاں سیٹ کریں
+          pkg_name = "com.systempro.app"
+          
+          # gradle.properties بنانا
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
           
-          # settings.gradle میں ریپوزٹریز کا ہونا لازمی ہے
+          # settings.gradle بنانا
           with open("settings.gradle", "w") as f:
               f.write("""
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-include ':app'
-""")
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
+          """)
           
-          # روٹ build.gradle (خالی یا بنیادی)
+          # build.gradle بنانا
           with open("build.gradle", "w") as f:
               f.write("// Top-level build file")
 
-          # ایپ لیول build.gradle (ورژن کے ساتھ)
+          # اگر 'app' کا فولڈر نہیں ہے تو اسے بنانا
+          if not os.path.exists("app"):
+              os.makedirs("app")
+
+          # ایپ لیول build.gradle بنانا
           with open("app/build.gradle", "w") as f:
               f.write(f"""
-plugins {{
-    id 'com.android.application' version '8.2.2' 
-}}
-
-android {{
-    namespace '{pkg_name}'
-    compileSdk 34
-    defaultConfig {{
-        applicationId '{pkg_name}'
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }}
-    buildTypes {{
-        release {{
-            minifyEnabled false
-        }}
-    }}
-}}
-
-dependencies {{
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-}}
-""")
+          plugins {{
+              id 'com.android.application' version '8.2.2' 
+          }}
+          android {{
+              namespace '{pkg_name}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId '{pkg_name}'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }}
+          """)
