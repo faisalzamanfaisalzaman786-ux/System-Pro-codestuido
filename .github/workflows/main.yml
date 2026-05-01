@@ -1,4 +1,4 @@
-name: System-Pro-V16-2-Industrial
+name: System-Pro-V16-3-Final-Fix
 
 on:
   repository_dispatch:
@@ -18,12 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 AI Ultra-Dynamic Engine (V16.2)
+      - name: 🧠 AI Auto-Resource Engine (V16.3)
         shell: python
         run: |
           import os, json, re
 
-          # ڈیٹا لوڈنگ اور پے لوڈ ہینڈلنگ
+          # ڈیٹا لوڈنگ
           try:
               payload_raw = r"""${{ toJson(github.event.client_payload) }}"""
               payload = json.loads(payload_raw) if payload_raw != "null" else {}
@@ -33,32 +33,47 @@ jobs:
           pkg_name = payload.get("package_name", "com.faisal.systempro")
           pkg_path = pkg_name.replace('.', '/')
 
-          # 1. آئی ڈی اور ویجیٹ اسکیننگ
+          # 1. تمام مطلوبہ لے آؤٹ فائلز کا پتہ لگانا
+          # اگر کوڈ میں R.layout.something ہے، تو یہ 'something' کو نکال لے گا
+          required_layouts = set(re.findall(r"R\.layout\.([a-zA-Z0-9_]+)", java_code))
           all_ids = list(set(re.findall(r"R\.id\.([a-zA-Z0-9_]+)", java_code)))
           
-          # 2. اسمارٹ یو آئی (72dp Buttons for Adjustment)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+
+          # 2. ڈیفالٹ لے آؤٹ جنریٹر (تاکہ 'missing symbol' ایرر نہ آئے)
+          def create_basic_layout(layout_name):
+              content = f"""<?xml version="1.0" encoding="utf-8"?>
+              <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:orientation="vertical" android:padding="16dp">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" 
+                  android:text="System Pro: {layout_name}" android:textSize="18sp" android:gravity="center"/>
+              </LinearLayout>"""
+              with open(f"app/src/main/res/layout/{layout_name}.xml", "w", encoding='utf-8') as f:
+                  f.write(content)
+
+          for layout in required_layouts:
+              if layout != "activity_main": # activity_main ہم خود بنائیں گے
+                  create_basic_layout(layout)
+
+          # 3. مین یو آئی بلڈر (72dp Buttons for Adjustment)
           widgets_xml = ""
           for wid in all_ids:
               if any(x in wid.lower() for x in ["editor", "code", "input"]):
-                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="350dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="{wid}" android:textColor="#000000" android:inputType="textMultiLine"/>\n'
+                  widgets_xml += f'<EditText android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="350dp" android:background="#FFFFFF" android:gravity="top" android:padding="12dp" android:layout_margin="10dp" android:hint="{wid}" android:textColor="#000000"/>\n'
               else:
                   widgets_xml += f'<Button android:id="@+id/{wid}" android:layout_width="match_parent" android:layout_height="72dp" android:text="{wid}" android:layout_margin="8dp" android:backgroundTint="#1B4F72" android:textColor="#FFFFFF" android:textAllCaps="false" android:elevation="6dp"/>\n'
 
-          # 3. کریش پروف ہائبرڈ لے آؤٹ
-          # ہم نے یہاں NestedScrollView کو ایٹریبیوٹس کے ساتھ فکس کر دیا ہے تاکہ ClassCastException نہ آئے
-          final_xml = f"""<?xml version="1.0" encoding="utf-8"?>
+          main_xml = f"""<?xml version="1.0" encoding="utf-8"?>
           <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
               <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="System Pro v16.2" android:textSize="20sp" android:gravity="center" android:padding="15dp" android:textStyle="bold" android:textColor="#1B4F72"/>
                   {widgets_xml}
               </LinearLayout>
           </androidx.core.widget.NestedScrollView>"""
 
-          # 4. فائل رائٹنگ
-          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f: f.write(final_xml)
+          with open("app/src/main/res/layout/activity_main.xml", "w", encoding='utf-8') as f: f.write(main_xml)
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w", encoding='utf-8') as f: f.write(java_code)
           
           # بلڈ کنفیگریشن
@@ -70,16 +85,15 @@ jobs:
           with open("app/src/main/AndroidManifest.xml", "w") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>')
 
-      - name: 🏗️ Fix Gradlew & Build
+      - name: 🏗️ Final Build Execution
         run: |
-          # گریڈل فائلز کو ری-جنریٹ کرنا تاکہ 'No such file' کا مسئلہ ختم ہو
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 📤 Upload Success APK
+      - name: 📤 Export System Pro APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V16-2-APK
+          name: System-Pro-V16-3-FINAL
           path: app/build/outputs/apk/debug/*.apk
