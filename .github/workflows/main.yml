@@ -1,4 +1,4 @@
-name: System-Pro-V19.9-Dynamic-Master
+name: System-Pro-V20.1-UI-Synced
 
 on:
   repository_dispatch:
@@ -9,7 +9,7 @@ jobs:
   Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛠️ چیک آؤٹ
+      - name: 🛠️ تفتیش (Checkout)
         uses: actions/checkout@v4
 
       - name: ☕ جاوا سیٹ اپ (Java 17)
@@ -18,26 +18,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🧠 اے آئی ڈائنیمک انجن (V19.9)
+      - name: 🧠 اے آئی یو آئی انجن (V20.1)
         shell: python
         run: |
           import os, json, re, shutil, base64
 
-          # پے لوڈ وصول کرنا
+          # پے لوڈ کو آپ کی نئی UI کے مطابق وصول کرنا
           try:
               payload = json.loads('''${{ toJson(github.event.client_payload) }}''')
           except:
               payload = {}
 
-          # 1. ڈائنیمک پیکیج نیم کی لاجک
-          # اگر پے لوڈ میں نام نہ ہو تو ہر بار ایک نیا رینڈم نام بنے گا تاکہ کنفلکٹ نہ آئے
-          raw_pkg = payload.get("package_name", "com.systempro.app" + str(os.urandom(2).hex()))
-          pkg_name = raw_pkg.strip().lower()
+          # 1. ڈائنیمک پیکیج اور ایپ نیم (UI سے حاصل شدہ)
+          app_name = payload.get("app_name", "System Pro App")
+          pkg_name = payload.get("package_name", "com.system.pro").strip().lower()
           pkg_path = pkg_name.replace('.', '/')
           
-          print(f"AI: Working with Dynamic Package -> {pkg_name}")
-
-          # پرانے اسٹرکچر کی صفائی اور نیا بنانا
           if os.path.exists('app'): shutil.rmtree('app')
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
@@ -47,61 +43,48 @@ jobs:
           with open("gradle.properties", "w") as f:
               f.write("android.useAndroidX=true\nandroid.enableJetifier=true")
 
-          # 2. آئیکن کی لازمی انٹری
-          img_data = payload.get("app_image_base64", "")
-          icon_res = "@android:drawable/sym_def_app_icon"
+          # 2. آئیکن کی لازمی انٹری (icon_data فرام UI)
+          img_data = payload.get("icon_data", "")
+          icon_ref = "@android:drawable/sym_def_app_icon"
           if img_data:
               try:
                   with open("app/src/main/res/drawable/app_icon_custom.png", "wb") as f:
                       f.write(base64.b64decode(img_data))
-                  icon_res = "@drawable/app_icon_custom"
-                  print("AI: Custom Icon integrated successfully.")
-              except:
-                  print("AI: Icon conversion failed, using default.")
+                  icon_ref = "@drawable/app_icon_custom"
+              except: pass
 
-          # 3. مینی فیسٹ (ڈائنیمک آئیکن اور پیکیج کے ساتھ)
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
-              <application 
-                  android:label="System Pro App" 
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-                  android:icon="{icon_res}"
-                  tools:replace="android:icon">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
+          # 3. مینی فیسٹ (UI سے حاصل شدہ یا آٹو جنریٹڈ)
+          user_manifest = payload.get("manifest", "")
+          if not user_manifest:
+              user_manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="{app_name}" android:theme="@style/Theme.AppCompat.Light.NoActionBar" android:icon="{icon_ref}"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+          
+          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(user_manifest)
 
-          # 4. جاوا کوڈ کی ڈائنیمک درستگی
-          user_java = payload.get("java_code", "")
+          # 4. جاوا کوڈ (java فرام UI)
+          user_java = payload.get("java", "")
           if user_java:
-              # پیکیج لائن کو زبردستی نئے پیکیج سے بدلنا
-              if "package" in user_java:
-                  user_java = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', user_java)
-              else:
-                  user_java = f"package {pkg_name};\n" + user_java
+              user_java = re.sub(r'package\s+[\w.]+;', f'package {pkg_name};', user_java)
+              if "package" not in user_java: user_java = f"package {pkg_name};\n" + user_java
           else:
               user_java = f"package {pkg_name}; import android.os.Bundle; import androidx.appcompat.app.AppCompatActivity; public class MainActivity extends AppCompatActivity {{ @Override protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
 
           with open(f"app/src/main/java/{pkg_path}/MainActivity.java", "w") as f: f.write(user_java)
 
-          # 5. ایکس ایم ایل لے آؤٹ
-          user_xml = payload.get("layout_xml", '<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"><ImageView android:layout_width="200dp" android:layout_height="200dp" android:src="@drawable/app_icon_custom" android:layout_centerInParent="true"/></RelativeLayout>')
+          # 5. ایکس ایم ایل لے آؤٹ (xml فرام UI)
+          user_xml = payload.get("xml", "")
+          if not user_xml:
+              user_xml = f'<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#121212"><ImageView android:layout_width="150dp" android:layout_height="150dp" android:src="{icon_ref}" android:layout_centerInParent="true"/></RelativeLayout>'
+          
           with open("app/src/main/res/layout/activity_main.xml", "w") as f: f.write(user_xml)
 
-          # 6. ڈائنیمک بلڈ کنفیگریشن
+          # 6. ڈائنیمک گریڈل
           with open("app/build.gradle", "w") as f:
               f.write(f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg_name}'\ncompileSdk 34\ndefaultConfig {{ applicationId '{pkg_name}'\nminSdk 24\ntargetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\nimplementation 'com.google.android.material:material:1.11.0' }}")
           
           with open("settings.gradle", "w") as f: f.write("include ':app'")
           with open("build.gradle", "w") as f: f.write("buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.2' } }\nallprojects { repositories { google(); mavenCentral() } }")
 
-      - name: 🏗️ ڈائنیمک بلڈ شروع کریں
+      - name: 🏗️ بلڈ (Stable Build)
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
@@ -110,5 +93,5 @@ jobs:
       - name: 📤 اے پی کے حاصل کریں
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Dynamic-APK
+          name: APK-Build
           path: app/build/outputs/apk/debug/*.apk
