@@ -1,4 +1,0 @@
-hello(param1: "world")
-
-lane(:empty) do
-end

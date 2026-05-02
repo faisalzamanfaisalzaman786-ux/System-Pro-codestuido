@@ -1,5 +1,0 @@
-platform :ios do
-  lane :something do
-    action_from_action_invalid
-  end
-end

@@ -1,3 +1,0 @@
-lane :test do
-  sigh(app_identifier: ‘net.sunapps.1‘)
-end
