@@ -1,41 +1,36 @@
-name: System-Pro-V500-Transporter
+name: System-Pro-V600-Force-Xerox
 
 on:
-  workflow_dispatch: # اسے آپ مینوئل (Manual) رن کریں گے تاکہ ایک بار کلوننگ ہو جائے
+  workflow_dispatch: # اسے مینوئل رن کریں
 
 jobs:
-  wash_and_clone:
+  force_clone:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # یہ پرمیشن فائلوں کو لکھنے کے لیے ضروری ہے
     steps:
-      - name: 1. Checkout Your Repository
+      - name: 1. Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: 2. Wipe Everything (Except YAML)
+      - name: 2. Force Clone & Replace Everything
         run: |
-          # یہ کمانڈ آپ کے .github فولڈر کے علاوہ باقی سب کچھ ڈیلیٹ کر دے گی
-          # تاکہ آپ کی یہ وائی اے ایم ایل فائل محفوظ رہے اور باقی گند صاف ہو جائے
-          find . -maxdepth 1 ! -name '.github' ! -name '.' ! -name '..' ! -name '.git' -exec rm -rf {} +
-          echo "✅ Repository washed. Everything is clean now."
-
-      - name: 3. Xerox Clone from Master Link
-        run: |
-          # یہاں ہم فاسٹ لین کی ریپوزٹری کو عارضی طور پر کلون کر رہے ہیں
-          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_folder
-          
-          # اب ہم اس ٹیمپ فولڈر کا سارا ڈیٹا آپ کی ریپوزٹری کی روٹ (Root) میں منتقل کر رہے ہیں
-          cp -rn temp_folder/* .
-          rm -rf temp_folder
-          echo "✅ Full Structure Cloned successfully."
-
-      - name: 4. Commit and Push to Your Repo
-        run: |
+          # گٹ کی سیٹنگز
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
-          git add .
-          # اگر کوئی تبدیلی نہیں ہوگی تو یہ ایرر نہیں دے گا
-          git diff-index --quiet HEAD || git commit -m "System Pro: Full Xerox Clone and Clean Up"
-          git push origin main
-          echo "✅ All data has been shifted to your repository permanently."
+
+          # عارضی فولڈر میں فاسٹ لین کو کلون کرنا
+          git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
+          
+          # گٹ ہب اور گٹ فولڈرز کو بچا کر باقی سب کچھ مٹانا
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # نیا ڈیٹا شفٹ کرنا
+          cp -rf fastlane_temp/* .
+          rm -rf fastlane_temp
+          
+          # زبردستی پش کرنا (Force Push)
+          git add -A
+          git commit -m "System Pro: Forced Xerox Clone Complete"
+          git push origin main --force
