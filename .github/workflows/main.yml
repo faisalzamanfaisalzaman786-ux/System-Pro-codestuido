@@ -1,4 +1,4 @@
-name: System-Pro-V95-Ultimate-Auto-Path
+name: System-Pro-V100-Final-Stable
 
 on:
   repository_dispatch:
@@ -17,64 +17,60 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: AI-Path-Scanner-and-Processor
+      - name: AI-Master-Processor
         shell: python
         run: |
           import base64, os, re
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.system.pro')
           app_name = p.get('app_name', 'System Pro')
-          
-          # آٹو پاتھ میپنگ: یہ سسٹم خود راستہ تلاش کرے گا
           java_path = pkg.replace('.', '/')
-          base_dir = "app/src/main/java/" + java_path
-          res_dir = "app/src/main/res"
           
-          def ensure_path(path):
-              if not os.path.exists(path):
-                  os.makedirs(path, exist_ok=True)
-
-          def safe_write(file_path, content, is_binary=False):
-              ensure_path(os.path.dirname(file_path))
-              mode = "wb" if is_binary else "w"
-              with open(file_path, mode) as f:
+          def safe_write(path, content, binary=False):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "wb" if binary else "w") as f:
                   f.write(content)
 
-          # 1. ریسورسز اور اسٹائلز کی میپنگ
-          ensure_path(f"{res_dir}/layout")
-          ensure_path(f"{res_dir}/values")
-          ensure_path(f"{res_dir}/mipmap-xxxhdpi")
+          def decode_data(data):
+              if not data: return b""
+              if "," in data: data = data.split(",")[1]
+              return base64.b64decode(data)
 
-          # 2. خود کار کوڈ ہیلنگ لاجک (Self-Repairing Injection)
-          java_b64 = p.get('java_b64', '')
-          if "," in java_b64: java_b64 = java_b64.split(",")[1]
-          java_code = base64.b64decode(java_b64).decode('utf-8') if java_b64 else "public class MainActivity extends androidx.appcompat.app.AppCompatActivity {}"
+          # 1. ICON & LAYOUT
+          icon = decode_data(p.get('icon_data_b64', ''))
+          if icon: safe_write("app/src/main/res/mipmap-xxxhdpi/ic_launcher.png", icon, True)
           
-          # پیکیج نیم کی فورس اپ ڈیٹ
+          xml_raw = decode_data(p.get('xml_b64', ''))
+          safe_write("app/src/main/res/layout/activity_main.xml", xml_raw.decode('utf-8', errors='ignore') if xml_raw else '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"/>')
+
+          # 2. JAVA HEALING ENGINE
+          java_raw = decode_data(p.get('java_b64', ''))
+          java_code = java_raw.decode('utf-8', errors='ignore') if java_raw else "public class MainActivity extends androidx.appcompat.app.AppCompatActivity {}"
           java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
-          safe_write(f"{base_dir}/MainActivity.java", java_code)
+          
+          # ہیلنگ لاجک انجکشن
+          if "onCreate" in java_code:
+              healing_call = "super.onCreate(savedInstanceState);\n        android.widget.Toast.makeText(this, \"AI System Healed\", 1).show();"
+              java_code = java_code.replace("super.onCreate(savedInstanceState);", healing_call)
+          
+          safe_write(f"app/src/main/java/{java_path}/MainActivity.java", java_code)
 
-          # 3. مینی فیسٹ اور گریڈل سنک
-          manifest = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="{app_name}" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
-                  <activity android:name="{pkg}.MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
-                  </activity>
-              </application>
-          </manifest>'''
-          safe_write("app/src/main/AndroidManifest.xml", manifest)
+          # 3. CRITICAL CONFIG FILES (Path Fixing)
+          safe_write("app/src/main/AndroidManifest.xml", f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="{app_name}" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>')
+          
+          # گریڈل ورژن 8.7 کے لیے درست سنٹیکس
+          safe_write("app/build.gradle", f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg}'\n compileSdk 34\n defaultConfig {{ applicationId '{pkg}'\n minSdk 24\n targetSdk 34 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'\n implementation 'com.google.android.material:material:1.11.0' }}")
+          safe_write("settings.gradle", "include ':app'")
+          safe_write("gradle.properties", "android.useAndroidX=true\nandroid.enableJetifier=true\norg.gradle.jvmargs=-Xmx2048m")
 
-      - name: Force Gradle Build
+      - name: Force Specific Gradle Version (8.7)
         run: |
-          # گریڈل انجن کو پاتھ بتانا اور بلڈ شروع کرنا
-          gradle wrapper
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Functional APK
+      - name: Dispatch Stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Functional-Build
+          name: ${{ github.event.client_payload.app_name }}-Final-V100
           path: app/build/outputs/apk/debug/*.apk
