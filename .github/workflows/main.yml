@@ -1,92 +1,41 @@
-name: System-Pro-V300-Zero-Failure-Engine
+name: System-Pro-V500-Transporter
 
 on:
-  repository_dispatch:
-    types: [build-app]
+  workflow_dispatch: # اسے آپ مینوئل (Manual) رن کریں گے تاکہ ایک بار کلوننگ ہو جائے
 
 jobs:
-  build:
+  wash_and_clone:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Your Repository
         uses: actions/checkout@v4
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      # مرحلہ 1: اے آئی سنٹیکس اسکینر اور ہیلر (Gradle سے پہلے)
-      - name: AI Syntax Scanner & Resource Scout
-        shell: python
+      - name: 2. Wipe Everything (Except YAML)
         run: |
-          import base64, os, re, time
-          print("🛡️ AI Scanner: Checking Syntax & Resources before Gradle...")
-          
-          p = ${{ toJson(github.event.client_payload) }}
-          pkg = p.get('package_name', 'com.system.pro')
-          app_name = p.get('app_name', 'System Pro')
-          java_path = pkg.replace('.', '/')
+          # یہ کمانڈ آپ کے .github فولڈر کے علاوہ باقی سب کچھ ڈیلیٹ کر دے گی
+          # تاکہ آپ کی یہ وائی اے ایم ایل فائل محفوظ رہے اور باقی گند صاف ہو جائے
+          find . -maxdepth 1 ! -name '.github' ! -name '.' ! -name '..' ! -name '.git' -exec rm -rf {} +
+          echo "✅ Repository washed. Everything is clean now."
 
-          def safe_write(path, content, binary=False):
-              directory = os.path.dirname(path)
-              if directory: os.makedirs(directory, exist_ok=True)
-              with open(path, "wb" if binary else "w") as f:
-                  f.write(content)
-
-          def get_bytes(key):
-              data = p.get(key, '')
-              if "," in data: data = data.split(",")[1]
-              try: return base64.b64decode(data)
-              except: return b''
-
-          # --- اے آئی اسکینر: سنٹیکس کی درستی ---
-          java_raw = get_bytes('java_b64').decode('utf-8', errors='ignore')
-          if not java_raw: java_raw = f"package {pkg};\npublic class MainActivity extends androidx.appcompat.app.AppCompatActivity {{}}"
-          
-          # مسنگ امپورٹس اور بریکٹ چیک (Basic Healing)
-          if "AppCompatActivity" in java_raw and "import" not in java_raw:
-              java_raw = f"package {pkg};\nimport androidx.appcompat.app.AppCompatActivity;\n" + java_raw
-          
-          # پیکیج نیم سنک کرنا
-          java_raw = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_raw)
-          
-          # --- انجکشن: سیلف ہیلنگ برین ---
-          healing_injection = "\n    private void runSystemProHealer() { /* AI Auto-Fix Active */ }"
-          if "onCreate" in java_raw:
-              java_raw = java_raw.replace("super.onCreate(savedInstanceState);", "super.onCreate(savedInstanceState); runSystemProHealer();")
-
-          safe_write(f"app/src/main/java/{java_path}/MainActivity.java", java_raw)
-
-          # --- ریسورس اسکاؤٹ: مسنگ تھیمز اور کلرز ---
-          safe_write("app/src/main/res/values/colors.xml", '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color></resources>')
-          safe_write("app/src/main/res/values/themes.xml", f'<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar"/></resources>')
-
-          # اینگل: آئیکن میپنگ
-          icon_data = get_bytes('icon_data_b64')
-          if icon_data:
-              for d in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']:
-                  safe_write(f"app/src/main/res/mipmap-{d}/ic_launcher.png", icon_data, True)
-
-          # مینی فیسٹ اور گریڈل سنک
-          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="{app_name}" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>'
-          safe_write("app/src/main/AndroidManifest.xml", manifest)
-          
-          gradle_logic = f'plugins {{ id("com.android.application") version "8.7.0" }}\nandroid {{ namespace = "{pkg}"\n compileSdk = 35\n defaultConfig {{ applicationId = "{pkg}"\n minSdk = 26\n targetSdk = 35 }} }}\ndependencies {{ implementation("androidx.appcompat:appcompat:1.7.0")\n implementation("com.google.android.material:material:1.12.0") }}'
-          safe_write("app/build.gradle", gradle_logic)
-          safe_write("settings.gradle", f'rootProject.name = "{app_name}"\ninclude(":app")')
-          print("✅ Scanner: All files verified. Proceeding to Gradle.")
-
-      # مرحلہ 2: گریڈل بلڈ (صرف تب چلے گا جب اسکینر پاس ہوگا)
-      - name: Build Certified APK
+      - name: 3. Xerox Clone from Master Link
         run: |
-          gradle wrapper --gradle-version 9.1
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # یہاں ہم فاسٹ لین کی ریپوزٹری کو عارضی طور پر کلون کر رہے ہیں
+          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_folder
+          
+          # اب ہم اس ٹیمپ فولڈر کا سارا ڈیٹا آپ کی ریپوزٹری کی روٹ (Root) میں منتقل کر رہے ہیں
+          cp -rn temp_folder/* .
+          rm -rf temp_folder
+          echo "✅ Full Structure Cloned successfully."
 
-      - name: Export Final AI-Healed APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}-V300-Fixed
-          path: app/build/outputs/apk/debug/*.apk
+      - name: 4. Commit and Push to Your Repo
+        run: |
+          git config --global user.name "System Pro AI"
+          git config --global user.email "ai@systempro.com"
+          git add .
+          # اگر کوئی تبدیلی نہیں ہوگی تو یہ ایرر نہیں دے گا
+          git diff-index --quiet HEAD || git commit -m "System Pro: Full Xerox Clone and Clean Up"
+          git push origin main
+          echo "✅ All data has been shifted to your repository permanently."
