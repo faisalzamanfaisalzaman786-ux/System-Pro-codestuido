@@ -1,43 +1,134 @@
-      - name: System-Pro AI-Scanner
-        shell: python
+name: System-Pro-Advanced-Master-Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Advanced Foundation
         run: |
-          import base64, os, re
+          # 1. Purge Old Data
+          find . -maxdepth 1 ! -name '.github' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # 2. Comprehensive Directory Structure (Advanced)
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values-night  # ڈارک موڈ کے لیے
+          mkdir -p app/src/main/res/drawable-nodpi # گیم گرافکس کے لیے
+          mkdir -p app/src/main/res/xml           # نیٹ ورک سیکیورٹی کنفیگ کے لیے
+          mkdir -p app/src/main/assets            # گیم ایسٹس اور تھری ڈی ماڈلز کے لیے
+          mkdir -p app/src/main/jniLibs           # سی پلس پلس لائبریریز کے لیے
 
-          # 1. ڈیٹا لوڈ کرنا
-          p = ${{ toJson(github.event.client_payload) }}
-          xml_code = base64.b64decode(p.get('xml_b64', '')).decode('utf-8', errors='ignore') if p.get('xml_b64') else ""
-          
-          # 2. مسنگ اسٹائلز کی تلاش (Regex کے ذریعے)
-          # یہ لائن XML میں موجود ہر "@style/..." کو ڈھونڈے گی
-          found_styles = re.findall(r'@style/([\w.]+)', xml_code)
-          
-          # ڈیفالٹ محفوظ اسٹائلز (Base Library)
-          base_styles = {
-              "AppTheme": "Theme.MaterialComponents.DayNight.NoActionBar",
-              "ActionButton": "Widget.MaterialComponents.Button",
-              "TabButton": "Widget.MaterialComponents.Button.TextButton",
-              "BuildButton": "Widget.MaterialComponents.Button.UnelevatedButton"
+          # 3. Project Level Config
+          echo "include ':app'" > settings.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
           }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
 
-          # 3. لوکل ریسورس جنریٹر (Local Folder: res/values/auto_generated_styles.xml)
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-          
-          style_content = '<resources>\n'
-          # جو اسٹائلز پے لوڈ میں ہیں لیکن لائبریری میں نہیں، انہیں خودکار طریقے سے بنائیں
-          for s in set(found_styles):
-              parent = base_styles.get(s, "Widget.AppCompat.Button")
-              style_content += f'    <style name="{s}" parent="{parent}">\n'
-              style_content += '        <item name="android:layout_width">wrap_content</item>\n'
-              style_content += '        <item name="android:layout_height">wrap_content</item>\n'
-              style_content += '    </style>\n'
-          
-          # اگر کوئی اسٹائل نہیں ملا تو کم از کم AppTheme ضرور بنائیں
-          if "AppTheme" not in found_styles:
-              style_content += f'    <style name="AppTheme" parent="{base_styles["AppTheme"]}"></style>\n'
-          
-          style_content += '</resources>'
+          # 4. Professional Properties
+          cat <<EOF > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g
+          EOF
 
-          with open("app/src/main/res/values/auto_generated_styles.xml", "w") as f:
-              f.write(style_content)
-          
-          print("AI Scanner: All missing styles have been healed and saved to local folder.")
+          # 5. Advanced Build Gradle (Gaming & Map Compatible)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.system.pro"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+              buildFeatures { viewBinding true }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              // Maps & Location کے لیے بنیادی لائبریریز
+              implementation 'com.google.android.gms:play-services-maps:18.2.0'
+              implementation 'com.google.android.gms:play-services-location:21.1.0'
+          }
+          EOF
+
+          # 6. Global Resource Guard
+          # Colors (Neon & Dark Support)
+          cat <<EOF > app/src/main/res/values/colors.xml
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorAccent">#03DAC5</color>
+              <color name="neon_yellow">#CCFF00</color>
+              <color name="background_dark">#121212</color>
+          </resources>
+          EOF
+
+          # Styles (All Advanced Themes)
+          cat <<EOF > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="android:windowBackground">@color/background_dark</item>
+              </style>
+              <style name="MapTheme" parent="Theme.MaterialComponents.Light.DarkActionBar" />
+          </resources>
+          EOF
+
+          # 7. The "Everything-Allowed" Manifest
+          cat <<EOF > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              
+              <application
+                  android:allowBackup="true"
+                  android:label="System Pro"
+                  android:theme="@style/AppTheme"
+                  android:hardwareAccelerated="true">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_API_KEY_HERE"/>
+              </application>
+          </manifest>
+          EOF
+
+      - name: Push Physical Foundation
+        run: |
+          git config --global user.name "System-Pro-Engine"
+          git config --global user.email "faisal@systempro.ai"
+          git add .
+          git commit -m "Initialize Advanced Foundation (Maps, Games, Hardware Ready)"
+          git push
