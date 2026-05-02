@@ -12,22 +12,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build Advanced Foundation
+      - name: Advanced Nuclear Clean & Foundation Build
         run: |
-          # 1. Purge Old Data
-          find . -maxdepth 1 ! -name '.github' ! -name '.' ! -name '..' -exec rm -rf {} +
+          # 1. پاور فل کلیننگ (Nuclear Wipe)
+          # یہ کمانڈ .git اور .github کے علاوہ تمام فائلوں اور پوشیدہ فولڈرز کو ڈیلیٹ کر دے گی
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
           
-          # 2. Comprehensive Directory Structure (Advanced)
+          # 2. فولڈر اسٹرکچر کی ازسرنو تخلیق (Force Creation)
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values-night  # ڈارک موڈ کے لیے
-          mkdir -p app/src/main/res/drawable-nodpi # گیم گرافکس کے لیے
-          mkdir -p app/src/main/res/xml           # نیٹ ورک سیکیورٹی کنفیگ کے لیے
-          mkdir -p app/src/main/assets            # گیم ایسٹس اور تھری ڈی ماڈلز کے لیے
-          mkdir -p app/src/main/jniLibs           # سی پلس پلس لائبریریز کے لیے
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/values-night
+          mkdir -p app/src/main/res/drawable-nodpi
+          mkdir -p app/src/main/res/xml
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/jniLibs
 
-          # 3. Project Level Config
+          # 3. روٹ فائلیں (Standard)
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -36,15 +39,14 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-          # 4. Professional Properties
           cat <<EOF > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
           EOF
 
-          # 5. Advanced Build Gradle (Gaming & Map Compatible)
+          # 4. پروفیشنل ایپ کنفیگریشن
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -56,79 +58,65 @@ jobs:
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
               buildFeatures { viewBinding true }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              // Maps & Location کے لیے بنیادی لائبریریز
               implementation 'com.google.android.gms:play-services-maps:18.2.0'
               implementation 'com.google.android.gms:play-services-location:21.1.0'
           }
           EOF
 
-          # 6. Global Resource Guard
-          # Colors (Neon & Dark Support)
+          # 5. بنیادی ریسورسز کی فزیکل موجودگی
           cat <<EOF > app/src/main/res/values/colors.xml
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="colorAccent">#03DAC5</color>
-              <color name="neon_yellow">#CCFF00</color>
-              <color name="background_dark">#121212</color>
+              <color name="white">#FFFFFF</color>
+              <color name="black">#000000</color>
           </resources>
           EOF
 
-          # Styles (All Advanced Themes)
           cat <<EOF > app/src/main/res/values/styles.xml
           <resources>
               <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
                   <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="android:windowBackground">@color/background_dark</item>
+                  <item name="android:statusBarColor">@color/colorPrimary</item>
               </style>
-              <style name="MapTheme" parent="Theme.MaterialComponents.Light.DarkActionBar" />
           </resources>
           EOF
 
-          # 7. The "Everything-Allowed" Manifest
+          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+
+          # 6. ماسٹر مینی فیسٹ
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
               <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              
               <application
                   android:allowBackup="true"
-                  android:label="System Pro"
+                  android:label="@string/app_name"
                   android:theme="@style/AppTheme"
                   android:hardwareAccelerated="true">
-                  <activity android:name=".MainActivity" android:exported="true">
+                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-                  <meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_API_KEY_HERE"/>
               </application>
           </manifest>
           EOF
 
-      - name: Push Physical Foundation
+      - name: Force Push Clean Foundation
         run: |
           git config --global user.name "System-Pro-Engine"
           git config --global user.email "faisal@systempro.ai"
           git add .
-          git commit -m "Initialize Advanced Foundation (Maps, Games, Hardware Ready)"
-          git push
+          git commit -m "Nuclear Clean: Full Standard Foundation Initialized"
+          git push --force
