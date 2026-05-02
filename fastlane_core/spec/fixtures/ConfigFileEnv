@@ -1,5 +1,0 @@
-app_identifier ENV["SOMETHING_RANDOM_APP_IDENTIFIER"]
-
-ios_version do
-  ENV["SOMETHING_RANDOM_IOS_VERSION"]
-end
