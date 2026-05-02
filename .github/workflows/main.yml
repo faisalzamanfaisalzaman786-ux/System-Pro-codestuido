@@ -1,60 +1,69 @@
-name: System Pro - Project Sanitization & Restoration
+name: System Pro - Permanent Wash & Core Protection
 on:
-  workflow_dispatch: # اسے آپ مینوئلی رن کریں گے
+  workflow_dispatch: # مکمل کنٹرول کے لیے مینوئل رن
 
 permissions:
   contents: write
 
 jobs:
-  sanitize-project:
+  wash-and-protect:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Full Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 1. Delete Non-Project Files (The Purge)
+      - name: 2. Core Protection Shield (Verification)
         run: |
-          echo "Starting Purge of unnecessary files..."
-          # ان فائلوں کو ڈیلیٹ کرنا جو اینڈرائیڈ پروجیکٹ کا حصہ نہیں ہیں
-          find . -type f -name "*.exe" -delete
-          find . -type f -name "*.bin" -delete
-          find . -type f -name "*.apk" -delete
-          # پرانے ڈویلپر کے کسٹم لنکس یا ٹیکسٹ فائلیں جو کام کی نہیں ہیں
-          find . -maxdepth 1 -type f -name "*.txt" ! -name "requirements.txt" -delete
-          find . -maxdepth 1 -type f -name "*.md" ! -name "README.md" -delete
+          echo "🛡️ Shielding Core Android Files..."
+          # چیک کرنا کہ ضروری فائلیں موجود ہیں، اگر نہیں تو بلڈ روک دی جائے گی تاکہ نقصان نہ ہو
+          if [ ! -d "app/src/main" ] && [ ! -f "build.gradle" ]; then
+            echo "❌ CRITICAL ERROR: Core Android structure not found. Aborting to protect data!"
+            exit 1
+          fi
+          echo "✅ Core Structure Verified. Proceeding to Wash..."
+
+      - name: 3. Permanent Wash (Deep Cleaning)
+        run: |
+          echo "🧹 Starting Permanent Wash of Non-Android files..."
           
-          # کسی بھی نامعلوم یا فالتو فولڈر کی صفائی (احتیاط کے ساتھ)
-          rm -rf .externalNativeBuild || true
-          rm -rf .cxx || true
+          # تمام ونڈوز ایگزیکیوٹیبل اور بائنری فائلیں ڈیلیٹ کرنا
+          find . -type f \( -name "*.exe" -o -name "*.dll" -o -name "*.bat" -o -name "*.msi" -o -name "*.bin" -o -name "*.out" \) -exec rm -rf {} +
+          
+          # پرانی کیشے اور لاگ فائلیں صاف کرنا جو بلڈ میں رکاوٹ بنتی ہیں
+          find . -type d \( -name "build" -o -name ".externalNativeBuild" -o -name ".cxx" -o -name ".gradle" \) -exec rm -rf {} +
+          
+          # پرانے ڈویلپر کے وہ اسکرپٹس جو مین ایپ سے باہر ہیں (احتیاط کے ساتھ)
+          find . -maxdepth 1 -type f -name "*.txt" ! -name "requirements.txt" ! -name "README.md" -delete
+          
+          echo "✨ Wash Complete. All traces of non-essential files removed."
 
-      - name: 2. Core Structure Protection
+      - name: 4. Secure Alignment (Package Fix)
         run: |
-          echo "Ensuring Core Android folders exist..."
+          echo "📂 Aligning files to: com.faisal.systempro"
           mkdir -p app/src/main/java/com/faisal/systempro
-          mkdir -p app/src/main/res
-          mkdir -p app/src/main/assets
-
-      - name: 3. Intelligent File Relocation
-        run: |
-          echo "Moving Java/Kotlin files to new package structure..."
-          # تمام سورس کوڈ کو تلاش کر کے نئے پیکج میں منتقل کرنا
-          find . -path "./app/src/main/java/*" -name "*.java" -o -name "*.kt" | while read -r file; do
-            mv "$file" app/src/main/java/com/faisal/systempro/ 2>/dev/null || true
+          
+          # صرف جاوا اور کوٹلن فائلوں کو ان کی صحیح جگہ منتقل کرنا
+          find app/src/main/java -name "*.java" -o -name "*.kt" | while read -r file; do
+            filename=$(basename "$file")
+            target="app/src/main/java/com/faisal/systempro/$filename"
+            if [ "$file" != "$target" ]; then
+              mv "$file" "$target" || true
+            fi
           done
 
-      - name: 4. Library & Resource Audit
+      - name: 5. Force Push Clean State (Permanent Sync)
         run: |
-          echo "Validating Libraries and XML Resources..."
-          # یہ یقینی بنانا کہ build.gradle اور libs فولڈر محفوظ ہیں
-          ls -R app/libs || echo "No external libs found, keeping internal ones."
-          ls app/src/main/res/values/themes.xml || echo "Themes.xml is safe."
-
-      - name: 5. Final Code Integrity (Muzammil-AI)
-        run: |
-          git config --global user.name "System Pro Sanitizer"
-          git config --global user.email "cleanup@systempro.ai"
+          git config --global user.name "Muzammil-AI"
+          git config --global user.email "muzammil@systempro.ai"
+          
           git add .
-          git commit -m "Project Sanitized: Removed extra files, restored core structure"
-          git push --force
+          
+          # تبدیلیوں کو زبردستی پش کرنا تاکہ ریپوزٹری مکمل صاف ہو جائے
+          if git diff --staged --quiet; then
+            echo "No changes needed, repository is already clean."
+          else
+            git commit -m "System Pro: Permanent Wash & Core Protection Applied"
+            git push origin HEAD:${{ github.ref }} --force
+          fi
