@@ -1,36 +1,38 @@
-name: System-Pro-V600-Force-Xerox
+name: System-Pro-V601-Ultimate-Mirror
 
 on:
-  workflow_dispatch: # اسے مینوئل رن کریں
+  workflow_dispatch:
 
 jobs:
   force_clone:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # یہ پرمیشن فائلوں کو لکھنے کے لیے ضروری ہے
+      contents: write
     steps:
-      - name: 1. Checkout
+      - name: 1. Checkout Your Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Force Clone & Replace Everything
+      - name: 2. Force Clone & Mirror Everything
         run: |
-          # گٹ کی سیٹنگز
+          # گٹ کی پہچان سیٹ کرنا
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # عارضی فولڈر میں فاسٹ لین کو کلون کرنا
+          # عارضی فولڈر میں کلون کرنا
           git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
           
-          # گٹ ہب اور گٹ فولڈرز کو بچا کر باقی سب کچھ مٹانا
+          # .github اور .git کو بچا کر باقی سب کچھ مٹانا
           find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
           
-          # نیا ڈیٹا شفٹ کرنا
+          # اب تمام فائلوں کو (بشمول ڈاٹ فائلز) کاپی کرنا
+          shopt -s dotglob
           cp -rf fastlane_temp/* .
           rm -rf fastlane_temp
           
-          # زبردستی پش کرنا (Force Push)
+          # زبردستی پش کرنا
           git add -A
-          git commit -m "System Pro: Forced Xerox Clone Complete"
+          git commit -m "System Pro: Full Mirror Update V601" || echo "No changes to commit"
           git push origin main --force
