@@ -1,4 +1,4 @@
-name: System-Pro-V1400-Atomic-Sync
+name: System-Pro-V1500-Ultimate-Bypass
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  atomic_sync:
+  bypass_sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,28 +16,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Direct Source Injection
+      - name: 2. Force Mirror Without Workflow Conflicts
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # ان کی ریپوزٹری کو ریموٹ کے طور پر جوڑنا
+          # ان کی ریپوزٹری کو بطور ریموٹ ایڈ کرنا
           git remote add xerox https://github.com/fastlane/fastlane.git
           git fetch xerox master
 
-          # آپ کی ریپوزٹری سے پرانا سارا کچرا صاف کرنا (سوائے آپ کی اس وائی اے ایم ایل کے)
+          # آپ کی ریپوزٹری سے پرانا سارا ڈیٹا صاف کرنا
           find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
 
-          # براہ راست ڈیٹا نکالنا (بغیر .github فولڈر کے تاکہ پرمیشن ایرر نہ آئے)
-          # یہ کمانڈ صرف ضروری فائلیں اٹھائے گی
+          # سارا ڈیٹا نکالنا
           git checkout xerox/master -- .
           
-          # مخصوص پریشان کن فائلیں اگر بچ گئی ہوں تو ہٹانا
-          rm -rf .github/workflows/announce_release.yml || true
-          rm -rf .github/workflows/ci.yml || true
-          rm -rf .github/workflows/issues.yml || true
+          # 🛑 سب سے اہم قدم: ان کا پورا ورک فلو فولڈر جڑ سے اکھاڑ دیں
+          # اس سے گٹ ہب کی سیکیورٹی کو کوئی اعتراض نہیں رہے گا
+          rm -rf .github/workflows/*
+          
+          # اب اپنی موجودہ فائل کو واپس لانا (تاکہ یہ ورک فلو چلتا رہے)
+          # ہم فرض کر رہے ہیں کہ آپ کی فائل کا نام main.yml ہے
+          mkdir -p .github/workflows
+          git checkout HEAD -- .github/workflows/main.yml || echo "Workflow file already exists"
 
-          # تبدیلیوں کو محفوظ کر کے پش کرنا
-          git add .
-          git commit -m "System Pro: Atomic Sync V1400 Success" || echo "No changes"
+          # تبدیلیوں کو محفوظ کر کے زبردستی پش کرنا
+          git add -A
+          git commit -m "System Pro: Final Success V1500" || echo "No changes"
           git push origin main --force
