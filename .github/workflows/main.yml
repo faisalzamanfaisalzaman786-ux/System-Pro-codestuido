@@ -1,4 +1,4 @@
-name: System-Pro-V800-Auto-Executor
+name: System-Pro-V900-Final-Path-Cleaner
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  auto_sync_and_wipe:
+  clean_and_mirror:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,21 +17,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Direct Xerox Sync (No Errors)
+      - name: 2. Professional Xerox Move (No Workflows)
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # ان کی ریپوزٹری کو بطور ریموٹ ایڈ کرنا
-          git remote add external https://github.com/fastlane/fastlane.git
-          git fetch external master
-
-          # آپ کی ریپوزٹری کو ان کے اسٹرکچر پر ری سیٹ کرنا (پورا ڈیٹا واش ہو جائے گا)
-          # ہم ان کے ورک فلو فولڈر (.github) کو ہٹا دیں گے تاکہ گٹھاب اعتراض نہ کرے
-          git checkout external/master -- .
-          rm -rf .github/workflows/announce_release.yml # مخصوص ایرر والی فائل ہٹانا
+          # ان کی ریپوزٹری کو عارضی طور پر الگ فولڈر میں لینا
+          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_xerox
           
-          # تبدیلیوں کو زبردستی پش کرنا
-          git add .
-          git commit -m "System Pro: Final Xerox Sync V800" || echo "No changes"
+          # 🛑 سب سے اہم قدم: ان کا ورک فلو فولڈر مکمل اڑا دینا تاکہ گٹھاب کو اعتراض نہ ہو
+          rm -rf temp_xerox/.github
+          
+          # آپ کی ریپوزٹری سے پرانا ڈیٹا مٹانا (سوائے آپ کی اس وائی اے ایم ایل کے)
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # نیا ڈیٹا منتقل کرنا
+          shopt -s dotglob
+          cp -rf temp_xerox/* .
+          rm -rf temp_xerox
+          
+          # پش کرنا
+          git add -A
+          git commit -m "System Pro: Xerox Copy Success V900" || echo "Nothing to change"
           git push origin main --force
