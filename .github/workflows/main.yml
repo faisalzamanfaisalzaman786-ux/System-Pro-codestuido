@@ -1,4 +1,4 @@
-name: System-Pro-V77-Main-Engine
+name: System-Pro-V77-AI-Bank
 
 on:
   repository_dispatch:
@@ -11,114 +11,91 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Restore Gradle Wrapper
+      - name: 🏦 AI-Structure-Vault (Folders Initialization)
         run: |
+          # بینک اسٹرکچر بنانا تاکہ سسٹم میچور ہو سکے
+          mkdir -p .system_pro/bank/syntax
+          mkdir -p .system_pro/bank/resources
+          mkdir -p .system_pro/bank/libraries
+          
+          # گریڈل ریکوری
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: AI-Autonomous-Injector & Conflict Resolver
+      - name: 🧠 AI-Project-Manager (Placing Files in Bank)
         shell: python
         run: |
           import base64, os, re
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.faisal.systempro')
-          app_name = p.get('app_name', 'System Pro')
           path = pkg.replace('.', '/')
 
-          def safe_write(file_path, content):
-              directory = os.path.dirname(file_path)
-              if directory and not os.path.exists(directory):
-                  os.makedirs(directory, exist_ok=True)
+          def vault_write(file_path, content, bank_path=None):
+              # فائل کو پروجیکٹ میں رکھنا
+              os.makedirs(os.path.dirname(file_path), exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
-                  f.write(content)
+                  f.write(content.strip())
+              # فائل کا ایک کاپی بینک میں محفوظ کرنا (Next Time کے لیے)
+              if bank_path:
+                  os.makedirs(os.path.dirname(bank_path), exist_ok=True)
+                  with open(bank_path, "w", encoding="utf-8") as f:
+                      f.write(content.strip())
 
-          # 1. جدید سیٹنگز (Strict Resolution Mode)
-          settings_gradle = f"""
-          pluginManagement {{
-              repositories {{ google(); mavenCentral(); gradlePluginPortal(); }}
-          }}
-          dependencyResolutionManagement {{
+          # --- 1. Syntax Bank Management ---
+          settings_logic = f"""
+          pluginManagement {{ repositories {{ google(); mavenCentral(); gradlePluginPortal(); }} }}
+          dependencyResolutionManagement {{ 
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {{ google(); mavenCentral(); }}
+              repositories {{ google(); mavenCentral(); }} 
           }}
           rootProject.name = "System-Pro-codestuido"
           include ':app'
           """
-          safe_write("settings.gradle", settings_gradle)
-          
-          # 2. روٹ گریڈل (Standard Version)
-          safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral(); } dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }")
+          vault_write("settings.gradle", settings_logic, ".system_pro/bank/syntax/settings.bak")
 
-          # 3. ایپ ماڈیول (اس ورژن میں میٹریل لائبریری کو 1.10.0 پر فکس کیا گیا ہے)
+          # --- 2. Resource Bank (Themes & Colors) ---
+          theme_logic = """<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>"""
+          vault_write("app/src/main/res/values/themes.xml", theme_logic, ".system_pro/bank/resources/neon_theme.bak")
+
+          # --- 3. App Core (Mapping & Sync) ---
           app_gradle = f"""
           apply plugin: 'com.android.application'
           android {{
               namespace '{pkg}'
               compileSdk 34
-              defaultConfig {{
-                  applicationId "{pkg}"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }}
-              compileOptions {{
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }}
+              defaultConfig {{ applicationId "{pkg}"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0"; }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'com.google.android.material:material:1.9.0'
           }}
           """
-          safe_write("app/build.gradle", app_gradle)
+          vault_write("app/build.gradle", app_build_logic := app_gradle, ".system_pro/bank/libraries/app_build.bak")
 
-          # 4. جاوا اور ایکس ایم ایل انجکشن (Base64 Decoding)
+          # جاوا اور ایکس ایم ایل کو اپنی جگہ پر پلیس کرنا
           java_raw = p.get('java_b64', '')
           if java_raw:
-              if "," in java_raw: java_raw = java_raw.split(",")[1]
-              java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
-              # پیکیج نیم کی تصحیح
-              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
-              safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
+              java_code = base64.b64decode(java_raw.split(",")[1] if "," in java_raw else java_raw).decode('utf-8')
+              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
+              vault_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          xml_raw = p.get('xml_b64', '')
-          if xml_raw:
-              if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
-              xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
-              safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
+          # مینی فیسٹ آٹو میجک
+          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/Theme.SystemPro"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
+          vault_write("app/src/main/AndroidManifest.xml", manifest)
 
-          # 5. مینی فیسٹ اور تھیمز
-          safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
-          themes = """<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>"""
-          safe_write("app/src/main/res/values/themes.xml", themes)
-          
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
-                  <activity android:name="{pkg}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
-          safe_write("app/src/main/AndroidManifest.xml", manifest)
+      - name: 🚀 Mature Build Execution
+        run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 🚀 Force Build Execution
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
-
-      - name: Upload APK
+      - name: 💾 Artifacts Delivery
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Build
-          path: app/build/outputs/apk/debug/*.apk
+          name: ${{ github.event.client_payload.app_name }}-Stable-Build
+          path: |
+             app/build/outputs/apk/debug/*.apk
+             .system_pro/bank/
