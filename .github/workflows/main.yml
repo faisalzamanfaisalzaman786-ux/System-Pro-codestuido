@@ -1,4 +1,4 @@
-name: System-Pro-V62-Direct-APK
+name: System-Pro-V62-Ultimate-Final
 
 on:
   repository_dispatch:
@@ -8,33 +8,81 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Force JDK 17
+      - name: Setup Environment (JDK 17 & Gradle 8.5)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          check-latest: false # سسٹم کو نیا ورژن ڈھونڈنے سے روک دیا ہے
-
-      - name: Force Gradle 8.5 Setup
+      
+      - name: Install & Lock Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-          cache-disabled: true # کسی بھی پرانے کیشے کو استعمال کرنے سے روک دیا ہے
 
-      - name: Create Dynamic Structure (Hardcoded Order)
+      - name: AI-Powered Dynamic Structure & Payload Mapping
+        shell: python
         run: |
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
+          import base64, os, json
+
+          # پے لوڈ حاصل کرنا
+          payload = ${{ toJson(github.event.client_payload) }}
+          pkg_name = payload.get('package_name', 'com.system.pro')
+          app_name = payload.get('app_name', 'System Pro')
+          pkg_path = pkg_name.replace('.', '/')
+
+          # ضروری فولڈرز بنانا (پیکیج نیم کے مطابق)
+          os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
+          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          os.makedirs("app/src/main/res/values", exist_ok=True)
+          os.makedirs("app/src/main/res/drawable", exist_ok=True)
+
+          def save_b64(key, target):
+              data = payload.get(key, '')
+              if data and len(data) > 10:
+                  if "," in data: data = data.split(",")[1]
+                  with open(target, "wb") as f: f.write(base64.b64decode(data))
+                  return True
+              return False
+
+          # کوڈ اور لے آؤٹ کی پلیسمنٹ
+          save_b64('java_b64', f"app/src/main/java/{pkg_path}/MainActivity.java")
+          save_b64('xml_b64', "app/src/main/res/layout/activity_main.xml")
           
-          # Force root settings
+          # آئیکن کی ہینڈلنگ (پہلی ترجیح پے لوڈ، ورنہ ڈیفالٹ)
+          if not save_b64('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png"):
+              # اگر آئیکن نہیں ہے تو ایک سادہ ڈرا ایبل بنانا تاکہ AAPT2 فیل نہ ہو
+              with open("app/src/main/res/drawable/ic_launcher.png", "wb") as f:
+                  f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+
+          # مینی فیسٹ کی پکی کنفیگریشن
+          manifest = f'''<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="{app_name}"
+                  android:theme="@style/Theme.MaterialComponents.Light.NoActionBar">
+                  <activity android:name="{pkg_name}.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>'''
+          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
+
+          # Strings.xml بنانا
+          with open("app/src/main/res/values/strings.xml", "w") as f:
+              f.write(f'<resources><string name="app_name">{app_name}</string></resources>')
+
+      - name: Generate Build Scripts (Strict Order)
+        run: |
           echo "include ':app'" > settings.gradle
           
-          # Force Root Build Config
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -45,11 +93,10 @@ jobs:
           }
           EOF
 
-          # Force App Build Config (Namespace & SDK Locked)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
-              namespace 'com.system.pro'
+              namespace '${{ github.event.client_payload.package_name || 'com.system.pro' }}'
               compileSdk 34
               defaultConfig {
                   applicationId "${{ github.event.client_payload.package_name || 'com.system.pro' }}"
@@ -61,31 +108,13 @@ jobs:
           }
           EOF
 
-      - name: Payload Implementation
-        shell: python
-        run: |
-          import base64, os
-          p = ${{ toJson(github.event.client_payload) }}
-          def save(key, path):
-              data = p.get(key, '')
-              if data and len(data) > 10:
-                  if "," in data: data = data.split(",")[1]
-                  with open(path, "wb") as f: f.write(base64.b64decode(data))
+      - name: Build Final APK
+        # اب کوئی گنجائش نہیں، براہِ راست فائنل بلڈ
+        run: gradle assembleDebug --no-daemon
 
-          save('java_b64', "app/src/main/java/com/system/pro/MainActivity.java")
-          save('xml_b64', "app/src/main/res/layout/activity_main.xml")
-          save('manifest_b64', "app/src/main/AndroidManifest.xml")
-          
-          icon = p.get('icon_data_b64', '')
-          if len(icon) > 50: save('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png")
-
-      - name: Force Build APK
-        # ہم نے 'gradlew' کے بجائے براہ راست 'gradle' استعمال کیا ہے جو اوپر لاک (Lock) کیا گیا ہے
-        run: gradle assembleDebug --no-daemon --stacktrace
-
-      - name: Upload Forced APK
+      - name: Upload Final Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-V62-Forced
+          name: ${{ github.event.client_payload.app_name }}-V62-Final
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error # اگر فائل نہ بنی تو بلڈ فیل دکھائے تاکہ ہمیں دھوکہ نہ ہو
+          if-no-files-found: error
