@@ -1,4 +1,4 @@
-name: System-Pro-V62-Final-Shield
+name: System-Pro-V62-Modern-Safe-Build
 
 on:
   repository_dispatch:
@@ -8,16 +8,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java & Gradle
+      - name: Setup JDK 17 (Required for Modern Android)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Payload & Code Validation
+      - name: Lock Gradle 8.5 (Fast & Stable)
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Modern Structure & Package Mapping
         shell: python
         run: |
           import base64, os
@@ -27,53 +32,54 @@ jobs:
           app_name = p.get('app_name', 'System Pro')
           path = pkg.replace('.', '/')
 
-          # پکا اسٹرکچر بنانا
+          # جدید اینڈرائیڈ کے لیے فولڈر اسٹرکچر
           os.makedirs(f"app/src/main/java/{path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
           os.makedirs("app/src/main/res/drawable", exist_ok=True)
 
-          def write_b64(key, file_path, default_content=""):
+          def write_b64(key, file_path):
               data = p.get(key, '')
-              if data and len(data) > 20:
+              if data and len(data) > 10:
                   if "," in data: data = data.split(",")[1]
                   content = base64.b64decode(data).decode('utf-8', errors='ignore')
-                  # خودکار تصحیح: اگر کوڈ میں پیکیج نیم غلط ہے تو اسے درست کریں
+                  # Auto-Sync package name
                   if key == 'java_b64' and "package " in content:
-                      lines = content.split('\n')
-                      for i, line in enumerate(lines):
-                          if line.strip().startswith("package "):
-                              lines[i] = f"package {pkg};"
-                              break
-                      content = '\n'.join(lines)
+                      content = f"package {pkg};" + content[content.find(';')+1:]
                   with open(file_path, "w") as f: f.write(content)
-              elif default_content:
-                  with open(file_path, "w") as f: f.write(default_content)
 
-          # ڈیفالٹ محفوظ کوڈز
-          def_java = f"package {pkg};\nimport androidx.appcompat.app.AppCompatActivity;\nimport android.os.Bundle;\npublic class MainActivity extends AppCompatActivity {{ protected void onCreate(Bundle s) {{ super.onCreate(s); setContentView(R.layout.activity_main); }} }}"
-          def_xml = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"></RelativeLayout>'
+          write_b64('java_b64', f"app/src/main/java/{path}/MainActivity.java")
+          write_b64('xml_b64', "app/src/main/res/layout/activity_main.xml")
 
-          write_b64('java_b64', f"app/src/main/java/{path}/MainActivity.java", def_java)
-          write_b64('xml_b64', "app/src/main/res/layout/activity_main.xml", def_xml)
-
-          # Styles & Manifest (No external dependency)
-          with open("app/src/main/res/values/styles.xml", "w") as f:
-              f.write('<resources><style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar"></style></resources>')
+          # 1. جدید تھیم جو کریش نہیں ہوگی (AppCompat + Material)
+          styles = '''<resources>
+              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorSecondary">#03DAC6</item>
+                  <item name="android:statusBarColor">#6200EE</item>
+              </style>
+          </resources>'''
+          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles)
           
+          # 2. مینی فیسٹ (Android 14 Ready)
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="{app_name}" android:theme="@style/AppTheme">
+              <application 
+                  android:label="{app_name}" 
+                  android:theme="@style/AppTheme"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
                   <activity android:name="{pkg}.MainActivity" android:exported="true">
                       <intent-filter>
-                          <action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" />
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
               </application>
           </manifest>'''
           with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
 
-      - name: Root Build Config
+      - name: Strict Build Configuration
         run: |
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
@@ -84,8 +90,6 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           EOF
 
-      - name: App Build Config (Dynamic Payload)
-        run: |
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -95,19 +99,22 @@ jobs:
                   applicationId "${{ github.event.client_payload.package_name || 'com.system.pro' }}"
                   minSdk 24
                   targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
 
-      - name: Force Build APK
-        run: ./gradlew assembleDebug || gradle assembleDebug --no-daemon
+      - name: Build Modern APK
+        run: gradle assembleDebug --no-daemon
 
-      - name: Upload Result
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-V62-Ready
+          name: ${{ github.event.client_payload.app_name }}-RedmiNote14-Ready
           path: app/build/outputs/apk/debug/*.apk
