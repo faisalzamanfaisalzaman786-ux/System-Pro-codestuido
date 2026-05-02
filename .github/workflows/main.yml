@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'Target Package Name'
+        description: 'Package Name'
         required: false
         default: 'com.system.pro'
       app_name:
-        description: 'App Display Name'
+        description: 'App Name'
         required: false
         default: 'System Pro'
       app_icon_base64:
-        description: 'Base64 encoded App Icon'
+        description: 'Base64 Icon'
         required: false
         default: ''
 
@@ -29,54 +29,52 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Handle App Icon Logic
+      - name: Handle Icon and Payload
         run: |
           mkdir -p app/src/main/res/drawable
           python3 -c "
           import base64
           import os
 
-          b64_data = '${{ github.event.inputs.app_icon_base64 }}'
-          target_path = 'app/src/main/res/drawable/ic_launcher.png'
-          template_path = 'templates/ic_launcher.png'
+          # فیصل بھائی، یہاں ہم پے لوڈ کو ہینڈل کر رہے ہیں
+          b64 = '${{ github.event.inputs.app_icon_base64 }}'
+          target = 'app/src/main/res/drawable/ic_launcher.png'
+          template = 'templates/ic_launcher.png'
 
-          if b64_data and len(b64_data.strip()) > 50:
+          if b64 and len(b64.strip()) > 100:
               try:
-                  if ',' in b64_data:
-                      b64_data = b64_data.split(',')[1]
-                  with open(target_path, 'wb') as f:
-                      f.write(base64.b64decode(b64_data))
-                  print('Icon from UI applied.')
-              except:
-                  if os.path.exists(template_path):
-                      os.system(f'cp {template_path} {target_path}')
-          elif os.path.exists(template_path):
-              os.system(f'cp {template_path} {target_path}')
-              print('Template icon applied.')
+                  if ',' in b64: b64 = b64.split(',')[1]
+                  with open(target, 'wb') as f:
+                      f.write(base64.b64decode(b64))
+                  print('Success: UI Icon applied.')
+              except Exception as e:
+                  print(f'Error: {e}. Falling back to template.')
+                  if os.path.exists(template): os.system(f'cp {template} {target}')
+          elif os.path.exists(template):
+              os.system(f'cp {template} {target}')
+              print('Default: Template icon applied.')
           "
 
-      - name: Dynamic Branding Update
+      - name: Update Android Files
         run: |
-          NEW_PKG="${{ github.event.inputs.package_name }}"
-          if [ -z "$NEW_PKG" ]; then NEW_PKG="com.system.pro"; fi
-          
-          # تمام ضروری فائلوں میں پیکیج نیم تبدیل کریں
-          find . -maxdepth 4 -type f \( -name "*.gradle" -o -name "*.xml" -o -name "*.java" \) -exec sed -i "s/com.system.pro/$NEW_PKG/g" {} +
+          # پیکیج نیم کی تبدیلی
+          PKG="${{ github.event.inputs.package_name }}"
+          if [ -z "$PKG" ]; then PKG="com.system.pro"; fi
+          find . -maxdepth 4 -type f \( -name "*.gradle" -o -name "*.xml" -o -name "*.java" \) -exec sed -i "s/com.system.pro/$PKG/g" {} +
 
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          if [ -z "$APP_NAME" ]; then APP_NAME="System Pro"; fi
-          
-          # Strings.xml میں نام اپ ڈیٹ کریں
+          # ایپ کا نام تبدیل کرنا
+          NAME="${{ github.event.inputs.app_name }}"
+          if [ -z "$NAME" ]; then NAME="System Pro"; fi
           if [ -f app/src/main/res/values/strings.xml ]; then
-            sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$APP_NAME<\/string>/g" app/src/main/res/values/strings.xml
+            sed -i "s/>.*<\/string>/>$NAME<\/string>/g" app/src/main/res/values/strings.xml
           fi
 
-      - name: Build Application
+      - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Build
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-V62
