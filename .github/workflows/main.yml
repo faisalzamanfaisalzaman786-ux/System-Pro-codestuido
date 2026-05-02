@@ -1,4 +1,4 @@
-name: System-Pro-V1200-Final-Absolute-Sync
+name: System-Pro-V1300-Shield-Sync
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  ultimate_sync:
+  shield_sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,26 +16,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Direct Sync (No Copy Command)
+      - name: 2. Force Sync (Wiping Workflow Conflicts)
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # بیرونی ریپوزٹری کو ریموٹ کے طور پر جوڑنا
-          git remote add external https://github.com/fastlane/fastlane.git
-          git fetch external master
-
-          # آپ کی ریپوزٹری سے پرانا ڈیٹا صاف کرنا (سوائے .github کے)
-          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
-
-          # براہ راست ایکسٹرنل ڈیٹا کو اپنی مین برانچ میں نکالنا
-          git checkout external/master -- .
+          # ان کی ریپوزٹری کو عارضی طور پر کلون کرنا
+          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_xerox
           
-          # سیکیورٹی: ان کا ورک فلو فولڈر ہٹانا تاکہ پش میں مسئلہ نہ آئے
-          rm -rf .github/workflows/announce_release.yml
-          rm -rf .github/workflows/ci.yml
-
-          # زبردستی پش کرنا
-          git add .
-          git commit -m "System Pro: Final Absolute Sync V1200" || echo "No changes"
+          # 🛑 سب سے اہم قدم: ان کا ورک فلو فولڈر مکمل مٹا دیں تاکہ گٹ ہب اعتراض نہ کرے
+          rm -rf temp_xerox/.github
+          
+          # آپ کی ریپوزٹری سے پرانا سارا ڈیٹا اڑانا (سوائے آپ کی اس وائی اے ایم ایل کے)
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # نیا ڈیٹا (Source Code, Assets, Libs) آپ کے پاس منتقل کرنا
+          shopt -s dotglob
+          cp -rf temp_xerox/* .
+          rm -rf temp_xerox
+          
+          # تبدیلیوں کو زبردستی پش کرنا
+          git add -A
+          git commit -m "System Pro: Professional Structure Applied (V1300)" || echo "No changes"
           git push origin main --force
