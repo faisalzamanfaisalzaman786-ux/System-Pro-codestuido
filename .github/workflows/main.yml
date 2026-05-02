@@ -1,122 +1,97 @@
-name: System-Pro-Advanced-Master-Setup
+name: System-Pro-V65-Main-Engine
 
 on:
-  workflow_dispatch:
+  repository_dispatch:
+    types: [build-app]
 
 jobs:
-  initialize:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Advanced Nuclear Clean & Foundation Build
+      - name: Setup Environment
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: AI-Master-Injector (Applying All Instructions)
+        shell: python
         run: |
-          # 1. پاور فل کلیننگ (Nuclear Wipe)
-          # یہ کمانڈ .git اور .github کے علاوہ تمام فائلوں اور پوشیدہ فولڈرز کو ڈیلیٹ کر دے گی
-          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
-          
-          # 2. فولڈر اسٹرکچر کی ازسرنو تخلیق (Force Creation)
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/values-night
-          mkdir -p app/src/main/res/drawable-nodpi
-          mkdir -p app/src/main/res/xml
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/jniLibs
+          import base64, os, re
 
-          # 3. روٹ فائلیں (Standard)
-          echo "include ':app'" > settings.gradle
-          
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
+          # 1. ڈیٹا لوڈ کرنا
+          p = ${{ toJson(github.event.client_payload) }}
+          pkg = p.get('package_name', 'com.system.pro')
+          app_name = p.get('app_name', 'System Pro')
+          path = pkg.replace('.', '/')
 
-          cat <<EOF > gradle.properties
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.nonTransitiveRClass=true
-          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
-          EOF
+          # 2. جاوا کوڈ کی صفائی اور انجکشن (Syntax & Package Lock)
+          java_raw = p.get('java_b64', '')
+          if java_raw:
+              if "," in java_raw: java_raw = java_raw.split(",")[1]
+              java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
+              # اے آئی کے فالتو کمنٹس ہٹانا
+              java_code = re.sub(r'```java|```', '', java_code).strip()
+              # پیکیج نیم کو خودکار طریقے سے سنک کرنا
+              if "package " in java_code:
+                  java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
+              else:
+                  java_code = f"package {pkg};\n\n" + java_code
+              
+              # فائل کو فزیکل فولڈر میں محفوظ کرنا
+              os.makedirs(f"app/src/main/java/{path}", exist_ok=True)
+              with open(f"app/src/main/java/{path}/MainActivity.java", "w") as f:
+                  f.write(java_code)
 
-          # 4. پروفیشنل ایپ کنفیگریشن
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.system.pro"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildFeatures { viewBinding true }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-              implementation 'com.google.android.gms:play-services-maps:18.2.0'
-              implementation 'com.google.android.gms:play-services-location:21.1.0'
-          }
-          EOF
+          # 3. XML اور مسنگ اسٹائلز کا علاج (Resource Healer)
+          xml_raw = p.get('xml_b64', '')
+          if xml_raw:
+              if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
+              xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
+              xml_code = re.sub(r'```xml|```', '', xml_code).strip()
+              with open("app/src/main/res/layout/activity_main.xml", "w") as f:
+                  f.write(xml_code)
 
-          # 5. بنیادی ریسورسز کی فزیکل موجودگی
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="colorAccent">#03DAC5</color>
-              <color name="white">#FFFFFF</color>
-              <color name="black">#000000</color>
-          </resources>
-          EOF
+              # مسنگ اسٹائلز اور کلرز کو ڈھونڈ کر بنانا
+              found_styles = re.findall(r'@style/([\w.]+)', xml_code)
+              if found_styles:
+                  with open("app/src/main/res/values/styles.xml", "a") as f: # Append mode
+                      for s in set(found_styles):
+                          if s not in ['AppTheme', 'AppDialogTheme']:
+                              f.write(f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n')
+                              f.write('        <item name="android:layout_width">wrap_content</item>\n')
+                              f.write('        <item name="android:layout_height">wrap_content</item>\n    </style>')
 
-          cat <<EOF > app/src/main/res/values/styles.xml
-          <resources>
-              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/colorPrimary</item>
-                  <item name="android:statusBarColor">@color/colorPrimary</item>
-              </style>
-          </resources>
-          EOF
+          # 4. ڈائنامک پیکیج سنک (Gradle & Manifest Sync)
+          # مینی فیسٹ اپ ڈیٹ
+          with open("app/src/main/AndroidManifest.xml", "r") as f:
+              m_content = f.read()
+          m_content = re.sub(r'android:name="[\w.]+"', f'android:name="{pkg}.MainActivity"', m_content, 1)
+          m_content = re.sub(r'android:label=".*"', f'android:label="{app_name}"', m_content, 1)
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write(m_content)
 
-          echo '<resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+          # گریڈل اپ ڈیٹ
+          with open("app/build.gradle", "r") as f:
+              g_content = f.read()
+          g_content = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g_content)
+          g_content = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g_content)
+          with open("app/build.gradle", "w") as f:
+              f.write(g_content)
 
-          # 6. ماسٹر مینی فیسٹ
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <application
-                  android:allowBackup="true"
-                  android:label="@string/app_name"
-                  android:theme="@style/AppTheme"
-                  android:hardwareAccelerated="true">
-                  <activity android:name="com.system.pro.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+      - name: Build System-Pro APK
+        run: gradle assembleDebug --no-daemon
 
-      - name: Force Push Clean Foundation
-        run: |
-          git config --global user.name "System-Pro-Engine"
-          git config --global user.email "faisal@systempro.ai"
-          git add .
-          git commit -m "Nuclear Clean: Full Standard Foundation Initialized"
-          git push --force
+      - name: Upload Success APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name }}-Ready
+          path: app/build/outputs/apk/debug/*.apk
