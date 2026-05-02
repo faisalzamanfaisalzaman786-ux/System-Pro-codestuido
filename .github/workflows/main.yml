@@ -12,7 +12,7 @@ on:
         required: false
         default: 'System Pro'
       app_icon_base64:
-        description: 'Base64 Icon'
+        description: 'Base64 Encoded Icon Data'
         required: false
         default: ''
 
@@ -29,52 +29,66 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Handle Icon and Payload
+      - name: Process Base64 Icon
+        shell: python
         run: |
-          mkdir -p app/src/main/res/drawable
-          python3 -c "
           import base64
           import os
 
-          # فیصل بھائی، یہاں ہم پے لوڈ کو ہینڈل کر رہے ہیں
-          b64 = '${{ github.event.inputs.app_icon_base64 }}'
-          target = 'app/src/main/res/drawable/ic_launcher.png'
-          template = 'templates/ic_launcher.png'
+          # فیصل بھائی، یہاں ہم بیس 64 ڈیٹا کو محفوظ طریقے سے نکال رہے ہیں
+          raw_b64 = """${{ github.event.inputs.app_icon_base64 }}""".strip()
+          target_dir = "app/src/main/res/drawable"
+          target_path = os.path.join(target_dir, "ic_launcher.png")
+          template_path = "templates/ic_launcher.png"
 
-          if b64 and len(b64.strip()) > 100:
+          if not os.path.exists(target_dir):
+              os.makedirs(target_dir)
+
+          if len(raw_b64) > 100:
               try:
-                  if ',' in b64: b64 = b64.split(',')[1]
-                  with open(target, 'wb') as f:
-                      f.write(base64.b64decode(b64))
-                  print('Success: UI Icon applied.')
+                  # اگر ڈیٹا یو آر آئی فارمیٹ میں ہے (data:image/png;base64,...) تو اسے صاف کریں
+                  if "," in raw_b64:
+                      raw_b64 = raw_b64.split(",")[1]
+                  
+                  # وائٹ سپیس اور نیو لائنز ختم کریں
+                  raw_b64 = "".join(raw_b64.split())
+                  
+                  img_data = base64.b64decode(raw_b64)
+                  with open(target_path, "wb") as f:
+                      f.write(img_data)
+                  print("✅ Icon successfully decoded from Base64 payload.")
               except Exception as e:
-                  print(f'Error: {e}. Falling back to template.')
-                  if os.path.exists(template): os.system(f'cp {template} {target}')
-          elif os.path.exists(template):
-              os.system(f'cp {template} {target}')
-              print('Default: Template icon applied.')
-          "
+                  print(f"❌ Base64 Decoding failed: {e}")
+                  if os.path.exists(template_path):
+                      os.system(f"cp {template_path} {target_path}")
+          else:
+              print("ℹ️ No valid Base64 icon found, using template.")
+              if os.path.exists(template_path):
+                  os.system(f"cp {template_path} {target_path}")
 
-      - name: Update Android Files
+      - name: Update Branding and Package
         run: |
-          # پیکیج نیم کی تبدیلی
           PKG="${{ github.event.inputs.package_name }}"
-          if [ -z "$PKG" ]; then PKG="com.system.pro"; fi
+          NAME="${{ github.event.inputs.app_name }}"
+          
+          # ڈیفالٹ ویلیوز اگر پے لوڈ خالی ہو
+          [ -z "$PKG" ] && PKG="com.system.pro"
+          [ -z "$NAME" ] && NAME="System Pro"
+
+          # پیکیج نیم کی تمام فائلوں میں تبدیلی
           find . -maxdepth 4 -type f \( -name "*.gradle" -o -name "*.xml" -o -name "*.java" \) -exec sed -i "s/com.system.pro/$PKG/g" {} +
 
-          # ایپ کا نام تبدیل کرنا
-          NAME="${{ github.event.inputs.app_name }}"
-          if [ -z "$NAME" ]; then NAME="System Pro"; fi
+          # ایپ نیم کی تبدیلی (Strings.xml)
           if [ -f app/src/main/res/values/strings.xml ]; then
-            sed -i "s/>.*<\/string>/>$NAME<\/string>/g" app/src/main/res/values/strings.xml
+            sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$NAME<\/string>/g" app/src/main/res/values/strings.xml
           fi
 
-      - name: Build APK
+      - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name }}-V62
