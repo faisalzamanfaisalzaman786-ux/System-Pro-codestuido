@@ -1,4 +1,4 @@
-name: System-Pro-V65-Main-Engine
+name: System-Pro-V70-Main-Engine
 
 on:
   repository_dispatch:
@@ -22,7 +22,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: AI-Master-Injector (Applying All Instructions)
+      - name: AI-Master-Injector (Force-Path Mode)
         shell: python
         run: |
           import base64, os, re
@@ -33,65 +33,74 @@ jobs:
           app_name = p.get('app_name', 'System Pro')
           path = pkg.replace('.', '/')
 
-          # 2. جاوا کوڈ کی صفائی اور انجکشن (Syntax & Package Lock)
+          # 2. سیفٹی فنکشن: فولڈر موجود نہ ہو تو بناؤ
+          def safe_write(file_path, content):
+              os.makedirs(os.path.dirname(file_path), exist_ok=True)
+              with open(file_path, "w", encoding="utf-8") as f:
+                  f.write(content)
+
+          # 3. جاوا کوڈ ہینڈلر (Syntax & Interference Clean)
           java_raw = p.get('java_b64', '')
           if java_raw:
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
-              # اے آئی کے فالتو کمنٹس ہٹانا
               java_code = re.sub(r'```java|```', '', java_code).strip()
-              # پیکیج نیم کو خودکار طریقے سے سنک کرنا
+              
+              # پیکیج نیم سنک کرنا
               if "package " in java_code:
                   java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
               else:
                   java_code = f"package {pkg};\n\n" + java_code
               
-              # فائل کو فزیکل فولڈر میں محفوظ کرنا
-              os.makedirs(f"app/src/main/java/{path}", exist_ok=True)
-              with open(f"app/src/main/java/{path}/MainActivity.java", "w") as f:
-                  f.write(java_code)
+              safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # 3. XML اور مسنگ اسٹائلز کا علاج (Resource Healer)
+          # 4. XML اور ریسورس ہینڈلر (Physical Existence Check)
           xml_raw = p.get('xml_b64', '')
           if xml_raw:
               if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
               xml_code = re.sub(r'```xml|```', '', xml_code).strip()
-              with open("app/src/main/res/layout/activity_main.xml", "w") as f:
-                  f.write(xml_code)
+              safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-              # مسنگ اسٹائلز اور کلرز کو ڈھونڈ کر بنانا
+              # مسنگ اسٹائلز کا خودکار علاج (Healer)
+              styles_path = "app/src/main/res/values/styles.xml"
               found_styles = re.findall(r'@style/([\w.]+)', xml_code)
-              if found_styles:
-                  with open("app/src/main/res/values/styles.xml", "a") as f: # Append mode
-                      for s in set(found_styles):
-                          if s not in ['AppTheme', 'AppDialogTheme']:
-                              f.write(f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n')
-                              f.write('        <item name="android:layout_width">wrap_content</item>\n')
-                              f.write('        <item name="android:layout_height">wrap_content</item>\n    </style>')
+              
+              # اگر اسٹائل فائل موجود نہ ہو تو بیس فائل بناؤ
+              if not os.path.exists(styles_path):
+                  base_style = '<resources>\n    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>\n</resources>'
+                  safe_write(styles_path, base_style)
 
-          # 4. ڈائنامک پیکیج سنک (Gradle & Manifest Sync)
-          # مینی فیسٹ اپ ڈیٹ
-          with open("app/src/main/AndroidManifest.xml", "r") as f:
-              m_content = f.read()
-          m_content = re.sub(r'android:name="[\w.]+"', f'android:name="{pkg}.MainActivity"', m_content, 1)
-          m_content = re.sub(r'android:label=".*"', f'android:label="{app_name}"', m_content, 1)
-          with open("app/src/main/AndroidManifest.xml", "w") as f:
-              f.write(m_content)
+              with open(styles_path, "r") as f: s_file = f.read()
+              with open(styles_path, "a") as f:
+                  for s in set(found_styles):
+                      if s not in s_file and s != "AppTheme":
+                          f.write(f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n')
+                          f.write('        <item name="android:layout_width">wrap_content</item>\n')
+                          f.write('        <item name="android:layout_height">wrap_content</item>\n    </style>')
 
-          # گریڈل اپ ڈیٹ
-          with open("app/build.gradle", "r") as f:
-              g_content = f.read()
-          g_content = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g_content)
-          g_content = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g_content)
-          with open("app/build.gradle", "w") as f:
-              f.write(g_content)
+          # 5. کنفیگریشن سنک (Gradle & Manifest)
+          # مینی فیسٹ درستی
+          manifest_path = "app/src/main/AndroidManifest.xml"
+          if os.path.exists(manifest_path):
+              with open(manifest_path, "r") as f: m_content = f.read()
+              m_content = re.sub(r'android:name="[\w.]+"', f'android:name="{pkg}.MainActivity"', m_content, 1)
+              m_content = re.sub(r'android:label=".*"', f'android:label="{app_name}"', m_content, 1)
+              safe_write(manifest_path, m_content)
+
+          # گریڈل درستی
+          gradle_path = "app/build.gradle"
+          if os.path.exists(gradle_path):
+              with open(gradle_path, "r") as f: g_content = f.read()
+              g_content = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g_content)
+              g_content = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g_content)
+              safe_write(gradle_path, g_content)
 
       - name: Build System-Pro APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload Success APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Ready
+          name: ${{ github.event.client_payload.app_name }}-V70
           path: app/build/outputs/apk/debug/*.apk
