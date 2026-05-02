@@ -1,12 +1,15 @@
 name: System Pro - Auto-Dispatch Architect
 on:
-  workflow_dispatch: # مینوئل کنٹرول کے لیے
+  workflow_dispatch:
   repository_dispatch:
-    types: [trigger_system_pro_init] # آٹو اپڈیٹ سگنل کے لیے
+    types: [trigger_system_pro_init]
+  push:
+    branches:
+      - main # یا آپ کی جو بھی مین برانچ ہے
 
 permissions:
   contents: write
-  actions: write # ڈسپیچ بھیجنے کے لیے ضروری ہے
+  actions: write
 
 jobs:
   build-structure:
@@ -14,12 +17,9 @@ jobs:
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 2. Construct Standard Java Structure
         run: |
-          echo "🏗️ Building System Pro Java Structure..."
           mkdir -p app/src/main/java/com/faisal/systempro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -28,7 +28,7 @@ jobs:
 
       - name: 3. Inject Core Standard Files
         run: |
-          # Manifest for com.faisal.systempro
+          # AndroidManifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -48,12 +48,11 @@ jobs:
           </manifest>
           EOF
 
-          # Professional Java MainActivity
+          # MainActivity.java
           cat <<EOF > app/src/main/java/com/faisal/systempro/MainActivity.java
           package com.faisal.systempro;
           import android.app.Activity;
           import android.os.Bundle;
-
           public class MainActivity extends Activity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +61,7 @@ jobs:
           }
           EOF
 
-          # Standard Gradle Initialization
+          # Gradle Files
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
           buildscript {
@@ -75,20 +74,21 @@ jobs:
           EOF
 
       - name: 4. Auto-Update Sync & Force Push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "Muzammil-AI"
           git config --global user.email "muzammil@systempro.ai"
           git add .
-          # تبدیلیوں کو زبردستی پش کرنا
-          git commit -m "System Pro: Auto-Updated Structure [Standard Java]" || echo "No changes"
+          git commit -m "System Pro: Structure Update [Standard Java]" || echo "No changes"
           git push origin HEAD --force
 
-      - name: 5. Signal Success (Auto-Dispatch Next Stage)
-        if: success()
+      - name: 5. Force Auto-Dispatch Self
+        if: always()
         run: |
-          echo "🚀 Sending signal for next stage..."
+          echo "🔄 Triggering self-dispatch to ensure update..."
           curl -X POST \
           -H "Accept: application/vnd.github.v3+json" \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           https://api.github.com/repos/${{ github.repository }}/dispatches \
-          -d '{"event_type": "system_pro_ready_for_cloning"}'
+          -d '{"event_type": "trigger_system_pro_init"}'
