@@ -1,4 +1,4 @@
-name: System-Pro-V62-Ultimate-AI-Engine
+name: System-Pro-V62-Direct-APK
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Minimal Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -17,59 +17,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Virtual Workspace Construction (Hardcoded Paths)
+      - name: Dynamic Android Structure Build
         run: |
-          # فولڈرز کی تقسیم تاکہ آف لائن لوکلائزیشن میں آسانی ہو
-          mkdir -p local_assets/themes local_assets/styles local_assets/libraries
-          mkdir -p local_assets/layouts_xml local_assets/drawables_neon local_assets/fonts
-          
-          # اینڈرائیڈ کا ورچوئل ڈھانچہ تیار کرنا
+          # ہارڈ کوڈڈ پاتھس کے مطابق فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/layout-local # جیمنائی کا ڈیزائن زون
-
-      - name: Gemini AI - Triple Engine Resource Seeker
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "🤖 Gemini AI: Starting Duty - Priority 1: Internal Design Generation"
-          echo "🤖 Gemini AI: Starting Duty - Priority 2: Triple Engine Resource Search"
-          # جیمنائی یہاں گٹھاب، گوگل اور کمیونٹی سے بہترین ریسورسز نکال کر سیگریگیٹڈ فولڈرز میں ڈالے گا
-          python3 -c "
-          import os
-          print('✅ AI Engine: Resources segregated into local_assets/')
-          "
-
-      - name: Code Protector & Payload Processor
-        shell: python
-        run: |
-          import base64, os
-          p = ${{ toJson(github.event.client_payload) }}
           
-          def secure_save(data_key, target_path):
-              data = p.get(data_key, '')
-              if data and len(data) > 10:
-                  if "," in data: data = data.split(",")[1]
-                  with open(target_path, "wb") as f: f.write(base64.b64decode(data))
-
-          # آپ کا اوریجنل کوڈ (جیمنائی اس میں مداخلت نہیں کرے گا)
-          secure_save('java_b64', "app/src/main/java/com/system/pro/MainActivity.java")
-          secure_save('xml_b64', "app/src/main/res/layout/activity_main.xml")
-          secure_save('manifest_b64', "app/src/main/AndroidManifest.xml")
-          
-          # آئیکن اور گرافکس
-          icon = p.get('icon_data_b64', '')
-          if len(icon) > 50: secure_save('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png")
-
-      - name: AI Permission Hunter & Gradle Sync
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "🎯 AI Duty: Scanning Code for missing Permissions & Dependencies..."
-          # جیمنائی یہاں مینی فیسٹ اور گریڈل کو آپ کے کوڈ کے مطابق خودکار طریقے سے اپ ڈیٹ کرے گا
+          # گریڈل کی ضروری فائلیں رن ٹائم پر بنانا
           echo "include ':app'" > settings.gradle
+          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -80,25 +38,51 @@ jobs:
           }
           EOF
 
-      - name: Setup Stable Environment (Gradle 8.5)
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: Process App Payload (Java/XML)
+        shell: python
+        run: |
+          import base64, os
+          p = ${{ toJson(github.event.client_payload) }}
+          def save(key, path):
+              data = p.get(key, '')
+              if data and len(data) > 10:
+                  if "," in data: data = data.split(",")[1]
+                  with open(path, "wb") as f: f.write(base64.b64decode(data))
+
+          save('java_b64', "app/src/main/java/com/system/pro/MainActivity.java")
+          save('xml_b64', "app/src/main/res/layout/activity_main.xml")
+          save('manifest_b64', "app/src/main/AndroidManifest.xml")
+          
+          # آئیکن اگر موجود ہو
+          icon = p.get('icon_data_b64', '')
+          if len(icon) > 50: save('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png")
+
+      - name: Setup Gradle Wrapper (8.5)
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: Build and Monitor
-        id: build_step
+      - name: Build Debug APK
+        # یہاں ہم نے 'continue-on-error' ہٹا دیا ہے تاکہ اگر ایرر آئے تو پتہ چلے
         run: ./gradlew assembleDebug --no-daemon
-        continue-on-error: true
 
-      - name: Final Bundle & Localization Package
-        run: |
-          # تمام لائبریریز اور ریسورسز کو زپ کرنا تاکہ آپ موبائل پر ڈاؤن لوڈ کر سکیں
-          zip -r SystemPro_V62_Offline_Package.zip local_assets/
-
-      - name: Upload Everything
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-V62-Portable
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            SystemPro_V62_Offline_Package.zip
+          name: ${{ github.event.client_payload.app_name }}-V62-Standard
+          path: app/build/outputs/apk/debug/*.apk
