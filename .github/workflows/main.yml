@@ -1,38 +1,40 @@
-name: System-Pro-V1000-Ultimate-Ghost-Mirror
+name: System-Pro-V1100-Final-Xerox
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  ghost_mirror:
+  full_mirror:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: 1. Checkout Your Repo
+      - name: 1. Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Force Sync via Remote Fetch
+      - name: 2. Professional Sync
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # ان کی ریپوزٹری کو ریموٹ کے طور پر شامل کرنا
-          git remote add xerox https://github.com/fastlane/fastlane.git
-          git fetch xerox master
-
-          # آپ کی ریپوزٹری کو مکمل صاف کر کے ان کے ڈیٹا پر ری سیٹ کرنا
-          git reset --hard xerox/master
-
-          # سیکیورٹی: ان کا .github فولڈر مکمل اڑا دینا تاکہ پش ایرر نہ آئے
-          # ہم اپنی ورک فلو فائل کو بچانے کے لیے اسے الگ سے ہینڈل کریں گے
-          rm -rf .github
+          # ان کی ریپوزٹری کلون کرنا
+          git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
           
-          # تبدیلیوں کو زبردستی اپنی ریپوزٹری میں دھکیلنا
-          # نوٹ: یہ قدم آپ کی ریپوزٹری کو بالکل ان جیسا بنا دے گا
-          git push origin main --force || echo "Force push failed, trying fallback..."
+          # ان کا سیکیورٹی فولڈر اڑانا
+          rm -rf fastlane_temp/.github
+          
+          # آپ کا اپنا ورک فلو بچا کر باقی سب مٹانا
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # نیا ڈیٹا ڈالنا
+          cp -rf fastlane_temp/* .
+          rm -rf fastlane_temp
+          
+          # زبردستی پش کرنا (Force Push)
+          git add -A
+          git commit -m "System Pro: Xerox Success V1100" || echo "No changes"
+          git push origin main --force
