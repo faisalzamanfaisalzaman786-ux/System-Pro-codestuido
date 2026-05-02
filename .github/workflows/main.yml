@@ -17,13 +17,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Setup Gradle 8.5
+      - name: 🛠️ Setup Gradle 8.5 (Standardized)
         run: |
           rm -rf .gradle gradle/ gradlew gradlew.bat
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: 🧠 AI-Logic-Vault (Path-Fixed)
+      - name: 🧠 AI-Logic-Vault (Path-Logic Fixed)
         shell: python
         run: |
           import base64, os, re
@@ -33,15 +33,15 @@ jobs:
           path = pkg.replace('.', '/')
 
           def vault_write(file_path, content):
-              """محفوظ طریقے سے فائل لکھنے کی لاجک"""
+              """محفوظ طریقے سے فائل لکھنے کی لاجک - اب روٹ ایرر فکسڈ ہے"""
               directory = os.path.dirname(file_path)
-              # اگر ڈائریکٹری موجود نہیں اور پاتھ خالی نہیں ہے تو فولڈر بنائیں
+              # اگر ڈائریکٹری پاتھ موجود ہے تو فولڈر بنائیں
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content.strip())
 
-          # --- 1. SETTINGS & ROOT (Locked) ---
+          # --- 1. SETTINGS (Locked) ---
           settings_logic = f"""
           pluginManagement {{ repositories {{ google(); mavenCentral(); gradlePluginPortal(); }} }}
           dependencyResolutionManagement {{ 
@@ -52,9 +52,8 @@ jobs:
           include ':app'
           """
           vault_write("settings.gradle", settings_logic)
-          vault_write("build.gradle", "buildscript { repositories { google(); mavenCentral(); } dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }")
 
-          # --- 2. APP MODULE (Locked) ---
+          # --- 2. APP BUILD (Locked) ---
           app_gradle = f"""
           apply plugin: 'com.android.application'
           android {{
@@ -67,20 +66,15 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }}
-              compileOptions {{
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }}
           """
           vault_write("app/build.gradle", app_gradle)
 
-          # --- 3. SOURCE INJECTION (Fixed) ---
+          # جاوا فائل انجکشن
           java_raw = p.get('java_b64', '')
           if java_raw:
               raw_data = java_raw.split(",")[1] if "," in java_raw else java_raw
@@ -88,32 +82,16 @@ jobs:
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
               vault_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          xml_raw = p.get('xml_b64', '')
-          if xml_raw:
-              raw_xml = xml_raw.split(",")[1] if "," in xml_raw else xml_raw
-              xml_code = base64.b64decode(raw_xml).decode('utf-8', errors='ignore')
-              vault_write("app/src/main/res/layout/activity_main.xml", xml_code)
-
-          # --- 4. MANIFEST & RESOURCES (Locked) ---
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
-                  <activity android:name="{pkg}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>"""
+          # مینی فیسٹ آٹو میجک
+          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="@string/app_name" android:theme="@style/Theme.SystemPro"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
           vault_write("app/src/main/AndroidManifest.xml", manifest)
           vault_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
           vault_write("app/src/main/res/values/themes.xml", '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>')
 
-      - name: 🚀 Final Mature Build
+      - name: 🚀 Execute Standard Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Upload Finished APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}-Stable-V77
