@@ -1,46 +1,53 @@
-name: System-Pro-V1500-Ultimate-Bypass
+name: System Pro - Package & Name Changer
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  repository_dispatch:
+    types: [rebrand_only]
 
 jobs:
-  bypass_sync:
+  rebranding-process:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: 1. Checkout Your Repo
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 2. Force Mirror Without Workflow Conflicts
+      - name: Rebranding System Pro
         run: |
-          git config --global user.name "System Pro AI"
-          git config --global user.email "ai@systempro.com"
+          # 1. Variables Set Karein (Inhein payload se bhi le sakte hain)
+          OLD_PKG="${{ github.event.client_payload.old_package }}"
+          NEW_PKG="com.faisal.systempro"
+          OLD_NAME="${{ github.event.client_payload.old_app_name }}"
+          NEW_NAME="System Pro"
 
-          # ان کی ریپوزٹری کو بطور ریموٹ ایڈ کرنا
-          git remote add xerox https://github.com/fastlane/fastlane.git
-          git fetch xerox master
+          echo "Changing Package from $OLD_PKG to $NEW_PKG"
+          echo "Changing App Name from $OLD_NAME to $NEW_NAME"
 
-          # آپ کی ریپوزٹری سے پرانا سارا ڈیٹا صاف کرنا
-          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          # 2. Global Name Replacement (Strings, XML, Java, Kotlin)
+          # Purane naam ko 'System Pro' se har jagah badalna
+          find . -type f \( -name "*.xml" -o -name "*.java" -o -name "*.kt" -o -name "*.gradle" \) -print0 | xargs -0 sed -i "s/$OLD_NAME/$NEW_NAME/g"
 
-          # سارا ڈیٹا نکالنا
-          git checkout xerox/master -- .
+          # 3. Global Package Replacement
+          # Purane package ko 'com.faisal.systempro' se badalna
+          find . -type f \( -name "*.xml" -o -name "*.java" -o -name "*.gradle" -o -name "*.kt" -o -name "*.json" \) -print0 | xargs -0 sed -i "s/$OLD_PKG/$NEW_PKG/g"
+
+          # 4. Correcting Directory Structure
+          # Android mein package name ke mutabiq folders ka hona zaroori hai
+          OLD_PATH=$(echo $OLD_PKG | tr '.' '/')
+          NEW_PATH=$(echo $NEW_PKG | tr '.' '/')
           
-          # 🛑 سب سے اہم قدم: ان کا پورا ورک فلو فولڈر جڑ سے اکھاڑ دیں
-          # اس سے گٹ ہب کی سیکیورٹی کو کوئی اعتراض نہیں رہے گا
-          rm -rf .github/workflows/*
+          mkdir -p app/src/main/java/$NEW_PATH
           
-          # اب اپنی موجودہ فائل کو واپس لانا (تاکہ یہ ورک فلو چلتا رہے)
-          # ہم فرض کر رہے ہیں کہ آپ کی فائل کا نام main.yml ہے
-          mkdir -p .github/workflows
-          git checkout HEAD -- .github/workflows/main.yml || echo "Workflow file already exists"
+          if [ -d "app/src/main/java/$OLD_PATH" ]; then
+            echo "Moving files from $OLD_PATH to $NEW_PATH"
+            cp -r app/src/main/java/$OLD_PATH/* app/src/main/java/$NEW_PATH/
+            # Purane khali folders ko remove karne ke liye (Optional)
+            # rm -rf app/src/main/java/$(echo $OLD_PKG | cut -d. -f1) 
+          fi
 
-          # تبدیلیوں کو محفوظ کر کے زبردستی پش کرنا
-          git add -A
-          git commit -m "System Pro: Final Success V1500" || echo "No changes"
-          git push origin main --force
+      - name: Commit & Push Changes
+        run: |
+          git config --global user.name "System Pro Bot"
+          git config --global user.email "bot@systempro.com"
+          git add .
+          git commit -m "Successfully rebranded to System Pro and changed package to com.faisal.systempro"
+          git push
