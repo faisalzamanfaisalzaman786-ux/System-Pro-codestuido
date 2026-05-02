@@ -1,31 +1,64 @@
-        name: AI-Master-Injector (XML Logic Fixed)
+name: System-Pro-V72-Main-Engine
+
+on:
+  repository_dispatch:
+    types: [build-app]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: AI-Master-Injector
         shell: python
         run: |
           import base64, os, re
 
-          p = ${{ toJson(github.event.client_payload) }}
-          pkg = p.get('package_name', 'com.system.pro')
-          app_name = p.get('app_name', 'System Pro')
-          path = pkg.replace('.', '/')
+          # 1. Load Data from Payload
+          try:
+              p = ${{ toJson(github.event.client_payload) }}
+              pkg = p.get('package_name', 'com.system.pro')
+              app_name = p.get('app_name', 'System Pro')
+              path = pkg.replace('.', '/')
+          except Exception as e:
+              print(f"Payload Error: {e}")
+              exit(1)
 
           def safe_write(file_path, content):
               os.makedirs(os.path.dirname(file_path), exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # 1. Java Injection
+          # 2. Java Code Sanitizer (Interference Removal)
           java_raw = p.get('java_b64', '')
           if java_raw:
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
+              # Remove AI markdown fences
               java_code = re.sub(r'```java|```', '', java_code).strip()
+              
+              # Auto-Sync Package Name
               if "package " in java_code:
                   java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
               else:
                   java_code = f"package {pkg};\n\n" + java_code
+              
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # 2. XML & Style Healing (Corrected Logic)
+          # 3. XML & Resource Healer (Corrected XML Nesting)
           xml_raw = p.get('xml_b64', '')
           if xml_raw:
               if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
@@ -36,14 +69,11 @@
               styles_path = "app/src/main/res/values/styles.xml"
               found_styles = re.findall(r'@style/([\w.]+)', xml_code)
               
-              # اگر فائل موجود ہے تو اسے ریڈ کریں، ورنہ بیس بنائیں
-              current_styles = ""
               if os.path.exists(styles_path):
                   with open(styles_path, "r") as f: current_styles = f.read()
               else:
                   current_styles = '<resources>\n    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>\n</resources>'
 
-              # ٹیگز کو صحیح طریقے سے جوڑنا (Closing tag سے پہلے انجکشن)
               new_entries = ""
               for s in set(found_styles):
                   if s not in current_styles and s != "AppTheme":
@@ -52,12 +82,10 @@
                       new_entries += '        <item name="android:layout_height">wrap_content</item>\n    </style>'
               
               if new_entries:
-                  # آخری </resources> ٹیگ سے پہلے نیا ڈیٹا ڈالنا
                   updated_styles = current_styles.replace('</resources>', f'{new_entries}\n</resources>')
                   safe_write(styles_path, updated_styles)
 
-          # 3. Sync Configurations
-          # Manifest Update
+          # 4. Sync Gradle & Manifest
           m_path = "app/src/main/AndroidManifest.xml"
           if os.path.exists(m_path):
               with open(m_path, "r") as f: m_content = f.read()
@@ -65,10 +93,18 @@
               m_content = re.sub(r'android:label=".*"', f'android:label="{app_name}"', m_content, 1)
               safe_write(m_path, m_content)
 
-          # Gradle Update
           g_path = "app/build.gradle"
           if os.path.exists(g_path):
               with open(g_path, "r") as f: g_content = f.read()
               g_content = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g_content)
               g_content = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g_content)
               safe_write(g_path, g_content)
+
+      - name: Execute Build
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name }}-V72
+          path: app/build/outputs/apk/debug/*.apk
