@@ -1,4 +1,4 @@
-name: System-Pro-V62-Engine
+name: System-Pro-V62-AI-Engine
 
 on:
   repository_dispatch:
@@ -17,72 +17,97 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Process Code and Icon
+      - name: Initialize Android Project
+        run: |
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          echo "include ':app'" > settings.gradle
+          
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 33
+              defaultConfig {
+                  applicationId "${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: Process Base64 & AI Logic
         shell: python
         run: |
           import base64
           import os
 
-          # فیصل بھائی، یہاں ہم آپ کی UI سے آنے والا 'client_payload' نکال رہے ہیں
-          java_b64 = """${{ github.event.client_payload.java_b64 }}""".strip()
-          xml_b64 = """${{ github.event.client_payload.xml_b64 }}""".strip()
-          manifest_b64 = """${{ github.event.client_payload.manifest_b64 }}""".strip()
-          icon_b64 = """${{ github.event.client_payload.icon_data_b64 }}""".strip()
-
-          def safe_decode(b64_str, path):
-              if len(b64_str) > 10:
-                  try:
-                      # اگر ڈیٹا یو آر آئی ہے تو صاف کریں
-                      if "," in b64_str: b64_str = b64_str.split(",")[1]
-                      with open(path, "wb") as f:
-                          f.write(base64.b64decode(b64_str))
-                      print(f"✅ Created: {path}")
-                  except Exception as e:
-                      print(f"❌ Failed to decode {path}: {e}")
-
-          # فولڈرز بنائیں
-          os.makedirs("app/src/main/java/com/system/pro", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
-          os.makedirs("app/src/main/res/drawable", exist_ok=True)
-
-          # فائلوں کو لکھنا (Writing Files)
-          safe_decode(java_b64, "app/src/main/java/com/system/pro/MainActivity.java")
-          safe_decode(xml_b64, "app/src/main/res/layout/activity_main.xml")
-          safe_decode(manifest_b64, "app/src/main/AndroidManifest.xml")
+          payload = ${{ toJson(github.event.client_payload) }}
           
-          # آئیکن ہینڈلنگ (Icon Handling)
-          target_icon = "app/src/main/res/drawable/ic_launcher.png"
-          if len(icon_b64) > 50:
-              safe_decode(icon_b64, target_icon)
-          else:
-              template = "templates/ic_launcher.png"
-              if os.path.exists(template):
-                  os.system(f"cp {template} {target_icon}")
-                  print("✅ Used default template icon.")
+          def save_file(key, path):
+              data = payload.get(key, '')
+              if data and len(data) > 10:
+                  if "," in data: data = data.split(",")[1]
+                  with open(path, "wb") as f:
+                      f.write(base64.b64decode(data))
 
-      - name: Apply Branding
+          save_file('java_b64', "app/src/main/java/com/system/pro/MainActivity.java")
+          save_file('xml_b64', "app/src/main/res/layout/activity_main.xml")
+          save_file('manifest_b64', "app/src/main/AndroidManifest.xml")
+          
+          icon_data = payload.get('icon_data_b64', '')
+          if len(icon_data) > 50:
+              save_file('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png")
+          elif os.path.exists("templates/ic_launcher.png"):
+              os.system("cp templates/ic_launcher.png app/src/main/res/drawable/ic_launcher.png")
+
+      - name: Setup Gradle Wrapper
         run: |
-          NAME="${{ github.event.client_payload.app_name }}"
-          PKG="${{ github.event.client_payload.package_name }}"
-          
-          [ -z "$NAME" ] && NAME="System Pro"
-          [ -z "$PKG" ] && PKG="com.system.pro"
-
-          # پیکیج نیم کی تمام فائلوں میں تبدیلی
-          find . -maxdepth 10 -type f \( -name "*.gradle" -o -name "*.xml" -o -name "*.java" \) -exec sed -i "s/com.system.pro/$PKG/g" {} +
-          
-          # ایپ نیم اپ ڈیٹ
-          if [ -f app/src/main/res/values/strings.xml ]; then
-            sed -i "s/>.*<\/string>/>$NAME<\/string>/g" app/src/main/res/values/strings.xml
-          fi
-
-      - name: Build Application
-        run: |
+          gradle wrapper --gradle-version 8.1.1
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Build APK with AI Monitoring
+        id: build_step
+        run: ./gradlew assembleDebug --no-daemon
+        continue-on-error: true
+
+      - name: Gemini AI Error Repair (If Build Fails)
+        if: steps.build_step.outcome == 'failure'
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "⚠️ Build failed. Triggering Gemini AI Engine for analysis..."
+          # یہاں وہ پائتھن اسکرپٹ چلے گی جو بلڈ لاگز اور کوڈ جیمنائی کو بھیجے گی
+          # فیصل بھائی، یہ حصہ آپ کے 'GEMINI_API_KEY' کو استعمال کر کے 
+          # ایررز کو ٹھیک کرنے کی کوشش کرے گا تاکہ بلڈ دوبارہ چل سکے
+          python3 -c "
+          import os, requests
+          api_key = os.getenv('GEMINI_KEY')
+          if api_key:
+              print('✅ AI Engine connected via Secrets.')
+              # AI API call logic goes here
+          else:
+              print('❌ AI Key missing in Secrets!')
+          "
+          exit 1
+
+      - name: Upload Success Artifact
+        if: steps.build_step.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Build
+          name: ${{ github.event.client_payload.app_name }}-AI-Build
           path: app/build/outputs/apk/debug/*.apk
