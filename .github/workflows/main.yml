@@ -1,20 +1,23 @@
-name: System-Pro-V77-Starter
+name: System-Pro-V77-Auto-Pilot
 
 on:
+  repository_dispatch:
+    types: [build-app]
   push:
     branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # یہ آپ کے سیکرٹس کو استعمال کرے گا
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -22,14 +25,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Initialize Clean Structure
+      - name: 🧠 AI-Master-Logic
+        shell: python
         run: |
-          rm -rf .gradle gradle/ gradlew gradlew.bat
+          import os
+          def write_file(path, content):
+              d = os.path.dirname(path)
+              if d and not os.path.exists(d): os.makedirs(d, exist_ok=True)
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content.strip())
+
+          # آپ کے پروجیکٹ کی تمام فائلوں کو فزیکلی درست کرنا
+          write_file("settings.gradle", "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal(); } }\ndependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral(); } }\nrootProject.name='System-Pro-codestuido'\ninclude ':app'")
+          write_file("build.gradle", "buildscript { repositories { google(); mavenCentral(); } dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral(); } }")
+          
+          pkg = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
+          write_file("app/build.gradle", f"apply plugin: 'com.android.application'\nandroid {{ namespace '{pkg}'; compileSdk 34; defaultConfig {{ applicationId '{pkg}'; minSdk 21; targetSdk 34; versionCode 1; versionName '1.0' }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.9.0' }}")
+
+      - name: 🛠️ Build Engine
+        run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # مینوئل پاتھ فکسنگ تاکہ کوئی فائل مس نہ ہو
-          mkdir -p app/src/main/res/values/
-          echo '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>' > app/src/main/res/values/themes.xml
+          ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 🚀 First Green Build
-        run: ./gradlew help # یہ صرف چیک کرے گا کہ گریڈل سیٹ اپ صحیح ہے یا نہیں
+      - name: 💾 Deliver Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V77-Success
+          path: app/build/outputs/apk/debug/*.apk
