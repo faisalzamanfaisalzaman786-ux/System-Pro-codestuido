@@ -1,4 +1,4 @@
-name: System-Pro-V62-Ultimate-Final
+name: System-Pro-V62-Authentic-Build
 
 on:
   repository_dispatch:
@@ -11,27 +11,28 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Environment (JDK 17 & Gradle 8.5)
+      - name: Setup Environment (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Install & Lock Gradle 8.5
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      - name: AI-Powered Dynamic Structure & Theme Generation
+      - name: Payload Mapping & Resource Solidification
         shell: python
         run: |
-          import base64, os, json
+          import base64, os
 
           payload = ${{ toJson(github.event.client_payload) }}
           pkg_name = payload.get('package_name', 'com.system.pro')
           app_name = payload.get('app_name', 'System Pro')
           pkg_path = pkg_name.replace('.', '/')
 
+          # فولڈرز کی پکی ترتیب
           os.makedirs(f"app/src/main/java/{pkg_path}", exist_ok=True)
           os.makedirs("app/src/main/res/layout", exist_ok=True)
           os.makedirs("app/src/main/res/values", exist_ok=True)
@@ -42,34 +43,27 @@ jobs:
               if data and len(data) > 10:
                   if "," in data: data = data.split(",")[1]
                   with open(target, "wb") as f: f.write(base64.b64decode(data))
-                  return True
-              return False
 
+          # کوڈ اور لے آؤٹ کی سیونگ
           save_b64('java_b64', f"app/src/main/java/{pkg_path}/MainActivity.java")
           save_b64('xml_b64', "app/src/main/res/layout/activity_main.xml")
           
-          if not save_b64('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png"):
-              with open("app/src/main/res/drawable/ic_launcher.png", "wb") as f:
-                  f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
-
-          # 1. Themes.xml خود جنریٹ کرنا تاکہ 'Theme not found' کا مسئلہ ختم ہو
-          themes_content = '''<resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar">
+          # 1. Styles.xml بنانا (سب سے اہم سٹیپ)
+          # یہ اینڈرائیڈ کو بتائے گا کہ 'AppTheme' کیا ہے تاکہ وہ کریش نہ ہو
+          styles = '''<resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="colorPrimary">#6200EE</item>
-                  <item name="colorPrimaryVariant">#3700B3</item>
-                  <item name="colorOnPrimary">#FFFFFF</item>
+                  <item name="colorAccent">#03DAC5</item>
               </style>
           </resources>'''
-          with open("app/src/main/res/values/themes.xml", "w") as f: f.write(themes_content)
+          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles)
 
-          # 2. مینی فیسٹ کو نئی تھیم کے ساتھ پکا کرنا
+          # 2. مینی فیسٹ کی پکی کنفیگریشن
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
                   android:label="{app_name}"
-                  android:theme="@style/Theme.SystemPro">
+                  android:theme="@style/AppTheme">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -83,7 +77,7 @@ jobs:
           with open("app/src/main/res/values/strings.xml", "w") as f:
               f.write(f'<resources><string name="app_name">{app_name}</string></resources>')
 
-      - name: Generate Build Scripts (Strict Library Sync)
+      - name: Build Scripts Generation
         run: |
           echo "include ':app'" > settings.gradle
           cat <<EOF > build.gradle
@@ -110,17 +104,17 @@ jobs:
               }
           }
           dependencies {
-              implementation 'com.google.android.material:material:1.11.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
 
-      - name: Build Final APK
+      - name: Build APK (Final Attempt)
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload Final Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-V62-Final
+          name: ${{ github.event.client_payload.app_name }}-V62-Authentic
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
