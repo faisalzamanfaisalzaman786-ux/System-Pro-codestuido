@@ -1,122 +1,43 @@
-name: System-Pro-V62-AndroidX-Modern
-
-on:
-  repository_dispatch:
-    types: [build-app]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      
-      - name: Setup Gradle 8.5
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: Fix AndroidX & Cache Configuration
-        # یہاں ہم gradle.properties فائل بنا رہے ہیں تاکہ AndroidX کا مسئلہ حل ہو
-        run: |
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
-
-      - name: Professional Code & Resource Mapping
+      - name: System-Pro AI-Scanner
         shell: python
         run: |
-          import base64, os
+          import base64, os, re
 
+          # 1. ڈیٹا لوڈ کرنا
           p = ${{ toJson(github.event.client_payload) }}
-          pkg = p.get('package_name', 'com.system.pro')
-          app_name = p.get('app_name', 'System Pro')
-          path = pkg.replace('.', '/')
+          xml_code = base64.b64decode(p.get('xml_b64', '')).decode('utf-8', errors='ignore') if p.get('xml_b64') else ""
+          
+          # 2. مسنگ اسٹائلز کی تلاش (Regex کے ذریعے)
+          # یہ لائن XML میں موجود ہر "@style/..." کو ڈھونڈے گی
+          found_styles = re.findall(r'@style/([\w.]+)', xml_code)
+          
+          # ڈیفالٹ محفوظ اسٹائلز (Base Library)
+          base_styles = {
+              "AppTheme": "Theme.MaterialComponents.DayNight.NoActionBar",
+              "ActionButton": "Widget.MaterialComponents.Button",
+              "TabButton": "Widget.MaterialComponents.Button.TextButton",
+              "BuildButton": "Widget.MaterialComponents.Button.UnelevatedButton"
+          }
 
-          # Directory setup for modern Android
-          os.makedirs(f"app/src/main/java/{path}", exist_ok=True)
-          os.makedirs("app/src/main/res/layout", exist_ok=True)
+          # 3. لوکل ریسورس جنریٹر (Local Folder: res/values/auto_generated_styles.xml)
           os.makedirs("app/src/main/res/values", exist_ok=True)
-          os.makedirs("app/src/main/res/drawable", exist_ok=True)
+          
+          style_content = '<resources>\n'
+          # جو اسٹائلز پے لوڈ میں ہیں لیکن لائبریری میں نہیں، انہیں خودکار طریقے سے بنائیں
+          for s in set(found_styles):
+              parent = base_styles.get(s, "Widget.AppCompat.Button")
+              style_content += f'    <style name="{s}" parent="{parent}">\n'
+              style_content += '        <item name="android:layout_width">wrap_content</item>\n'
+              style_content += '        <item name="android:layout_height">wrap_content</item>\n'
+              style_content += '    </style>\n'
+          
+          # اگر کوئی اسٹائل نہیں ملا تو کم از کم AppTheme ضرور بنائیں
+          if "AppTheme" not in found_styles:
+              style_content += f'    <style name="AppTheme" parent="{base_styles["AppTheme"]}"></style>\n'
+          
+          style_content += '</resources>'
 
-          def write_b64(key, file_path):
-              data = p.get(key, '')
-              if data and len(data) > 10:
-                  if "," in data: data = data.split(",")[1]
-                  content = base64.b64decode(data).decode('utf-8', errors='ignore')
-                  # Auto-sync package name
-                  if key == 'java_b64' and "package " in content:
-                      lines = content.split('\n')
-                      for i, line in enumerate(lines):
-                          if line.strip().startswith("package "):
-                              lines[i] = f"package {pkg};"
-                              break
-                      content = '\n'.join(lines)
-                  with open(file_path, "w") as f: f.write(content)
-
-          write_b64('java_b64', f"app/src/main/java/{path}/MainActivity.java")
-          write_b64('xml_b64', "app/src/main/res/layout/activity_main.xml")
-
-          # Styles for modern devices
-          styles = '''<resources>
-              <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-              </style>
-          </resources>'''
-          with open("app/src/main/res/values/styles.xml", "w") as f: f.write(styles)
-
-          manifest = f'''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="{app_name}" android:theme="@style/AppTheme" android:allowBackup="true">
-                  <activity android:name="{pkg}.MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>'''
-          with open("app/src/main/AndroidManifest.xml", "w") as f: f.write(manifest)
-
-      - name: Final Authentic Build Config
-        run: |
-          echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              namespace '${{ github.event.client_payload.package_name || 'com.system.pro' }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ github.event.client_payload.package_name || 'com.system.pro' }}"
-                  minSdk 24
-                  targetSdk 34
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-          }
-          EOF
-
-      - name: Build Modern APK
-        run: gradle assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}-Modern-Success
-          path: app/build/outputs/apk/debug/*.apk
+          with open("app/src/main/res/values/auto_generated_styles.xml", "w") as f:
+              f.write(style_content)
+          
+          print("AI Scanner: All missing styles have been healed and saved to local folder.")
