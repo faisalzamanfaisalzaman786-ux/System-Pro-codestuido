@@ -2,7 +2,7 @@ name: System-Pro-V77-Main-Engine
 
 on:
   repository_dispatch:
-    types: [build-app] # آپ کے یو آئی کے 'event_type' سے مماثل ہے
+    types: [build-app]
 
 jobs:
   build:
@@ -11,23 +11,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java & Gradle
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
+
+      - name: 🛠️ Restore Gradle Wrapper (Critical Fix)
+        run: |
+          # اگر گریڈل فائلیں غائب ہیں تو یہ انہیں دوبارہ بنائے گا
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
 
       - name: AI-Autonomous-Injector
         shell: python
         run: |
           import base64, os, re
-
-          # یو آئی پے لوڈ حاصل کرنا
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.faisal.systempro')
           app_name = p.get('app_name', 'System Pro')
@@ -38,40 +37,31 @@ jobs:
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # 1. جاوا انجکشن (Decodes UI java_b64)
+          # Java & XML Handling
           java_raw = p.get('java_b64', '')
           if java_raw:
-              # اگر ڈیٹا میں ہیڈر ہو تو اسے الگ کرنا
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
-              # پیکج نیم کی خودکار درستی
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # 2. ایکس ایم ایل انجکشن (Decodes UI xml_b64)
           xml_raw = p.get('xml_b64', '')
           if xml_raw:
               if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 3. مینی فیسٹ اور گریڈل کی میپنگ (Syncing with UI Settings)
-          manifest_path = "app/src/main/AndroidManifest.xml"
-          if os.path.exists(manifest_path):
-              with open(manifest_path, "r") as f: m = f.read()
-              m = re.sub(r'package="[\w.]+"', f'package="{pkg}"', m)
-              m = re.sub(r'android:name="[\w.]+"', f'android:name=".MainActivity"', m, 1)
-              safe_write(manifest_path, m)
-
-          gradle_path = "app/build.gradle"
-          if os.path.exists(gradle_path):
-              with open(gradle_path, "r") as f: g = f.read()
-              g = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g)
-              g = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g)
-              safe_write(gradle_path, g)
-
-          # ایپ کا نام strings.xml میں ڈالنا
+          # Build Environment Sync
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
+          
+          # Sync Manifest & Gradle
+          for f_path in ["app/build.gradle", "app/src/main/AndroidManifest.xml"]:
+              if os.path.exists(f_path):
+                  with open(f_path, "r") as f: c = f.read()
+                  c = re.sub(r'package="[\w.]+"', f'package="{pkg}"', c)
+                  c = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", c)
+                  c = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', c)
+                  safe_write(f_path, c)
 
       - name: Build Stable APK
         run: ./gradlew assembleDebug --no-daemon
