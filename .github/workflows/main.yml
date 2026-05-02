@@ -1,4 +1,4 @@
-      - name: AI-Master-Injector (XML Logic Fixed)
+        name: AI-Master-Injector (XML Logic Fixed)
         shell: python
         run: |
           import base64, os, re
