@@ -1,10 +1,10 @@
-name: System-Pro-V601-Ultimate-Mirror
+name: System-Pro-V603-Remote-Link-Sync
 
 on:
   workflow_dispatch:
 
 jobs:
-  force_clone:
+  link_and_sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,24 +15,23 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Force Clone & Mirror Everything
+      - name: 2. Link External Repo and Force Pull
         run: |
           # گٹ کی پہچان سیٹ کرنا
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # عارضی فولڈر میں کلون کرنا
-          git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
+          # ان کی ریپوزٹری کو بطور 'upstream' لنک کرنا
+          git remote add upstream https://github.com/fastlane/fastlane.git
           
-          # .github اور .git کو بچا کر باقی سب کچھ مٹانا
-          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          # وہاں سے سارا ڈیٹا فیچ (Fetch) کرنا
+          git fetch upstream master
           
-          # اب تمام فائلوں کو (بشمول ڈاٹ فائلز) کاپی کرنا
-          shopt -s dotglob
-          cp -rf fastlane_temp/* .
-          rm -rf fastlane_temp
+          # اب ان کی 'master' برانچ کو اپنی 'main' برانچ پر زبردستی چڑھانا
+          # اس سے آپ کا پرانا ڈیٹا خود بخود ختم ہو جائے گا
+          git reset --hard upstream/master
           
-          # زبردستی پش کرنا
-          git add -A
-          git commit -m "System Pro: Full Mirror Update V601" || echo "No changes to commit"
+          # اب اس تبدیلی کو اپنی ریپوزٹری (origin) پر پش کرنا
           git push origin main --force
+          
+          echo "✅ Remote Linked and Synced successfully!"
