@@ -1,4 +1,4 @@
-name: System-Pro-V1100-Final-Xerox
+name: System-Pro-V1200-Final-Absolute-Sync
 
 on:
   push:
@@ -6,35 +6,36 @@ on:
   workflow_dispatch:
 
 jobs:
-  full_mirror:
+  ultimate_sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: 1. Checkout
+      - name: 1. Checkout Your Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Professional Sync
+      - name: 2. Direct Sync (No Copy Command)
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # ان کی ریپوزٹری کلون کرنا
-          git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
-          
-          # ان کا سیکیورٹی فولڈر اڑانا
-          rm -rf fastlane_temp/.github
-          
-          # آپ کا اپنا ورک فلو بچا کر باقی سب مٹانا
+          # بیرونی ریپوزٹری کو ریموٹ کے طور پر جوڑنا
+          git remote add external https://github.com/fastlane/fastlane.git
+          git fetch external master
+
+          # آپ کی ریپوزٹری سے پرانا ڈیٹا صاف کرنا (سوائے .github کے)
           find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+
+          # براہ راست ایکسٹرنل ڈیٹا کو اپنی مین برانچ میں نکالنا
+          git checkout external/master -- .
           
-          # نیا ڈیٹا ڈالنا
-          cp -rf fastlane_temp/* .
-          rm -rf fastlane_temp
-          
-          # زبردستی پش کرنا (Force Push)
-          git add -A
-          git commit -m "System Pro: Xerox Success V1100" || echo "No changes"
+          # سیکیورٹی: ان کا ورک فلو فولڈر ہٹانا تاکہ پش میں مسئلہ نہ آئے
+          rm -rf .github/workflows/announce_release.yml
+          rm -rf .github/workflows/ci.yml
+
+          # زبردستی پش کرنا
+          git add .
+          git commit -m "System Pro: Final Absolute Sync V1200" || echo "No changes"
           git push origin main --force
