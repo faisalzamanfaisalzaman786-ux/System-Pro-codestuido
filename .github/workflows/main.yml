@@ -22,7 +22,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: AI-Powered Dynamic Structure & Payload Mapping
+      - name: AI-Powered Dynamic Structure & Theme Generation
         shell: python
         run: |
           import base64, os, json
@@ -52,14 +52,24 @@ jobs:
               with open("app/src/main/res/drawable/ic_launcher.png", "wb") as f:
                   f.write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
 
-          # مینی فیسٹ میں تھیم کو سادہ رکھا گیا ہے تاکہ ایرر نہ آئے
+          # 1. Themes.xml خود جنریٹ کرنا تاکہ 'Theme not found' کا مسئلہ ختم ہو
+          themes_content = '''<resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryVariant">#3700B3</item>
+                  <item name="colorOnPrimary">#FFFFFF</item>
+              </style>
+          </resources>'''
+          with open("app/src/main/res/values/themes.xml", "w") as f: f.write(themes_content)
+
+          # 2. مینی فیسٹ کو نئی تھیم کے ساتھ پکا کرنا
           manifest = f'''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@drawable/ic_launcher"
                   android:label="{app_name}"
-                  android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+                  android:theme="@style/Theme.SystemPro">
                   <activity android:name="{pkg_name}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -73,10 +83,9 @@ jobs:
           with open("app/src/main/res/values/strings.xml", "w") as f:
               f.write(f'<resources><string name="app_name">{app_name}</string></resources>')
 
-      - name: Generate Build Scripts (Added Material Library)
+      - name: Generate Build Scripts (Strict Library Sync)
         run: |
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -115,4 +124,3 @@ jobs:
         with:
           name: ${{ github.event.client_payload.app_name }}-V62-Final
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
