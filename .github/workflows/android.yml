@@ -1,4 +1,4 @@
-name: System-Pro-V77-Auto-Pilot-Final
+name: System-Pro-V77-Final-Shield-Engine
 
 on:
   push:
@@ -7,22 +7,13 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
-  ai_takeover:
+  build_engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.MY_AI_TOKEN }} # یہاں آپ کا دیا ہوا ٹوکن استعمال ہو رہا ہے
-
-      - name: 🧠 Connect AI Brain
-        run: |
-          git config --global user.name "Muzammil-AI"
-          git config --global user.email "faisal.ai@systempro.com"
-          echo "Connection Established with MY_AI_TOKEN"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -30,23 +21,32 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🚀 Auto-Repair & Build
+      - name: 🧠 AI-Self-Healing-Core
         shell: python
         run: |
           import os
-          # یہ حصہ اب خود بخود فائلیں درست کرے گا
-          with open("settings.gradle", "w") as f:
-              f.write("rootProject.name='System-Pro-codestuido'\ninclude ':app'")
-          print("Files repaired by AI Engine")
+          # فائلیں خود بخود تیار کرنا تاکہ کوئی پاتھ ایرر نہ آئے
+          files = {
+              "settings.gradle": "rootProject.name='System-Pro-codestuido'\ninclude ':app'",
+              "build.gradle": "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }",
+              "app/build.gradle": "apply plugin: 'com.android.application'\nandroid {\n    namespace 'com.faisal.systempro'\n    compileSdk 34\n    defaultConfig {\n        applicationId 'com.faisal.systempro'\n        minSdk 21\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n}\ndependencies {\n    implementation 'androidx.appcompat:appcompat:1.6.1'\n    implementation 'com.google.android.material:material:1.9.0'\n}",
+              "app/src/main/AndroidManifest.xml": "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android' package='com.faisal.systempro'>\n    <application android:label='System Pro V77' android:theme='@style/Theme.AppCompat.Light'>\n    </application>\n</manifest>"
+          }
+          for path, content in files.items():
+              os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
+              with open(path, "w") as f: f.write(content.strip())
+          print("All system files generated and repaired by AI.")
 
-      - name: 🛠️ Build APK
+      - name: 🛠️ Setup Gradle
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 💾 Deliver Success APK
+      - name: 🚀 Build Production APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: 💾 Deliver APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Success-V77
+          name: System-Pro-V77-Success-APK
           path: app/build/outputs/apk/debug/*.apk
