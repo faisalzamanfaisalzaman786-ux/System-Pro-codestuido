@@ -17,12 +17,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Setup Gradle Wrapper
+      - name: 🛠️ Restore Gradle Wrapper
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: AI-Autonomous-Injector & Dependency Fixer
+      - name: AI-Autonomous-Injector & Conflict Resolver
         shell: python
         run: |
           import base64, os, re
@@ -38,25 +38,26 @@ jobs:
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # --- 1. روٹ سیٹ اپ ---
-          safe_write("settings.gradle", f"include ':app'\nrootProject.name='System-Pro-codestuido'")
-          
-          root_gradle = """
-          buildscript {
-              repositories { google(); mavenCentral(); }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral(); }
-          }
-          """
-          safe_write("build.gradle", root_gradle)
-
-          # --- 2. ایپ ماڈیول (لائبریری ورژن اپ ڈیٹ) ---
-          app_gradle = f"""
-          plugins {{
-              id 'com.android.application'
+          # 1. جدید سیٹنگز (Strict Resolution Mode)
+          settings_gradle = f"""
+          pluginManagement {{
+              repositories {{ google(); mavenCentral(); gradlePluginPortal(); }}
           }}
+          dependencyResolutionManagement {{
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {{ google(); mavenCentral(); }}
+          }}
+          rootProject.name = "System-Pro-codestuido"
+          include ':app'
+          """
+          safe_write("settings.gradle", settings_gradle)
+          
+          # 2. روٹ گریڈل (Standard Version)
+          safe_write("build.gradle", "buildscript { repositories { google(); mavenCentral(); } dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }")
+
+          # 3. ایپ ماڈیول (اس ورژن میں میٹریل لائبریری کو 1.10.0 پر فکس کیا گیا ہے)
+          app_gradle = f"""
+          apply plugin: 'com.android.application'
           android {{
               namespace '{pkg}'
               compileSdk 34
@@ -73,7 +74,6 @@ jobs:
               }}
           }}
           dependencies {{
-              // اسٹینڈرڈ اور مستحکم ورژنز
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.10.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
@@ -81,11 +81,12 @@ jobs:
           """
           safe_write("app/build.gradle", app_gradle)
 
-          # --- 3. سورس کوڈ (Java & XML) ---
+          # 4. جاوا اور ایکس ایم ایل انجکشن (Base64 Decoding)
           java_raw = p.get('java_b64', '')
           if java_raw:
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
+              # پیکیج نیم کی تصحیح
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
@@ -95,17 +96,10 @@ jobs:
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # --- 4. مینی فیسٹ اور تھیمز ---
+          # 5. مینی فیسٹ اور تھیمز
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
-          # تھیم کو میٹریل ڈیزائن کے مطابق اپ ڈیٹ کیا گیا
-          themes_content = """
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#00FFCC</item>
-              </style>
-          </resources>
-          """
-          safe_write("app/src/main/res/values/themes.xml", themes_content)
+          themes = """<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>"""
+          safe_write("app/src/main/res/values/themes.xml", themes)
           
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -120,8 +114,8 @@ jobs:
           </manifest>"""
           safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-      - name: 🚀 Final Build
-        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: 🚀 Force Build Execution
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
