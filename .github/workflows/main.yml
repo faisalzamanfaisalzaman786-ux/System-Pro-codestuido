@@ -1,94 +1,102 @@
-name: System Pro - Auto-Dispatch Architect
-on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [trigger_system_pro_init]
-  push:
-    branches:
-      - main # یا آپ کی جو بھی مین برانچ ہے
+name: System-Pro-V77-Main-Engine
 
-permissions:
-  contents: write
-  actions: write
+on:
+  repository_dispatch:
+    types: [build-app]
 
 jobs:
-  build-structure:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Construct Standard Java Structure
+      - name: Setup Java & Gradle
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: AI-Autonomous-Injector
+        shell: python
         run: |
-          mkdir -p app/src/main/java/com/faisal/systempro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p gradle/wrapper
+          import base64, os, re
 
-      - name: 3. Inject Core Standard Files
-        run: |
-          # AndroidManifest
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.faisal.systempro">
-              <application
-                  android:allowBackup="true"
-                  android:label="System Pro"
-                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
-                  <activity android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # ڈیٹا حاصل کرنا
+          p = ${{ toJson(github.event.client_payload) }}
+          pkg = p.get('package_name', 'com.faisal.systempro') # ڈیفالٹ پیکج آپ کے نئے اسٹرکچر والا
+          app_name = p.get('app_name', 'System Pro')
+          path = pkg.replace('.', '/')
 
-          # MainActivity.java
-          cat <<EOF > app/src/main/java/com/faisal/systempro/MainActivity.java
-          package com.faisal.systempro;
-          import android.app.Activity;
-          import android.os.Bundle;
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-              }
-          }
-          EOF
+          def safe_write(file_path, content):
+              os.makedirs(os.path.dirname(file_path), exist_ok=True)
+              with open(file_path, "w", encoding="utf-8") as f:
+                  f.write(content)
 
-          # Gradle Files
-          echo "include ':app'" > settings.gradle
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral(); }
-              dependencies { classpath "com.android.tools.build:gradle:8.2.0" }
-          }
-          allprojects {
-              repositories { google(); mavenCentral(); }
-          }
-          EOF
+          # 1. جاوا انجکشن (Mapping to app/src/main/java/...)
+          java_raw = p.get('java_b64', '')
+          java_code = ""
+          if java_raw:
+              if "," in java_raw: java_raw = java_raw.split(",")[1]
+              java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
+              java_code = re.sub(r'```java|```', '', java_code).strip()
+              # پیکج نیم کو خودکار درست کرنا
+              java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
+              # صحیح اسٹینڈرڈ پاتھ پر فائل لکھنا
+              safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-      - name: 4. Auto-Update Sync & Force Push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.name "Muzammil-AI"
-          git config --global user.email "muzammil@systempro.ai"
-          git add .
-          git commit -m "System Pro: Structure Update [Standard Java]" || echo "No changes"
-          git push origin HEAD --force
+          # 2. XML انجکشن اور خودکار اسٹائل تخلیق
+          xml_raw = p.get('xml_b64', '')
+          if xml_raw:
+              if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
+              xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
+              xml_code = re.sub(r'```xml|```', '', xml_code).strip()
+              safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-      - name: 5. Force Auto-Dispatch Self
-        if: always()
-        run: |
-          echo "🔄 Triggering self-dispatch to ensure update..."
-          curl -X POST \
-          -H "Accept: application/vnd.github.v3+json" \
-          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          https://api.github.com/repos/${{ github.repository }}/dispatches \
-          -d '{"event_type": "trigger_system_pro_init"}'
+              # اسٹائلز کو درست کرنا (Style Healer)
+              styles_path = "app/src/main/res/values/styles.xml"
+              found_styles = re.findall(r'@style/([\w.]+)', xml_code)
+              final_style_content = '<resources>\n    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>'
+              
+              for s in set(found_styles):
+                  if s != "Theme.SystemPro":
+                      final_style_content += f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n'
+                      final_style_content += '        <item name="android:layout_width">wrap_content</item>\n'
+                      final_style_content += '        <item name="android:layout_height">wrap_content</item>\n    </style>'
+              
+              final_style_content += '\n</resources>'
+              safe_write(styles_path, final_style_content)
+
+          # 3. مینی فیسٹ اور گریڈل کی خودکار میپنگ
+          # مینی فیسٹ میں پیکج اور مین ایکٹیویٹی کو سنک کرنا
+          manifest_path = "app/src/main/AndroidManifest.xml"
+          if os.path.exists(manifest_path):
+              with open(manifest_path, "r") as f: m = f.read()
+              m = re.sub(r'package="[\w.]+"', f'package="{pkg}"', m)
+              m = re.sub(r'android:name="[\w.]+"', f'android:name=".MainActivity"', m, 1)
+              safe_write(manifest_path, m)
+
+          # گریڈل میں namespace اور applicationId کو سنک کرنا
+          gradle_path = "app/build.gradle"
+          if os.path.exists(gradle_path):
+              with open(gradle_path, "r") as f: g = f.read()
+              g = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", g)
+              g = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g)
+              safe_write(gradle_path, g)
+
+          # ایپ کا نام سیٹ کرنا
+          safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
+
+      - name: Build Final Stable APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name }}-Build
+          path: app/build/outputs/apk/debug/*.apk
