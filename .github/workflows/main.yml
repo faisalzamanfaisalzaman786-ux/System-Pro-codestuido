@@ -17,13 +17,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🛠️ Restore Gradle Wrapper (Critical Fix)
+      - name: 🛠️ Setup Exact Gradle Path
         run: |
-          # اگر گریڈل فائلیں غائب ہیں تو یہ انہیں دوبارہ بنائے گا
+          # گریڈل کے لیے مخصوص ماحول تیار کرنا
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: AI-Autonomous-Injector
+      - name: AI-Autonomous-Injector & Path Mapper
         shell: python
         run: |
           import base64, os, re
@@ -37,12 +37,59 @@ jobs:
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # Java & XML Handling
+          # --- 1. روٹ میپنگ (Root Mapping) ---
+          # گریڈل کو بتانا کہ 'app' ماڈیول کہاں ہے
+          safe_write("settings.gradle", "include ':app'\nrootProject.name='System-Pro-codestuido'")
+          
+          # روٹ build.gradle میں پلگ انز کا صحیح ورژن
+          root_gradle = """
+          buildscript {
+              repositories { google(); mavenCentral(); }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral(); }
+          }
+          """
+          safe_write("build.gradle", root_gradle)
+
+          # --- 2. ایپ ماڈیول میپنگ (App Path Mapping) ---
+          app_gradle = f"""
+          plugins {{
+              id 'com.android.application'
+          }}
+          android {{
+              namespace '{pkg}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId "{pkg}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+              buildTypes {{
+                  release {{
+                      minifyEnabled false
+                  }}
+              }}
+          }}
+          dependencies {{
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }}
+          """
+          safe_write("app/build.gradle", app_gradle)
+
+          # --- 3. سورس کوڈ پلیسمنٹ (Source Mapping) ---
+          # یو آئی سے آنے والے ڈیٹا کو مخصوص اینڈرائیڈ فولڈرز میں فٹ کرنا
           java_raw = p.get('java_b64', '')
           if java_raw:
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
+              # یہاں ہم گریڈل کو بتا رہے ہیں کہ جاوا فائل یہاں ملے گی
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
           xml_raw = p.get('xml_b64', '')
@@ -51,22 +98,27 @@ jobs:
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # Build Environment Sync
+          # --- 4. مینی فیسٹ اور ریسورسز ---
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
+          safe_write("app/src/main/res/values/themes.xml", '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>')
           
-          # Sync Manifest & Gradle
-          for f_path in ["app/build.gradle", "app/src/main/AndroidManifest.xml"]:
-              if os.path.exists(f_path):
-                  with open(f_path, "r") as f: c = f.read()
-                  c = re.sub(r'package="[\w.]+"', f'package="{pkg}"', c)
-                  c = re.sub(r"namespace\s+'.*'", f"namespace '{pkg}'", c)
-                  c = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', c)
-                  safe_write(f_path, c)
+          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
+                  <activity android:name="{pkg}.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>"""
+          safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-      - name: Build Stable APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: 🚀 Executing Specified Build Path
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
-      - name: Upload Result
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.client_payload.app_name }}-Build
