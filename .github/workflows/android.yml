@@ -1,0 +1,115 @@
+name: System-Pro-V77-Auto-Pilot
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [build-app]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Custom Package Name'
+        required: false
+        default: 'com.faisal.systempro'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  faisal_auto_engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🧠 AI-Self-Healing-Logic (Auto-Configuration)
+        shell: python
+        run: |
+          import os
+          
+          # پیکیج نیم ہینڈلنگ
+          payload_pkg = "${{ github.event.client_payload.package_name }}"
+          input_pkg = "${{ github.event.inputs.package_name }}"
+          pkg = payload_pkg if payload_pkg and payload_pkg != "" else (input_pkg if input_pkg else "com.faisal.systempro")
+
+          def vault_write(file_path, content):
+              # روٹ ڈائریکٹری چیک فکس
+              parent = os.path.dirname(file_path)
+              if parent:
+                  os.makedirs(parent, exist_ok=True)
+              with open(file_path, "w", encoding="utf-8") as f:
+                  f.write(content.strip())
+
+          # 1. settings.gradle
+          settings_content = """
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal(); } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral(); } 
+          }
+          rootProject.name = "System-Pro-codestuido"
+          include ':app'
+          """
+          vault_write("settings.gradle", settings_content)
+
+          # 2. build.gradle (Root)
+          root_build = """
+          buildscript {
+              repositories { google(); mavenCentral(); }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral(); }
+          }
+          """
+          vault_write("build.gradle", root_build)
+
+          # 3. app/build.gradle
+          app_gradle = f"""
+          apply plugin: 'com.android.application'
+          android {{
+              namespace '{pkg}'
+              compileSdk 34
+              defaultConfig {{
+                  applicationId "{pkg}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+              compileOptions {{
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }}
+          }}
+          dependencies {{
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
+          }}
+          """
+          vault_write("app/build.gradle", app_gradle)
+          print(f"Build configured for: {pkg}")
+
+      - name: 🛠️ Setup Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+      - name: 🚀 Final Success Build
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: 💾 Deliver Final APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V77-Success-APK
+          path: app/build/outputs/apk/debug/*.apk
