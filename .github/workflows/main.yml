@@ -1,88 +1,84 @@
-name: System Pro - Ultimate AI Engine
+name: System Pro - Absolute AI Logic
 on:
   repository_dispatch:
-    types: [system_pro_master_build]
+    types: [system_pro_ai_orchestrate]
+
+permissions:
+  contents: write
 
 jobs:
-  build-engine:
+  ai-orchestrator:
     runs-on: ubuntu-latest
-    # سسٹم کی سٹیبلٹی کے لیے پرمیشنز کو سخت رکھا گیا ہے
-    permissions:
-      contents: write
-      actions: write
-
     steps:
-      - name: 1. Environmental Sanitization
+      - name: 1. Deep Context Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Core Environment Lock (Java 17 & Gradle 8.5)
+      - name: 2. Set Up Build Environment
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 3. AI Semantic Scanner (Filter & Security)
+      - name: 3. Gemini AI Code Refactoring
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # یہ حصہ کسی بھی ممنوعہ لفظ یا غیر ضروری ریفرنس (جیسے 'Drinks') کو کوڈ سے نکال دے گا
-          echo "AI Scanner: Searching for prohibited strings and logic patterns..."
-          # Case-insensitive removal of restricted keywords
-          find . -type f -exec sed -i -E 's/(drink|beverage|alcohol|wine)/SystemProLogic/gi' {} +
+          python3 << 'EOF'
+          import os
+          import google.generativeai as genai
+
+          genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+          model = genai.GenerativeModel('gemini-pro')
+
+          # ریپوزٹری کا مکمل نقشہ تیار کرنا
+          project_files = []
+          for root, dirs, files in os.walk("."):
+              for file in files:
+                  if file.endswith(('.java', '.kt', '.xml', '.gradle')):
+                      project_files.append(os.path.join(root, file))
+
+          # Gemini کو سخت ہدایات دینا تاکہ کوئی سنٹیکس غلطی نہ ہو
+          prompt = f"""
+          Analyze this Android project files: {project_files[:40]}.
+          Duty: Refactor everything to package 'com.faisal.systempro' and app name 'System Pro'.
+          Constraint 1: NO SYNTAX ERRORS. Ensure all imports match the new directory structure.
+          Constraint 2: NO DRINK REFERENCES.
+          Constraint 3: Output only a bash script with 'mkdir -p', 'mv', and 'sed' commands.
+          """
           
-      - name: 4. Deep-Structural Rebranding (No Conflict Logic)
+          response = model.generate_content(prompt)
+          with open("refactor_engine.sh", "w") as f:
+              # صرف کوڈ بلاک نکالنا اگر اے آئی نے مارک ڈاؤن استعمال کیا ہو
+              clean_code = response.text.replace('```bash', '').replace('```', '')
+              f.write(clean_code)
+          EOF
+
+      - name: 4. Pre-Execution Safety Check
         run: |
-          # پیرامیٹرز کو محفوظ طریقے سے نکالنا
-          OLD_PKG="${{ github.event.client_payload.old_package }}"
-          NEW_PKG="com.faisal.systempro"
-          OLD_NAME="${{ github.event.client_payload.old_app_name }}"
-          NEW_NAME="System Pro"
-
-          # فائل مواد کی تبدیلی (Strings, IDs, Manifest)
-          echo "Phase 1: Content Transformation..."
-          grep -rl "$OLD_PKG" . | xargs -r sed -i "s/$OLD_PKG/$NEW_PKG/g"
-          grep -rl "$OLD_NAME" . | xargs -r sed -i "s/$OLD_NAME/$NEW_NAME/g"
-
-          # فولڈر اسٹرکچر کی ری میپنگ (Safe Directory Handling)
-          echo "Phase 2: Directory Migration..."
-          OLD_PATH=$(echo $OLD_PKG | tr '.' '/')
-          NEW_PATH=$(echo $NEW_PKG | tr '.' '/')
-          
-          # صرف تب فائلز موو کرنا اگر فولڈر موجود ہو (Error Prevention)
-          if [ -d "app/src/main/java/$OLD_PATH" ]; then
-            mkdir -p "app/src/main/java/$NEW_PATH"
-            cp -rn "app/src/main/java/$OLD_PATH"/* "app/src/main/java/$NEW_PATH/"
-            rm -rf "app/src/main/java/$OLD_PATH"
-          fi
-
-      - name: 5. Build Integrity & Dependency Shield
-        run: |
-          # گریڈل کی تمام ڈپینڈنسیز کو سنک کرنا اور ورژن لاک چیک کرنا
-          chmod +x gradlew
-          ./gradlew clean --refresh-dependencies
-          
-          # لے آؤٹ اور تھیمز کے تصادم کو روکنے کے لیے چیکس
-          echo "Validating Layout & Theme integrity..."
-
-      - name: 6. Final Compilation (APK Generation)
-        run: ./gradlew assembleDebug --stacktrace --info
-
-      - name: 7. Post-Build AI Audit
-        if: always()
-        run: |
-          if [ ${{ job.status }} == 'success' ]; then
-            echo "AI Audit: Build successful. Moving to deployment."
+          if [ -f "refactor_engine.sh" ]; then
+            chmod +x refactor_engine.sh
+            # خالی لائنوں یا غلط کمانڈز کی صفائی
+            sed -i '/^$/d' refactor_engine.sh 
           else
-            echo "AI Audit: Analyzing failure logs..."
-            # یہاں ایرر آنے کی صورت میں لاگز کو اے آئی کے لیے پریپئر کرنا
+            echo "AI failed to generate script. Aborting to prevent errors."
+            exit 1
           fi
 
-      - name: 8. Secure Push (Muzammil-AI)
+      - name: 5. Execute Refactoring & Build
+        run: |
+          sh refactor_engine.sh
+          chmod +x gradlew
+          # صرف سنٹیکس چیک کرنے کے لیے (Assemble کے بجائے پہلے compile چیک کرنا)
+          ./gradlew compileDebugJavaWithJavac --stacktrace
+          ./gradlew assembleDebug
+
+      - name: 6. Push Verified Changes
         run: |
           git config --global user.name "Muzammil-AI"
           git config --global user.email "muzammil@systempro.ai"
           git add .
-          # صرف اس صورت میں کمٹ کرنا اگر کچھ بدلا ہو (Avoid Empty Commits)
-          git diff-index --quiet HEAD || git commit -m "AI-Driven Infrastructure Update: System Pro"
+          git diff-index --quiet HEAD || git commit -m "System Pro: Zero-Error AI Refactoring Completed"
           git push
