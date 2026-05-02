@@ -11,23 +11,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Force JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          check-latest: false # سسٹم کو نیا ورژن ڈھونڈنے سے روک دیا ہے
 
-      - name: Dynamic Android Structure Build
+      - name: Force Gradle 8.5 Setup
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+          cache-disabled: true # کسی بھی پرانے کیشے کو استعمال کرنے سے روک دیا ہے
+
+      - name: Create Dynamic Structure (Hardcoded Order)
         run: |
-          # ہارڈ کوڈڈ پاتھس کے مطابق فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
           
-          # گریڈل کی ضروری فائلیں رن ٹائم پر بنانا
+          # Force root settings
           echo "include ':app'" > settings.gradle
           
+          # Force Root Build Config
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -38,6 +45,7 @@ jobs:
           }
           EOF
 
+          # Force App Build Config (Namespace & SDK Locked)
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -53,7 +61,7 @@ jobs:
           }
           EOF
 
-      - name: Process App Payload (Java/XML)
+      - name: Payload Implementation
         shell: python
         run: |
           import base64, os
@@ -68,21 +76,16 @@ jobs:
           save('xml_b64', "app/src/main/res/layout/activity_main.xml")
           save('manifest_b64', "app/src/main/AndroidManifest.xml")
           
-          # آئیکن اگر موجود ہو
           icon = p.get('icon_data_b64', '')
           if len(icon) > 50: save('icon_data_b64', "app/src/main/res/drawable/ic_launcher.png")
 
-      - name: Setup Gradle Wrapper (8.5)
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
+      - name: Force Build APK
+        # ہم نے 'gradlew' کے بجائے براہ راست 'gradle' استعمال کیا ہے جو اوپر لاک (Lock) کیا گیا ہے
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Build Debug APK
-        # یہاں ہم نے 'continue-on-error' ہٹا دیا ہے تاکہ اگر ایرر آئے تو پتہ چلے
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
+      - name: Upload Forced APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-V62-Standard
+          name: ${{ github.event.client_payload.app_name }}-V62-Forced
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error # اگر فائل نہ بنی تو بلڈ فیل دکھائے تاکہ ہمیں دھوکہ نہ ہو
