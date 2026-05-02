@@ -1,4 +1,4 @@
-name: System-Pro-V77-AI-Bank
+name: System-Pro-V77-Locked-Engine
 
 on:
   repository_dispatch:
@@ -17,37 +17,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 🏦 AI-Structure-Vault (Folders Initialization)
+      - name: 🛠️ Setup Gradle 8.5
         run: |
-          # بینک اسٹرکچر بنانا تاکہ سسٹم میچور ہو سکے
-          mkdir -p .system_pro/bank/syntax
-          mkdir -p .system_pro/bank/resources
-          mkdir -p .system_pro/bank/libraries
-          
-          # گریڈل ریکوری
+          rm -rf .gradle gradle/ gradlew gradlew.bat
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: 🧠 AI-Project-Manager (Placing Files in Bank)
+      - name: 🧠 AI-Logic-Vault (Path-Fixed)
         shell: python
         run: |
           import base64, os, re
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.faisal.systempro')
+          app_name = p.get('app_name', 'System Pro')
           path = pkg.replace('.', '/')
 
-          def vault_write(file_path, content, bank_path=None):
-              # فائل کو پروجیکٹ میں رکھنا
-              os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          def vault_write(file_path, content):
+              """محفوظ طریقے سے فائل لکھنے کی لاجک"""
+              directory = os.path.dirname(file_path)
+              # اگر ڈائریکٹری موجود نہیں اور پاتھ خالی نہیں ہے تو فولڈر بنائیں
+              if directory and not os.path.exists(directory):
+                  os.makedirs(directory, exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content.strip())
-              # فائل کا ایک کاپی بینک میں محفوظ کرنا (Next Time کے لیے)
-              if bank_path:
-                  os.makedirs(os.path.dirname(bank_path), exist_ok=True)
-                  with open(bank_path, "w", encoding="utf-8") as f:
-                      f.write(content.strip())
 
-          # --- 1. Syntax Bank Management ---
+          # --- 1. SETTINGS & ROOT (Locked) ---
           settings_logic = f"""
           pluginManagement {{ repositories {{ google(); mavenCentral(); gradlePluginPortal(); }} }}
           dependencyResolutionManagement {{ 
@@ -57,45 +51,70 @@ jobs:
           rootProject.name = "System-Pro-codestuido"
           include ':app'
           """
-          vault_write("settings.gradle", settings_logic, ".system_pro/bank/syntax/settings.bak")
+          vault_write("settings.gradle", settings_logic)
+          vault_write("build.gradle", "buildscript { repositories { google(); mavenCentral(); } dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }")
 
-          # --- 2. Resource Bank (Themes & Colors) ---
-          theme_logic = """<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>"""
-          vault_write("app/src/main/res/values/themes.xml", theme_logic, ".system_pro/bank/resources/neon_theme.bak")
-
-          # --- 3. App Core (Mapping & Sync) ---
+          # --- 2. APP MODULE (Locked) ---
           app_gradle = f"""
           apply plugin: 'com.android.application'
           android {{
               namespace '{pkg}'
               compileSdk 34
-              defaultConfig {{ applicationId "{pkg}"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0"; }}
+              defaultConfig {{
+                  applicationId "{pkg}"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }}
+              compileOptions {{
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }}
           }}
           dependencies {{
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }}
           """
-          vault_write("app/build.gradle", app_build_logic := app_gradle, ".system_pro/bank/libraries/app_build.bak")
+          vault_write("app/build.gradle", app_gradle)
 
-          # جاوا اور ایکس ایم ایل کو اپنی جگہ پر پلیس کرنا
+          # --- 3. SOURCE INJECTION (Fixed) ---
           java_raw = p.get('java_b64', '')
           if java_raw:
-              java_code = base64.b64decode(java_raw.split(",")[1] if "," in java_raw else java_raw).decode('utf-8')
+              raw_data = java_raw.split(",")[1] if "," in java_raw else java_raw
+              java_code = base64.b64decode(raw_data).decode('utf-8', errors='ignore')
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
               vault_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # مینی فیسٹ آٹو میجک
-          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/Theme.SystemPro"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>'
-          vault_write("app/src/main/AndroidManifest.xml", manifest)
+          xml_raw = p.get('xml_b64', '')
+          if xml_raw:
+              raw_xml = xml_raw.split(",")[1] if "," in xml_raw else xml_raw
+              xml_code = base64.b64decode(raw_xml).decode('utf-8', errors='ignore')
+              vault_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-      - name: 🚀 Mature Build Execution
+          # --- 4. MANIFEST & RESOURCES (Locked) ---
+          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
+                  <activity android:name="{pkg}.MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>"""
+          vault_write("app/src/main/AndroidManifest.xml", manifest)
+          vault_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
+          vault_write("app/src/main/res/values/themes.xml", '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>')
+
+      - name: 🚀 Final Mature Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: 💾 Artifacts Delivery
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Stable-Build
-          path: |
-             app/build/outputs/apk/debug/*.apk
-             .system_pro/bank/
+          name: ${{ github.event.client_payload.app_name }}-Stable-V77
+          path: app/build/outputs/apk/debug/*.apk
