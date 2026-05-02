@@ -1,4 +1,4 @@
-name: System-Pro-V1300-Shield-Sync
+name: System-Pro-V1400-Atomic-Sync
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  shield_sync:
+  atomic_sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,26 +16,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Force Sync (Wiping Workflow Conflicts)
+      - name: 2. Direct Source Injection
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # ان کی ریپوزٹری کو عارضی طور پر کلون کرنا
-          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_xerox
-          
-          # 🛑 سب سے اہم قدم: ان کا ورک فلو فولڈر مکمل مٹا دیں تاکہ گٹ ہب اعتراض نہ کرے
-          rm -rf temp_xerox/.github
-          
-          # آپ کی ریپوزٹری سے پرانا سارا ڈیٹا اڑانا (سوائے آپ کی اس وائی اے ایم ایل کے)
+          # ان کی ریپوزٹری کو ریموٹ کے طور پر جوڑنا
+          git remote add xerox https://github.com/fastlane/fastlane.git
+          git fetch xerox master
+
+          # آپ کی ریپوزٹری سے پرانا سارا کچرا صاف کرنا (سوائے آپ کی اس وائی اے ایم ایل کے)
           find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+
+          # براہ راست ڈیٹا نکالنا (بغیر .github فولڈر کے تاکہ پرمیشن ایرر نہ آئے)
+          # یہ کمانڈ صرف ضروری فائلیں اٹھائے گی
+          git checkout xerox/master -- .
           
-          # نیا ڈیٹا (Source Code, Assets, Libs) آپ کے پاس منتقل کرنا
-          shopt -s dotglob
-          cp -rf temp_xerox/* .
-          rm -rf temp_xerox
-          
-          # تبدیلیوں کو زبردستی پش کرنا
-          git add -A
-          git commit -m "System Pro: Professional Structure Applied (V1300)" || echo "No changes"
+          # مخصوص پریشان کن فائلیں اگر بچ گئی ہوں تو ہٹانا
+          rm -rf .github/workflows/announce_release.yml || true
+          rm -rf .github/workflows/ci.yml || true
+          rm -rf .github/workflows/issues.yml || true
+
+          # تبدیلیوں کو محفوظ کر کے پش کرنا
+          git add .
+          git commit -m "System Pro: Atomic Sync V1400 Success" || echo "No changes"
           git push origin main --force
