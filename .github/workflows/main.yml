@@ -22,7 +22,7 @@ jobs:
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: AI-Autonomous-Injector & Precise Path Mapper
+      - name: AI-Autonomous-Injector & Dependency Fixer
         shell: python
         run: |
           import base64, os, re
@@ -32,14 +32,13 @@ jobs:
           path = pkg.replace('.', '/')
 
           def safe_write(file_path, content):
-              # روٹ فائلوں کے لیے ڈائریکٹری چیک کو بہتر بنایا گیا ہے
               directory = os.path.dirname(file_path)
               if directory and not os.path.exists(directory):
                   os.makedirs(directory, exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # --- 1. روٹ فائلز (Root Paths) ---
+          # --- 1. روٹ سیٹ اپ ---
           safe_write("settings.gradle", f"include ':app'\nrootProject.name='System-Pro-codestuido'")
           
           root_gradle = """
@@ -53,7 +52,7 @@ jobs:
           """
           safe_write("build.gradle", root_gradle)
 
-          # --- 2. ایپ ماڈیول (App Specific Paths) ---
+          # --- 2. ایپ ماڈیول (لائبریری ورژن اپ ڈیٹ) ---
           app_gradle = f"""
           plugins {{
               id 'com.android.application'
@@ -68,21 +67,26 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }}
+              compileOptions {{
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }}
           }}
           dependencies {{
-              implementation 'com.google.android.material:material:1.11.0'
+              // اسٹینڈرڈ اور مستحکم ورژنز
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }}
           """
           safe_write("app/build.gradle", app_gradle)
 
-          # --- 3. سورس کوڈ میپنگ (Java & XML Paths) ---
+          # --- 3. سورس کوڈ (Java & XML) ---
           java_raw = p.get('java_b64', '')
           if java_raw:
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
-              # فائل کو بالکل درست اینڈرائیڈ اسٹرکچر میں پلیس کرنا
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
           xml_raw = p.get('xml_b64', '')
@@ -91,13 +95,21 @@ jobs:
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # --- 4. مینی فیسٹ اور ریسورسز ---
+          # --- 4. مینی فیسٹ اور تھیمز ---
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
-          safe_write("app/src/main/res/values/themes.xml", '<resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/></resources>')
+          # تھیم کو میٹریل ڈیزائن کے مطابق اپ ڈیٹ کیا گیا
+          themes_content = """
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#00FFCC</item>
+              </style>
+          </resources>
+          """
+          safe_write("app/src/main/res/values/themes.xml", themes_content)
           
           manifest = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro" android:icon="@mipmap/ic_launcher">
+              <application android:label="@string/app_name" android:theme="@style/Theme.SystemPro">
                   <activity android:name="{pkg}.MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -108,7 +120,7 @@ jobs:
           </manifest>"""
           safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-      - name: 🚀 Final Build Execution
+      - name: 🚀 Final Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload APK
