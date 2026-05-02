@@ -1,28 +1,30 @@
-name: System Pro - Absolute AI Logic
+name: System Pro - Master Path Fixer & AI Build
 on:
   repository_dispatch:
-    types: [system_pro_ai_orchestrate]
+    types: [system_pro_master_sync]
+  workflow_dispatch: # مینوئل رن کے لیے
 
 permissions:
   contents: write
 
 jobs:
-  ai-orchestrator:
+  fix-and-build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Deep Context Checkout
+      - name: 1. Checkout Full Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Set Up Build Environment
-        uses: actions/setup-java@v4
+      - name: 2. Set Up Python & Gemini AI
+        uses: actions/setup-python@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
+          python-version: '3.9'
 
-      - name: 3. Gemini AI Code Refactoring
+      - name: 3. Install AI Dependencies
+        run: pip install -q -U google-generativeai
+
+      - name: 4. Gemini AI - Intelligent Path Re-Mapping
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -33,52 +35,41 @@ jobs:
           genai.configure(api_key=os.environ["GEMINI_API_KEY"])
           model = genai.GenerativeModel('gemini-pro')
 
-          # ریپوزٹری کا مکمل نقشہ تیار کرنا
-          project_files = []
-          for root, dirs, files in os.walk("."):
-              for file in files:
-                  if file.endswith(('.java', '.kt', '.xml', '.gradle')):
-                      project_files.append(os.path.join(root, file))
+          # ریپوزٹری کا ڈھانچہ اسکین کرنا
+          files = []
+          for root, dirs, f_names in os.walk("."):
+              for f in f_names:
+                  if f.endswith(('.java', '.kt', '.xml', '.gradle', '.json')):
+                      files.append(os.path.join(root, f))
 
-          # Gemini کو سخت ہدایات دینا تاکہ کوئی سنٹیکس غلطی نہ ہو
-          prompt = f"""
-          Analyze this Android project files: {project_files[:40]}.
-          Duty: Refactor everything to package 'com.faisal.systempro' and app name 'System Pro'.
-          Constraint 1: NO SYNTAX ERRORS. Ensure all imports match the new directory structure.
-          Constraint 2: NO DRINK REFERENCES.
-          Constraint 3: Output only a bash script with 'mkdir -p', 'mv', and 'sed' commands.
-          """
+          # Gemini کو ہدایات تاکہ وہ پاتھ فکس کرے
+          prompt = f"Analyze these files: {files[:30]}. Generate a bash script to: 1. Create directory 'app/src/main/java/com/faisal/systempro'. 2. Move all source files there. 3. Use 'sed' to update ALL package names and imports to 'com.faisal.systempro'. 4. Update 'applicationId' in build.gradle. Output ONLY bash code."
           
           response = model.generate_content(prompt)
-          with open("refactor_engine.sh", "w") as f:
-              # صرف کوڈ بلاک نکالنا اگر اے آئی نے مارک ڈاؤن استعمال کیا ہو
-              clean_code = response.text.replace('```bash', '').replace('```', '')
-              f.write(clean_code)
+          with open("fix_paths.sh", "w") as f:
+              clean_script = response.text.replace('```bash', '').replace('```', '')
+              f.write(clean_script)
           EOF
 
-      - name: 4. Pre-Execution Safety Check
+      - name: 5. Execute Path Fixes
         run: |
-          if [ -f "refactor_engine.sh" ]; then
-            chmod +x refactor_engine.sh
-            # خالی لائنوں یا غلط کمانڈز کی صفائی
-            sed -i '/^$/d' refactor_engine.sh 
+          if [ -f "fix_paths.sh" ]; then
+            chmod +x fix_paths.sh
+            sh fix_paths.sh
           else
-            echo "AI failed to generate script. Aborting to prevent errors."
-            exit 1
+            echo "AI Script not found!" && exit 1
           fi
 
-      - name: 5. Execute Refactoring & Build
+      - name: 6. Verify and Build APK (Forced Build)
         run: |
-          sh refactor_engine.sh
           chmod +x gradlew
-          # صرف سنٹیکس چیک کرنے کے لیے (Assemble کے بجائے پہلے compile چیک کرنا)
-          ./gradlew compileDebugJavaWithJavac --stacktrace
-          ./gradlew assembleDebug
+          ./gradlew clean assembleDebug --stacktrace --info
 
-      - name: 6. Push Verified Changes
-        run: |
-          git config --global user.name "Muzammil-AI"
-          git config --global user.email "muzammil@systempro.ai"
-          git add .
-          git diff-index --quiet HEAD || git commit -m "System Pro: Zero-Error AI Refactoring Completed"
-          git push
+      - name: 7. Upload Verified Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V${{ github.run_number }}
+          # یہ وائلڈ کارڈ ہر جگہ سے APK تلاش کر لے گا
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
