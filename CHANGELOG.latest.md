@@ -1,1 +1,0 @@
-* [deliver] fix app previews always running during usage. (#29989) via Connor Tumbleson (@iBotPeaches)
