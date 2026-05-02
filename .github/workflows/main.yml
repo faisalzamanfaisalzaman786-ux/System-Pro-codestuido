@@ -1,4 +1,4 @@
-name: System-Pro-V75-Main-Engine
+name: System-Pro-V77-Main-Engine
 
 on:
   repository_dispatch:
@@ -11,7 +11,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Environment
+      - name: Setup Java & Gradle
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -22,11 +22,12 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: AI-Master-Injector (Resource Guard Mode)
+      - name: AI-Autonomous-Injector
         shell: python
         run: |
           import base64, os, re
 
+          # ڈیٹا حاصل کرنا
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.system.pro')
           app_name = p.get('app_name', 'System Pro')
@@ -37,7 +38,7 @@ jobs:
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # 1. Java Injection & Package Fix
+          # 1. جاوا انجکشن (Auto Package Fix)
           java_raw = p.get('java_b64', '')
           java_code = ""
           if java_raw:
@@ -47,31 +48,45 @@ jobs:
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # 2. Main XML Injection
+          # 2. XML انجکشن اور خودکار اسٹائل تخلیق (Style Healer)
           xml_raw = p.get('xml_b64', '')
           if xml_raw:
               if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
+              xml_code = re.sub(r'```xml|```', '', xml_code).strip()
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-          # 3. RESOURCE GUARD (مسنگ فائلز اور آئی ڈیز کا علاج)
-          # اگر جاوا میں dialog_settings ہے تو فائل بناؤ
+              # اے آئی اسکینر: تمام مسنگ اسٹائلز کو ڈھونڈنا
+              styles_path = "app/src/main/res/values/styles.xml"
+              # XML میں جہاں بھی style="@style/..." استعمال ہوا ہے اسے تلاش کرنا
+              found_styles = re.findall(r'@style/([\w.]+)', xml_code)
+              
+              # بیس اسٹائل بنانا
+              final_style_content = '<resources>\n    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>'
+              
+              # ہر مسنگ اسٹائل کے لیے ایک اسٹینڈرڈ ڈیفینیشن بنانا
+              for s in set(found_styles):
+                  if s != "AppTheme":
+                      final_style_content += f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n'
+                      final_style_content += '        <item name="android:layout_width">wrap_content</item>\n'
+                      final_style_content += '        <item name="android:layout_height">wrap_content</item>\n    </style>'
+              
+              final_style_content += '\n</resources>'
+              safe_write(styles_path, final_style_content)
+
+          # 3. آٹو ریسورس گارڈ (ڈائیلاگ اور آئی ڈیز)
           if "dialog_settings" in java_code:
-              dialog_xml = '''<?xml version="1.0" encoding="utf-8"?>
-              <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-                  android:orientation="vertical" android:padding="16dp"
-                  android:layout_width="match_parent" android:layout_height="wrap_content">
-                  <EditText android:id="@+id/etAppName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="App Name"/>
-                  <EditText android:id="@+id/etPkgName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Package"/>
-                  <EditText android:id="@+id/etGhToken" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Token"/>
-                  <EditText android:id="@+id/etGhRepo" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Repo"/>
-              </LinearLayout>'''
+              dialog_xml = '<?xml version="1.0" encoding="utf-8"?>\n<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:orientation="vertical" android:padding="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">'
+              # جاوا سے آئی ڈیز نکال کر ایکس ایم ایل میں شامل کرنا
+              ids = re.findall(r'R\.id\.(\w+)', java_code)
+              for id_name in set(ids):
+                  dialog_xml += f'\n    <EditText android:id="@+id/{id_name}" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="{id_name}"/>'
+              dialog_xml += '\n</LinearLayout>'
               safe_write("app/src/main/res/layout/dialog_settings.xml", dialog_xml)
 
-          # 4. Sync Configurations
+          # 4. فائنل سنک (Gradle & Manifest)
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
           
-          # Gradle & Manifest Sync
           for f_path in ["app/build.gradle", "app/src/main/AndroidManifest.xml"]:
               if os.path.exists(f_path):
                   with open(f_path, "r") as f: c = f.read()
@@ -80,11 +95,11 @@ jobs:
                   c = re.sub(r'android:name="[\w.]+"', f'android:name="{pkg}.MainActivity"', c, 1)
                   safe_write(f_path, c)
 
-      - name: Final Build Execution
+      - name: Build Final Stable APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload Finished APK
+      - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Stable
+          name: ${{ github.event.client_payload.app_name }}-Autonomous-Build
           path: app/build/outputs/apk/debug/*.apk
