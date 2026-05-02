@@ -1,7 +1,46 @@
 name: System-Pro-V603-Remote-Link-Sync
 
 on:
+  workflow_dispatch:name: System-Pro-V605-Smart-Data-Sync
+
+on:
   workflow_dispatch:
+
+jobs:
+  sync_data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 1. Checkout Your Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 2. Clone and Clean (Bypassing Workflow Error)
+        run: |
+          git config --global user.name "System Pro AI"
+          git config --global user.email "ai@systempro.com"
+
+          # بیرونی ریپوزٹری کلون کرنا
+          git clone --depth 1 https://github.com/fastlane/fastlane.git fastlane_temp
+          
+          # سب سے اہم مرحلہ: ان کی تمام YAML فائلوں کو مٹانا تاکہ ایرر نہ آئے
+          rm -rf fastlane_temp/.github
+          
+          # آپ کی ریپوزٹری سے پرانا سارا ڈیٹا مٹانا (سوائے آپ کی موجودہ YAML کے)
+          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
+          
+          # اب باقی سارا ڈیٹا (Source Code, Assets, Libs) آپ کے پاس منتقل کرنا
+          shopt -s dotglob
+          cp -rf fastlane_temp/* .
+          rm -rf fastlane_temp
+          
+          # زبردستی اپ لوڈ (Force Push)
+          git add -A
+          git commit -m "System Pro: Professional Data Sync V605" || echo "No changes"
+          git push origin main --force
+
 
 jobs:
   link_and_sync:
