@@ -2,7 +2,7 @@ name: System-Pro-V77-Main-Engine
 
 on:
   repository_dispatch:
-    types: [build-app]
+    types: [build-app] # آپ کے یو آئی کے 'event_type' سے مماثل ہے
 
 jobs:
   build:
@@ -27,9 +27,9 @@ jobs:
         run: |
           import base64, os, re
 
-          # ڈیٹا حاصل کرنا
+          # یو آئی پے لوڈ حاصل کرنا
           p = ${{ toJson(github.event.client_payload) }}
-          pkg = p.get('package_name', 'com.faisal.systempro') # ڈیفالٹ پیکج آپ کے نئے اسٹرکچر والا
+          pkg = p.get('package_name', 'com.faisal.systempro')
           app_name = p.get('app_name', 'System Pro')
           path = pkg.replace('.', '/')
 
@@ -38,42 +38,24 @@ jobs:
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content)
 
-          # 1. جاوا انجکشن (Mapping to app/src/main/java/...)
+          # 1. جاوا انجکشن (Decodes UI java_b64)
           java_raw = p.get('java_b64', '')
-          java_code = ""
           if java_raw:
+              # اگر ڈیٹا میں ہیڈر ہو تو اسے الگ کرنا
               if "," in java_raw: java_raw = java_raw.split(",")[1]
               java_code = base64.b64decode(java_raw).decode('utf-8', errors='ignore')
-              java_code = re.sub(r'```java|```', '', java_code).strip()
-              # پیکج نیم کو خودکار درست کرنا
+              # پیکج نیم کی خودکار درستی
               java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code) if "package " in java_code else f"package {pkg};\n\n" + java_code
-              # صحیح اسٹینڈرڈ پاتھ پر فائل لکھنا
               safe_write(f"app/src/main/java/{path}/MainActivity.java", java_code)
 
-          # 2. XML انجکشن اور خودکار اسٹائل تخلیق
+          # 2. ایکس ایم ایل انجکشن (Decodes UI xml_b64)
           xml_raw = p.get('xml_b64', '')
           if xml_raw:
               if "," in xml_raw: xml_raw = xml_raw.split(",")[1]
               xml_code = base64.b64decode(xml_raw).decode('utf-8', errors='ignore')
-              xml_code = re.sub(r'```xml|```', '', xml_code).strip()
               safe_write("app/src/main/res/layout/activity_main.xml", xml_code)
 
-              # اسٹائلز کو درست کرنا (Style Healer)
-              styles_path = "app/src/main/res/values/styles.xml"
-              found_styles = re.findall(r'@style/([\w.]+)', xml_code)
-              final_style_content = '<resources>\n    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"/>'
-              
-              for s in set(found_styles):
-                  if s != "Theme.SystemPro":
-                      final_style_content += f'\n    <style name="{s}" parent="Widget.MaterialComponents.Button">\n'
-                      final_style_content += '        <item name="android:layout_width">wrap_content</item>\n'
-                      final_style_content += '        <item name="android:layout_height">wrap_content</item>\n    </style>'
-              
-              final_style_content += '\n</resources>'
-              safe_write(styles_path, final_style_content)
-
-          # 3. مینی فیسٹ اور گریڈل کی خودکار میپنگ
-          # مینی فیسٹ میں پیکج اور مین ایکٹیویٹی کو سنک کرنا
+          # 3. مینی فیسٹ اور گریڈل کی میپنگ (Syncing with UI Settings)
           manifest_path = "app/src/main/AndroidManifest.xml"
           if os.path.exists(manifest_path):
               with open(manifest_path, "r") as f: m = f.read()
@@ -81,7 +63,6 @@ jobs:
               m = re.sub(r'android:name="[\w.]+"', f'android:name=".MainActivity"', m, 1)
               safe_write(manifest_path, m)
 
-          # گریڈل میں namespace اور applicationId کو سنک کرنا
           gradle_path = "app/build.gradle"
           if os.path.exists(gradle_path):
               with open(gradle_path, "r") as f: g = f.read()
@@ -89,10 +70,10 @@ jobs:
               g = re.sub(r'applicationId\s+".*"', f'applicationId "{pkg}"', g)
               safe_write(gradle_path, g)
 
-          # ایپ کا نام سیٹ کرنا
+          # ایپ کا نام strings.xml میں ڈالنا
           safe_write("app/src/main/res/values/strings.xml", f'<resources><string name="app_name">{app_name}</string></resources>')
 
-      - name: Build Final Stable APK
+      - name: Build Stable APK
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload Result
