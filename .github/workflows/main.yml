@@ -1,13 +1,13 @@
-name: System-Pro-V700-Auto-Mirror
+name: System-Pro-V800-Auto-Executor
 
 on:
   push:
     branches:
-      - main # جیسے ہی مین برانچ پر کوئی بھی تبدیلی (Update) ہوگی، یہ رن ہو جائے گا
-  workflow_dispatch: # ضرورت پڑنے پر مینوئل رن کا آپشن بھی موجود رہے گا
+      - main
+  workflow_dispatch:
 
 jobs:
-  auto_sovereign_sync:
+  auto_sync_and_wipe:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,29 +17,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Force Sync External Data (The Xerox Move)
+      - name: 2. Direct Xerox Sync (No Errors)
         run: |
           git config --global user.name "System Pro AI"
           git config --global user.email "ai@systempro.com"
 
-          # بیرونی ریپوزٹری (Fastlane) سے ڈیٹا لینا
-          git clone --depth 1 https://github.com/fastlane/fastlane.git temp_fastlane
-          
-          # سیکیورٹی کے لیے ان کے ورک فلو فولڈر کو ہٹانا تاکہ ایرر نہ آئے
-          rm -rf temp_fastlane/.github
-          
-          # آپ کی ریپوزٹری سے پرانا ڈیٹا مٹانا (سوائے گٹ اور آپ کی اس موجودہ YAML کے)
-          find . -maxdepth 1 ! -name '.github' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} +
-          
-          # نیا پروفیشنل اسٹرکچر آپ کے کوڈ ٹیب میں شفٹ کرنا
-          shopt -s dotglob
-          cp -rf temp_fastlane/* .
-          rm -rf temp_fastlane
-          
-          # تبدیلیوں کو زبردستی اپ لوڈ کرنا
-          git add -A
-          git commit -m "Auto-Update: Xerox Structure Refreshed" || echo "No changes detected"
-          git push origin main --force
+          # ان کی ریپوزٹری کو بطور ریموٹ ایڈ کرنا
+          git remote add external https://github.com/fastlane/fastlane.git
+          git fetch external master
 
-      - name: 3. Verify New Files
-        run: ls -R
+          # آپ کی ریپوزٹری کو ان کے اسٹرکچر پر ری سیٹ کرنا (پورا ڈیٹا واش ہو جائے گا)
+          # ہم ان کے ورک فلو فولڈر (.github) کو ہٹا دیں گے تاکہ گٹھاب اعتراض نہ کرے
+          git checkout external/master -- .
+          rm -rf .github/workflows/announce_release.yml # مخصوص ایرر والی فائل ہٹانا
+          
+          # تبدیلیوں کو زبردستی پش کرنا
+          git add .
+          git commit -m "System Pro: Final Xerox Sync V800" || echo "No changes"
+          git push origin main --force
