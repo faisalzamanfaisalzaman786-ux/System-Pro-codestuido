@@ -1,7 +1,7 @@
 name: System Pro - Auto-Dispatch Architect
 on:
-  workflow_dispatch:true
-  repository_dispatch:true
+  workflow_dispatch: # مینوئل کنٹرول کے لیے
+  repository_dispatch:
     types: [trigger_system_pro_init] # آٹو اپڈیٹ سگنل کے لیے
 
 permissions:
