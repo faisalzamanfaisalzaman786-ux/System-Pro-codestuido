@@ -1,88 +1,40 @@
-name: System Pro - Absolute Recovery & Wash
+name: System Pro - Final Absolute Purge
 on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [system_pro_recovery_sync]
+  workflow_dispatch: # مینوئلی رن کرنے کے لیے
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
-  repair-and-clean:
+  absolute-clean:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Full Repository
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2. Set Up Gemini AI (The Doctor)
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: 3. Intelligent File Recovery & Re-Mapping
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: 2. Selective Deletion (Preserve .github)
         run: |
-          python3 << 'EOF'
-          import os
-          import google.generativeai as genai
+          echo "🧹 Starting Absolute Purge..."
+          
+          # یہ کمانڈ .github فولڈر کے علاوہ باقی ہر چیز (فائلیں اور فولڈرز) ڈیلیٹ کر دے گی
+          find . -maxdepth 1 ! -name ".github" ! -name "." ! -name ".." -exec rm -rf {} +
+          
+          echo "✅ Everything deleted except the .github folder."
 
-          genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-          model = genai.GenerativeModel('gemini-pro')
-
-          # 1. پہلے سے موجود ڈھانچہ بنانا
-          base_path = "app/src/main/java/com/faisal/systempro"
-          os.makedirs(base_path, exist_ok=True)
-
-          # 2. بکھری ہوئی فائلوں کو تلاش کرنا (Deep Search)
-          # ہم ہر اس فائل کو پکڑیں گے جس میں 'package' یا 'import' لکھا ہو
-          for root, dirs, files in os.walk("."):
-              for file in files:
-                  if file.endswith(('.java', '.kt')):
-                      old_path = os.path.join(root, file)
-                      new_path = os.path.join(base_path, file)
-                      if base_path not in old_path:
-                          os.rename(old_path, new_path)
-                          print(f"Recovered: {file} to {new_path}")
-
-          # 3. اگر مین فائلیں ابھی بھی غائب ہیں تو Gemini سے لکھوانا
-          if not os.listdir(base_path):
-              prompt = "Generate a professional Android MainActivity.java for package com.faisal.systempro. Include basic setup and a Neon UI theme reference. No drinks."
-              response = model.generate_content(prompt)
-              with open(os.path.join(base_path, "MainActivity.java"), "w") as f:
-                  f.write(response.text)
-          EOF
-
-      - name: 4. Permanent Wash (Removing Junk)
-        run: |
-          echo "🧹 Permanent Wash in progress..."
-          # ونڈوز کی فالتو فائلیں اور کچرا صاف کرنا
-          find . -type f \( -name "*.exe" -o -name "*.dll" -o -name "*.bin" -o -name "*.bat" \) -delete
-          # پرانے کیشے فولڈرز
-          rm -rf .gradle build .cxx || true
-          # فالتو ٹیکسٹ فائلیں
-          find . -maxdepth 1 -type f -name "*.txt" ! -name "requirements.txt" ! -name "README.md" -delete
-
-      - name: 5. Final Sync & Forced Push
+      - name: 3. Verify and Sync
         run: |
           git config --global user.name "Muzammil-AI"
           git config --global user.email "muzammil@systempro.ai"
+          
+          # تمام تبدیلیوں کو ایڈ کرنا
           git add .
+          
+          # اگر ریپوزٹری پہلے سے صاف ہے تو میسج دے، ورنہ فورس پش کرے
           if git diff --staged --quiet; then
-            echo "Everything is clean and in place."
+            echo "Repository is already in the desired clean state."
           else
-            git commit -m "System Pro: Recovered Source, Washed Junk & Re-mapped Paths"
+            git commit -m "System Pro: Final Purge - Only .github workflow folder preserved"
             git push origin HEAD:${{ github.ref }} --force
           fi
-
-      - name: 6. Trigger Main Engine
-        if: success()
-        run: |
-          curl -X POST \
-          -H "Accept: application/vnd.github.v3+json" \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          https://api.github.com/repos/${{ github.repository }}/dispatches \
-          -d '{"event_type": "system_pro_master_build"}'
