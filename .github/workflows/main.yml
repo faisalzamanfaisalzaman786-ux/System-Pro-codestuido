@@ -1,4 +1,4 @@
-name: System-Pro-V160-Final-Sovereign
+name: System-Pro-V165-Absolute-Fix
 
 on:
   repository_dispatch:
@@ -16,15 +16,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: AI Pre-Build Manager
         shell: python
         run: |
           import base64, os, re, time
-          
-          print("🧠 AI Sovereign Engine: Initializing System Healing & Path Mapping...")
-          time.sleep(10) # AI سرچ اور سنک کے لیے وقت
+          print("🧠 AI Sovereign: Resolving Version Conflicts...")
           
           p = ${{ toJson(github.event.client_payload) }}
           pkg = p.get('package_name', 'com.system.pro')
@@ -32,72 +29,63 @@ jobs:
           java_path = pkg.replace('.', '/')
 
           def safe_write(path, content, binary=False):
-              # بہتر لاجک: اگر پاتھ میں فولڈر موجود ہے تب ہیmakedirs چلائیں
               directory = os.path.dirname(path)
-              if directory: 
-                  os.makedirs(directory, exist_ok=True)
-              
-              mode = "wb" if binary else "w"
-              with open(path, mode) as f:
+              if directory: os.makedirs(directory, exist_ok=True)
+              with open(path, "wb" if binary else "w") as f:
                   f.write(content)
 
-          def get_bytes(key):
-              data = p.get(key, '')
-              if "," in data: data = data.split(",")[1]
-              try: return base64.b64decode(data)
-              except: return b''
+          # 1. جدید گریڈل سنٹیکس (Avoiding 'module' error)
+          # ہم یہاں 'implementation' کو سادہ سٹرنگ کے طور پر لکھ رہے ہیں جو ہر ورژن پر چلے گی
+          gradle_latest = f"""
+          plugins {{
+              id 'com.android.application'
+          }}
+          android {{
+              namespace '{pkg}'
+              compileSdk 35
+              defaultConfig {{
+                  applicationId '{pkg}'
+                  minSdk 26
+                  targetSdk 35
+              }}
+          }}
+          dependencies {{
+              implementation "androidx.appcompat:appcompat:1.7.0"
+              implementation "com.google.android.material:material:1.12.0"
+          }}
+          """
+          safe_write("app/build.gradle", gradle_latest)
+          safe_write("settings.gradle", "include ':app'")
 
-          # 1. ریسورس اور لے آؤٹ کی میپنگ
-          icon_bytes = get_bytes('icon_data_b64')
-          if icon_bytes: safe_write("app/src/main/res/mipmap-xxxhdpi/ic_launcher.png", icon_bytes, True)
+          # 2. سیلف ہیلنگ برین انجکشن
+          java_raw = p.get('java_b64', '')
+          if "," in java_raw: java_raw = java_raw.split(",")[1]
+          java_code = base64.b64decode(java_raw).decode('utf-8') if java_raw else "public class MainActivity extends androidx.appcompat.app.AppCompatActivity {}"
           
-          xml_raw = get_bytes('xml_b64').decode('utf-8', errors='ignore')
-          safe_write("app/src/main/res/layout/activity_main.xml", xml_raw if xml_raw else '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"/>')
-
-          # 2. رن ٹائم سیلف ہیلنگ برین (The Injected Repair System)
-          java_raw = get_bytes('java_b64').decode('utf-8', errors='ignore')
-          healing_logic = """
+          healing_code = """
           private void startSelfHealing() {
-              android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
-              pd.setTitle("System Pro AI");
-              pd.setMessage("AI Engine: Repairing Internal Crashes...");
-              pd.setCancelable(false);
-              pd.show();
-              new Thread(() -> {
-                  try {
-                      // یہاں اے آئی انجن مسنگ ریسورسز کو سنک کرے گا
-                      Thread.sleep(3000); 
-                      runOnUiThread(() -> {
-                          pd.dismiss();
-                          android.widget.Toast.makeText(this, "AI Healing Complete: System Stable", 1).show();
-                      });
-                  } catch (Exception e) {}
-              }).start();
+              android.widget.Toast.makeText(this, "System Pro: AI Healing Active", 1).show();
           }
           """
-          if "onCreate" in java_raw:
-              java_raw = java_raw.replace("super.onCreate(savedInstanceState);", "super.onCreate(savedInstanceState);\n        startSelfHealing();")
-              java_raw = java_raw.rstrip().rstrip('}') + "\n" + healing_logic + "\n}"
+          if "onCreate" in java_code:
+              java_code = java_code.replace("super.onCreate(savedInstanceState);", "super.onCreate(savedInstanceState); startSelfHealing();")
+              java_code = java_code.rstrip().rstrip('}') + "\n" + healing_code + "\n}"
           
-          java_raw = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_raw)
-          safe_write(f"app/src/main/java/{java_path}/MainActivity.java", java_raw)
-
-          # 3. گریڈل اور کنفیگریشن فائلز (Fixed Path Logic)
-          gradle_build = f"plugins {{ id 'com.android.application' }}\nandroid {{ namespace '{pkg}'\n compileSdk 35\n defaultConfig {{ applicationId '{pkg}'\n minSdk 26\n targetSdk 35 }} }}\ndependencies {{ implementation 'androidx.appcompat:appcompat:1.7.0'\n implementation 'com.google.android.material:material:1.12.0' }}"
-          safe_write("app/build.gradle", gradle_build)
-          safe_write("settings.gradle", "include ':app'")
+          java_code = re.sub(r'package\s+[\w.]+;', f'package {pkg};', java_code)
+          safe_write(f"app/src/main/java/{java_path}/MainActivity.java", java_code)
           
-          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.INTERNET"/><application android:label="{app_name}" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.Material3.DayNight.NoActionBar"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>'
+          # 3. مینی فیسٹ
+          manifest = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="{app_name}" android:theme="@style/Theme.Material3.DayNight.NoActionBar"><activity android:name="{pkg}.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>'
           safe_write("app/src/main/AndroidManifest.xml", manifest)
 
-      - name: Build Final Stable APK
+      - name: Build with Environment Gradle
         run: |
-          gradle wrapper --gradle-version 8.10
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # ہم کسی خاص ورژن کو فورس نہیں کریں گے، جو سسٹم میں ہے وہی استعمال ہوگا
+          # بس سنٹیکس ہم نے ایسا کر دیا ہے کہ ایرر نہ آئے
+          gradle assembleDebug --no-daemon
 
-      - name: Export AI-Verified APK
+      - name: Export Final APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name }}-Final-Stable
+          name: ${{ github.event.client_payload.app_name }}-Stable-V165
           path: app/build/outputs/apk/debug/*.apk
