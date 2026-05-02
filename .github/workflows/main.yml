@@ -6,10 +6,17 @@ on:
   repository_dispatch:
     types: [build-app]
   workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Custom Package Name'
+        required: false
+        default: 'com.faisal.systempro'
 
-# تمام ضروری پرمیشنز جو فیصل بھائی نے سیٹ کی ہیں
+# آٹو پائلٹ کو فائلیں پش کرنے اور ایکشنز چلانے کی مکمل اجازت
 permissions:
   contents: write
+  actions: write
+  statuses: write
 
 jobs:
   faisal_auto_engine:
@@ -26,18 +33,24 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: 🧠 AI-Self-Healing-Logic
+      - name: 🧠 AI-Self-Healing-Logic (Auto-Configuration)
         shell: python
         run: |
           import os
-          # فیصل بھائی، یہ فنکشن فائلز کو کلین طریقے سے ری رائٹ کرے گا تاکہ 'Line 1' والے ایرر نہ آئیں
+          
+          # پیکیج نیم نکالنے کی لاجک: اگر ڈسپیچ سے آئے تو وہ، ورنہ ڈیفالٹ
+          payload_pkg = "${{ github.event.client_payload.package_name }}"
+          input_pkg = "${{ github.event.inputs.package_name }}"
+          pkg = payload_pkg if payload_pkg and payload_pkg != "" else (input_pkg if input_pkg else "com.faisal.systempro")
+
           def vault_write(file_path, content):
               os.makedirs(os.path.dirname(file_path), exist_ok=True)
               with open(file_path, "w", encoding="utf-8") as f:
                   f.write(content.strip())
 
-          # 1. settings.gradle (Locked Configuration)
+          # 1. settings.gradle
           settings_content = """
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal(); } }
           dependencyResolutionManagement { 
@@ -49,7 +62,7 @@ jobs:
           """
           vault_write("settings.gradle", settings_content)
 
-          # 2. build.gradle (Root Fix - No Syntax Errors)
+          # 2. build.gradle (Root)
           root_build = """
           buildscript {
               repositories { google(); mavenCentral(); }
@@ -61,9 +74,7 @@ jobs:
           """
           vault_write("build.gradle", root_build)
 
-          # 3. app/build.gradle (Standardized for Gradle 8.5)
-          # پیکیج نیم فیصل بھائی کے ڈیفالٹ کے مطابق
-          pkg = "${{ github.event.client_payload.package_name }}" or "com.faisal.systempro"
+          # 3. app/build.gradle
           app_gradle = f"""
           apply plugin: 'com.android.application'
           android {{
@@ -87,6 +98,7 @@ jobs:
           }}
           """
           vault_write("app/build.gradle", app_gradle)
+          print(f"AI-Engine: Configuration complete for package: {pkg}")
 
       - name: 🛠️ Setup Gradle Wrapper
         run: |
