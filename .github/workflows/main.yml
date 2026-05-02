@@ -1,9 +1,12 @@
-name: System Pro - Standard Structure Architect
+name: System Pro - Auto-Dispatch Architect
 on:
-  workflow_dispatch: # اسے مینوئلی چلائیں تاکہ اسٹرکچر تیار ہو سکے
+  workflow_dispatch: # مینوئل کنٹرول کے لیے
+  repository_dispatch:
+    types: [trigger_system_pro_init] # آٹو اپڈیٹ سگنل کے لیے
 
 permissions:
   contents: write
+  actions: write # ڈسپیچ بھیجنے کے لیے ضروری ہے
 
 jobs:
   build-structure:
@@ -11,21 +14,21 @@ jobs:
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Create Standard Android Directory Structure
+      - name: 2. Construct Standard Java Structure
         run: |
-          echo "🏗️ Creating professional Android directory structure..."
-          # جاوا، ریسورسز اور گریڈل کے بنیادی فولڈرز بنانا
+          echo "🏗️ Building System Pro Java Structure..."
           mkdir -p app/src/main/java/com/faisal/systempro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
-          mkdir -p app/libs
 
-      - name: 3. Inject Standard Base Files
+      - name: 3. Inject Core Standard Files
         run: |
-          # 1. پروفیشنل مینی فیسٹ (AndroidManifest.xml)
+          # Manifest for com.faisal.systempro
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -45,7 +48,7 @@ jobs:
           </manifest>
           EOF
 
-          # 2. اسٹینڈرڈ جاوا مین ایکٹیویٹی (MainActivity.java)
+          # Professional Java MainActivity
           cat <<EOF > app/src/main/java/com/faisal/systempro/MainActivity.java
           package com.faisal.systempro;
           import android.app.Activity;
@@ -55,14 +58,12 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  // یہاں سے آپ کا جاوا پروجیکٹ شروع ہوگا
               }
           }
           EOF
 
-          # 3. بنیادی گریڈل فائلز (Standard Gradle Files)
+          # Standard Gradle Initialization
           echo "include ':app'" > settings.gradle
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral(); }
@@ -73,10 +74,21 @@ jobs:
           }
           EOF
 
-      - name: 4. Final Sync and Push
+      - name: 4. Auto-Update Sync & Force Push
         run: |
           git config --global user.name "Muzammil-AI"
           git config --global user.email "muzammil@systempro.ai"
           git add .
-          git commit -m "System Pro: Standard Android structure and base files initialized" || echo "No changes"
+          # تبدیلیوں کو زبردستی پش کرنا
+          git commit -m "System Pro: Auto-Updated Structure [Standard Java]" || echo "No changes"
           git push origin HEAD --force
+
+      - name: 5. Signal Success (Auto-Dispatch Next Stage)
+        if: success()
+        run: |
+          echo "🚀 Sending signal for next stage..."
+          curl -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/${{ github.repository }}/dispatches \
+          -d '{"event_type": "system_pro_ready_for_cloning"}'
