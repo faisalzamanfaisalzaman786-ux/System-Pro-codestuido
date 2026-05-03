@@ -48,6 +48,7 @@ jobs:
           PKG=$(echo "${RAW_PKG:-com.system.pro}" | tr '[:upper:]' '[:lower:]')
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
+          # 1. صفائی اور فولڈرز کی تیاری
           rm -rf app/src/main/res/mipmap-*
           rm -rf app/src/main/res/drawable*
           mkdir -p app/src/main/java/$PKG_PATH
@@ -59,19 +60,30 @@ jobs:
           echo "android.namespace = '$PKG'" > gradle.properties
           echo "android.useAndroidX = true" >> gradle.properties
 
+          # 2. آئیکن انجکشن (Original Icon)
           if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
             echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # کلرز اور تھیمز کے لیے سادہ echo استعمال کیا گیا ہے تاکہ ایرر نہ آئے
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
+          # 3. اوریجنل کلرز اور تھیمز (پے لوڈ سے کلر فائلز کی فراہمی)
+          # اگر پے لوڈ میں کلرز نہیں ہیں تو یہ ڈیفالٹ بیسک کلرز بنائے گا تاکہ بلڈ فیل نہ ہو
+          if [ -n "${{ github.event.client_payload.colors_b64 }}" ]; then
+            echo "${{ github.event.client_payload.colors_b64 }}" | base64 -d > app/src/main/res/values/colors.xml
+          else
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#6200EE</color><color name="colorPrimaryDark">#3700B3</color><color name="colorAccent">#03DAC5</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
+          fi
 
+          if [ -n "${{ github.event.client_payload.themes_b64 }}" ]; then
+            echo "${{ github.event.client_payload.themes_b64 }}" | base64 -d > app/src/main/res/values/themes.xml
+          else
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.DarkActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item></style></resources>' > app/src/main/res/values/themes.xml
+          fi
+
+          # 4. مینی فیسٹ، لے آؤٹ اور جاوا (اوریجنل کوڈ)
           if [ -n "${{ github.event.client_payload.manifest_b64 }}" ]; then
             echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
-            sed -i 's/android:theme="[^"]*"/android:theme="@style\/Theme.SystemPro"/' app/src/main/AndroidManifest.xml
           fi
 
           if [ -n "${{ github.event.client_payload.xml_b64 }}" ]; then
