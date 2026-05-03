@@ -16,24 +16,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Missing Project Files
+      - name: Purge & Rebuild Project Config
         run: |
+          # 1. پرانی فائلوں کا مکمل خاتمہ
+          rm -f build.gradle
+          rm -f settings.gradle
+          rm -rf app/build.gradle
+          
+          # 2. ضروری فولڈرز کی تیاری
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/assets
           mkdir -p gradle/wrapper
 
-          if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
-            echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          fi
+          # 3. نئی settings.gradle
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          include ':app'
+          rootProject.name = 'System-Pro'" > settings.gradle
 
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            curl -L https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-          fi
+          # 4. روٹ build.gradle (پلگ ان ورژن 8.2.2 کے ساتھ)
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
 
-          echo "include ':app'" > settings.gradle
-
-          echo "plugins { id 'com.android.application' version '8.2.2' }
+          # 5. ایپ لیول build.gradle
+          echo "apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
               compileSdk 34
@@ -54,11 +64,16 @@ jobs:
               }
           }" > app/build.gradle
 
+          # 6. گریڈل ورژن 8.5 کی پراپرٹیز اور جار فائل
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+          curl -L https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+
+          # 7. مینی فیسٹ (اگر موجود نہ ہو تو بن جائے)
           if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
             echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
           fi
 
-      - name: Setup Gradle
+      - name: Force Gradle 8.5 Wrapper
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
@@ -69,5 +84,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V116
+          name: System-Pro-V119
           path: "app/build/outputs/apk/debug/*.apk"
