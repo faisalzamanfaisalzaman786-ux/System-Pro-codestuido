@@ -29,13 +29,11 @@
         android:padding="16dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- EditText for user input -->
+        <!-- TextInputLayout without any drawable references -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Enter something"
-            app:startIconDrawable="@drawable/ic_edit"   <!-- placeholder, will not error if missing -->
-            >
+            android:hint="Enter something">
 
             <EditText
                 android:id="@+id/editText"
@@ -71,14 +69,14 @@
 
     </LinearLayout>
 
-    <!-- Floating Action Button -->
+    <!-- Floating Action Button (no icon, just a circular button) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:src="@drawable/ic_add"   <!-- placeholder icon, will not error if missing -->
+        android:src="@android:drawable/ic_input_add"
         app:tint="@android:color/white" />
 
     <!-- ProgressBar (hidden by default) -->
