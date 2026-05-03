@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # جاب 1: مکمل صفائی اور نئے سرے سے آفیشل فائلیں بنانا
+  # جاب 1: فزیکل ڈیلیشن اور آفیشل لاکنگ
   clean-and-setup:
     runs-on: ubuntu-latest
     permissions:
@@ -12,19 +12,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Total Purge (ہر پرانی چیز کا خاتمہ)
+      - name: Force Clean (جڑ سے صفائی)
         run: |
-          # 1. تمام پرانے فولڈرز، فائلیں اور پوشیدہ کیشے کو جڑ سے ختم کرنا
-          rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
-          find . -maxdepth 1 -not -path '*/.*' -not -name '.git' -not -name '.github' -delete
+          # 1. تمام فائلیں اور فولڈرز (سوائے .git اور .github) کو زبردستی ڈیلیٹ کرنا
+          rm -rf app src build gradle .gradle settings.gradle build.gradle gradlew gradlew.bat
           
-          # 2. بالکل نئی اور صاف ستھری آفیشل ڈائریکٹریز بنانا
+          # 2. گٹ کی تمام غیر ٹریک شدہ فائلوں کو صاف کرنا
+          git clean -fdx
+          
+          # 3. آفیشل ڈائریکٹریز بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/values app/src/main/res/layout
 
-      - name: Create Official Material (صرف وہی جو ضروری ہے)
+      - name: Create Official Structure
         run: |
-          # settings.gradle (Locking)
+          # settings.gradle
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -33,10 +37,10 @@ jobs:
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # root build.gradle
+          # build.gradle (Root)
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # app/build.gradle (آفیشل لائبریریز کے ساتھ)
+          # app/build.gradle
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -48,16 +52,13 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
-              // صرف وہ لائبریریز جو اینڈرائیڈ 14 (API 34) کے لیے لازمی ہیں
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" > app/build.gradle
 
-          # Manifest & Java (Fresh)
+          # Manifest & Java
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -85,10 +86,10 @@ jobs:
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
           git add -A
-          git commit -m "TOTAL PURGE: All legacy files removed, official structure only" || echo "No changes"
-          git push
+          git commit -m "CLEAN: Physical removal of all legacy build files" || echo "No changes"
+          git push --force
 
-  # جاب 2: آفیشل بلڈ رن کرنا
+  # جاب 2: آفیشل کلین بلڈ
   official-build:
     needs: clean-and-setup
     runs-on: ubuntu-latest
@@ -104,14 +105,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Run Build
+      - name: Run Official Build
         run: |
+          # گریڈل ریپر بنانا اور بلڈ چلانا
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Upload System Pro APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V140-Official
+          name: System-Pro-V141-Clean
           path: "app/build/outputs/apk/debug/*.apk"
