@@ -26,21 +26,26 @@ jobs:
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-xxhdpi
 
           echo "android.namespace = '$PKG'" > gradle.properties
           echo "android.useAndroidX = true" >> gradle.properties
 
           echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
-          
           echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "import $PKG.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
-          
           grep -vE "package |import .*\.R;" raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
 
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
           
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light"/></resources>' > app/src/main/res/values/styles.xml
+          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          fi
+
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color></resources>' > app/src/main/res/values/colors.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.DayNight.DarkActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item></style></resources>' > app/src/main/res/values/styles.xml
 
       - name: Build Official APK
         env:
