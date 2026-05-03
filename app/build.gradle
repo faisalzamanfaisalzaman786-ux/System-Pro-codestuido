@@ -10,17 +10,10 @@ android {
         versionName '1.0'
     }
     buildTypes { release { minifyEnabled false } }
-    
-    // ورژن کنفلکٹ ختم کرنے کے لیے فورس ریزولوشن
-    configurations.all {
-        resolutionStrategy {
-            force 'androidx.core:core:1.12.0'
-            force 'androidx.appcompat:appcompat:1.6.1'
-            force 'com.google.android.material:material:1.11.0'
-        }
-    }
 }
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    // ان ورژنز میں انٹرنل کنفلکٹ نہیں ہوتا
+    implementation 'androidx.appcompat:appcompat:1.6.0'
+    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
 }
