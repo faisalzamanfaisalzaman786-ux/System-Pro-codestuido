@@ -33,21 +33,22 @@ jobs:
 
           echo "android.namespace = '$PKG'" > gradle.properties
 
-          # 2. آئیکن انجکشن (Icon Solution)
+          # 2. آئیکن انجکشن
           if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
             echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # 3. نیون تھیم اور کلرز (Theme Solution)
+          # 3. نیون تھیم اور کلرز
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="dark_bg">#0A1022</color></resources>' > app/src/main/res/values/colors.xml
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="android:windowBackground">@color/dark_bg</item></style></resources>' > app/src/main/res/values/themes.xml
 
-          # 4. مینی فیسٹ فکس (Quoted EOF to preserve attributes)
-          # یہ حصہ 'name' ایٹریبیوٹس کو محفوظ رکھے گا
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          # 4. مینی فیسٹ فکس (Correct Namespace & Package Injection)
+          # یہاں EOF کو بغیر کوٹس کے استعمال کیا ہے تاکہ $PKG کی ویلیو اندر جا سکے
+          cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.microsoft.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$PKG">
               <application 
                   android:label="System Pro" 
                   android:icon="@mipmap/ic_launcher" 
