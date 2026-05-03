@@ -1,74 +1,43 @@
-name: System Pro Smart Builder
-on:
-  push:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
       - name: Create Missing Project Files
         run: |
-          # 1. ضروری فولڈرز بنانا (اگر موجود نہیں ہیں)
+          # 1. ضروری فولڈرز کی موجودگی یقینی بنانا
+          mkdir -p app
           mkdir -p gradle/wrapper
-          mkdir -p src/main/java/com/system/pro
-          mkdir -p src/main/res/layout
-          mkdir -p src/main/res/values
-          mkdir -p src/main/assets
 
           # 2. gradle-wrapper.properties (اگر غائب ہے)
           if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
             echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           fi
 
-          # 3. gradle-wrapper.jar ڈاؤن لوڈ کرنا (یہ بائنری فائل ہے، اس لیے ڈاؤن لوڈ کرنا ضروری ہے)
+          # 3. JAR فائل ڈاؤن لوڈ کرنا (اگر غائب ہو)
           if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
             curl -L https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
           fi
 
-          # 4. settings.gradle بنانا
-          if [ ! -f "settings.gradle" ]; then
-            echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-            dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
-            rootProject.name = 'System-Pro'" > settings.gradle
-          fi
+          # 4. Settings File (تاکہ پاتھ صحیح رہے)
+          echo "include ':app'" > settings.gradle
 
-          # 5. build.gradle (موجودہ فائلوں کے مطابق مینیج کرنا)
-          if [ ! -f "build.gradle" ]; then
-            echo "plugins { id 'com.android.application' version '8.2.2' }
-            android {
-                namespace 'com.system.pro'
-                compileSdk 34
-                sourceSets { main { manifest.srcFile 'src/main/AndroidManifest.xml'; res.srcDirs = ['src/main/res']; java.srcDirs = ['src/main/java']; assets.srcDirs = ['src/main/assets'] } }
-                defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
-            }" > build.gradle
-          fi
-
-          # 6. بنیادی مینی فیسٹ (اگر غائب ہے)
-          if [ ! -f "src/main/AndroidManifest.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > src/main/AndroidManifest.xml
-          fi
-
-      - name: Setup Gradle Wrapper
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-
-      - name: Build APK with Gradle 8.5
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload System Pro APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Full-Build
-          path: "**/build/outputs/apk/debug/*.apk"
+          # 5. ایپ لیول build.gradle کو فکس کرنا (یہ سب سے اہم ہے)
+          # ہم ایک نیا build.gradle بنائیں گے جو آپ کے پرانے ایررز (Realm اور SDK) کو ختم کر دے گا
+          echo "plugins {
+              id 'com.android.application' version '8.2.2'
+          }
+          android {
+              namespace 'com.system.pro'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.system.pro'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              sourceSets {
+                  main {
+                      manifest.srcFile '../src/main/AndroidManifest.xml'
+                      java.srcDirs = ['../src/main/java']
+                      res.srcDirs = ['../src/main/res']
+                      assets.srcDirs = ['../src/main/assets']
+                  }
+              }
+          }" > app/build.gradle
