@@ -18,15 +18,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Deep Clean and Force Structure
+      - name: Ultimate Deep Clean
         run: |
-          # 1. ہر پرانی فائل اور پوشیدہ فولڈر کو ڈیلیٹ کرنا (تاکہ کنفلکٹ کا نام و نشان نہ رہے)
-          rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src .github/workflows/old_*
+          # ہر قسم کی پرانی کنفیگریشن اور فائلوں کا خاتمہ
+          rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
+          # گریڈل کے عارضی ہوم فولڈر کو صاف کرنا تاکہ پرانا ڈیٹا اثر نہ کرے
+          rm -rf ~/.gradle/caches/
           
-          # 2. بالکل تازہ اور آفیشل ڈائریکٹریز بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/values app/src/main/res/layout
 
-          # 3. settings.gradle (Locking Repositories)
+      - name: Generate Official Locked Files
+        run: |
+          # 1. settings.gradle
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -35,10 +38,10 @@ jobs:
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 4. root build.gradle
+          # 2. build.gradle (Root) - ورژن 8.4.0 پر لاک
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 5. app/build.gradle (Strict Version Management)
+          # 3. app/build.gradle (سب سے زیادہ سٹیبل ورژنز کا انتخاب)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -51,22 +54,15 @@ jobs:
                   versionName '1.0'
               }
               buildTypes { release { minifyEnabled false } }
-              
-              // ورژن کنفلکٹ ختم کرنے کے لیے فورس ریزولوشن
-              configurations.all {
-                  resolutionStrategy {
-                      force 'androidx.core:core:1.12.0'
-                      force 'androidx.appcompat:appcompat:1.6.1'
-                      force 'com.google.android.material:material:1.11.0'
-                  }
-              }
           }
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
+              // ان ورژنز میں انٹرنل کنفلکٹ نہیں ہوتا
+              implementation 'androidx.appcompat:appcompat:1.6.0'
+              implementation 'com.google.android.material:material:1.8.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
           }" > app/build.gradle
 
-          # 6. Android Manifest (Clean)
+          # 4. Clean Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -79,7 +75,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 7. MainActivity.java
+          # 5. Simple MainActivity
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -90,26 +86,24 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-      - name: Setup Official Gradle Wrapper 9.4.1
+      - name: Build Official Wrapper
         run: |
-          # سسٹم کے پرانے گریڈل کو بائی پاس کر کے نیا ریپر بنانا
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
 
-      - name: Hard Push Clean Structure
+      - name: Force Push Official Structure
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
-          # پرانی فائلوں کو گٹ سے بھی ہٹانا
           git add -A
-          git commit -m "CLEAN: Removed all old versions and locked to 9.4.1" || echo "No changes"
+          git commit -m "LOCK: Physical cleanup and stable version 9.4.1" || echo "No changes"
           git push
 
-      - name: Run Official Build
-        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Execute Build
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V136-Clean
+          name: System-Pro-V137-Locked
           path: "app/build/outputs/apk/debug/*.apk"
