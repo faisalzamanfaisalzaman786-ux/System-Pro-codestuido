@@ -9,8 +9,12 @@ android {
         versionCode 1
         versionName '1.0'
     }
+    buildTypes { release { minifyEnabled false } }
 }
 dependencies {
+    // BOM استعمال کرنے سے تمام اینڈرائیڈ لائبریریز ایک دوسرے کے ساتھ لاک ہو جاتی ہیں
+    implementation platform('androidx.compose:compose-bom:2024.02.01')
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
