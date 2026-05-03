@@ -2,7 +2,105 @@ name: System Pro Official Build
 on:
   repository_dispatch:
     types: [build-app]
+  workflow_dispatch:name: System Pro Official Build
+on:
+  repository_dispatch:
+    types: [build-app]
   workflow_dispatch:
+
+jobs:
+  official-build:
+    name: "System Pro: Processing & Build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: System Pro Validation Tab
+        run: |
+          [ -n "${{ github.event.client_payload.package_name }}" ] && PKG="✅ True" || PKG="❌ False"
+          [ -n "${{ github.event.client_payload.app_name }}" ] && APP="✅ True" || APP="❌ False"
+          [ -n "${{ github.event.client_payload.manifest_b64 }}" ] && MANIFEST="✅ True" || MANIFEST="❌ False"
+          [ -n "${{ github.event.client_payload.xml_b64 }}" ] && LAYOUT="✅ True" || LAYOUT="❌ False"
+          [ -n "${{ github.event.client_payload.java_b64 }}" ] && JAVA="✅ True" || JAVA="❌ False"
+          [ -n "${{ github.event.client_payload.icon_data_b64 }}" ] && ICON="✅ True" || ICON="❌ False"
+
+          echo "### 🛠️ System Pro: Build Validation Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Package Name | $PKG |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📱 App Name | $APP |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📄 Manifest File | $MANIFEST |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🎨 Layout XML | $LAYOUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| ☕ Java Source | $JAVA |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🖼️ App Icon Data | $ICON |" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$PKG" == *"False"* || "$MANIFEST" == *"False"* ]]; then
+            echo "::error::Critical data missing. Aborting build."
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gemini Design & Build Engine
+        run: |
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG=$(echo "${RAW_PKG:-com.system.pro}" | tr '[:upper:]' '[:lower:]')
+          PKG_PATH=$(echo $PKG | tr '.' '/')
+          
+          rm -rf app/src/main/res/mipmap-*
+          rm -rf app/src/main/res/drawable*
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/drawable
+
+          echo "android.namespace = '$PKG'" > gradle.properties
+          echo "android.useAndroidX = true" >> gradle.properties
+
+          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # کلرز اور تھیمز کے لیے سادہ echo استعمال کیا گیا ہے تاکہ ایرر نہ آئے
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
+
+          if [ -n "${{ github.event.client_payload.manifest_b64 }}" ]; then
+            echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
+            sed -i 's/android:theme="[^"]*"/android:theme="@style\/Theme.SystemPro"/' app/src/main/AndroidManifest.xml
+          fi
+
+          if [ -n "${{ github.event.client_payload.xml_b64 }}" ]; then
+            echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
+          fi
+
+          if [ -n "${{ github.event.client_payload.java_b64 }}" ]; then
+            echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
+            echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "import $PKG.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+            grep -vE "package |import .*\.R;" raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+      - name: Build Official APK
+        run: |
+          gradle wrapper --gradle-version 9.4.1 --distribution-type bin
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload System Pro APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
+          path: "app/build/outputs/apk/debug/*.apk"
+
 
 jobs:
   official-build:
