@@ -18,12 +18,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Initialize Official Project Structure
+      - name: Deep Clean and Force Structure
         run: |
-          rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
+          # 1. ہر پرانی فائل اور پوشیدہ فولڈر کو ڈیلیٹ کرنا (تاکہ کنفلکٹ کا نام و نشان نہ رہے)
+          rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src .github/workflows/old_*
+          
+          # 2. بالکل تازہ اور آفیشل ڈائریکٹریز بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/values app/src/main/res/layout
 
-          # 1. settings.gradle (Locking Repositories)
+          # 3. settings.gradle (Locking Repositories)
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
@@ -32,10 +35,10 @@ jobs:
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 2. build.gradle (Root - Official 8.4.0)
+          # 4. root build.gradle
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 3. app/build.gradle (BOM Integration for Version Locking)
+          # 5. app/build.gradle (Strict Version Management)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -48,16 +51,22 @@ jobs:
                   versionName '1.0'
               }
               buildTypes { release { minifyEnabled false } }
+              
+              // ورژن کنفلکٹ ختم کرنے کے لیے فورس ریزولوشن
+              configurations.all {
+                  resolutionStrategy {
+                      force 'androidx.core:core:1.12.0'
+                      force 'androidx.appcompat:appcompat:1.6.1'
+                      force 'com.google.android.material:material:1.11.0'
+                  }
+              }
           }
           dependencies {
-              // BOM استعمال کرنے سے تمام اینڈرائیڈ لائبریریز ایک دوسرے کے ساتھ لاک ہو جاتی ہیں
-              implementation platform('androidx.compose:compose-bom:2024.02.01')
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" > app/build.gradle
 
-          # 4. Official Android Manifest
+          # 6. Android Manifest (Clean)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -70,7 +79,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 5. Java Code
+          # 7. MainActivity.java
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -83,22 +92,24 @@ jobs:
 
       - name: Setup Official Gradle Wrapper 9.4.1
         run: |
+          # سسٹم کے پرانے گریڈل کو بائی پاس کر کے نیا ریپر بنانا
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
 
-      - name: Commit and Physical Push
+      - name: Hard Push Clean Structure
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
-          git add .
-          git commit -m "OFFICIAL: Locked Structure and BOM applied" || echo "No changes"
+          # پرانی فائلوں کو گٹ سے بھی ہٹانا
+          git add -A
+          git commit -m "CLEAN: Removed all old versions and locked to 9.4.1" || echo "No changes"
           git push
 
       - name: Run Official Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Upload Verified APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V134-Locked
+          name: System-Pro-V136-Clean
           path: "app/build/outputs/apk/debug/*.apk"
