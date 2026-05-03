@@ -1,95 +1,26 @@
-name: System-Pro-V77-Cleaner-Engine
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: write
+name: System Pro APK Generator
+on: [push, workflow_dispatch] # جب آپ چاہیں یا کوڈ پش کریں
 
 jobs:
-  auto_repair_and_build:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
+      - uses: actions/checkout@v4
+      - name: set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: 🧹 Deep-Clean & Self-Heal
-        shell: python
-        run: |
-          import os, shutil
-          # پرانے تمام کنفلکٹس ختم کرنے کے لیے صفائی
-          for item in ['app/build.gradle', 'build.gradle', 'settings.gradle']:
-              if os.path.exists(item): os.remove(item)
-          
-          # برین لاجک: بالکل درست فائلیں دوبارہ لکھنا
-          files = {
-              "settings.gradle": "rootProject.name='System-Pro-codestuido'\ninclude ':app'",
-              "build.gradle": "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0' } }\nallprojects { repositories { google(); mavenCentral() } }",
-              "app/build.gradle": """
-          apply plugin: 'com.android.application'
-          android {
-              namespace 'com.faisal.systempro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.faisal.systempro"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes { release { minifyEnabled false } }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
-          }""",
-              "app/src/main/AndroidManifest.xml": """
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.faisal.systempro">
-              <application android:label="System Pro V77" android:theme="@style/Theme.AppCompat.Light">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>""",
-              "app/src/main/java/com/faisal/systempro/MainActivity.java": """
-          package com.faisal.systempro;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  // Brain Initialized
-              }
-          }"""
-          }
-          
-          for path, content in files.items():
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              with open(path, "w", encoding="utf-8") as f: f.write(content.strip())
-          print("System Deep-Cleaned and Brain Re-Injected.")
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-      - name: 🛠️ Force Gradle Setup
-        run: |
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
 
-      - name: 🚀 Build Production APK
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
-
-      - name: 💾 Deliver Final Shield APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V77-Success-APK
+          name: System-Pro-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
