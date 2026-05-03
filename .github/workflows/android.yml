@@ -1,8 +1,8 @@
-name: System Pro APK Generator
+name: System Pro Smart Builder
 on: [push, workflow_dispatch]
 
 jobs:
-  build:
+  arrange-and-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,28 +14,37 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      # گریڈل کو ایگزیکیوٹ کرنے کی اجازت دینا (اگر فائل موجود ہو)
-      - name: Grant execute permission for gradlew
+      # یہ سٹیپ فائلوں کو صحیح جگہ پر ترتیب دے گا
+      - name: Arrange Android Structure
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-          elif [ -f "app/gradlew" ]; then
-            cd app && chmod +x gradlew
-          else
-            echo "❌ gradlew not found!" && exit 1
-          fi
+          echo "📂 Arranging files for Android Build..."
+          mkdir -p app/src/main/java/com/system/pro
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          
+          # اگر فائلیں باہر پڑی ہیں تو انہیں اندر منتقل کرو
+          [ -f "MainActivity.java" ] && mv MainActivity.java app/src/main/java/com/system/pro/
+          [ -f "activity_main.xml" ] && mv activity_main.xml app/src/main/res/layout/
+          [ -f "AndroidManifest.xml" ] && mv AndroidManifest.xml app/src/main/
+          
+          echo "✅ Structure Arranged."
 
-      # بلڈ پروسیس (ایرر چیکنگ کے ساتھ)
-      - name: Build with Gradle
+      # گریڈل 8.5 کو سیٹ کرنا اور ایگزیکیوشن کی اجازت دینا
+      - name: Setup Gradle 8.5
         run: |
-          if [ -f "gradlew" ]; then
-            ./gradlew assembleDebug
-          else
-            cd app && ./gradlew assembleDebug
+          if [ ! -f "gradlew" ]; then
+            echo "🔧 Generating Gradle Wrapper..."
+            gradle wrapper --gradle-version 8.5
           fi
+          chmod +x gradlew
 
-      - name: Upload APK
+      # بلڈ پروسیس
+      - name: Build APK with Gradle 8.5
+        run: ./gradlew assembleDebug --stacktrace
+
+      # اے پی کے اپلوڈ کرنا
+      - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Debug-APK
-          path: "**/build/outputs/apk/debug/*.apk" # یہ خود ہی ڈھونڈ لے گا کہ APK کہاں ہے
+          name: System-Pro-V108-Build
+          path: "**/build/outputs/apk/debug/*.apk"
