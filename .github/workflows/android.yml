@@ -1,29 +1,62 @@
+name: System Pro Official Build
+on:
+  repository_dispatch:
+    types: [build-app]
+  workflow_dispatch:
+
+jobs:
+  official-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
       - name: Gemini Dynamic Package & Folder Duty
         run: |
-          # 1. یو آئی سے پیکج نیم اٹھانا
+          # 1. ڈائنامک پیکج نیم سیٹ کرنا
           RAW_PKG="${{ github.event.client_payload.package_name }}"
-          # اگر پیکج خالی ہو تو ڈیفالٹ سیٹ کرنا
           PKG=${RAW_PKG:-"com.system.pro"}
-          
-          # 2. ڈاٹ (.) کو سلیش (/) میں بدل کر پاتھ بنانا
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
-          # 3. ڈائنامک فولڈر بنانا
+          # 2. درست فولڈر اسٹرکچر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 4. جاوا فائل پروسیسنگ (پیکیج نیم سنک کرنا)
+          # 3. جاوا فائل کی صفائی اور درستگی
+          # ہم UI سے آنے والے کوڈ کو ڈیکوڈ کریں گے
           echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
           
-          # فائل تیار کرنا: پہلے پیکیج، پھر امپورٹ R، پھر باقی کوڈ (پرانا پیکیج ہٹا کر)
+          # جیمنائی ڈیوٹی: فائل کے شروع میں صرف ایک بار پیکیج اور R امپورٹ ڈالنا
           echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "import $PKG.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # اگر کوڈ میں پہلے سے پیکیج لائن ہے تو اسے ہٹا کر باقی کوڈ شامل کرنا
           grep -v "package " raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # 5. مینی فیسٹ اور ریسورسز
+          # 4. ریسورسز اور مینی فیسٹ
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
           
-          # ضروری اسٹائلز (بلڈ پروٹیکشن)
+          # اسٹائل شیٹ (کریش سے بچاؤ کے لیے)
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light"/></resources>' > app/src/main/res/values/styles.xml
+
+      - name: Build Official APK
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
+          path: "app/build/outputs/apk/debug/*.apk"
