@@ -16,21 +16,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Purge & Rebuild Project Config
+      - name: Total Purge and Fresh Setup
         run: |
-          # 1. پرانی فائلوں کا مکمل خاتمہ
-          rm -f build.gradle
-          rm -f settings.gradle
+          # 1. پرانے سسٹم کے تمام نشانات مٹانا
+          rm -rf .gradle
+          rm -rf gradle
+          rm -f build.gradle settings.gradle gradlew gradlew.bat
           rm -rf app/build.gradle
           
-          # 2. ضروری فولڈرز کی تیاری
+          # 2. نئے سرے سے فولڈرز بنانا
+          mkdir -p gradle/wrapper
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/assets
-          mkdir -p gradle/wrapper
 
-          # 3. نئی settings.gradle (ریپوزٹری موڈ کے ساتھ)
-          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          # 3. نئی settings.gradle (8.5 کے مطابق)
+          echo "pluginManagement { 
+              repositories { google(); mavenCentral(); gradlePluginPortal() } 
+          }
           dependencyResolutionManagement { 
               repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories { google(); mavenCentral() } 
@@ -38,10 +42,13 @@ jobs:
           include ':app'
           rootProject.name = 'System-Pro'" > settings.gradle
 
-          # 4. روٹ build.gradle (صرف پلگ ان کلاسی پاتھ، کوئی ریپوزٹری نہیں)
+          # 4. روٹ build.gradle (پلگ ان 8.2.2 - جو 8.5 کے لیے بیسٹ ہے)
           echo "buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
           }" > build.gradle
 
           # 5. ایپ لیول build.gradle
@@ -64,27 +71,49 @@ jobs:
                       assets.srcDirs = ['src/main/assets']
                   }
               }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.9.0'
           }" > app/build.gradle
 
-          # 6. گریڈل ورژن 8.5 کی پراپرٹیز اور جار فائل
+          # 6. بنیادی تھیم فائل (تاکہ ریسورس ایرر نہ آئے)
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.SystemPro" parent="Theme.MaterialComponents.Light.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryDark">#3700B3</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+          </resources>' > app/src/main/res/values/themes.xml
+
+          # 7. مینی فیسٹ فائل
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro">
+              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+          # 8. گریڈل 8.5 کی پراپرٹیز اور جار فائل ڈاؤن لوڈ کرنا
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           curl -L https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
 
-          # 7. مینی فیسٹ (اگر موجود نہ ہو تو بن جائے)
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-          fi
-
-      - name: Force Gradle 8.5 Wrapper
+      - name: Generate Local Wrapper 8.5
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
-      - name: Build APK
+      - name: Final APK Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload Clean APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V120
+          name: System-Pro-V122-Clean
           path: "app/build/outputs/apk/debug/*.apk"
