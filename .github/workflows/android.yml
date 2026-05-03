@@ -4,89 +4,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  clean-and-setup:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Physical Purge
-        run: |
-          # ہر چیز صاف کر دی جائے گی تاکہ صرف آفیشل مٹیریل آ سکے
-          rm -rf app src build gradle .gradle settings.gradle build.gradle gradlew gradlew.bat
-          git clean -fdx
-          # آفیشل ڈائریکٹری اسٹرکچر
-          mkdir -p gradle/wrapper app/src/main/java app/src/main/res/values app/src/main/res/layout
-
-      - name: Create Standard Official Files
-        run: |
-          # 1. Official settings.gradle
-          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() } 
-          }
-          rootProject.name = 'System-Pro'
-          include ':app'" > settings.gradle
-
-          # 2. Official Root build.gradle
-          echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
-
-          # 3. Official App build.gradle (Namespace خالی رکھا گیا ہے تاکہ آپ خود سیٹ کریں)
-          echo "plugins { id 'com.android.application' }
-          android {
-              namespace '' 
-              compileSdk 34
-              defaultConfig {
-                  applicationId ''
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
-          }" > app/build.gradle
-
-          # 4. Official Android Manifest
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
-
-      - name: Force Push Official Cleanup
-        run: |
-          git config --global user.name "Faisal Zaman"
-          git config --global user.email "faisal@example.com"
-          git add -A
-          git commit -m "OFFICIAL: Clean slate with zero customization" || echo "No changes"
-          git push --force
-
   official-build:
-    needs: clean-and-setup
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Clean
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          ref: main
 
-      - name: JDK 17 Setup
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Run Official Gradle
+      - name: Build Official APK
         run: |
-          # گریڈل کو آفیشل طریقے سے شروع کرنا
-          gradle wrapper --gradle-version 9.4.1
+          # گریڈل ریپر سیٹ کرنا اور بلڈ چلانا
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # نوٹ: یہ بلڈ ابھی فیل ہو سکتا ہے کیونکہ ہم نے پیکج نیم خالی چھوڑا ہے
-          # لیکن آپ کی ریپوزٹری میں تمام آفیشل فائلیں پہنچ جائیں گی
-          ./gradlew help 
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload System Pro APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V146-Official
+          path: "app/build/outputs/apk/debug/*.apk"
