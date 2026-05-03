@@ -15,7 +15,6 @@ jobs:
       - name: System Pro Validation Tab
         id: validate
         run: |
-          # پے لوڈ ڈیٹا کی چیکنگ (Checking inputs from payload)
           [ -n "${{ github.event.client_payload.package_name }}" ] && PKG="✅ True" || PKG="❌ False"
           [ -n "${{ github.event.client_payload.app_name }}" ] && APP="✅ True" || APP="❌ False"
           [ -n "${{ github.event.client_payload.manifest_b64 }}" ] && MANIFEST="✅ True" || MANIFEST="❌ False"
@@ -23,7 +22,6 @@ jobs:
           [ -n "${{ github.event.client_payload.java_b64 }}" ] && JAVA="✅ True" || JAVA="❌ False"
           [ -n "${{ github.event.client_payload.icon_data_b64 }}" ] && ICON="✅ True" || ICON="❌ False"
 
-          # گٹ ہب سمری ٹیبل (Generating Summary Table)
           echo "### 🛠️ System Pro: Build Validation Status" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
@@ -34,9 +32,8 @@ jobs:
           echo "| ☕ Java Source | $JAVA |" >> $GITHUB_STEP_SUMMARY
           echo "| 🖼️ App Icon Data | $ICON |" >> $GITHUB_STEP_SUMMARY
 
-          # اگر پیکیج نیم یا مینی فیسٹ غائب ہو تو بلڈ روک دیں
           if [[ "$PKG" == *"False"* || "$MANIFEST" == *"False"* ]]; then
-            echo "::error::Critical data missing. Aborting build for safety."
+            echo "::error::Critical data missing. Aborting build."
             exit 1
           fi
 
@@ -48,23 +45,68 @@ jobs:
 
       - name: Gemini Design & Build Engine
         run: |
-          # پیکیج نیم سیٹ اپ
+          # پیکیج نیم اور پاتھ
           RAW_PKG="${{ github.event.client_payload.package_name }}"
           PKG=$(echo "${RAW_PKG:-com.system.pro}" | tr '[:upper:]' '[:lower:]')
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
-          # 1. ریسورسز کی صفائی اور فولڈرز کی تیاری
+          # 1. کلین اپ اور ڈائریکٹریز کی تیاری
           rm -rf app/src/main/res/mipmap-*
+          rm -rf app/src/main/res/drawable*
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/drawable
 
           # 2. گریڈل کنفیگریشن
           echo "android.namespace = '$PKG'" > gradle.properties
           echo "android.useAndroidX = true" >> gradle.properties
 
-          # 3. جاوا فائل کی پروسیسنگ (Base64 Decode)
+          # 3. آئیکن کی مضبوط امپلیمنٹیشن (Double Location Injection)
+          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+          fi
+
+          # 4. نیون کلرز پیلیٹ (Hardcoded for System Pro)
+          cat <<EOF > app/src/main/res/values/colors.xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#00FFCC</color>
+    <color name="colorPrimaryDark">#0A1022</color>
+    <color name="colorAccent">#A855F7</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
+EOF
+
+          # 5. تھیم کی تیاری (Universal Compatibility)
+          cat <<EOF > app/src/main/res/values/themes.xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:statusBarColor">@color/colorPrimaryDark</item>
+    </style>
+</resources>
+EOF
+
+          # 6. مینی فیسٹ انجکشن اور تھیم فکسر
+          if [ -n "${{ github.event.client_payload.manifest_b64 }}" ]; then
+            echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
+            # مینی فیسٹ کے اندر کسی بھی پرانی تھیم کو ہماری نئی تھیم سے بدلنا
+            sed -i 's/android:theme="[^"]*"/android:theme="@style\/Theme.SystemPro"/' app/src/main/AndroidManifest.xml
+          fi
+
+          # 7. جاوا اور ایکس ایم ایل پروسیسنگ
+          if [ -n "${{ github.event.client_payload.xml_b64 }}" ]; then
+            echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
+          fi
+
           if [ -n "${{ github.event.client_payload.java_b64 }}" ]; then
             echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
             echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
@@ -72,28 +114,8 @@ jobs:
             grep -vE "package |import .*\.R;" raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # 4. لے آؤٹ اور مینی فیسٹ جنریشن
-          if [ -n "${{ github.event.client_payload.xml_b64 }}" ]; then
-            echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
-          fi
-          
-          if [ -n "${{ github.event.client_payload.manifest_b64 }}" ]; then
-            echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
-          fi
-          
-          # 5. ایپ آئیکن کی تیاری
-          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          fi
-
-          # 6. نیون کلرز اور اسٹائلز
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item></style></resources>' > app/src/main/res/values/styles.xml
-
       - name: Build Official APK
         run: |
-          # گریڈل 9.4.1 کا استعمال
           gradle wrapper --gradle-version 9.4.1 --distribution-type bin
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
