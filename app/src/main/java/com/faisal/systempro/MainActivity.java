@@ -10,15 +10,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        WebView webView = new WebView(this);
-        setContentView(webView);
-
+        setContentView(R.layout.activity_main);
+        
+        WebView webView = findViewById(R.id.webView);
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
-
+        
         webView.setWebViewClient(new WebViewClient());
-        // یہ آپ کی index.html کو لوڈ کرے گا
+        // یہاں اپنی انڈیکس فائل کا راستہ دیں
         webView.loadUrl("file:///android_asset/index.html");
     }
 }
