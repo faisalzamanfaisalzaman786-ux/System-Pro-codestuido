@@ -1,11 +1,13 @@
-name: System Pro Smart Builder
+name: System Pro Structure Builder
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # فائلوں کو پش کرنے کے لیے اجازت
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -16,39 +18,27 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Full Project Structure (Gradle 9.4.1)
+      - name: Generate Physical Structure
         run: |
-          # 1. مکمل صفائی
+          # 1. پرانی فائلوں کی صفائی
           rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
           
-          # 2. فولڈرز کی تیاری
+          # 2. فولڈرز بنانا
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/assets
           mkdir -p gradle/wrapper
 
-          # 3. جدید settings.gradle
-          echo "pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() }
-          }
+          # 3. فائلیں تیار کرنا
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 4. روٹ build.gradle
-          echo "buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.4.0' }
-          }
-          plugins {
-              id 'com.android.application' version '8.4.0' apply false
-          }" > build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.4.0' } }
+          plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 5. ایپ لیول build.gradle (Groovy Syntax Fix)
           echo "apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
@@ -60,19 +50,12 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 6. MainActivity.java
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -84,22 +67,9 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-          # 7. Layout اور Themes
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.SystemPro" parent="Theme.Material3.DayNight.NoActionBar" />
-          </resources>' > app/src/main/res/values/themes.xml
-
-          # 8. Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.SystemPro">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
@@ -109,11 +79,18 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 9. Gradle 9.4.1 Wrapper Fix
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           curl -L https://github.com/gradle/gradle/raw/v9.4.1/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
 
-      - name: Build with Gradle 9.4.1
+      - name: Commit and Push Physical Structure
+        run: |
+          git config --global user.name "Faisal Zaman"
+          git config --global user.email "faisal@example.com"
+          git add .
+          git commit -m "Generated full physical structure for Gradle 9.4.1" || echo "No changes to commit"
+          git push
+
+      - name: Run Build
         run: |
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
@@ -122,5 +99,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V126-Fixed
+          name: System-Pro-Structure-Build
           path: "app/build/outputs/apk/debug/*.apk"
