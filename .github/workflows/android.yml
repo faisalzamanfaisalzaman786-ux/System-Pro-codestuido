@@ -1,4 +1,4 @@
-      - name: Auto-Repair Project Structure
+        name: Auto-Repair Project Structure
         run: |
           # گریڈل کے مطابق فولڈرز بنانا (بغیر 'app' کے)
           mkdir -p src/main/java/com/system/pro
