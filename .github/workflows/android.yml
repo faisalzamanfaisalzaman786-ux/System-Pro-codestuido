@@ -18,53 +18,55 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Gemini Design & Build Engine
+      - name: System Pro: Engine Start
         run: |
+          # 1. ماحول کی تیاری اور صفائی
           RAW_PKG="${{ github.event.client_payload.package_name }}"
           PKG=$(echo "${RAW_PKG:-com.system.pro}" | tr '[:upper:]' '[:lower:]')
           PKG_PATH=$(echo $PKG | tr '.' '/')
           
           rm -rf app/src/main/res/mipmap-*
           rm -rf app/src/main/res/drawable*
-          
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
 
           echo "android.namespace = '$PKG'" > gradle.properties
           echo "android.useAndroidX = true" >> gradle.properties
 
+          # 2. ائیکن ماسٹر فکس (Icon Force Injection)
           if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > base_icon.png
-            cp base_icon.png app/src/main/res/drawable/ic_launcher.png
-            cp base_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp base_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp base_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp base_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp base_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-            cp base_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           fi
 
+          # 3. سسٹم پرو ڈارک تھیم اور کلرز (Safe Backup)
+          # اگر پے لوڈ میں کلرز نہیں ہیں تو یہ خود بخود نیون کلرز ڈال دے گا
           if [ -n "${{ github.event.client_payload.colors_b64 }}" ]; then
             echo "${{ github.event.client_payload.colors_b64 }}" | base64 -d > app/src/main/res/values/colors.xml
           else
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color><color name="white">#FFFFFF</color><color name="black">#000000</color><color name="dark_bg">#0A1022</color></resources>' > app/src/main/res/values/colors.xml
           fi
 
-          if [ -n "${{ github.event.client_payload.themes_b64 }}" ]; then
-            echo "${{ github.event.client_payload.themes_b64 }}" | base64 -d > app/src/main/res/values/themes.xml
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item></style></resources>' > app/src/main/res/values/themes.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item><item name="android:windowBackground">@color/dark_bg</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
+
+          # 4. مینی فیسٹ اور لے آؤٹ پروسیسنگ
+          if [ -n "${{ github.event.client_payload.manifest_b64 }}" ]; then
+            echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
+            # مینی فیسٹ میں تھیم کو زبردستی سسٹم پرو تھیم سے بدلنا تاکہ کلر غائب نہ ہوں
+            sed -i 's/android:theme="[^"]*"/android:theme="@style\/Theme.SystemPro"/' app/src/main/AndroidManifest.xml
           fi
 
-          [ -n "${{ github.event.client_payload.manifest_b64 }}" ] && echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
-          [ -n "${{ github.event.client_payload.xml_b64 }}" ] && echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
-          
+          if [ -n "${{ github.event.client_payload.xml_b64 }}" ]; then
+            echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
+          fi
+
+          # 5. جاوا سورس فکس
           if [ -n "${{ github.event.client_payload.java_b64 }}" ]; then
             echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
             echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
