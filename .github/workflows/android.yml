@@ -1,20 +1,38 @@
-        name: Auto-Repair Project Structure
+name: System Pro Smart Builder
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  arrange-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Auto-Repair Project Structure
         run: |
-          # گریڈل کے مطابق فولڈرز بنانا (بغیر 'app' کے)
+          # 1. فولڈرز کی صحیح ترتیب
           mkdir -p src/main/java/com/system/pro
           mkdir -p src/main/res/layout
           mkdir -p src/main/res/values
           
-          # فائلیں منتقل کرنا
+          # 2. فائلوں کو ان کی جگہ پر پہنچانا
           find . -maxdepth 1 -name "*.java" -exec mv {} src/main/java/com/system/pro/ \;
-          find . -maxdepth 1 -name "*.xml" -not -name "AndroidManifest.xml" -not -name "settings.gradle" -not -name "build.gradle" -exec mv {} src/main/res/layout/ \;
+          find . -maxdepth 1 -name "*.xml" -not -name "AndroidManifest.xml" -exec mv {} src/main/res/layout/ \;
 
-          # settings.gradle (گوگل ریپوزٹری)
+          # 3. settings.gradle بنانا
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
           rootProject.name = 'System-Pro'" > settings.gradle
 
-          # build.gradle (مکمل کنفیگریشن)
+          # 4. build.gradle (مینی فیسٹ کا صحیح راستہ بتاتے ہوئے)
           echo "plugins { id 'com.android.application' version '8.2.2' }
           android {
               namespace 'com.system.pro'
@@ -23,5 +41,19 @@
               defaultConfig { applicationId 'com.system.pro'; minSdk 24; targetSdk 34; versionCode 1; versionName '1.0' }
           }" > build.gradle
 
-          # مینی فیسٹ فائل کو صحیح جگہ بنانا
+          # 5. مینی فیسٹ فائل بنانا (اگر غائب ہو)
           echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.system.pro"><application android:label="System Pro"></application></manifest>' > src/main/AndroidManifest.xml
+
+      - name: Setup Gradle 8.5
+        run: |
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+      - name: Build APK
+        run: ./gradlew assembleDebug --no-daemon
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-V112
+          path: "**/build/outputs/apk/debug/*.apk"
