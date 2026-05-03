@@ -30,25 +30,17 @@ jobs:
           mkdir -p app/src/main/assets
           mkdir -p gradle/wrapper
 
-          # 3. Settings File - ورژن کنٹرول لاکڈ
-          echo "pluginManagement { 
-              repositories { google(); mavenCentral(); gradlePluginPortal() } 
-          }
-          dependencyResolutionManagement { 
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-              repositories { google(); mavenCentral() } 
-          }
+          # 3. Settings File
+          echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 4. Root build.gradle - پلگ ان ورژن 8.4.0 پر لاکڈ
-          echo "buildscript { 
-              repositories { google(); mavenCentral() } 
-              dependencies { classpath 'com.android.tools.build:gradle:8.4.0' } 
-          }
+          # 4. Root build.gradle
+          echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.4.0' } }
           plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 5. App build.gradle - فکسڈ کنفیگریشن
+          # 5. App build.gradle
           echo "apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
@@ -60,18 +52,14 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 6. بنیادی فائلیں (Manifest, Java, Themes)
+          # 6. بنیادی فائلیں
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -95,7 +83,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 7. گریڈل ورژن 9.4.1 پر ہارڈ لاک (Hard Lock)
+          # 7. گریڈل 9.4.1 ریپر بنانا
           echo "distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
@@ -109,12 +97,13 @@ jobs:
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
           git add .
-          git commit -m "LOCK: Physical structure locked to Gradle 9.4.1 and AGP 8.4.0" || echo "No changes"
+          git commit -m "LOCK: Physical structure locked to Gradle 9.4.1" || echo "No changes"
           git push
 
       - name: Strict Build Execution
         run: |
-          # یہاں ہم سسٹم گریڈل کو بائی پاس کر کے صرف اپنے لوکل ریپر کو پکار رہے ہیں
+          # یہاں ہم دستی طور پر ریپر دوبارہ تیار کر رہے ہیں تاکہ 'No such file' کا ایرر نہ آئے
+          gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
