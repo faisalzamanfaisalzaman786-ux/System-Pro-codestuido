@@ -1,55 +1,29 @@
-name: System Pro Official Build
-on:
-  repository_dispatch:
-    types: [build-app]
-  workflow_dispatch:
-
-jobs:
-  official-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Gemini Invisible Mechanic Duty
+      - name: Gemini Dynamic Package & Folder Duty
         run: |
-          # 1. ڈائریکٹری اسٹرکچر بنانا (Zero Error Path)
-          mkdir -p app/src/main/java/com/system/pro
+          # 1. یو آئی سے پیکج نیم اٹھانا
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          # اگر پیکج خالی ہو تو ڈیفالٹ سیٹ کرنا
+          PKG=${RAW_PKG:-"com.system.pro"}
+          
+          # 2. ڈاٹ (.) کو سلیش (/) میں بدل کر پاتھ بنانا
+          PKG_PATH=$(echo $PKG | tr '.' '/')
+          
+          # 3. ڈائنامک فولڈر بنانا
+          mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 2. پیکج نیم ڈیفائن کرنا
-          PKG="com.system.pro"
+          # 4. جاوا فائل پروسیسنگ (پیکیج نیم سنک کرنا)
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
+          
+          # فائل تیار کرنا: پہلے پیکیج، پھر امپورٹ R، پھر باقی کوڈ (پرانا پیکیج ہٹا کر)
+          echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
+          echo "import $PKG.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+          grep -v "package " raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # 3. جاوا فائل پروسیسنگ (Gemini Task: Auto-Import R)
-          echo "package $PKG;" > app/src/main/java/com/system/pro/MainActivity.java
-          echo "import $PKG.R;" >> app/src/main/java/com/system/pro/MainActivity.java
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d >> app/src/main/java/com/system/pro/MainActivity.java
-
-          # 4. ایگز ایم ایل اور مینی فیسٹ (Gemini Task: Exact Placement)
+          # 5. مینی فیسٹ اور ریسورسز
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
-
-          # 5. تھیمز اور کلرز (Gemini Task: Resource Filling)
-          # اگر تھیم فائل غائب ہے تو جیمنائی اسے خود پیدا کرے گا تاکہ بلڈ فیل نہ ہو
+          
+          # ضروری اسٹائلز (بلڈ پروٹیکشن)
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.AppCompat.Light.DarkActionBar" parent="Theme.AppCompat.Light"/></resources>' > app/src/main/res/values/styles.xml
-
-      - name: Build Official APK
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          gradle wrapper --gradle-version 9.4.1 --distribution-type bin
-          chmod +x gradlew
-          ./gradlew :app:assembleDebug -PGEMINI_API_KEY=$GEMINI_API_KEY --no-daemon
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
-          path: "app/build/outputs/apk/debug/*.apk"
