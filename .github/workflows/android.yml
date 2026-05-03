@@ -18,17 +18,17 @@ jobs:
 
       - name: Create Full Project Structure (Gradle 9.4.1)
         run: |
-          # 1. پرانی کسی بھی فائل کو صاف کرنا (تاکہ صرف نیا سٹرکچر رہے)
+          # 1. مکمل صفائی
           rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
           
-          # 2. اینڈرائیڈ کے معیاری فولڈرز بنانا
+          # 2. فولڈرز کی تیاری
           mkdir -p app/src/main/java/com/system/pro
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/assets
           mkdir -p gradle/wrapper
 
-          # 3. settings.gradle (جدید ترین فارمیٹ)
+          # 3. جدید settings.gradle
           echo "pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
@@ -39,16 +39,17 @@ jobs:
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 4. روٹ build.gradle (پلگ ان ورژن 8.4.0)
-          echo "plugins {
+          # 4. روٹ build.gradle
+          echo "buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.4.0' }
+          }
+          plugins {
               id 'com.android.application' version '8.4.0' apply false
-              id 'com.android.library' version '8.4.0' apply false
           }" > build.gradle
 
-          # 5. ایپ لیول build.gradle
-          echo "plugins {
-              id 'com.android.application'
-          }
+          # 5. ایپ لیول build.gradle (Groovy Syntax Fix)
+          echo "apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
               compileSdk 34
@@ -61,7 +62,8 @@ jobs:
               }
               buildTypes {
                   release {
-                      isMinifyEnabled = false
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
           }
@@ -70,7 +72,7 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }" > app/build.gradle
 
-          # 6. MainActivity.java (خالی کوڈ تاکہ بلڈ پاس ہو)
+          # 6. MainActivity.java
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -107,7 +109,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 9. Gradle 9.4.1 Wrapper
+          # 9. Gradle 9.4.1 Wrapper Fix
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           curl -L https://github.com/gradle/gradle/raw/v9.4.1/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
 
@@ -120,5 +122,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V125-Latest
+          name: System-Pro-V126-Fixed
           path: "app/build/outputs/apk/debug/*.apk"
