@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # جاب 1: فزیکل ڈیلیشن اور آفیشل لاکنگ
+  # جاب 1: مکمل صفائی اور آفیشل اسٹرکچر لاک کرنا
   clean-and-setup:
     runs-on: ubuntu-latest
     permissions:
@@ -12,21 +12,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Force Clean (جڑ سے صفائی)
+      - name: Physical Purge (فزیکلی ہر پرانی چیز ختم)
         run: |
-          # 1. تمام فائلیں اور فولڈرز (سوائے .git اور .github) کو زبردستی ڈیلیٹ کرنا
+          # 1. ہر وہ فائل مٹائیں جو آفیشل نہیں ہے
           rm -rf app src build gradle .gradle settings.gradle build.gradle gradlew gradlew.bat
-          
-          # 2. گٹ کی تمام غیر ٹریک شدہ فائلوں کو صاف کرنا
           git clean -fdx
           
-          # 3. آفیشل ڈائریکٹریز بنانا
+          # 2. آفیشل ڈائریکٹریز دوبارہ بنانا
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/values app/src/main/res/layout
 
-      - name: Create Official Structure
+      - name: Create Clean Official Files
         run: |
           # settings.gradle
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
@@ -40,7 +36,7 @@ jobs:
           # build.gradle (Root)
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # app/build.gradle
+          # app/build.gradle (صرف جدید فائلیں، پرانی فائلوں کا مکمل خاتمہ)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -52,10 +48,18 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              
+              # گریڈل کو حکم دینا کہ وہ کسی پرانی (Legacy) فائل کو بلڈ میں شامل نہ کرے
+              configurations.all {
+                  exclude group: 'androidx.legacy'
+                  exclude group: 'androidx.lifecycle', module: 'lifecycle-extensions'
+              }
           }
           dependencies {
+              // صرف وہ ورژنز جو آپس میں ٹکراتے نہیں ہیں
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'com.google.android.material:material:1.10.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" > app/build.gradle
 
           # Manifest & Java
@@ -81,33 +85,33 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-      - name: Force Push Clean Repository
+      - name: Force Push Official Cleanup
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
           git add -A
-          git commit -m "CLEAN: Physical removal of all legacy build files" || echo "No changes"
+          git commit -m "TOTAL CLEAN: Removed all legacy artifacts and locked structure" || echo "No changes"
           git push --force
 
-  # جاب 2: آفیشل کلین بلڈ
+  # جاب 2: آفیشل بلڈ
   official-build:
     needs: clean-and-setup
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Fresh
+      - name: Checkout Clean
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Set up JDK 17
+      - name: JDK 17 Setup
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Run Official Build
+      - name: Build Official APK
         run: |
-          # گریڈل ریپر بنانا اور بلڈ چلانا
+          # سسٹم کے پرانے گریڈل کو مکمل نظر انداز کر کے نیا بنانا
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
@@ -115,5 +119,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V141-Clean
+          name: System-Pro-V142-Pure
           path: "app/build/outputs/apk/debug/*.apk"
