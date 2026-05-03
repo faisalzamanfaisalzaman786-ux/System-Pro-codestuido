@@ -1,4 +1,4 @@
-      - name: Create Missing Project Files
+       name: Create Missing Project Files
         run: |
           # 1. ضروری فولڈرز کی موجودگی یقینی بنانا
           mkdir -p app
