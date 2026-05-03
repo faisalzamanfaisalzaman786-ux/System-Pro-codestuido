@@ -29,18 +29,20 @@ jobs:
           mkdir -p app/src/main/assets
           mkdir -p gradle/wrapper
 
-          # 3. نئی settings.gradle
+          # 3. نئی settings.gradle (ریپوزٹری موڈ کے ساتھ)
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() } 
+          }
           include ':app'
           rootProject.name = 'System-Pro'" > settings.gradle
 
-          # 4. روٹ build.gradle (پلگ ان ورژن 8.2.2 کے ساتھ)
+          # 4. روٹ build.gradle (صرف پلگ ان کلاسی پاتھ، کوئی ریپوزٹری نہیں)
           echo "buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }" > build.gradle
+          }" > build.gradle
 
           # 5. ایپ لیول build.gradle
           echo "apply plugin: 'com.android.application'
@@ -84,5 +86,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V119
+          name: System-Pro-V120
           path: "app/build/outputs/apk/debug/*.apk"
