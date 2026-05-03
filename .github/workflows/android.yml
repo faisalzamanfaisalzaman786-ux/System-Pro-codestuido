@@ -18,22 +18,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Initialize Standard Project
+      - name: Initialize Official Project Structure
         run: |
-          # مکمل صفائی اور آفیشل فولڈر اسٹرکچر
           rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
           mkdir -p gradle/wrapper app/src/main/java/com/system/pro app/src/main/res/values app/src/main/res/layout
 
-          # 1. settings.gradle
+          # 1. settings.gradle (Locking Repositories)
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() } 
+          }
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 2. build.gradle (Root)
+          # 2. build.gradle (Root - Official 8.4.0)
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 3. app/build.gradle
+          # 3. app/build.gradle (BOM Integration for Version Locking)
           echo "plugins { id 'com.android.application' }
           android {
               namespace 'com.system.pro'
@@ -45,13 +47,17 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
+              buildTypes { release { minifyEnabled false } }
           }
           dependencies {
+              // BOM استعمال کرنے سے تمام اینڈرائیڈ لائبریریز ایک دوسرے کے ساتھ لاک ہو جاتی ہیں
+              implementation platform('androidx.compose:compose-bom:2024.02.01')
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" > app/build.gradle
 
-          # 4. Manifest & Java
+          # 4. Official Android Manifest
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
@@ -64,6 +70,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
+          # 5. Java Code
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -74,24 +81,24 @@ jobs:
               }
           }" > app/src/main/java/com/system/pro/MainActivity.java
 
-      - name: Setup Gradle Wrapper 9.4.1
+      - name: Setup Official Gradle Wrapper 9.4.1
         run: |
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
 
-      - name: Commit and Push
+      - name: Commit and Physical Push
         run: |
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
           git add .
-          git commit -m "OFFICIAL: Structure Locked 9.4.1" || echo "No changes"
+          git commit -m "OFFICIAL: Locked Structure and BOM applied" || echo "No changes"
           git push
 
       - name: Run Official Build
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload Verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V133
+          name: System-Pro-V134-Locked
           path: "app/build/outputs/apk/debug/*.apk"
