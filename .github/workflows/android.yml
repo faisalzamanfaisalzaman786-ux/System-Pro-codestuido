@@ -20,27 +20,20 @@ jobs:
 
       - name: Create and Lock Project Structure
         run: |
-          # 1. مکمل صفائی
           rm -rf .gradle gradle build.gradle settings.gradle gradlew gradlew.bat app src
-          
-          # 2. فولڈرز کی تیاری
-          mkdir -p app/src/main/java/com/system/pro
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/assets
-          mkdir -p gradle/wrapper
+          mkdir -p app/src/main/java/com/system/pro app/src/main/res/layout app/src/main/res/values app/src/main/assets gradle/wrapper
 
-          # 3. Settings File
+          # Settings File
           echo "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
           rootProject.name = 'System-Pro'
           include ':app'" > settings.gradle
 
-          # 4. Root build.gradle
+          # Root build.gradle
           echo "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.4.0' } }
           plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
-          # 5. App build.gradle
+          # App build.gradle (Stable Dependencies Fix)
           echo "apply plugin: 'com.android.application'
           android {
               namespace 'com.system.pro'
@@ -56,10 +49,11 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }" > app/build.gradle
 
-          # 6. بنیادی فائلیں
+          # Java & XML Files
           echo "package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -73,7 +67,7 @@ jobs:
 
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+              <application android:label="System Pro" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
@@ -83,13 +77,7 @@ jobs:
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
 
-          # 7. گریڈل 9.4.1 ریپر بنانا
-          echo "distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists" > gradle/wrapper/gradle-wrapper.properties
-          
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           curl -L https://github.com/gradle/gradle/raw/v9.4.1/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
 
       - name: Commit Locked Structure
@@ -97,18 +85,17 @@ jobs:
           git config --global user.name "Faisal Zaman"
           git config --global user.email "faisal@example.com"
           git add .
-          git commit -m "LOCK: Physical structure locked to Gradle 9.4.1" || echo "No changes"
+          git commit -m "FIX: Stable dependencies for Gradle 9.4.1" || echo "No changes"
           git push
 
-      - name: Strict Build Execution
+      - name: Final Build Execution
         run: |
-          # یہاں ہم دستی طور پر ریپر دوبارہ تیار کر رہے ہیں تاکہ 'No such file' کا ایرر نہ آئے
           gradle wrapper --gradle-version 9.4.1
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Locked-Build
+          name: System-Pro-V130-Stable
           path: "app/build/outputs/apk/debug/*.apk"
