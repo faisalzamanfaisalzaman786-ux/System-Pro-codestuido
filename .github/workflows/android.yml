@@ -1,7 +1,102 @@
 name: System Pro Official Build
 on:
   repository_dispatch:
+    types: [build-app]name: System Pro Official Build
+on:
+  repository_dispatch:
     types: [build-app]
+  workflow_dispatch:
+
+jobs:
+  official-build:
+    name: "System Pro: Processing & Build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gemini Design & Build Engine
+        run: |
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG=$(echo "${RAW_PKG:-com.system.pro}" | tr '[:upper:]' '[:lower:]')
+          PKG_PATH=$(echo $PKG | tr '.' '/')
+          
+          # 1. تمام پرانے اور ڈیفالٹ آئیکنز کی صفائی
+          rm -rf app/src/main/res/mipmap-*
+          rm -rf app/src/main/res/drawable*
+          
+          # 2. ضروری ڈائریکٹریز بنانا
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+
+          echo "android.namespace = '$PKG'" > gradle.properties
+          echo "android.useAndroidX = true" >> gradle.properties
+
+          # 3. ائیکن ماسٹر فکس (Icon Master Fix)
+          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            # بیس فائل بنانا
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > base_icon.png
+            
+            # تمام ضروری فولڈرز میں کاپی کرنا تاکہ سسٹم اسے ہر حال میں اٹھائے
+            cp base_icon.png app/src/main/res/drawable/ic_launcher.png
+            cp base_icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp base_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp base_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp base_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            
+            # راؤنڈ آئیکن کے لیے کاپی (Round Icon Fix)
+            cp base_icon.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+            cp base_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          fi
+
+          # 4. کلرز اور تھیمز (Smart Logic)
+          if [ -n "${{ github.event.client_payload.colors_b64 }}" ]; then
+            echo "${{ github.event.client_payload.colors_b64 }}" | base64 -d > app/src/main/res/values/colors.xml
+          else
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><color name="colorPrimaryDark">#0A1022</color><color name="colorAccent">#A855F7</color><color name="white">#FFFFFF</color><color name="black">#000000</color></resources>' > app/src/main/res/values/colors.xml
+          fi
+
+          if [ -n "${{ github.event.client_payload.themes_b64 }}" ]; then
+            echo "${{ github.event.client_payload.themes_b64 }}" | base64 -d > app/src/main/res/values/themes.xml
+          else
+            echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/colorPrimary</item><item name="colorPrimaryDark">@color/colorPrimaryDark</item><item name="colorAccent">@color/colorAccent</item></style></resources>' > app/src/main/res/values/themes.xml
+          fi
+
+          # 5. مینی فیسٹ، لے آؤٹ اور جاوا
+          [ -n "${{ github.event.client_payload.manifest_b64 }}" ] && echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > app/src/main/AndroidManifest.xml
+          [ -n "${{ github.event.client_payload.xml_b64 }}" ] && echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > app/src/main/res/layout/activity_main.xml
+          
+          if [ -n "${{ github.event.client_payload.java_b64 }}" ]; then
+            echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > raw_java.java
+            echo "package $PKG;" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "import $PKG.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+            grep -vE "package |import .*\.R;" raw_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+      - name: Build Official APK
+        run: |
+          gradle wrapper --gradle-version 9.4.1 --distribution-type bin
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
+          path: "app/build/outputs/apk/debug/*.apk"
+
   workflow_dispatch:
 
 jobs:
