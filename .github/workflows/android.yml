@@ -18,13 +18,12 @@ jobs:
 
       - name: Build Official APK
         run: |
-          # گریڈل ریپر سیٹ کرنا اور بلڈ چلانا
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 9.4.1 --distribution-type bin
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V146-Official
+          name: System-Pro-V150-Final-Build
           path: "app/build/outputs/apk/debug/*.apk"
