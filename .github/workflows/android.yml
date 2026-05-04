@@ -1,4 +1,4 @@
-name: Android Universal Builder (Zero-Crash)
+name: Android APK Builder
 on:
   workflow_dispatch:
   repository_dispatch:
@@ -9,177 +9,93 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
-
-      - name: Extract UI Payload
-        id: extract
+      - name: Process and Build
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
-          PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
+          # Extract or use defaults
+          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "App"')
+          PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.example.app"')
           JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
           XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
           ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
-          # Fallbacks
+          # Simple fallbacks
           if [ -z "$JAVA_CODE" ]; then
-            JAVA_CODE='package com.system.pro;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.text); tv.setText("Hello");\n    }\n}'
+            JAVA_CODE='package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n        TextView tv = findViewById(R.id.text);\n        tv.setText("Hello");\n    }\n}'
           fi
           if [ -z "$XML_LAYOUT" ]; then
-            XML_LAYOUT='<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent">\n    <TextView android:id="@+id/text"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:layout_centerInParent="true"\n        android:text="System Pro"/>\n</RelativeLayout>'
+            XML_LAYOUT='<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent">\n    <TextView android:id="@+id/text"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:layout_centerInParent="true"\n        android:text="Hello"/>\n</RelativeLayout>'
           fi
 
+          # Create directories and files
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p gradle/wrapper
-
+          mkdir -p app/src/main/java/$PKG_PATH app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-hdpi gradle/wrapper
           echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-          if [ -n "$ICON_B64" ]; then
-            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
+          [ -n "$ICON_B64" ] && echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
 
-          # Fix package line and import R
+          # Fix package line and R import
           sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
           if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
             sed -i "/^package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
           fi
-
-          # Remove deprecated package attribute from manifest
           sed -i 's/ package="[^"]*"//' app/src/main/AndroidManifest.xml
 
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-
-      - name: Inject Missing Resources & Theme
-        run: |
+          # Add theme and colors
           THEME_NAME=$(grep -oP 'android:theme="\K@style/[^"]+' app/src/main/AndroidManifest.xml | head -1 | sed 's/@style\///')
-          if [ -z "$THEME_NAME" ]; then
-            THEME_NAME="Theme_${APP_NAME// /_}"
-            sed -i "s|<application |<application android:theme=\"@style/$THEME_NAME\" |" app/src/main/AndroidManifest.xml
-          fi
+          [ -z "$THEME_NAME" ] && THEME_NAME="Theme_${APP_NAME// /_}" && sed -i "s|<application |<application android:theme=\"@style/$THEME_NAME\" |" app/src/main/AndroidManifest.xml
 
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="bg_dark">#0F0F0F</color>
-              <color name="neon_blue">#00BFFF</color>
-              <color name="neon_purple">#9D00FF</color>
-              <color name="neon_green">#39FF14</color>
-              <color name="black">#000000</color>
-              <color name="white">#FFFFFF</color>
-              <color name="primary_color">#6200EE</color>
-              <color name="error_red">#FF0000</color>
-              <color name="warning_orange">#FFA500</color>
-              <color name="colorPrimaryDark">#0F0F0F</color>
-              <color name="colorAccent">#00BFFF</color>
-              <color name="glass_white_10">#1AFFFFFF</color>
-              <color name="glass_white_30">#4DFFFFFF</color>
-          </resources>
-          EOF
+          cat <<COLORS > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="neon_green">#39FF14</color></resources>
+          COLORS
 
-          cat <<EOF > app/src/main/res/values/themes.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="$THEME_NAME" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">@color/primary_color</item>
-                  <item name="colorPrimaryDark">@color/bg_dark</item>
-                  <item name="colorAccent">@color/neon_green</item>
-              </style>
-          </resources>
-          EOF
+          cat <<THEMES > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?><resources><style name="$THEME_NAME" parent="Theme.AppCompat.Light.DarkActionBar"><item name="colorPrimary">@color/neon_blue</item></style></resources>
+          THEMES
 
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
+          cat <<STR > app/src/main/res/values/strings.xml
+          <resources><string name="app_name">$APP_NAME</string></resources>
+          STR
 
-          # Add missing IDs to prevent NullPointerException
-          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
-          JAVA_FILE="app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java"
-          grep -oE 'findViewById\(R\.id\.([a-zA-Z0-9_]+)\)' "$JAVA_FILE" | sed 's/.*R\.id\.//' | sed 's/)//' | sort -u | while read id; do
-            if ! grep -q "android:id=\"@+id/$id\"" "$LAYOUT_FILE"; then
-              sed -i "s|</RelativeLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</RelativeLayout>|" "$LAYOUT_FILE"
-              sed -i "s|</LinearLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</LinearLayout>|" "$LAYOUT_FILE"
-              echo "Added missing ID: $id"
-            fi
-          done
-
-      - name: Setup Gradle 9.4.1 & Build Files
-        run: |
-          cat <<'EOF' > gradlew
+          # Gradle files
+          cat <<'WRAP' > gradlew
           #!/bin/sh
           exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
-          EOF
+          WRAP
           chmod +x gradlew
-
-          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
-          distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
-          EOF
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
 
-          cat <<EOF > settings.gradle
+          cat <<SET > settings.gradle
           rootProject.name = "$APP_NAME"
           include ':app'
-          EOF
+          SET
 
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
-          }
+          cat <<ROOT > build.gradle
+          buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.5.0' } }
           allprojects { repositories { google(); mavenCentral() } }
           task clean(type: Delete) { delete rootProject.buildDir }
-          EOF
+          ROOT
 
-          cat <<EOF > app/build.gradle
+          cat <<APP > app/build.gradle
           plugins { id 'com.android.application' }
-          android {
-              namespace '$PACKAGE_NAME'
-              compileSdk 34
-              defaultConfig {
-                  applicationId '$PACKAGE_NAME'
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              buildFeatures { viewBinding true }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
-          EOF
+          android { namespace '$PACKAGE_NAME' compileSdk 34 defaultConfig { applicationId '$PACKAGE_NAME' minSdk 21 targetSdk 34 versionCode 1 versionName "1.0" } compileOptions { sourceCompatibility JavaVersion.VERSION_17 targetCompatibility JavaVersion.VERSION_17 } buildFeatures { viewBinding true } }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' implementation 'com.google.android.material:material:1.11.0' }
+          APP
 
-      - name: Build APK
-        run: |
-          chmod +x gradlew
+          # Build
           ./gradlew clean assembleDebug --stacktrace
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
