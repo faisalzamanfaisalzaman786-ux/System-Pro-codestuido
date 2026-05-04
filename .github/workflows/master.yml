@@ -1,27 +1,30 @@
 name: 🏗️ System Pro Structure Builder
+
 on:
-  workflow_dispatch: # اسے آپ خود بٹن دبا کر ایک بار چلائیں گے
+  push:
+    branches:
+      - main  # اگر آپ کی مین برانچ کا نام 'master' ہے تو یہاں بدل دیں
+  workflow_dispatch: # یہ مینوئل بٹن کے لیے بھی رہے گا
 
 jobs:
-  create_structure:
+  build_foundation:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Flutter
+      - name: 🛠️ Setup Flutter Environment
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.0'
+          cache: true
 
-      - name: 🏗️ Create Full Project Skeleton
+      - name: 🏗️ Create Full Flutter Skeleton
         run: |
-          # اگر پروجیکٹ پہلے سے نہیں ہے تو نیا بنائیں
-          if [ ! -d "android" ]; then
-            flutter create . --org com.systempro.ultra --project-name system_pro_app
-          fi
+          # مکمل فلٹر پروجیکٹ کی تخلیق
+          flutter create . --org com.systempro.ultra --project-name system_pro_app --platforms android
           
-          # تمام ضروری فولڈرز بنانا
+          # سسٹم پرو کے مخصوص فولڈرز بنانا
           mkdir -p lib/core/theme
           mkdir -p lib/core/services
           mkdir -p lib/presentation/widgets
@@ -29,32 +32,16 @@ jobs:
           mkdir -p assets/images
           mkdir -p assets/fonts
 
-          # بنیادی اسٹائل فائل بنانا
-          cat <<EOF > lib/core/theme/style_vault.dart
-          import 'package:flutter/material.dart';
-          class StyleVault {
-            static const Color primaryNeon = Color(0xFF00F2FF);
-            static BoxDecoration glassEffect = BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            );
-          }
-          EOF
+          # بنیادی فائلیں انجیکٹ کرنا تاکہ بلڈ انجن خالی جگہ نہ پائے
+          echo "void main() => print('System Pro Engine Ready');" > lib/main.dart
+          
+          # ایک بنیادی پب اسپیک (pubspec.yaml) کو اپ ڈیٹ کرنا تاکہ ضروری پیکجز شامل ہوں
+          sed -i 's/sdk: flutter/sdk: flutter\n  permission_handler: ^11.3.0\n  http: ^1.2.0/' pubspec.yaml
 
-          # ہارڈ ویئر انجن بنانا
-          cat <<EOF > lib/core/services/hardware_engine.dart
-          import 'package:permission_handler/permission_handler.dart';
-          class HardwareEngine {
-            static Future<void> init() async {
-              await [Permission.camera, Permission.storage].request();
-            }
-          }
-          EOF
-
-      - name: 💾 Commit Structure to Repo
+      - name: 💾 Finalize & Push Structure
         run: |
           git config --global user.name "System Pro Bot"
           git config --global user.email "bot@systempro.com"
           git add .
-          git commit -m "🏗️ Base infrastructure established by Titan Engine"
-          git push
+          # اگر کچھ تبدیل ہوا ہو تب ہی کمٹ کرے گا
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🏗️ Base infrastructure established by Titan Engine" && git push)
