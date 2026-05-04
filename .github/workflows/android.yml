@@ -39,25 +39,30 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
 
-          # 1. Smart Java Decoding & R Import Fix
+          # 1. Absolute Java Header Injector
           if [ -n "$JAVA_B64" ] && [ "$JAVA_B64" != "null" ]; then
-            echo "$JAVA_B64" | base64 -d > app/src/main/java/$PKG_PATH/MainActivity.java
-            # خود بخود درست R امپورٹ شامل کرنا اگر موجود نہ ہو
-            if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
-              sed -i "/package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
-            fi
+            echo "$JAVA_B64" | base64 -d > temp_java.java
+            
+            # پرانی پیکیج اور R امپورٹ لائنز کو نکالنا (اگر موجود ہوں)
+            sed -i '/package /d' temp_java.java
+            sed -i '/import .*R;/d' temp_java.java
+            
+            # نئی اور درست ہیڈر لائنز زبردستی شامل کرنا
+            echo "package $PACKAGE_NAME;" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "import $PACKAGE_NAME.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+            cat temp_java.java >> app/src/main/java/$PKG_PATH/MainActivity.java
           else
             echo -e "package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\nimport $PACKAGE_NAME.R;\npublic class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # 2. XML Layout Fix
+          # 2. XML Layout Injection
           if [ -n "$XML_B64" ] && [ "$XML_B64" != "null" ]; then
             echo "$XML_B64" | base64 -d > app/src/main/res/layout/activity_main.xml
           else
             echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\" android:layout_width=\"match_parent\" android:layout_height=\"match_parent\" android:background=\"#0F0F0F\"></RelativeLayout>" > app/src/main/res/layout/activity_main.xml
           fi
 
-          # 3. Manifest Fix
+          # 3. Manifest Hard-Fix
           if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
             echo "$MANIFEST_B64" | base64 -d > app/src/main/AndroidManifest.xml
             sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
@@ -65,24 +70,23 @@ jobs:
             echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
           fi
 
-          # 4. Icon & Theme Resources
+          # 4. Resources & Theme Alignment
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
-          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
-          mkdir -p app/src/main/res/mipmap-anydpi-v26
-          echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="colorPrimaryDark">#000000</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item></style></resources>' > app/src/main/res/values/themes.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="colorPrimaryDark">#000000</color><color name="colorPrimary">#00BFFF</color></resources>' > app/src/main/res/values/colors.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
 
-          # 5. Build Config
+          # 5. Advanced Gradle Configuration
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
+
           echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
+
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -96,6 +100,7 @@ jobs:
               implementation 'androidx.core:core-ktx:1.12.0'
           }
           EOF
+
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
           
           sync
