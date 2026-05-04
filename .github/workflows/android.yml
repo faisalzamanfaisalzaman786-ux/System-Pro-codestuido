@@ -24,14 +24,11 @@ jobs:
         run: |
           ZIP_URL="${{ github.event.client_payload.zip_asset_url }}"
           if [ -z "$ZIP_URL" ]; then
-            echo "❌ No ZIP url provided in client_payload.zip_asset_url"
+            echo "❌ No ZIP url provided"
             exit 1
           fi
-          echo "📦 Downloading source bundle from: $ZIP_URL"
           curl -L -o source_bundle.zip "$ZIP_URL"
           unzip -q source_bundle.zip -d workspace/
-          echo "✅ Extracted files:"
-          ls -la workspace/
 
       - name: Read build metadata
         id: metadata
@@ -52,77 +49,41 @@ jobs:
           APP_JAVA_DIR="app/src/main/java/$(echo "$PKG" | tr '.' '/')"
           mkdir -p "$APP_JAVA_DIR"
           
-          # 1. MainActivity.java
-          if [ -f workspace/MainActivity.java ]; then
-            cp workspace/MainActivity.java "$APP_JAVA_DIR/MainActivity.java"
-          fi
-
-          # 2. Layout
+          [ -f workspace/MainActivity.java ] && cp workspace/MainActivity.java "$APP_JAVA_DIR/MainActivity.java"
+          
           mkdir -p app/src/main/res/layout
-          if [ -f workspace/res/layout/activity_main.xml ]; then
-            cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-          elif [ -f workspace/activity_main.xml ]; then
-            cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
-          fi
+          [ -f workspace/res/layout/activity_main.xml ] && cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
+          [ -f workspace/activity_main.xml ] && cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
 
-          # 3. Manifest – clean possible BOM / invalid PI
           if [ -f workspace/AndroidManifest.xml ]; then
-            # Remove UTF-8 BOM (bytes EF BB BF) and any whitespace before <?xml
+            # Remove BOM and leading whitespace
             sed -i '1s/^\xEF\xBB\xBF//' workspace/AndroidManifest.xml
             sed -i '1s/^[[:space:]]*<?xml/<?xml/' workspace/AndroidManifest.xml
             cp workspace/AndroidManifest.xml app/src/main/AndroidManifest.xml
           fi
 
-          # 4. Icon
           mkdir -p app/src/main/res/drawable
-          if [ -f workspace/res/drawable/ic_launcher.png ]; then
-            cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
-          elif [ -f workspace/ic_launcher.png ]; then
-            cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
-          fi
+          [ -f workspace/res/drawable/ic_launcher.png ] && cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
+          [ -f workspace/ic_launcher.png ] && cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
 
-          # 5. Update build.gradle with correct package
           if [ -f app/build.gradle ]; then
             sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
           fi
 
-      - name: Validate and fix AndroidManifest.xml (if still broken)
+      - name: Validate and fix AndroidManifest.xml (no heredoc issues)
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
+          PKG="${{ steps.metadata.outputs.pkg_name }}"
+          APPNAME="${{ steps.metadata.outputs.app_name }}"
+          
+          # اگر manifest موجود نہ ہو یا خراب ہو تو نیا بنا دیں
           if [ ! -f "$MANIFEST" ]; then
-            echo "⚠️ No manifest found – creating a minimal valid one"
-            cat > "$MANIFEST" <<EOF
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="${{ steps.metadata.outputs.pkg_name }}">
-                <application android:label="${{ steps.metadata.outputs.app_name }}">
-                    <activity android:name=".MainActivity">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    package="'"$PKG"'">\n    <application android:label="'"$APPNAME"'">\n        <activity android:name=".MainActivity">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > "$MANIFEST"
           else
-            # Run a simple XML syntax check
+            # اگر manifest موجود ہے تو چیک کریں valid ہے یا نہیں
             if ! xmllint --noout "$MANIFEST" 2>/dev/null; then
-              echo "❌ Manifest is still corrupt – replacing with a default valid one"
-              cat > "$MANIFEST" <<EOF
-              <?xml version="1.0" encoding="utf-8"?>
-              <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                  package="${{ steps.metadata.outputs.pkg_name }}">
-                  <application android:label="${{ steps.metadata.outputs.app_name }}">
-                      <activity android:name=".MainActivity">
-                          <intent-filter>
-                              <action android:name="android.intent.action.MAIN" />
-                              <category android:name="android.intent.category.LAUNCHER" />
-                          </intent-filter>
-                      </activity>
-                  </application>
-              </manifest>
-              EOF
+              echo "⚠️ Manifest corrupt, replacing with default valid manifest"
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    package="'"$PKG"'">\n    <application android:label="'"$APPNAME"'">\n        <activity android:name=".MainActivity">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > "$MANIFEST"
             fi
           fi
           echo "✅ Manifest is ready:"
@@ -144,6 +105,6 @@ jobs:
       - name: Build success summary
         if: success()
         run: |
-          echo "## ✅ Build succeeded (ZIP ingestion with manifest repair)" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build succeeded" >> $GITHUB_STEP_SUMMARY
           echo "App: **${{ steps.metadata.outputs.app_name }}**" >> $GITHUB_STEP_SUMMARY
           echo "Package: \`${{ steps.metadata.outputs.pkg_name }}\`" >> $GITHUB_STEP_SUMMARY
