@@ -23,7 +23,7 @@ jobs:
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          # پے لوڈ سے ڈیٹا نکالنا
+          # پے لوڈ ڈیٹا
           APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
           JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
@@ -31,7 +31,7 @@ jobs:
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
           ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
-          # فولڈرز کی درست ترتیب
+          # فولڈرز کی تخلیق
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
@@ -39,83 +39,70 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # فال بیک لاجک (اگر ڈیٹا خالی ہو)
+          # کوڈ اور لے آؤٹ جنریشن (اگر خالی ہوں)
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
             JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n    }\n}"
           fi
-
+          
           if [ -z "$XML_LAYOUT" ] || [ "$XML_LAYOUT" = "null" ]; then
-            XML_LAYOUT="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"match_parent\"\n    android:background=\"#0F0F0F\">\n</RelativeLayout>"
+            XML_LAYOUT="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"match_parent\">\n</RelativeLayout>"
           fi
 
-          # فائلز کی تخلیق (sync کے ساتھ تاکہ پاتھ کا مسئلہ نہ ہو)
+          # مینی فیسٹ سے پرانی پیکیج لائن ہٹانا تاکہ AGP 8.5 میں ایرر نہ آئے
+          if [ -z "$MANIFEST_XML" ] || [ "$MANIFEST_XML" = "null" ]; then
+             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:label=\"$APP_NAME\" android:theme=\"@style/Theme_SystemPro\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>"
+          else
+             # مینی فیسٹ کے اندر سے پیکیج ڈیفینیشن ڈیلیٹ کرنا اگر موجود ہو
+             MANIFEST_XML=$(echo "$MANIFEST_XML" | sed 's/package="[^"]*"//g')
+          fi
+
           echo -e "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo -e "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo -e "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
           
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
+          [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
 
-          # پیکیج اور امپورٹ آٹو فکس
-          sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
-          if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
-            sed -i "/^package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
+          # کلرز اور تھیمز (برائے حفاظت)
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"bg_dark\">#0F0F0F</color><color name=\"neon_blue\">#00BFFF</color></resources>" > app/src/main/res/values/colors.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme_SystemPro\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">@color/neon_blue</item></style></resources>" > app/src/main/res/values/themes.xml
 
-          # ریسورس فائلز
-          cat <<COLORS > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color></resources>
-          COLORS
-
-          cat <<THEMES > app/src/main/res/values/themes.xml
-          <?xml version="1.0" encoding="utf-8"?><resources><style name="Theme_SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item></style></resources>
-          THEMES
-
-          # گریڈل سیٹنگز (8.5.0 Plugin & 9.4.1 Wrapper)
+          # گریڈل کنفیگریشن
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          
-          cat <<SETTINGS > settings.gradle
-          rootProject.name = "$APP_NAME"
-          include ':app'
-          SETTINGS
+          echo "rootProject.name = \"$APP_NAME\"" > settings.gradle
+          echo "include ':app'" >> settings.gradle
 
-          cat <<BUILD_ROOT > build.gradle
-          buildscript { 
-            repositories { google(); mavenCentral() } 
-            dependencies { classpath 'com.android.tools.build:gradle:8.5.0' } 
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
           }
           allprojects { repositories { google(); mavenCentral() } }
-          BUILD_ROOT
+          EOF
 
-          cat <<BUILD_APP > app/build.gradle
+          cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          android { 
-              namespace '$PACKAGE_NAME' 
-              compileSdk 34 
-              defaultConfig { 
-                  applicationId '$PACKAGE_NAME' 
-                  minSdk 24 
-                  targetSdk 34 
-                  versionCode 1400 
-                  versionName "1400.0" 
-              } 
-              compileOptions { 
-                  sourceCompatibility JavaVersion.VERSION_17 
-                  targetCompatibility JavaVersion.VERSION_17 
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PACKAGE_NAME'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
               }
               buildFeatures { viewBinding true }
           }
-          dependencies { 
-              implementation 'androidx.appcompat:appcompat:1.6.1' 
-              implementation 'com.google.android.material:material:1.11.0' 
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }
-          BUILD_APP
+          EOF
 
-          # فائل سسٹم کو سنک کرنا تاکہ AAPT2 پاتھ ایرر نہ دے
+          # بلڈ سے پہلے فائلز سنک کریں
           sync
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
