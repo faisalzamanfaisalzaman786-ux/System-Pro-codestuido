@@ -3,11 +3,11 @@ name: System Pro ZIP Builder
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [build-from-zip]
+    types: [build-app]
 
 jobs:
   build:
-    name: "ZIP to APK Generation"
+    name: "System Pro Build Engine"
     runs-on: ubuntu-latest
     
     steps:
@@ -21,81 +21,69 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process ZIP and Advanced Python Sanitize
+      - name: Extract and Sanitize Payload
         run: |
-          # 1. Download ZIP
-          ZIP_URL="${{ github.event.client_payload.zip_asset_url }}"
-          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o project.zip "$ZIP_URL"
+          # 1. Download Payload from Dispatch
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || echo "" > temp_main.java
+          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || echo "" > temp_layout.xml
+          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || echo "" > temp_manifest.xml
           
-          # 2. Setup Directories
-          PACKAGE_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
-          PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          # 2. Setup Directory Structure
+          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable-xxxhdpi
 
-          # 3. Unzip
-          unzip -o project.zip -d temp_src/
-
-          # 4. PYTHON NUCLEAR SANITIZER (Prolog/Invisible Byte Fix)
-          # یہ اسکرپٹ ہر XML فائل کو پڑھے گا اور اسے دوبارہ بالکل صاف حالت میں لکھے گا
+          # 3. PYTHON NUCLEAR CLEANER (Fixes Prolog & Hidden Styles)
           python3 -c "
-          import os, xml.etree.ElementTree as ET
-          def sanitize_xml(file_path):
-              try:
-                  with open(file_path, 'rb') as f:
-                      content = f.read()
-                  # پہلا '<' تلاش کرنا تاکہ شروع کا کچرا ختم ہو
-                  start_idx = content.find(b'<')
-                  if start_idx != -1:
-                      clean_content = content[start_idx:]
-                      # فائل کو کلین اسٹرکچر کے ساتھ دوبارہ لکھنا
-                      root = ET.fromstring(clean_content)
-                      tree = ET.ElementTree(root)
-                      tree.write(file_path, encoding='utf-8', xml_declaration=True)
-                      print(f'Sanitized: {file_path}')
-              except Exception as e:
-                  print(f'Warning skipping {file_path}: {e}')
+          import os
+          def clean_xml(content):
+              content = content.strip()
+              # XML Prolog Fix: Find first <?xml and cut everything before it
+              if '<?xml' in content:
+                  content = content[content.find('<?xml'):]
+              # Remove illegal styles injected in layout
+              if '<style' in content:
+                  import re
+                  content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
+              return content
 
-          for root_dir, dirs, files in os.walk('temp_src/'):
-              for file in files:
-                  if file.endswith('.xml'):
-                      sanitize_xml(os.path.join(root_dir, file))
+          # Clean Layout
+          with open('temp_layout.xml', 'r', encoding='utf-8', errors='ignore') as f:
+              clean_l = clean_xml(f.read())
+          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
+              f.write(clean_l)
+
+          # Clean Manifest
+          with open('temp_manifest.xml', 'r', encoding='utf-8', errors='ignore') as f:
+              clean_m = clean_xml(f.read())
+          with open('app/src/main/AndroidManifest.xml', 'w') as f:
+              f.write(clean_m)
           "
 
-          # 5. Move Files
-          if [ -f temp_src/MainActivity.java ]; then
-            echo "package $PACKAGE_NAME;" > app/src/main/java/$PKG_PATH/MainActivity.java
-            echo "import $PACKAGE_NAME.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
-            cat temp_src/MainActivity.java | sed '/package /d' | sed '/import .*R;/d' >> app/src/main/java/$PKG_PATH/MainActivity.java
+          # 4. Java Package Injection
+          {
+            echo "package $PKG_NAME;"
+            echo "import $PKG_NAME.R;"
+            sed '/package /d' temp_main.java | sed '/import .*R;/d'
+          } > app/src/main/java/$PKG_PATH/MainActivity.java
+
+          # 5. Icon Processing
+          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/drawable-xxxhdpi/ic_launcher.png
           fi
-          
-          [ -f temp_src/res/layout/activity_main.xml ] && mv temp_src/res/layout/activity_main.xml app/src/main/res/layout/
-          [ -f temp_src/AndroidManifest.xml ] && mv temp_src/AndroidManifest.xml app/src/main/
-          [ -f temp_src/res/drawable/ic_launcher.png ] && mv temp_src/res/drawable/ic_launcher.png app/src/main/res/drawable/
 
-          # 6. Inject Mandatory Colors
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="bg_dark">#0F0F0F</color>
-              <color name="neon_green">#00FF00</color>
-              <color name="glass_white_10">#1AFFFFFF</color>
-              <color name="error_red">#FF4444</color>
-              <color name="colorAccent">#FF9800</color>
-          </resources>
-          EOF
-
-      - name: Build APK
+      - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug \
+          ./gradlew :app:clean :app:assembleDebug \
             -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
+            -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
             --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro-ZIP-Build' }}
+          name: ${{ github.event.client_payload.app_name || 'SystemPro-Build' }}
           path: app/build/outputs/apk/debug/*.apk
