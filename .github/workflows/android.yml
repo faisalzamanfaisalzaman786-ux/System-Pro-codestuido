@@ -40,7 +40,6 @@ jobs:
             APP_NAME="${{ github.event.client_payload.app_name }}"
             PKG_NAME="${{ github.event.client_payload.package_name }}"
           fi
-          # Convert package name to lowercase if needed, but keep as is
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
 
@@ -50,14 +49,11 @@ jobs:
           APP_JAVA_DIR="app/src/main/java/$(echo "$PKG" | tr '.' '/')"
           mkdir -p "$APP_JAVA_DIR"
           
-          # MainActivity.java
           if [ -f workspace/MainActivity.java ]; then
-            # Update package line inside MainActivity.java if needed
             sed -i "s/^package .*;/package $PKG;/" workspace/MainActivity.java
             cp workspace/MainActivity.java "$APP_JAVA_DIR/MainActivity.java"
           fi
           
-          # Layout
           mkdir -p app/src/main/res/layout
           if [ -f workspace/res/layout/activity_main.xml ]; then
             cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
@@ -65,17 +61,13 @@ jobs:
             cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
           fi
 
-          # AndroidManifest.xml - remove package attribute completely
           if [ -f workspace/AndroidManifest.xml ]; then
-            # Remove BOM and fix
             sed -i '1s/^\xEF\xBB\xBF//' workspace/AndroidManifest.xml
             sed -i '1s/^[[:space:]]*<?xml/<?xml/' workspace/AndroidManifest.xml
-            # Delete any package="..." from manifest tag
             sed -i 's/package="[^"]*"//' workspace/AndroidManifest.xml
             cp workspace/AndroidManifest.xml app/src/main/AndroidManifest.xml
           fi
 
-          # Icon
           mkdir -p app/src/main/res/drawable
           if [ -f workspace/res/drawable/ic_launcher.png ]; then
             cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
@@ -83,43 +75,39 @@ jobs:
             cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           fi
 
-          # Update build.gradle (app level)
           if [ -f app/build.gradle ]; then
-            # Add namespace if not exists, or replace
             if grep -q "namespace" app/build.gradle; then
               sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
             else
-              # Insert after android {
               sed -i "/android {/a \ \ \ \ namespace \"$PKG\"" app/build.gradle
             fi
             sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
           fi
 
-      - name: Validate and ensure valid AndroidManifest.xml (without package)
+      - name: Create valid AndroidManifest.xml (NO package attribute, NO heredoc)
         run: |
           MANIFEST="app/src/main/AndroidManifest.xml"
           PKG="${{ steps.metadata.outputs.pkg_name }}"
           APPNAME="${{ steps.metadata.outputs.app_name }}"
           
-          # If manifest still missing or invalid, create a clean one WITHOUT package attribute
+          # If file doesn't exist or is invalid, create fresh one using printf (safe method)
           if [ ! -f "$MANIFEST" ] || ! xmllint --noout "$MANIFEST" 2>/dev/null; then
-            echo "⚠️ Generating clean manifest (no package attribute)"
-            cat > "$MANIFEST" <<'EOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-                <application android:label="APP_NAME_PLACEHOLDER">
-                    <activity android:name=".MainActivity">
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN"/>
-                            <category android:name="android.intent.category.LAUNCHER"/>
-                        </intent-filter>
-                    </activity>
-                </application>
-            </manifest>
-            EOF
-            sed -i "s/APP_NAME_PLACEHOLDER/$APPNAME/" "$MANIFEST"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n' > "$MANIFEST"
+            printf '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' >> "$MANIFEST"
+            printf '    <application android:label="%s">\n' "$APPNAME" >> "$MANIFEST"
+            printf '        <activity android:name=".MainActivity">\n' >> "$MANIFEST"
+            printf '            <intent-filter>\n' >> "$MANIFEST"
+            printf '                <action android:name="android.intent.action.MAIN"/>\n' >> "$MANIFEST"
+            printf '                <category android:name="android.intent.category.LAUNCHER"/>\n' >> "$MANIFEST"
+            printf '            </intent-filter>\n' >> "$MANIFEST"
+            printf '        </activity>\n' >> "$MANIFEST"
+            printf '    </application>\n' >> "$MANIFEST"
+            printf '</manifest>\n' >> "$MANIFEST"
+            echo "✅ Generated fresh manifest (no package attribute)"
+          else
+            echo "✅ Existing manifest is valid"
           fi
-          echo "✅ Manifest ready (no package line):"
+          echo "First 6 lines of manifest:"
           head -n 6 "$MANIFEST"
 
       - name: Grant execute permission for Gradle wrapper
@@ -138,6 +126,6 @@ jobs:
       - name: Build success summary
         if: success()
         run: |
-          echo "## ✅ Build succeeded (modern manifest without package attribute)" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build succeeded (no heredoc, stable)" >> $GITHUB_STEP_SUMMARY
           echo "App: **${{ steps.metadata.outputs.app_name }}**" >> $GITHUB_STEP_SUMMARY
           echo "Package: \`${{ steps.metadata.outputs.pkg_name }}\`" >> $GITHUB_STEP_SUMMARY
