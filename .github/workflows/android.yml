@@ -1,43 +1,50 @@
-name: Self-Healing APK Builder (Zero Crash)
+name: Android Universal Builder (Auto-Heal & Zero Crash)
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [build-app]
 
 jobs:
-  build-self-healing:
-    name: 🛡️ Auto-Fix & Build Perfect APK
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup JDK 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 🧠 Extract & Heal All Files
+      - name: Extract & Heal All Files from Payload (or use defaults)
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          # === Extract user payload ===
-          JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
-          XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
-          MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
-          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SmartApp"')
-          PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // ""')
-          ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
-
-          # === Validation ===
-          if [ -z "$JAVA_CODE" ] || [ -z "$XML_LAYOUT" ] || [ -z "$MANIFEST_XML" ] || [ -z "$PACKAGE_NAME" ]; then
-            echo "❌ Missing required fields (java/xml/manifest/package_name)" && exit 1
+          # if no payload (manual run), use example files
+          if [ "${{ github.event_name }}" != "repository_dispatch" ] || [ -z "$PAYLOAD" ]; then
+            echo "No payload, using default demo files"
+            JAVA_CODE='package com.example.demo;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n        TextView tv = findViewById(R.id.text);\n        tv.setText("Hello World");\n    }\n}'
+            XML_LAYOUT='<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent">\n    <TextView android:id="@+id/text"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:text="Hello"/>\n</RelativeLayout>'
+            MANIFEST_XML='<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <application android:label="DemoApp">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>'
+            APP_NAME="DemoApp"
+            PACKAGE_NAME="com.example.demo"
+            ICON_B64=""
+          else
+            JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
+            XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
+            MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
+            APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SmartApp"')
+            PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // ""')
+            ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
+            if [ -z "$JAVA_CODE" ] || [ -z "$XML_LAYOUT" ] || [ -z "$MANIFEST_XML" ] || [ -z "$PACKAGE_NAME" ]; then
+              echo "❌ Missing required fields" && exit 1
+            fi
           fi
 
-          # === Create directories ===
+          # create directories
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
@@ -45,17 +52,11 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # 1. Write and fix Java file: ensure package line matches
+          # Write files
           echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
-
-          # 2. Write layout XML (will be auto-repaired later)
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
-
-          # 3. Write manifest and remove deprecated 'package' attribute
           echo "$MANIFEST_XML" | sed 's/ package="[^"]*"//' > app/src/main/AndroidManifest.xml
-
-          # 4. Decode icon if present
           if [ -n "$ICON_B64" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
@@ -63,61 +64,37 @@ jobs:
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
 
-      - name: 🔧 Auto-Heal Phase 1: Fix Missing Colors
+      - name: 🔧 Auto-Heal Missing Colors & Theme
         run: |
-          COLORS_FILE="app/src/main/res/values/colors.xml"
-          # Extract all color references from layout XML and manifest theme
-          ALL_COLORS=$(grep -ohE '#[A-Fa-f0-9]{6}|@color/[a-zA-Z0-9_]+' app/src/main/res/layout/activity_main.xml app/src/main/AndroidManifest.xml | grep '@color/' | sed 's/@color\///' | sort -u)
+          # colors.xml
+          COLORS="app/src/main/res/values/colors.xml"
+          mkdir -p app/src/main/res/values
+          cat <<'EOF' > "$COLORS"
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="bg_dark">#0F0F0F</color>
+              <color name="neon_blue">#00BFFF</color>
+              <color name="neon_purple">#9D00FF</color>
+              <color name="neon_green">#39FF14</color>
+              <color name="black">#000000</color>
+              <color name="white">#FFFFFF</color>
+              <color name="primary_color">#6200EE</color>
+              <color name="error_red">#FF0000</color>
+              <color name="warning_orange">#FFA500</color>
+              <color name="colorPrimaryDark">#0F0F0F</color>
+              <color name="colorAccent">#00BFFF</color>
+              <color name="glass_white_10">#1AFFFFFF</color>
+              <color name="glass_white_30">#4DFFFFFF</color>
+          </resources>
+          EOF
           
-          # Create colors.xml if missing, or append missing colors
-          if [ ! -f "$COLORS_FILE" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS_FILE"
-          fi
-          
-          for COLOR_NAME in $ALL_COLORS; do
-            if ! grep -q "<color name=\"$COLOR_NAME\"" "$COLORS_FILE"; then
-              # Add a safe default color (neon green)
-              sed -i "/<\/resources>/i \    <color name=\"$COLOR_NAME\">#39FF14</color>" "$COLORS_FILE"
-              echo "➕ Added missing color: $COLOR_NAME"
-            fi
-          done
-          
-          # Also ensure basic colors exist
-          for BASIC in bg_dark neon_blue neon_purple neon_green black white primary_color error_red warning_orange colorPrimaryDark colorAccent glass_white_10 glass_white_30; do
-            if ! grep -q "<color name=\"$BASIC\"" "$COLORS_FILE"; then
-              VALUE="#0F0F0F"
-              case $BASIC in
-                neon_blue) VALUE="#00BFFF";;
-                neon_purple) VALUE="#9D00FF";;
-                neon_green) VALUE="#39FF14";;
-                black) VALUE="#000000";;
-                white) VALUE="#FFFFFF";;
-                primary_color) VALUE="#6200EE";;
-                error_red) VALUE="#FF0000";;
-                warning_orange) VALUE="#FFA500";;
-                colorPrimaryDark) VALUE="#0F0F0F";;
-                colorAccent) VALUE="#00BFFF";;
-                glass_white_10) VALUE="#1AFFFFFF";;
-                glass_white_30) VALUE="#4DFFFFFF";;
-              esac
-              sed -i "/<\/resources>/i \    <color name=\"$BASIC\">$VALUE</color>" "$COLORS_FILE"
-            fi
-          done
-
-      - name: 🔧 Auto-Heal Phase 2: Ensure Theme Exists
-        run: |
-          # Extract theme name from manifest
+          # theme: extract from manifest or create default
           THEME_NAME=$(grep -oP 'android:theme="\K@style/[^"]+' app/src/main/AndroidManifest.xml | head -1 | sed 's/@style\///')
           if [ -z "$THEME_NAME" ]; then
             THEME_NAME="Theme_${APP_NAME// /_}"
-            # Inject theme into manifest if missing
             sed -i "s|<application |<application android:theme=\"@style/$THEME_NAME\" |" app/src/main/AndroidManifest.xml
           fi
-          
-          THEMES_FILE="app/src/main/res/values/themes.xml"
-          if [ ! -f "$THEMES_FILE" ] || ! grep -q "<style name=\"$THEME_NAME\"" "$THEMES_FILE"; then
-            mkdir -p app/src/main/res/values
-            cat <<EOF > "$THEMES_FILE"
+          cat <<EOF > app/src/main/res/values/themes.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="$THEME_NAME" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -127,80 +104,60 @@ jobs:
               </style>
           </resources>
           EOF
-            echo "➕ Created missing theme: $THEME_NAME"
-          fi
 
-      - name: 🔧 Auto-Heal Phase 3: Guarantee All IDs Exist in Layout
+          # strings.xml
+          cat <<EOF > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+
+      - name: 🔧 Auto-Heal Missing IDs (add invisible views)
         run: |
-          LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
-          # Extract all IDs from Java file (findViewById)
-          JAVA_IDS=$(grep -oE 'findViewById\(R\.id\.([a-zA-Z0-9_]+)\)' app/src/main/java/*/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java | sed 's/.*R\.id\.//' | sed 's/)//' | sort -u)
-          
-          for ID in $JAVA_IDS; do
-            if ! grep -q "android:id=\"@+id/$ID\"" "$LAYOUT_FILE" && ! grep -q "android:id=\"@id/$ID\"" "$LAYOUT_FILE"; then
-              # Add a dummy invisible view with that ID at the end of layout
-              sed -i "/<\/RelativeLayout>/i \    <View android:id=\"@+id/$ID\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />" "$LAYOUT_FILE"
-              sed -i "/<\/LinearLayout>/i \    <View android:id=\"@+id/$ID\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />" "$LAYOUT_FILE"
-              sed -i "/<\/androidx.constraintlayout.widget.ConstraintLayout>/i \    <View android:id=\"@+id/$ID\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />" "$LAYOUT_FILE"
-              echo "➕ Added missing ID: $ID as invisible view"
+          LAYOUT="app/src/main/res/layout/activity_main.xml"
+          JAVA_FILE="app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java"
+          # extract findViewById IDs from Java
+          IDS=$(grep -oE 'findViewById\(R\.id\.([a-zA-Z0-9_]+)\)' "$JAVA_FILE" | sed 's/.*R\.id\.//' | sed 's/)//' | sort -u)
+          for id in $IDS; do
+            if ! grep -q "android:id=\"@+id/$id\"" "$LAYOUT" && ! grep -q "android:id=\"@id/$id\"" "$LAYOUT"; then
+              # inject invisible view before closing tag
+              sed -i "s|</RelativeLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</RelativeLayout>|" "$LAYOUT"
+              sed -i "s|</LinearLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</LinearLayout>|" "$LAYOUT"
+              sed -i "s|</androidx.constraintlayout.widget.ConstraintLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</androidx.constraintlayout.widget.ConstraintLayout>|" "$LAYOUT"
+              echo "➕ Added missing ID: $id"
             fi
           done
 
-      - name: 🔧 Auto-Heal Phase 4: Add Default Click Handlers (Prevent Crashes)
+      - name: 🔧 Auto-Heal Click Handlers (prevent NPE)
         run: |
           JAVA_FILE="app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java"
-          # If no setOnClickListener found, wrap the whole onCreate in try-catch and add a dummy button click
           if ! grep -q "setOnClickListener" "$JAVA_FILE"; then
-            # Add a safe click listener to the first button found (or create a default one)
-            # Simple approach: wrap existing code and add a fallback
+            # Inject safe click handler at end of onCreate
             sed -i '/protected void onCreate/,/^    }/ {
               /super.onCreate/ a\
-                    try {\
-                        // Auto-added safe click handler for all buttons\
-                        View root = getWindow().getDecorView().findViewById(android.R.id.content);\
-                        if (root instanceof ViewGroup) {\
-                            addSafeClickListeners((ViewGroup) root);\
-                        }\
-                    } catch (Exception e) { e.printStackTrace(); }
+                    // Auto-safe click handler\
+                    View root = getWindow().getDecorView().findViewById(android.R.id.content);\
+                    if (root instanceof ViewGroup) addSafeClickListeners((ViewGroup) root);
             }' "$JAVA_FILE"
-            
-            # Add helper method at end of class
             cat <<'EOF' >> "$JAVA_FILE"
             private void addSafeClickListeners(ViewGroup group) {
                 for (int i = 0; i < group.getChildCount(); i++) {
                     View child = group.getChildAt(i);
-                    if (child instanceof Button) {
-                        if (!(child.hasOnClickListeners())) {
-                            child.setOnClickListener(v -> 
-                                Toast.makeText(this, "Button clicked: " + ((Button)v).getText(), Toast.LENGTH_SHORT).show()
-                            );
-                        }
+                    if (child instanceof android.widget.Button && !child.hasOnClickListeners()) {
+                        child.setOnClickListener(v -> 
+                            android.widget.Toast.makeText(this, "Button: " + ((android.widget.Button)v).getText(), android.widget.Toast.LENGTH_SHORT).show()
+                        );
                     } else if (child instanceof ViewGroup) {
                         addSafeClickListeners((ViewGroup) child);
                     }
                 }
             }
-            private void showSafeToast(String msg) {
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-            }
-            import android.widget.Toast;
+            import android.view.View;
+            import android.view.ViewGroup;
             EOF
-            echo "➕ Added default click handlers to prevent crashes"
           fi
 
-      - name: 🔧 Auto-Heal Phase 5: Ensure Strings.xml Exists
-        run: |
-          STRINGS_FILE="app/src/main/res/values/strings.xml"
-          if [ ! -f "$STRINGS_FILE" ]; then
-            cat <<EOF > "$STRINGS_FILE"
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
-          fi
-
-      - name: ⚙️ Generate Gradle Files (Wrapper 9.4.1)
+      - name: Setup Gradle 9.4.1
         run: |
           cat <<'EOF' > gradlew
           #!/bin/sh
@@ -211,23 +168,18 @@ jobs:
           distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
           EOF
           curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
-          
           cat <<EOF > settings.gradle
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
-          
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
           }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           task clean(type: Delete) { delete rootProject.buildDir }
           EOF
-          
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -235,7 +187,7 @@ jobs:
               compileSdk 34
               defaultConfig {
                   applicationId '$PACKAGE_NAME'
-                  minSdk 24
+                  minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
@@ -253,12 +205,12 @@ jobs:
           }
           EOF
 
-      - name: ✅ Build Debug APK
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew clean assembleDebug --stacktrace
 
-      - name: 📤 Upload APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build
