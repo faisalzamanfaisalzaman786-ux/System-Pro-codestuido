@@ -23,7 +23,6 @@ jobs:
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          # پے لوڈ ڈیٹا
           APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
           JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
@@ -31,7 +30,6 @@ jobs:
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
           ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
-          # فولڈرز کی تخلیق
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
@@ -39,46 +37,39 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # کوڈ اور لے آؤٹ جنریشن (اگر خالی ہوں)
-          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
-            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n    }\n}"
-          fi
-          
-          if [ -z "$XML_LAYOUT" ] || [ "$XML_LAYOUT" = "null" ]; then
-            XML_LAYOUT="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"match_parent\">\n</RelativeLayout>"
-          fi
-
-          # مینی فیسٹ سے پرانی پیکیج لائن ہٹانا تاکہ AGP 8.5 میں ایرر نہ آئے
+          # پیکیج نیم کو مینی فیسٹ سے مکمل صاف کرنا (AGP 8.5 کی ضرورت)
           if [ -z "$MANIFEST_XML" ] || [ "$MANIFEST_XML" = "null" ]; then
-             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <application android:label=\"$APP_NAME\" android:theme=\"@style/Theme_SystemPro\">\n        <activity android:name=\".MainActivity\" android:exported=\"true\">\n            <intent-filter>\n                <action android:name=\"android.intent.action.MAIN\" />\n                <category android:name=\"android.intent.category.LAUNCHER\" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>"
+             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>"
           else
-             # مینی فیسٹ کے اندر سے پیکیج ڈیفینیشن ڈیلیٹ کرنا اگر موجود ہو
              MANIFEST_XML=$(echo "$MANIFEST_XML" | sed 's/package="[^"]*"//g')
           fi
 
           echo -e "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo -e "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo -e "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-          
-          [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ] && echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
 
-          # کلرز اور تھیمز (برائے حفاظت)
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"bg_dark\">#0F0F0F</color><color name=\"neon_blue\">#00BFFF</color></resources>" > app/src/main/res/values/colors.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme_SystemPro\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">@color/neon_blue</item></style></resources>" > app/src/main/res/values/themes.xml
-
-          # گریڈل کنفیگریشن
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          echo "rootProject.name = \"$APP_NAME\"" > settings.gradle
-          echo "include ':app'" >> settings.gradle
-
-          cat <<EOF > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
+          # جدید گریڈل کے لیے settings.gradle کی ترتیب
+          cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "$APP_NAME"
+          include ':app'
           EOF
 
+          # Root build.gradle (صرف پلگ انز کی تعریف)
+          cat <<EOF > build.gradle
+          plugins {
+              id 'com.android.application' version '8.5.0' apply false
+              id 'com.android.library' version '8.5.0' apply false
+          }
+          EOF
+
+          # App build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -92,6 +83,10 @@ jobs:
                   versionName "1.0"
               }
               buildFeatures { viewBinding true }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -99,11 +94,14 @@ jobs:
           }
           EOF
 
-          # بلڈ سے پہلے فائلز سنک کریں
+          # گریڈل انجن سیٹ اپ
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+          
           sync
           chmod +x gradlew
-          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
-
+          # بلڈ کو فورس کرنا تاکہ پرانے ورکرز ختم ہوں
+          ./gradlew clean assembleDebug --no-daemon --stacktrace --parallel
+          
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
