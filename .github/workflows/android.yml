@@ -34,9 +34,8 @@ jobs:
 
           # 1.2 Validation & Fallback (Guarantee: Build NEVER fails)
           if [ -z "$JAVA_CODE" ]; then
-            JAVA_CODE='package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.text); tv.setText("Welcome to System Pro");\n    }\n}'
+            JAVA_CODE='package com.system.pro;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.text); tv.setText("Welcome to System Pro");\n    }\n}'
           fi
-          # سادہ لے آؤٹ (Fallback)
           if [ -z "$XML_LAYOUT" ]; then
             XML_LAYOUT='<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent">\n    <TextView android:id="@+id/text"\n        android:layout_width="wrap_content"\n        android:layout_height="wrap_content"\n        android:layout_centerInParent="true"\n        android:text="System Pro"/>\n</RelativeLayout>'
           fi
@@ -53,28 +52,35 @@ jobs:
           echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-          # پیکیج لائن کو درست کرنا (مکمل ڈائنامک)
+          
+          # 1.5 Fix the package line in Java file
           sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
+          
+          # 1.6 ✅ CRITICAL FIX: Auto-import R for the correct package
+          if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
+            sed -i "/^package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "✅ Added auto-import of R class for package: $PACKAGE_NAME"
+          fi
           
           if [ -n "$ICON_B64" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-          # 1.5 Save Meta Data
+          # 1.7 Save Meta Data
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
 
       # --- 2. Guarantee Resources (AUTO-FIX) ---
       - name: Inject ALL Missing Resources
         run: |
-          # مینیفیسٹ سے تھیم کا نام حاصل کریں، ورنہ ڈیفالٹ استعمال کریں
+          # Extract theme from manifest, or create a default one
           THEME_NAME=$(grep -oP 'android:theme="\K@style/[^"]+' app/src/main/AndroidManifest.xml | head -1 | sed 's/@style\///')
           if [ -z "$THEME_NAME" ]; then
             THEME_NAME="Theme_${APP_NAME// /_}"
             sed -i "s|<application |<application android:theme=\"@style/$THEME_NAME\" |" app/src/main/AndroidManifest.xml
           fi
 
-          # 2.1 جامع Colors.xml (تمام ممکنہ رنگ پہلے سے)
+          # 2.1 Comprehensive colors.xml
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -94,7 +100,7 @@ jobs:
           </resources>
           EOF
 
-          # 2.2 ڈائنامک Themes.xml
+          # 2.2 Dynamic themes.xml
           cat <<EOF > app/src/main/res/values/themes.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -106,36 +112,35 @@ jobs:
           </resources>
           EOF
 
-          # 2.3 Strings.xml
+          # 2.3 strings.xml
           cat <<EOF > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
 
-          # 2.4 آئی ڈیز کا آٹو-فکس (کریش سے بچاؤ)
+          # 2.4 Auto-fix missing IDs in layout
           LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
           JAVA_FILE="app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java"
-          # main.xml میں موجود تمام IDs کو لے آؤٹ میں شامل کریں
           grep -oE 'findViewById\(R\.id\.([a-zA-Z0-9_]+)\)' "$JAVA_FILE" | sed 's/.*R\.id\.//' | sed 's/)//' | sort -u | while read id; do
             if ! grep -q "android:id=\"@+id/$id\"" "$LAYOUT_FILE"; then
               sed -i "s|</RelativeLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</RelativeLayout>|" "$LAYOUT_FILE"
               sed -i "s|</LinearLayout>|    <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" visibility=\"gone\" />\n</LinearLayout>|" "$LAYOUT_FILE"
-              echo "Added missing ID: $id as invisible view"
+              echo "➕ Added missing ID: $id as invisible view"
             fi
           done
 
       # --- 3. Generate Gradle & Build Environment ---
-      - name: Setup Gradle 9.4.1
+      - name: Setup Gradle 9.4.1 and Build Scripts
         run: |
-          # Gradle Wrapper Script
+          # Gradle wrapper script
           cat <<'EOF' > gradlew
           #!/bin/sh
           exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
           EOF
           chmod +x gradlew
 
-          # properties & Jar
+          # wrapper properties
           cat <<EOF > gradle/wrapper/gradle-wrapper.properties
           distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
           EOF
@@ -147,7 +152,7 @@ jobs:
           include ':app'
           EOF
 
-          # Root build.gradle
+          # root build.gradle
           cat <<EOF > build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
@@ -157,7 +162,7 @@ jobs:
           task clean(type: Delete) { delete rootProject.buildDir }
           EOF
 
-          # App build.gradle (Namespace and ApplicationId are dynamic)
+          # app/build.gradle
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
           android {
@@ -174,7 +179,9 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              buildFeatures { viewBinding true }
+              buildFeatures {
+                  viewBinding true
+              }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -183,8 +190,11 @@ jobs:
           }
           EOF
 
-          # 3.1 میٹا ڈیٹا سے مینیفیسٹ میں موجود package attribute ہٹانا
+          # Remove deprecated 'package' attribute from manifest
           sed -i 's/ package="[^"]*"//' app/src/main/AndroidManifest.xml
+
+          # ✅ Ensure the manifest uses the dynamic theme correctly
+          sed -i "s|Theme.SystemPro|$THEME_NAME|g" app/src/main/AndroidManifest.xml
 
       # --- 4. Build & Upload ---
       - name: Build Debug APK
