@@ -40,38 +40,50 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
 
-          # 1. Java Reconstruction (Nuclear Fix for R class)
+          # 1. Java Absolute Reconstruction (Fixed for Build #933)
           if [ -n "$JAVA_B64" ] && [ "$JAVA_B64" != "null" ]; then
             echo "$JAVA_B64" | base64 -d > raw_java.txt
-            grep -v "package " raw_java.txt | grep -v "import .*R;" > clean_body.txt
-            echo "package $PACKAGE_NAME;" > app/src/main/java/$PKG_PATH/MainActivity.java
-            echo "import $PACKAGE_NAME.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
-            cat clean_body.txt >> app/src/main/java/$PKG_PATH/MainActivity.java
+            
+            # تمام پیکیج اور R امپورٹس کو مکمل ختم کرنا
+            sed -i '/package /d' raw_java.txt
+            sed -i '/import .*R;/d' raw_java.txt
+            
+            # نئی فائل کی تعمیر: پیکیج، امپورٹس اور پھر اصل باڈی
+            {
+              echo "package $PACKAGE_NAME;"
+              echo "import $PACKAGE_NAME.R;"
+              echo "import android.os.Bundle;"
+              echo "import androidx.appcompat.app.AppCompatActivity;"
+              echo "import androidx.core.content.ContextCompat;"
+              cat raw_java.txt
+            } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # 2. Resources Fix
+          # 2. Layout Injection
           if [ -n "$XML_B64" ] && [ "$XML_B64" != "null" ]; then
             echo "$XML_B64" | base64 -d > app/src/main/res/layout/activity_main.xml
           fi
 
-          # 3. Manifest Fix
+          # 3. Manifest Handling
           if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
             echo "$MANIFEST_B64" | base64 -d > app/src/main/AndroidManifest.xml
             sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
           else
-            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="'"$APP_NAME"'" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
           fi
 
-          # 4. Icon & Theme Alignment
+          # 4. Resources Sync
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="colorPrimaryDark">#000000</color><color name="colorPrimary">#00BFFF</color></resources>' > app/src/main/res/values/colors.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
+
+          # 5. Icon Generation
           echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
           echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="colorPrimaryDark">#000000</color><color name="colorPrimary">#00BFFF</color></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
 
-          # 5. Build Config
+          # 6. Build Engine (Locked Versions)
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
@@ -89,6 +101,7 @@ jobs:
           dependencies { 
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.core:core:1.12.0'
           }
           EOF
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
@@ -100,5 +113,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Success' }}
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
           path: app/build/outputs/apk/debug/*.apk
