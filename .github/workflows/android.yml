@@ -1,8 +1,8 @@
 name: System Pro Official Build (ZIP Ingest)
 on:
-  workflow_dispatch:                               # manual trigger for testing
+  workflow_dispatch:
   repository_dispatch:
-    types: [build-from-zip]                        # triggered by HTML builder after ZIP upload
+    types: [build-from-zip]
 
 jobs:
   assemble-official-apk:
@@ -41,63 +41,92 @@ jobs:
             PKG_NAME=$(jq -r '.package_name' workspace/build_metadata.json)
             echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
             echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
-            echo "📋 App name: $APP_NAME"
-            echo "📦 Package: $PKG_NAME"
           else
-            # fallback to client_payload values
             echo "app_name=${{ github.event.client_payload.app_name }}" >> $GITHUB_OUTPUT
             echo "pkg_name=${{ github.event.client_payload.package_name }}" >> $GITHUB_OUTPUT
-            echo "⚠️ No build_metadata.json, using client_payload values"
           fi
 
       - name: Inject source files into Android project
         run: |
-          # Define paths (assumes standard Android structure)
-          APP_JAVA_DIR="app/src/main/java/$(echo "${{ steps.metadata.outputs.pkg_name }}" | tr '.' '/')"
+          PKG="${{ steps.metadata.outputs.pkg_name }}"
+          APP_JAVA_DIR="app/src/main/java/$(echo "$PKG" | tr '.' '/')"
           mkdir -p "$APP_JAVA_DIR"
           
           # 1. MainActivity.java
           if [ -f workspace/MainActivity.java ]; then
             cp workspace/MainActivity.java "$APP_JAVA_DIR/MainActivity.java"
-            echo "✅ MainActivity.java placed"
-          else
-            echo "⚠️ MainActivity.java not found in ZIP"
           fi
 
-          # 2. Layout file
+          # 2. Layout
           mkdir -p app/src/main/res/layout
           if [ -f workspace/res/layout/activity_main.xml ]; then
             cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
           elif [ -f workspace/activity_main.xml ]; then
             cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
-          else
-            echo "⚠️ activity_main.xml missing"
           fi
 
-          # 3. AndroidManifest.xml
+          # 3. Manifest – clean possible BOM / invalid PI
           if [ -f workspace/AndroidManifest.xml ]; then
+            # Remove UTF-8 BOM (bytes EF BB BF) and any whitespace before <?xml
+            sed -i '1s/^\xEF\xBB\xBF//' workspace/AndroidManifest.xml
+            sed -i '1s/^[[:space:]]*<?xml/<?xml/' workspace/AndroidManifest.xml
             cp workspace/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest.xml replaced"
-          else
-            echo "⚠️ Manifest not found, keeping existing"
           fi
 
-          # 4. App icon (PNG)
+          # 4. Icon
           mkdir -p app/src/main/res/drawable
           if [ -f workspace/res/drawable/ic_launcher.png ]; then
             cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Icon placed in drawable/"
           elif [ -f workspace/ic_launcher.png ]; then
             cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
-          else
-            echo "ℹ️ No custom icon provided, using default"
           fi
 
-          # 5. Update app name & package in build.gradle (optional)
+          # 5. Update build.gradle with correct package
           if [ -f app/build.gradle ]; then
-            sed -i "s/applicationId \".*\"/applicationId \"${{ steps.metadata.outputs.pkg_name }}\"/" app/build.gradle
-            echo "🔧 Updated applicationId in build.gradle"
+            sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
           fi
+
+      - name: Validate and fix AndroidManifest.xml (if still broken)
+        run: |
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "⚠️ No manifest found – creating a minimal valid one"
+            cat > "$MANIFEST" <<EOF
+            <?xml version="1.0" encoding="utf-8"?>
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                package="${{ steps.metadata.outputs.pkg_name }}">
+                <application android:label="${{ steps.metadata.outputs.app_name }}">
+                    <activity android:name=".MainActivity">
+                        <intent-filter>
+                            <action android:name="android.intent.action.MAIN" />
+                            <category android:name="android.intent.category.LAUNCHER" />
+                        </intent-filter>
+                    </activity>
+                </application>
+            </manifest>
+            EOF
+          else
+            # Run a simple XML syntax check
+            if ! xmllint --noout "$MANIFEST" 2>/dev/null; then
+              echo "❌ Manifest is still corrupt – replacing with a default valid one"
+              cat > "$MANIFEST" <<EOF
+              <?xml version="1.0" encoding="utf-8"?>
+              <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                  package="${{ steps.metadata.outputs.pkg_name }}">
+                  <application android:label="${{ steps.metadata.outputs.app_name }}">
+                      <activity android:name=".MainActivity">
+                          <intent-filter>
+                              <action android:name="android.intent.action.MAIN" />
+                              <category android:name="android.intent.category.LAUNCHER" />
+                          </intent-filter>
+                      </activity>
+                  </application>
+              </manifest>
+              EOF
+            fi
+          fi
+          echo "✅ Manifest is ready:"
+          head -n 5 "$MANIFEST"
 
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x gradlew
@@ -115,7 +144,6 @@ jobs:
       - name: Build success summary
         if: success()
         run: |
-          echo "## ✅ Build succeeded (ZIP ingestion mode)" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build succeeded (ZIP ingestion with manifest repair)" >> $GITHUB_STEP_SUMMARY
           echo "App: **${{ steps.metadata.outputs.app_name }}**" >> $GITHUB_STEP_SUMMARY
-          echo "Package: `${{ steps.metadata.outputs.pkg_name }}`" >> $GITHUB_STEP_SUMMARY
-          echo "APK is attached as a workflow artifact." >> $GITHUB_STEP_SUMMARY
+          echo "Package: \`${{ steps.metadata.outputs.pkg_name }}\`" >> $GITHUB_STEP_SUMMARY
