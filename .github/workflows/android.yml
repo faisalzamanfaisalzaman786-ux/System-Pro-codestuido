@@ -23,24 +23,15 @@ jobs:
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          # Extracting data from JSON Payload
-          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "App"')
+          # پے لوڈ سے ڈیٹا نکالنا
+          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
           JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
           XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
           ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
-          # Fallback values for Java and XML
-          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
-            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n        TextView tv = findViewById(R.id.text);\n        if(tv != null) tv.setText(\"System Pro Ready\");\n    }\n}"
-          fi
-
-          if [ -z "$XML_LAYOUT" ] || [ "$XML_LAYOUT" = "null" ]; then
-            XML_LAYOUT="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"match_parent\"\n    android:background=\"#0F0F0F\">\n    <TextView android:id=\"@+id/text\"\n        android:layout_width=\"wrap_content\"\n        android:layout_height=\"wrap_content\"\n        android:layout_centerInParent=\"true\"\n        android:textColor=\"#00BFFF\"\n        android:text=\"Hello System Pro\"/>\n</RelativeLayout>"
-          fi
-
-          # Setting up Directory Structure
+          # فولڈرز کی درست ترتیب
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
@@ -48,63 +39,42 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # Creating Files
+          # فال بیک لاجک (اگر ڈیٹا خالی ہو)
+          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
+            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n    }\n}"
+          fi
+
+          if [ -z "$XML_LAYOUT" ] || [ "$XML_LAYOUT" = "null" ]; then
+            XML_LAYOUT="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:layout_width=\"match_parent\"\n    android:layout_height=\"match_parent\"\n    android:background=\"#0F0F0F\">\n</RelativeLayout>"
+          fi
+
+          # فائلز کی تخلیق (sync کے ساتھ تاکہ پاتھ کا مسئلہ نہ ہو)
           echo -e "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
           echo -e "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo -e "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
           
-          # Icon processing
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-          # Auto-fixing Package and Imports
+          # پیکیج اور امپورٹ آٹو فکس
           sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
           if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
             sed -i "/^package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
           fi
-          sed -i 's/ package="[^"]*"//' app/src/main/AndroidManifest.xml
 
-          # Theme and Resources Setup
-          THEME_NAME=$(grep -oP 'android:theme="\K@style/[^"]+' app/src/main/AndroidManifest.xml | head -1 | sed 's/@style\///')
-          if [ -z "$THEME_NAME" ]; then
-            THEME_NAME="Theme_SystemPro"
-            sed -i "s|<application |<application android:theme=\"@style/$THEME_NAME\" |" app/src/main/AndroidManifest.xml
-          fi
-
+          # ریسورس فائلز
           cat <<COLORS > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="bg_dark">#0F0F0F</color>
-              <color name="neon_blue">#00BFFF</color>
-              <color name="neon_green">#39FF14</color>
-          </resources>
+          <?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color></resources>
           COLORS
 
           cat <<THEMES > app/src/main/res/values/themes.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="$THEME_NAME" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">@color/neon_blue</item>
-                  <item name="android:windowBackground">@color/bg_dark</item>
-              </style>
-          </resources>
+          <?xml version="1.0" encoding="utf-8"?><resources><style name="Theme_SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item></style></resources>
           THEMES
 
-          cat <<STRINGS > app/src/main/res/values/strings.xml
-          <resources><string name="app_name">$APP_NAME</string></resources>
-          STRINGS
-
-          # Gradle and Wrapper Setup
-          cat <<'WRAP' > gradlew
-          #!/bin/sh
-          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
-          WRAP
-          chmod +x gradlew
-
+          # گریڈل سیٹنگز (8.5.0 Plugin & 9.4.1 Wrapper)
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
-
+          
           cat <<SETTINGS > settings.gradle
           rootProject.name = "$APP_NAME"
           include ':app'
@@ -125,16 +95,16 @@ jobs:
               compileSdk 34 
               defaultConfig { 
                   applicationId '$PACKAGE_NAME' 
-                  minSdk 21 
+                  minSdk 24 
                   targetSdk 34 
-                  versionCode 1 
-                  versionName "1.0" 
+                  versionCode 1400 
+                  versionName "1400.0" 
               } 
               compileOptions { 
                   sourceCompatibility JavaVersion.VERSION_17 
                   targetCompatibility JavaVersion.VERSION_17 
-              } 
-              buildFeatures { viewBinding true } 
+              }
+              buildFeatures { viewBinding true }
           }
           dependencies { 
               implementation 'androidx.appcompat:appcompat:1.6.1' 
@@ -142,11 +112,13 @@ jobs:
           }
           BUILD_APP
 
-          # Final Compilation
-          ./gradlew clean assembleDebug --stacktrace
+          # فائل سسٹم کو سنک کرنا تاکہ AAPT2 پاتھ ایرر نہ دے
+          sync
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Build' }}
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-V1400' }}
           path: app/build/outputs/apk/debug/*.apk
