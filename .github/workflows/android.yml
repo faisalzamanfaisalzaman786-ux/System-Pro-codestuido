@@ -28,7 +28,6 @@ jobs:
           JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
           XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
-          ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
@@ -38,26 +37,19 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
 
-          # 🛡️ اہم فکس: ڈیفالٹ آئیکن بنانا تاکہ AAPT2 ایرر نہ دے
-          cat <<EOF > app/src/main/res/drawable/ic_launcher_foreground.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/><path android:fillColor="#FFFFFF" android:pathData="M31,31h46v46h-46z"/></vector>
-          EOF
+          # 🛡️ Default Icon & Resource Generation
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"bg_dark\">#0F0F0F</color><color name=\"neon_blue\">#00BFFF</color></resources>" > app/src/main/res/values/colors.xml
+          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme_SystemPro\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">@color/neon_blue</item></style></resources>" > app/src/main/res/values/themes.xml
 
-          cat <<EOF > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/bg_dark"/>
-              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-          </adaptive-icon>
-          EOF
-
-          # کوڈ اور مینی فیسٹ سیٹ اپ
+          # ⚙️ Manifest & Logic
           if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
-            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        setContentView(R.layout.activity_main);\n    }\n}"
+            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }"
           fi
           
           if [ -z "$MANIFEST_XML" ] || [ "$MANIFEST_XML" = "null" ]; then
-             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>"
+             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme_SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>"
           else
              MANIFEST_XML=$(echo "$MANIFEST_XML" | sed 's/package="[^"]*"//g')
           fi
@@ -66,13 +58,13 @@ jobs:
           echo -e "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
           echo -e "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
 
-          # کلرز اور گریڈل سیٹنگز
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"bg_dark\">#0F0F0F</color><color name=\"neon_blue\">#00BFFF</color></resources>" > app/src/main/res/values/colors.xml
-          echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><style name=\"Theme_SystemPro\" parent=\"Theme.MaterialComponents.DayNight.NoActionBar\"><item name=\"colorPrimary\">@color/neon_blue</item></style></resources>" > app/src/main/res/values/themes.xml
-
+          # 🛠️ Advanced Settings for Gradle 9.4.1
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          dependencyResolutionManagement { 
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositories { google(); mavenCentral() } 
+          }
           rootProject.name = "$APP_NAME"
           include ':app'
           EOF
@@ -85,7 +77,7 @@ jobs:
               namespace '$PACKAGE_NAME'
               compileSdk 34
               defaultConfig { applicationId '$PACKAGE_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
-              buildFeatures { viewBinding true }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
           }
           dependencies { implementation 'androidx.appcompat:appcompat:1.6.1'; implementation 'com.google.android.material:material:1.11.0' }
           EOF
@@ -94,7 +86,8 @@ jobs:
           
           sync
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          # میموری اور ورکرز کے ٹکراؤ کو روکنے کے لیے خصوصی فلیگز
+          ./gradlew clean assembleDebug --no-daemon --max-workers=2 --stacktrace
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
