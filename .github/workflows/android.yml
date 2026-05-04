@@ -27,12 +27,18 @@ jobs:
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
+          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           
-          # 1. جاوا فائل کی دوبارہ تعمیر (R Class Fix)
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/drawable
+
+          # 1. Java Reconstruction
           if [ -n "$(echo "$PAYLOAD" | jq -r '.java_b64')" ]; then
-            mkdir -p app/src/main/java/$PKG_PATH
             echo "$PAYLOAD" | jq -r '.java_b64' | base64 -d > raw_java.txt
             sed -i '/package /d' raw_java.txt
             sed -i '/import .*R;/d' raw_java.txt
@@ -44,8 +50,17 @@ jobs:
             } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # 2. لاپتہ رنگوں کا انجکشن (AAPT2 Fix)
-          mkdir -p app/src/main/res/values
+          # 2. Manifest Sanitizer (Fix for 'Content not allowed in prolog')
+          if [ -n "$(echo "$PAYLOAD" | jq -r '.manifest_b64')" ]; then
+            # فائل کو ڈی کوڈ کرنا اور تمام پوشیدہ کریکٹرز (BOM) کو صاف کرنا
+            echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d | tr -d '\357\273\277' > app/src/main/AndroidManifest.xml
+            # یقینی بنانا کہ فائل کا آغاز صرف مینی فیسٹ ٹیگ یا XML ڈیکلریشن سے ہو
+            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          # 3. Comprehensive Colors Injection
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -62,17 +77,6 @@ jobs:
           </resources>
           EOF
 
-          # 3. مینی فیسٹ اور آئیکن سیٹ اپ
-          if [ -n "$(echo "$PAYLOAD" | jq -r '.manifest_b64')" ]; then
-            echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d > app/src/main/AndroidManifest.xml
-            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
-          fi
-          
-          if [ -n "$(echo "$PAYLOAD" | jq -r '.icon_data_b64')" ]; then
-            mkdir -p app/src/main/res/mipmap-hdpi
-            echo "$PAYLOAD" | jq -r '.icon_data_b64' | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-          fi
-
       - name: Build Official Debug APK
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --no-build-cache --stacktrace
 
@@ -82,9 +86,3 @@ jobs:
           name: ${{ github.event.client_payload.app_name || 'System-Pro-Official' }}
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 5
-
-      - name: Build Success Summary
-        if: success()
-        run: |
-          echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "System Pro Official APK has been generated successfully with Forced R-Linking." >> $GITHUB_STEP_SUMMARY
