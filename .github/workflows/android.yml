@@ -35,7 +35,7 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          # 1. Java Reconstruction (R Class Fix)
+          # 1. Java Reconstruction (Force Linker)
           if [ -n "$(echo "$PAYLOAD" | jq -r '.java_b64')" ]; then
             echo "$PAYLOAD" | jq -r '.java_b64' | base64 -d > raw_java.txt
             sed -i '/package /d' raw_java.txt
@@ -48,14 +48,23 @@ jobs:
             } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # 2. Strict Manifest Sanitizer (Fix for Prolog Error)
+          # 2. Python-Powered Manifest Sanitizer (Prolog Error Fix)
           if [ -n "$(echo "$PAYLOAD" | jq -r '.manifest_b64')" ]; then
-            echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d > temp_manifest.xml
-            # مینی فیسٹ سے تمام پوشیدہ کریکٹرز اور خالی لائنز کو شروع سے ختم کرنا
-            sed -i '1,/[[:graph:]]/ { /[[:graph:]]/!d }' temp_manifest.xml
-            # پیکیج ٹیگ کو ہٹانا تاکہ گریڈل نیم اسپیس استعمال ہو سکے
-            sed -i 's/package="[^"]*"//g' temp_manifest.xml
-            cat temp_manifest.xml > app/src/main/AndroidManifest.xml
+            echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d > dirty_manifest.xml
+            python3 -c "
+            import xml.etree.ElementTree as ET
+            import sys
+            try:
+                tree = ET.parse('dirty_manifest.xml')
+                root = tree.getroot()
+                if 'package' in root.attrib:
+                    del root.attrib['package']
+                tree.write('app/src/main/AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
+                print('Manifest sanitized successfully')
+            except Exception as e:
+                print(f'Error: {e}')
+                sys.exit(1)
+            "
           else
             echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="SystemPro" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
           fi
