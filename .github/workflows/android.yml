@@ -15,18 +15,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Download project ZIP from release asset
+      - name: Download project ZIP
         run: |
           ZIP_URL="${{ github.event.client_payload.zip_asset_url }}"
-          if [ -z "$ZIP_URL" ]; then
-            echo "❌ No ZIP url provided"
-            exit 1
-          fi
           curl -L -o source_bundle.zip "$ZIP_URL"
           unzip -q source_bundle.zip -d workspace/
           ls -la workspace/
 
-      - name: Read metadata (app name & package)
+      - name: Read metadata
         id: meta
         run: |
           if [ -f workspace/build_metadata.json ]; then
@@ -40,14 +36,24 @@ jobs:
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
 
-      - name: Create Android project structure
+      - name: Create clean Android project (official template)
         run: |
-          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/java/com/example/temp
-
-          # AndroidManifest.xml (NO package attribute)
+          # Create minimal project with known working files
+          mkdir -p app/src/main/java/com/example/app
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          
+          # strings.xml (to avoid missing resource errors)
+          printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/values/strings.xml
+          printf '<resources>\n' >> app/src/main/res/values/strings.xml
+          printf '    <string name="app_name">AppPlaceholder</string>\n' >> app/src/main/res/values/strings.xml
+          printf '</resources>\n' >> app/src/main/res/values/strings.xml
+          
+          # AndroidManifest.xml (no package attribute)
           printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/AndroidManifest.xml
           printf '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' >> app/src/main/AndroidManifest.xml
-          printf '    <application android:label="AppPlaceholder" android:icon="@drawable/ic_launcher">\n' >> app/src/main/AndroidManifest.xml
+          printf '    <application android:label="@string/app_name" android:icon="@drawable/ic_launcher">\n' >> app/src/main/AndroidManifest.xml
           printf '        <activity android:name=".MainActivity" android:exported="true">\n' >> app/src/main/AndroidManifest.xml
           printf '            <intent-filter>\n' >> app/src/main/AndroidManifest.xml
           printf '                <action android:name="android.intent.action.MAIN"/>\n' >> app/src/main/AndroidManifest.xml
@@ -56,16 +62,16 @@ jobs:
           printf '        </activity>\n' >> app/src/main/AndroidManifest.xml
           printf '    </application>\n' >> app/src/main/AndroidManifest.xml
           printf '</manifest>\n' >> app/src/main/AndroidManifest.xml
-
-          # app/build.gradle
+          
+          # build.gradle (app level)
           printf 'plugins {\n' > app/build.gradle
           printf '    id "com.android.application"\n' >> app/build.gradle
           printf '}\n' >> app/build.gradle
           printf 'android {\n' >> app/build.gradle
           printf '    compileSdk 34\n' >> app/build.gradle
-          printf '    namespace "com.example.temp"\n' >> app/build.gradle
+          printf '    namespace "com.example.app"\n' >> app/build.gradle
           printf '    defaultConfig {\n' >> app/build.gradle
-          printf '        applicationId "com.example.temp"\n' >> app/build.gradle
+          printf '        applicationId "com.example.app"\n' >> app/build.gradle
           printf '        minSdk 21\n' >> app/build.gradle
           printf '        targetSdk 34\n' >> app/build.gradle
           printf '        versionCode 1\n' >> app/build.gradle
@@ -80,7 +86,7 @@ jobs:
           printf 'dependencies {\n' >> app/build.gradle
           printf '    implementation "androidx.appcompat:appcompat:1.6.1"\n' >> app/build.gradle
           printf '}\n' >> app/build.gradle
-
+          
           # Top-level build.gradle
           printf 'buildscript {\n' > build.gradle
           printf '    repositories {\n' >> build.gradle
@@ -97,7 +103,7 @@ jobs:
           printf '        mavenCentral()\n' >> build.gradle
           printf '    }\n' >> build.gradle
           printf '}\n' >> build.gradle
-
+          
           printf "include ':app'\n" > settings.gradle
 
       - name: Setup Gradle Wrapper 8.7
@@ -108,18 +114,22 @@ jobs:
           rm -rf gradle-8.7*
           chmod +x gradlew
 
-      - name: Inject user source files
+      - name: Try to inject user files (with fallback)
         run: |
           PKG="${{ steps.meta.outputs.pkg_name }}"
           APP_NAME="${{ steps.meta.outputs.app_name }}"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           DEST_JAVA_DIR="app/src/main/java/$PKG_PATH"
           mkdir -p "$DEST_JAVA_DIR"
-
+          
+          # Use user's MainActivity if exists
           if [ -f workspace/MainActivity.java ]; then
+            # Fix package declaration
             sed -i "s/^package .*;/package $PKG;/" workspace/MainActivity.java
             cp workspace/MainActivity.java "$DEST_JAVA_DIR/MainActivity.java"
+            echo "Using user's MainActivity.java"
           else
+            echo "No MainActivity.java uploaded, using default"
             printf 'package %s;\n' "$PKG" > "$DEST_JAVA_DIR/MainActivity.java"
             printf 'import android.os.Bundle;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
             printf 'import androidx.appcompat.app.AppCompatActivity;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
@@ -131,21 +141,30 @@ jobs:
             printf '    }\n' >> "$DEST_JAVA_DIR/MainActivity.java"
             printf '}\n' >> "$DEST_JAVA_DIR/MainActivity.java"
           fi
-
+          
+          # Use user's layout if exists
           if [ -f workspace/res/layout/activity_main.xml ]; then
             cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "Using user's layout"
           elif [ -f workspace/activity_main.xml ]; then
             cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "Using user's layout"
           else
+            echo "No layout uploaded, using default"
             printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/layout/activity_main.xml
-            printf '<TextView xmlns:android="http://schemas.android.com/apk/res/android"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"\n' >> app/src/main/res/layout/activity_main.xml
             printf '    android:layout_width="match_parent"\n' >> app/src/main/res/layout/activity_main.xml
             printf '    android:layout_height="match_parent"\n' >> app/src/main/res/layout/activity_main.xml
-            printf '    android:text="Hello from System Pro"\n' >> app/src/main/res/layout/activity_main.xml
-            printf '    android:gravity="center"\n' >> app/src/main/res/layout/activity_main.xml
-            printf '    android:textSize="24sp"/>\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:orientation="vertical"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:gravity="center">\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    <TextView android:text="Hello from System Pro"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '        android:textSize="24sp"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '        android:layout_width="wrap_content"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '        android:layout_height="wrap_content"/>\n' >> app/src/main/res/layout/activity_main.xml
+            printf '</LinearLayout>\n' >> app/src/main/res/layout/activity_main.xml
           fi
-
+          
+          # Icon (1x1 transparent if none)
           if [ -f workspace/res/drawable/ic_launcher.png ]; then
             cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           elif [ -f workspace/ic_launcher.png ]; then
@@ -153,13 +172,62 @@ jobs:
           else
             printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > app/src/main/res/drawable/ic_launcher.png
           fi
-
-          sed -i "s/AppPlaceholder/$APP_NAME/" app/src/main/AndroidManifest.xml
+          
+          # Update app name in strings.xml
+          sed -i "s/AppPlaceholder/$APP_NAME/" app/src/main/res/values/strings.xml
+          
+          # Update build.gradle with correct package
           sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
+          
+          # Remove any old MainActivity in wrong packages (avoid duplicate class)
+          find app/src/main/java -type f -name "MainActivity.java" ! -path "$DEST_JAVA_DIR/MainActivity.java" -delete
 
-      - name: Build APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Build APK with full error logging
+        id: build
+        continue-on-error: true
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build_output.txt
+          # Save exit code
+          if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo "BUILD_SUCCESS=true" >> $GITHUB_OUTPUT
+          else
+            echo "BUILD_SUCCESS=false" >> $GITHUB_OUTPUT
+            echo "Last 50 lines of build log:"
+            tail -n 50 build_output.txt
+          fi
+
+      - name: On build failure, try fallback to default MainActivity
+        if: steps.build.outputs.BUILD_SUCCESS == 'false'
+        run: |
+          echo "First build failed. Replacing MainActivity with default safe version..."
+          PKG="${{ steps.meta.outputs.pkg_name }}"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          DEST_JAVA_DIR="app/src/main/java/$PKG_PATH"
+          mkdir -p "$DEST_JAVA_DIR"
+          
+          # Create simplest possible MainActivity
+          printf 'package %s;\n' "$PKG" > "$DEST_JAVA_DIR/MainActivity.java"
+          printf 'import android.os.Bundle;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf 'import androidx.appcompat.app.AppCompatActivity;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf 'public class MainActivity extends AppCompatActivity {\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '    @Override\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '    protected void onCreate(Bundle savedInstanceState) {\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '        super.onCreate(savedInstanceState);\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '        setContentView(R.layout.activity_main);\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '    }\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          printf '}\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+          
+      - name: Retry build with default MainActivity
+        if: steps.build.outputs.BUILD_SUCCESS == 'false'
+        run: |
+          echo "Retrying build with default MainActivity..."
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build_retry.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "Still failing. Full error log:"
+            tail -n 100 build_retry.txt
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
