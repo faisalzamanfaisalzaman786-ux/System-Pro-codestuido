@@ -1,0 +1,99 @@
+name: System Pro Titan Master
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Display Name'
+        default: 'System Pro Ultra'
+        required: true
+      package_name:
+        description: 'Package Name'
+        default: 'com.systempro.ultra'
+        required: true
+      build_version:
+        description: 'Version Code'
+        default: '100'
+
+jobs:
+  build_and_inject:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🚀 Initializing Enterprise Structure
+        run: |
+          mkdir -p lib/core/theme lib/core/services lib/presentation/widgets lib/data/models
+          
+      - name: 🛠️ Injecting Professional Design Library (Style Vault)
+        run: |
+          cat <<EOF > lib/core/theme/style_vault.dart
+          import 'package:flutter/material.dart';
+          class StyleVault {
+            static BoxDecoration neonGlow(Color color) => BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: color.withOpacity(0.6), blurRadius: 20)],
+              border: Border.all(color: color, width: 2),
+            );
+            static BoxDecoration glassEffect = BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            );
+          }
+          EOF
+
+      - name: 🧬 Injecting Hardware Engine (Permissions & Sensors)
+        run: |
+          cat <<EOF > lib/core/services/hardware_engine.dart
+          import 'package:permission_handler/permission_handler.dart';
+          class HardwareEngine {
+            static Future<void> unlockHardware() async {
+              await [Permission.camera, Permission.location, Permission.microphone, 
+                     Permission.bluetoothConnect, Permission.storage].request();
+            }
+          }
+          EOF
+
+      - name: 📱 Customizing Android Manifest (Permissions Overload)
+        run: |
+          cat <<EOF > android/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <application android:label="${{ github.event.inputs.app_name }}" android:icon="@mipmap/launcher_icon">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+      - name: ⚡ Dynamic Package Rename Logic
+        run: |
+          NEW_PKG="${{ github.event.inputs.package_name }}"
+          find . -type f \( -name "build.gradle" -o -name "MainActivity.java" -o -name "AndroidManifest.xml" \) -exec sed -i "s/com.example.app/$NEW_PKG/g" {} +
+
+      - name: 🏗️ Setup & Build Ultra APK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          cache: true
+
+      - name: 📦 Finalize Release
+        run: |
+          flutter pub get
+          flutter build apk --release --build-number=${{ github.event.inputs.build_version }}
+
+      - name: 📤 Upload Enterprise Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.app_name }}-v${{ github.event.inputs.build_version }}
+          path: build/app/outputs/flutter-apk/app-release.apk
