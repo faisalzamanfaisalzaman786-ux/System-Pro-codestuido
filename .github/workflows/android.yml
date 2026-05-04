@@ -31,6 +31,7 @@ jobs:
           MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
           ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
 
+          # Fallbacks
           if [ -z "$JAVA_CODE" ]; then
             JAVA_CODE='package com.system.pro;\nimport android.os.Bundle;\nimport android.widget.TextView;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity {\n    @Override\n    protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); TextView tv = findViewById(R.id.text); tv.setText("Hello");\n    }\n}'
           fi
@@ -52,7 +53,7 @@ jobs:
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
           fi
 
-          # Fix Java package line and R import
+          # Fix package line and import R
           sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
           if ! grep -q "import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java; then
             sed -i "/^package $PACKAGE_NAME;/a import $PACKAGE_NAME.R;" app/src/main/java/$PKG_PATH/MainActivity.java
@@ -108,7 +109,7 @@ jobs:
           </resources>
           EOF
 
-          # Add missing IDs
+          # Add missing IDs to prevent NullPointerException
           LAYOUT_FILE="app/src/main/res/layout/activity_main.xml"
           JAVA_FILE="app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java"
           grep -oE 'findViewById\(R\.id\.([a-zA-Z0-9_]+)\)' "$JAVA_FILE" | sed 's/.*R\.id\.//' | sed 's/)//' | sort -u | while read id; do
