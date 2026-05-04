@@ -1,4 +1,4 @@
-name: System Pro ZIP Builder
+name: System Pro AI Build Engine
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: "System Pro Build Engine"
+    name: "System Pro AI Engine"
     runs-on: ubuntu-latest
     
     steps:
@@ -25,35 +25,40 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Workspace Setup & Clean
+      - name: AI Guard & Workspace Setup
         run: |
-          # ورک اسپیس ڈائریکٹری سیٹ کرنا
+          # پیکیج اور فولڈر سیٹنگ
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          
-          mkdir -p $GITHUB_WORKSPACE/app/src/main/java/$PKG_PATH
-          mkdir -p $GITHUB_WORKSPACE/app/src/main/res/layout
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable-xxxhdpi
 
           # پے لوڈ کو ڈی کوڈ کرنا
           echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
 
-          # پائتھون سے خودکار صفائی
+          # پائتھون فکسر (AI Logic) جو کمنٹس اور اسٹائلز کو ختم کرے گا
           python3 -c "
           import os, re
-          def clean(f_in, f_out):
-              if not os.path.exists(f_in): return
-              with open(f_in, 'r', encoding='utf-8') as f: content = f.read().strip()
-              if '<?xml' in content: content = content[content.find('<?xml'):]
+          def smart_fix(f_in, f_out):
+              if not os.path.exists(f_in) or os.stat(f_in).st_size == 0: return
+              with open(f_in, 'r', encoding='utf-8', errors='ignore') as f:
+                  content = f.read().strip()
+              # Prolog Fix: پہلی لائن پر صرف <?xml لانا
+              if '<?xml' in content:
+                  content = content[content.find('<?xml'):]
+              # Layout Fix: ناجائز اسٹائلز نکالنا جو بلڈ فیل کرتے ہیں
               content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
-              with open(f_out, 'w') as f: f.write(content)
+              with open(f_out, 'w', encoding='utf-8') as f:
+                  f.write(content)
 
-          clean('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
-          clean('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
+          smart_fix('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
+          smart_fix('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
           "
 
-          # جاوا فائل انجکشن
+          # جاوا پیکیج انجکشن
           if [ -s temp_main.java ]; then
             {
               echo "package $PKG_NAME;"
@@ -62,13 +67,21 @@ jobs:
             } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-      - name: Build APK
+          # آئیکن سیٹ اپ
+          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/drawable-xxxhdpi/ic_launcher.png
+          fi
+
+      - name: Build and Auto-Fix
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}"
+          ./gradlew clean assembleDebug \
+            -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
+            -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
+            --no-daemon --stacktrace || (echo '❌ Build Failed! Check Log for XML errors.' && exit 1)
 
-      - name: Upload Artifact
+      - name: Upload Green APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro' }}
+          name: ${{ github.event.client_payload.app_name || 'SystemPro-Success' }}
           path: app/build/outputs/apk/debug/*.apk
