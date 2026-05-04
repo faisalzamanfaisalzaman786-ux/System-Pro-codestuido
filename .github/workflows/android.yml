@@ -1,4 +1,4 @@
-name: UI APK Builder (No Compression)
+name: UI APK Builder (Fixed)
 on:
   repository_dispatch:
     types: [build-app]
@@ -20,7 +20,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 📥 Extract UI Payload
+      - name: 📥 Extract and Fix UI Payload
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
@@ -46,12 +46,19 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p gradle/wrapper
 
-          # Write files (raw text, no base64 decode needed)
+          # Write the Java file first
           echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
-          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
-          echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+          
+          # ✅ Fix package line in Java file to match PACKAGE_NAME
+          sed -i "s/^package .*;/package $PACKAGE_NAME;/" app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # Decode icon if provided (base64)
+          # Write layout
+          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+
+          # Fix manifest: replace package attribute and add missing namespace
+          echo "$MANIFEST_XML" | sed "s/package=\"[^\"]*\"/package=\"$PACKAGE_NAME\"/" > app/src/main/AndroidManifest.xml
+
+          # Decode icon if provided
           if [ -n "$ICON_B64" ]; then
             echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             echo "✅ Icon decoded"
@@ -60,13 +67,10 @@ jobs:
           # Save metadata for later steps
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-
-          # Also copy to workspace for verification
-          echo "✅ UI payload extracted and files written"
+          echo "✅ UI payload extracted and fixed"
 
       - name: 🛡️ Inject Missing Resources (Crash Prevention)
         run: |
-          # Colors (always provide safe defaults)
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -78,10 +82,15 @@ jobs:
               <color name="white">#FFFFFF</color>
               <color name="primary_color">#6200EE</color>
               <color name="error_red">#FF0000</color>
+              <color name="warning_orange">#FFA500</color>
+              <color name="colorPrimaryDark">#0F0F0F</color>
+              <color name="colorAccent">#00BFFF</color>
+              <color name="glass_white_10">#1AFFFFFF</color>
+              <color name="glass_white_30">#4DFFFFFF</color>
           </resources>
           EOF
 
-          # Theme (ensure manifest's theme exists)
+          # Theme (safe default)
           SAFE_THEME_NAME="Theme_${APP_NAME// /_}"
           cat <<EOF > app/src/main/res/values/themes.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -94,14 +103,13 @@ jobs:
           </resources>
           EOF
 
-          # Strings.xml (required for app name)
           cat <<EOF > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
 
-          # If manifest does not specify a theme, inject the safe one
+          # Inject theme into manifest if missing
           MANIFEST_FILE="app/src/main/AndroidManifest.xml"
           if ! grep -q "android:theme" "$MANIFEST_FILE"; then
             sed -i "s|<application |<application android:theme=\"@style/Theme.$SAFE_THEME_NAME\" |" "$MANIFEST_FILE"
@@ -109,17 +117,21 @@ jobs:
 
       - name: ⚙️ Generate Gradle Wrapper (9.4.1) & Build Scripts
         run: |
-          # Gradle wrapper with version 9.4.1
+          # ✅ Correct gradlew script (no backslashes)
+          cat <<'EOF' > gradlew
+          #!/bin/sh
+          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
+          EOF
+          chmod +x gradlew
+
+          # Wrapper properties
           cat <<EOF > gradle/wrapper/gradle-wrapper.properties
           distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
           EOF
-          # Download wrapper jar (if not present)
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo "Wrapper jar exists"
-          cat <<'EOF' > gradlew
-          #!/bin/sh
-          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "\$@"
-          EOF
-          chmod +x gradlew
+          # Download wrapper jar (use local copy if available, else download)
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar
+          fi
 
           # settings.gradle
           cat <<EOF > settings.gradle
@@ -130,30 +142,18 @@ jobs:
           # root build.gradle
           cat <<EOF > build.gradle
           buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.5.0'
-              }
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.5.0' }
           }
           allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
+          task clean(type: Delete) { delete rootProject.buildDir }
           EOF
 
           # app/build.gradle
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '$PACKAGE_NAME'
               compileSdk 34
@@ -168,9 +168,7 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              buildFeatures {
-                  viewBinding true
-              }
+              buildFeatures { viewBinding true }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -179,30 +177,22 @@ jobs:
           }
           EOF
 
-      - name: 🔍 Validate Project Files (Pre-build Check)
+      - name: 🔍 Validate Project Files
         run: |
-          echo "=== Project structure ==="
-          find app/src -type f | head -20
-          echo "=== Check MainActivity exists ==="
-          ls -la app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java
-          echo "=== Check layout ==="
-          ls -la app/src/main/res/layout/activity_main.xml
-          echo "=== Check manifest ==="
-          head -5 app/src/main/AndroidManifest.xml
+          echo "=== MainActivity package line ==="
+          head -1 app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java
+          echo "=== Manifest package ==="
+          grep 'package=' app/src/main/AndroidManifest.xml
+          echo "=== build.gradle namespace ==="
+          grep 'namespace' app/build.gradle
 
       - name: 📦 Build Debug APK
         run: |
-          chmod +x gradlew
           ./gradlew clean assembleDebug --stacktrace
 
-      - name: 📤 Upload APK Artifact (Named 'APK-Build' for nightly.link)
+      - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: APK-Build
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
-
-      - name: ✅ Success Notification
-        run: |
-          echo "✅ APK built successfully for $APP_NAME"
-          echo "Artifact name: APK-Build.zip"
