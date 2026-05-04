@@ -21,7 +21,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process ZIP and Sanitize XML
+      - name: Process ZIP and Advanced Python Sanitize
         run: |
           # 1. Download ZIP
           ZIP_URL="${{ github.event.client_payload.zip_asset_url }}"
@@ -37,10 +37,32 @@ jobs:
 
           # 3. Unzip
           unzip -o project.zip -d temp_src/
-          
-          # 4. XML SANITIZER (ایرر ختم کرنے کے لیے)
-          # یہ کمانڈ ہر XML فائل کے شروع سے خالی لائنیں اور کچرا صاف کر دے گی
-          find temp_src/ -name "*.xml" -type f -exec sed -i '1,/<[!?]xml/ { /<[!?]xml/!d }' {} +
+
+          # 4. PYTHON NUCLEAR SANITIZER (Prolog/Invisible Byte Fix)
+          # یہ اسکرپٹ ہر XML فائل کو پڑھے گا اور اسے دوبارہ بالکل صاف حالت میں لکھے گا
+          python3 -c "
+          import os, xml.etree.ElementTree as ET
+          def sanitize_xml(file_path):
+              try:
+                  with open(file_path, 'rb') as f:
+                      content = f.read()
+                  # پہلا '<' تلاش کرنا تاکہ شروع کا کچرا ختم ہو
+                  start_idx = content.find(b'<')
+                  if start_idx != -1:
+                      clean_content = content[start_idx:]
+                      # فائل کو کلین اسٹرکچر کے ساتھ دوبارہ لکھنا
+                      root = ET.fromstring(clean_content)
+                      tree = ET.ElementTree(root)
+                      tree.write(file_path, encoding='utf-8', xml_declaration=True)
+                      print(f'Sanitized: {file_path}')
+              except Exception as e:
+                  print(f'Warning skipping {file_path}: {e}')
+
+          for root_dir, dirs, files in os.walk('temp_src/'):
+              for file in files:
+                  if file.endswith('.xml'):
+                      sanitize_xml(os.path.join(root_dir, file))
+          "
 
           # 5. Move Files
           if [ -f temp_src/MainActivity.java ]; then
