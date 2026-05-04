@@ -1,47 +1,89 @@
-name: 🏗️ System Pro Structure Builder
+name: 🚀 System Pro Master Builder (Dynamic)
 
 on:
-  push:
-    branches:
-      - main  # اگر آپ کی مین برانچ کا نام 'master' ہے تو یہاں بدل دیں
-  workflow_dispatch: # یہ مینوئل بٹن کے لیے بھی رہے گا
+  repository_dispatch:
+    types: [system_pro_build]
 
 jobs:
-  build_foundation:
+  dynamic_build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout Repository
+      - name: 📥 ریپوزٹری چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Flutter Environment
+      - name: 🛠️ فلٹر سیٹ اپ
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.0'
           cache: true
 
-      - name: 🏗️ Create Full Flutter Skeleton
+      - name: 🧬 ڈائنامک انجن (Python Smart Logic)
         run: |
-          # مکمل فلٹر پروجیکٹ کی تخلیق
-          flutter create . --org com.systempro.ultra --project-name system_pro_app --platforms android
-          
-          # سسٹم پرو کے مخصوص فولڈرز بنانا
-          mkdir -p lib/core/theme
-          mkdir -p lib/core/services
-          mkdir -p lib/presentation/widgets
-          mkdir -p lib/data/models
-          mkdir -p assets/images
-          mkdir -p assets/fonts
+          python3 - <<EOF
+          import json
+          import os
+          import base64
+          import re
 
-          # بنیادی فائلیں انجیکٹ کرنا تاکہ بلڈ انجن خالی جگہ نہ پائے
-          echo "void main() => print('System Pro Engine Ready');" > lib/main.dart
+          # 1. پے لوڈ لوڈ کریں
+          payload = ${{ toJson(github.event.client_payload) }}
           
-          # ایک بنیادی پب اسپیک (pubspec.yaml) کو اپ ڈیٹ کرنا تاکہ ضروری پیکجز شامل ہوں
-          sed -i 's/sdk: flutter/sdk: flutter\n  permission_handler: ^11.3.0\n  http: ^1.2.0/' pubspec.yaml
+          # 2. ڈائنامک ویری ایبلز نکالیں
+          new_app_name = payload['build_config']['app_display_name']
+          new_pkg = payload['build_config']['package_name']
+          build_type = payload['build_config']['build_type']
+          main_code = payload['source_files']['main_dart']
+          icon_b64 = payload['assets']['app_icon_base64']
 
-      - name: 💾 Finalize & Push Structure
+          # 3. سورس کوڈ (main.dart) اپ ڈیٹ کریں
+          with open('lib/main.dart', 'w') as f:
+              f.write(main_code)
+
+          # 4. ایپ کا نام (Manifest) تبدیل کریں
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          if os.path.exists(manifest_path):
+              with open(manifest_path, 'r') as f:
+                  content = f.read()
+              # لیبل اور پیکیج نیم تبدیل کرنا
+              content = re.sub(r'android:label="[^"]*"', f'android:label="{new_app_name}"', content)
+              content = content.replace('com.systempro.ultra', new_pkg)
+              with open(manifest_path, 'w') as f:
+                  f.write(content)
+
+          # 5. بلڈ گریڈل (build.gradle) میں پیکیج نیم تبدیل کریں
+          gradle_path = 'android/app/build.gradle'
+          if os.path.exists(gradle_path):
+              with open(gradle_path, 'r') as f:
+                  content = f.read()
+              content = content.replace('com.systempro.ultra', new_pkg)
+              with open(gradle_path, 'w') as f:
+                  f.write(content)
+
+          # 6. ڈائنامک آئیکن انجکشن (Base64 decode)
+          if icon_b64:
+              icon_data = base64.b64decode(icon_b64)
+              # تمام میپ میپ فولڈرز میں آئیکن اپ ڈیٹ کرنا
+              res_path = 'android/app/src/main/res/'
+              for folder in os.listdir(res_path):
+                  if 'mipmap' in folder:
+                      icon_file = os.path.join(res_path, folder, 'ic_launcher.png')
+                      with open(icon_file, 'wb') as f:
+                          f.write(icon_data)
+
+          print(f"✅ Build configured for: {new_app_name} ({new_pkg})")
+          EOF
+
+      - name: 🏗️ بلڈ اینڈرائیڈ APK
         run: |
-          git config --global user.name "System Pro Bot"
-          git config --global user.email "bot@systempro.com"
-          git add .
-          # اگر کچھ تبدیل ہوا ہو تب ہی کمٹ کرے گا
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🏗️ Base infrastructure established by Titan Engine" && git push)
+          flutter pub get
+          if [ "${{ github.event.client_payload.build_config.build_type }}" == "release" ]; then
+            flutter build apk --release
+          else
+            flutter build apk --debug
+          fi
+
+      - name: 📤 بلڈ فائل اپ لوڈ
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.build_config.app_display_name }}-APK
+          path: build/app/outputs/flutter-apk/*.apk
