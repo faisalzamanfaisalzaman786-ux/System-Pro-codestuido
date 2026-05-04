@@ -3,13 +3,11 @@ name: System Pro ZIP Builder
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [build-app]
+    types: [build-app, build-from-zip]
 
-# ٹوکن کے لیے ضروری اجازتیں
 permissions:
   contents: write
   actions: write
-  packages: write
 
 jobs:
   build:
@@ -19,8 +17,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # تمام ہسٹری نکالنے کے لیے تاکہ برانچ کا مسئلہ نہ ہو
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -29,67 +25,59 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Extract and Sanitize Payload
+      - name: Setup Workspace and Sanitize
         run: |
-          # پے لوڈ ڈیٹا کو محفوظ طریقے سے نکالنا
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
-          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
-          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
-          
-          # ڈائریکٹری اسٹرکچر تیار کرنا
+          # ورک اسپیس کے اندر فولڈرز کی ترتیب [cite: 2026-05-01]
+          WS_DIR=$GITHUB_WORKSPACE
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable-xxxhdpi
+          
+          mkdir -p $WS_DIR/app/src/main/java/$PKG_PATH
+          mkdir -p $WS_DIR/app/src/main/res/layout
+          mkdir -p $WS_DIR/app/src/main/res/drawable-xxxhdpi
 
-          # پائتھون اسکرپٹ برائے صفائی (Prolog اور Styles کا خاتمہ)
+          # پے لوڈ کو ورک اسپیس میں ڈی کوڈ کرنا [cite: 2026-05-03]
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > $WS_DIR/temp_main.java || touch $WS_DIR/temp_main.java
+          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > $WS_DIR/temp_layout.xml || touch $WS_DIR/temp_layout.xml
+          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > $WS_DIR/temp_manifest.xml || touch $WS_DIR/temp_manifest.xml
+          
+          # پائتھون کلینر کا استعمال (Prolog Fix) [cite: 2026-03-03]
           python3 -c "
           import os, re
-          def clean_xml(file_in, file_out):
-              try:
-                  with open(file_in, 'r', encoding='utf-8', errors='ignore') as f:
-                      content = f.read().strip()
-                  if not content: return
-                  # XML Prolog Fix
-                  if '<?xml' in content:
-                      content = content[content.find('<?xml'):]
-                  # Layout سے ناجائز اسٹائلز ہٹانا
-                  content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
-                  with open(file_out, 'w', encoding='utf-8') as f:
-                      f.write(content)
-              except Exception as e: print(f'Error cleaning {file_in}: {e}')
+          ws = os.getenv('GITHUB_WORKSPACE')
+          def clean_xml(f_in, f_out):
+              path_in = os.path.join(ws, f_in)
+              path_out = os.path.join(ws, f_out)
+              if not os.path.exists(path_in): return
+              with open(path_in, 'r', encoding='utf-8', errors='ignore') as f:
+                  c = f.read().strip()
+              if '<?xml' in c: c = c[c.find('<?xml'):]
+              c = re.sub(r'<style.*?>.*?</style>', '', c, flags=re.DOTALL)
+              with open(path_out, 'w') as f: f.write(c)
 
           clean_xml('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
           clean_xml('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
           "
 
-          # جاوا فائل میں پیکیج انجیکشن
-          if [ -s temp_main.java ]; then
+          # جاوا فائل کو ورک اسپیس میں سیٹ کرنا [cite: 2026-05-01]
+          if [ -s $WS_DIR/temp_main.java ]; then
             {
               echo "package $PKG_NAME;"
               echo "import $PKG_NAME.R;"
-              sed '/package /d' temp_main.java | sed '/import .*R;/d'
-            } > app/src/main/java/$PKG_PATH/MainActivity.java
+              sed '/package /d' $WS_DIR/temp_main.java | sed '/import .*R;/d'
+            } > $WS_DIR/app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # آئیکن پروسیسنگ
+          # آئیکن کی منتقلی [cite: 2026-05-01]
           if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/drawable-xxxhdpi/ic_launcher.png
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > $WS_DIR/app/src/main/res/drawable-xxxhdpi/ic_launcher.png
           fi
 
       - name: Build Debug APK
         run: |
+          cd $GITHUB_WORKSPACE
           chmod +x gradlew
-          # کلین بلڈ تاکہ پرانے کیشے کا مسئلہ نہ ہو
           ./gradlew clean :app:assembleDebug \
             -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
             -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
-            --no-daemon --stacktrace
-
-      - name: Upload System Pro APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro-Build' }}
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+            --no-daemon
