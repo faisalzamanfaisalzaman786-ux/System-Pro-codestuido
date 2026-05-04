@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: "System Pro AI Engine"
+    name: "System Pro Build Engine (Locked 8.5)"
     runs-on: ubuntu-latest
     
     steps:
@@ -25,40 +25,34 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: AI Guard & Workspace Setup
+      - name: Workspace & Payload Setup
         run: |
-          # پیکیج اور فولڈر سیٹنگ
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable-xxxhdpi
 
-          # پے لوڈ کو ڈی کوڈ کرنا
+          # پے لوڈ نکالنا
           echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
           echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
           echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
 
-          # پائتھون فکسر (AI Logic) جو کمنٹس اور اسٹائلز کو ختم کرے گا
+          # پائتھون سے خودکار صفائی
           python3 -c "
           import os, re
-          def smart_fix(f_in, f_out):
+          def clean_xml(f_in, f_out):
               if not os.path.exists(f_in) or os.stat(f_in).st_size == 0: return
               with open(f_in, 'r', encoding='utf-8', errors='ignore') as f:
-                  content = f.read().strip()
-              # Prolog Fix: پہلی لائن پر صرف <?xml لانا
-              if '<?xml' in content:
-                  content = content[content.find('<?xml'):]
-              # Layout Fix: ناجائز اسٹائلز نکالنا جو بلڈ فیل کرتے ہیں
-              content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
-              with open(f_out, 'w', encoding='utf-8') as f:
-                  f.write(content)
+                  c = f.read().strip()
+              if '<?xml' in c: c = c[c.find('<?xml'):]
+              c = re.sub(r'<style.*?>.*?</style>', '', c, flags=re.DOTALL)
+              with open(f_out, 'w', encoding='utf-8') as f: f.write(c)
 
-          smart_fix('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
-          smart_fix('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
+          clean_xml('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
+          clean_xml('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
           "
 
-          # جاوا پیکیج انجکشن
+          # جاوا انجکشن
           if [ -s temp_main.java ]; then
             {
               echo "package $PKG_NAME;"
@@ -67,21 +61,26 @@ jobs:
             } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # آئیکن سیٹ اپ
-          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/drawable-xxxhdpi/ic_launcher.png
-          fi
-
-      - name: Build and Auto-Fix
+      - name: Force Lock Gradle 8.5
         run: |
+          # گریڈل ریپر کو زبردستی 8.5 پر لاک کرنا
+          mkdir -p gradle/wrapper
+          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          
           chmod +x gradlew
+
+      - name: Execute Build (8.5)
+        run: |
           ./gradlew clean assembleDebug \
             -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
-            -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
-            --no-daemon --stacktrace || (echo '❌ Build Failed! Check Log for XML errors.' && exit 1)
+            --no-daemon --stacktrace
 
-      - name: Upload Green APK
+      - name: Upload Success APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'SystemPro-Success' }}
+          name: SystemPro-V1400-Final
           path: app/build/outputs/apk/debug/*.apk
