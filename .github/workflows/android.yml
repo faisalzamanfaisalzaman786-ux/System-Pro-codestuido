@@ -1,97 +1,53 @@
-name: System Pro Official Build
+name: System Pro Dynamic Build
 on:
   workflow_dispatch:
   repository_dispatch:
     types: [build-app]
 
 jobs:
-  assemble-official-apk:
-    name: "System Pro: Official APK Generation"
+  assemble-dynamic-apk:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Grant Execute Permission to Gradlew
-        run: chmod +x gradlew
-
-      - name: Process Payload and Force Linker
+      - name: Process Dynamic Payload
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
+          # پے لوڈ سے پیکیج نیم نکالنا (ڈیفالٹ: com.system.pro)
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           
+          echo "Building for Package: $PACKAGE_NAME"
+          
+          # 1. فولڈر اسٹرکچر بنانا
           mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
+          
+          # 2. جاوا فائل کو نئے پیکیج کے ساتھ سیٹ کرنا
+          echo "$PAYLOAD" | jq -r '.java_b64' | base64 -d > raw_java.txt
+          sed -i '/package /d' raw_java.txt
+          sed -i '/import .*R;/d' raw_java.txt
+          {
+            echo "package $PACKAGE_NAME;"
+            echo "import $PACKAGE_NAME.R;"
+            echo "import androidx.core.content.ContextCompat;"
+            cat raw_java.txt
+          } > app/src/main/java/$PKG_PATH/MainActivity.java
 
-          # 1. Java Reconstruction (Force Linker)
-          if [ -n "$(echo "$PAYLOAD" | jq -r '.java_b64')" ]; then
-            echo "$PAYLOAD" | jq -r '.java_b64' | base64 -d > raw_java.txt
-            sed -i '/package /d' raw_java.txt
-            sed -i '/import .*R;/d' raw_java.txt
-            {
-              echo "package $PACKAGE_NAME;"
-              echo "import $PACKAGE_NAME.R;"
-              echo "import androidx.core.content.ContextCompat;"
-              cat raw_java.txt
-            } > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
+          # 3. مینی فیسٹ کو کلین کرنا (پیکیج ٹیگ ہٹانا تاکہ گریڈل ہینڈل کرے)
+          echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d > app/src/main/AndroidManifest.xml
+          sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
 
-          # 2. Python-Powered Manifest Sanitizer (Prolog Error Fix)
-          if [ -n "$(echo "$PAYLOAD" | jq -r '.manifest_b64')" ]; then
-            echo "$PAYLOAD" | jq -r '.manifest_b64' | base64 -d > dirty_manifest.xml
-            python3 -c "
-            import xml.etree.ElementTree as ET
-            import sys
-            try:
-                tree = ET.parse('dirty_manifest.xml')
-                root = tree.getroot()
-                if 'package' in root.attrib:
-                    del root.attrib['package']
-                tree.write('app/src/main/AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
-                print('Manifest sanitized successfully')
-            except Exception as e:
-                print(f'Error: {e}')
-                sys.exit(1)
-            "
-          else
-            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="SystemPro" android:icon="@mipmap/ic_launcher" android:theme="@style/Theme.SystemPro"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-          fi
+      - name: Build APK with Dynamic Property
+        run: |
+          # گریڈل کو ڈائنامک پیکیج پراپرٹی پاس کرنا
+          ./gradlew :app:assembleDebug \
+            -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
+            --no-daemon --stacktrace
 
-          # 3. Comprehensive Colors Injection
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="bg_dark">#0F0F0F</color>
-              <color name="neon_blue">#00BFFF</color>
-              <color name="neon_green">#00FF00</color>
-              <color name="glass_white_10">#1AFFFFFF</color>
-              <color name="glass_white_30">#4DFFFFFF</color>
-              <color name="error_red">#FF4444</color>
-              <color name="colorAccent">#FF9800</color>
-              <color name="warning_orange">#FFA500</color>
-              <color name="colorPrimaryDark">#000000</color>
-              <color name="colorPrimary">#00BFFF</color>
-          </resources>
-          EOF
-
-      - name: Build Official Debug APK
-        run: ./gradlew :app:clean :app:assembleDebug --no-daemon --no-build-cache --stacktrace
-
-      - name: Upload System Pro Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Official' }}
+          name: ${{ github.event.client_payload.package_name || 'Dynamic-Build' }}
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 5
