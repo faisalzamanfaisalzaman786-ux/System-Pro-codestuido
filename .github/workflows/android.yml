@@ -6,7 +6,6 @@ on:
 
 jobs:
   build-from-scratch:
-    name: "Build APK from scratch using uploaded ZIP"
     runs-on: ubuntu-latest
 
     steps:
@@ -41,13 +40,11 @@ jobs:
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
 
-      - name: Create fresh Android project from template (no heredoc)
+      - name: Create fresh Android project (Gradle 8.7)
         run: |
-          mkdir -p app/src/main/java/com/example/temp
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/drawable
-          
-          # AndroidManifest.xml
+          mkdir -p app/src/main/res/layout app/src/main/res/drawable app/src/main/java/com/example/temp
+
+          # AndroidManifest.xml (no package attribute)
           printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/AndroidManifest.xml
           printf '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' >> app/src/main/AndroidManifest.xml
           printf '    <application android:label="AppPlaceholder" android:icon="@drawable/ic_launcher">\n' >> app/src/main/AndroidManifest.xml
@@ -59,7 +56,7 @@ jobs:
           printf '        </activity>\n' >> app/src/main/AndroidManifest.xml
           printf '    </application>\n' >> app/src/main/AndroidManifest.xml
           printf '</manifest>\n' >> app/src/main/AndroidManifest.xml
-          
+
           # app/build.gradle
           printf 'plugins {\n' > app/build.gradle
           printf '    id "com.android.application"\n' >> app/build.gradle
@@ -83,7 +80,7 @@ jobs:
           printf 'dependencies {\n' >> app/build.gradle
           printf '    implementation "androidx.appcompat:appcompat:1.6.1"\n' >> app/build.gradle
           printf '}\n' >> app/build.gradle
-          
+
           # Top-level build.gradle
           printf 'buildscript {\n' > build.gradle
           printf '    repositories {\n' >> build.gradle
@@ -100,24 +97,32 @@ jobs:
           printf '        mavenCentral()\n' >> build.gradle
           printf '    }\n' >> build.gradle
           printf '}\n' >> build.gradle
-          
-          # settings.gradle
+
           printf "include ':app'\n" > settings.gradle
-          
-          # gradle wrapper
-          gradle wrapper --gradle-version 8.5 --no-daemon
+
+      - name: Setup Gradle Wrapper with version 8.7
+        run: |
+          mkdir -p gradle/wrapper
+          printf 'distributionBase=GRADLE_USER_HOME\n' > gradle/wrapper/gradle-wrapper.properties
+          printf 'distributionPath=wrapper/dists\n' >> gradle/wrapper/gradle-wrapper.properties
+          printf 'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-bin.zip\n' >> gradle/wrapper/gradle-wrapper.properties
+          printf 'zipStoreBase=GRADLE_USER_HOME\n' >> gradle/wrapper/gradle-wrapper.properties
+          printf 'zipStorePath=wrapper/dists\n' >> gradle/wrapper/gradle-wrapper.properties
+          # Download and setup gradlew script
+          curl -L -o gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+          mv gradle-wrapper.jar gradle/wrapper/
+          printf '#!/bin/sh\n' > gradlew
+          printf 'exec java -classpath "\\$APP_HOME/gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"\n' >> gradlew
           chmod +x gradlew
 
-      - name: Inject user files (no heredoc)
+      - name: Inject user files
         run: |
           PKG="${{ steps.meta.outputs.pkg_name }}"
           APP_NAME="${{ steps.meta.outputs.app_name }}"
-          
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           DEST_JAVA_DIR="app/src/main/java/$PKG_PATH"
           mkdir -p "$DEST_JAVA_DIR"
-          
-          # MainActivity.java
+
           if [ -f workspace/MainActivity.java ]; then
             sed -i "s/^package .*;/package $PKG;/" workspace/MainActivity.java
             cp workspace/MainActivity.java "$DEST_JAVA_DIR/MainActivity.java"
@@ -133,8 +138,7 @@ jobs:
             printf '    }\n' >> "$DEST_JAVA_DIR/MainActivity.java"
             printf '}\n' >> "$DEST_JAVA_DIR/MainActivity.java"
           fi
-          
-          # Layout
+
           if [ -f workspace/res/layout/activity_main.xml ]; then
             cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
           elif [ -f workspace/activity_main.xml ]; then
@@ -148,21 +152,16 @@ jobs:
             printf '    android:gravity="center"\n' >> app/src/main/res/layout/activity_main.xml
             printf '    android:textSize="24sp"/>\n' >> app/src/main/res/layout/activity_main.xml
           fi
-          
-          # Icon
+
           if [ -f workspace/res/drawable/ic_launcher.png ]; then
             cp workspace/res/drawable/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           elif [ -f workspace/ic_launcher.png ]; then
             cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           else
-            # 1x1 transparent pixel PNG (base64)
             printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > app/src/main/res/drawable/ic_launcher.png
           fi
-          
-          # Update AndroidManifest label
+
           sed -i "s/AppPlaceholder/$APP_NAME/" app/src/main/AndroidManifest.xml
-          
-          # Update build.gradle namespace and applicationId
           sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
 
