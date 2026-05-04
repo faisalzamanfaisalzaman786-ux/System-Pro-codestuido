@@ -19,49 +19,70 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process and Build
+      - name: Process Base64 Payload and Build
         env:
           PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
+          # پے لوڈ سے ڈیٹا نکالنا
           APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
           PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
-          JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
-          XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
-          MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
+          
+          # Base64 ڈیٹا نکالنا
+          JAVA_B64=$(echo "$PAYLOAD" | jq -r '.java_b64 // ""')
+          XML_B64=$(echo "$PAYLOAD" | jq -r '.xml_b64 // ""')
+          MANIFEST_B64=$(echo "$PAYLOAD" | jq -r '.manifest_b64 // ""')
+          ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data_b64 // ""')
 
+          # فولڈرز کی ترتیب
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/drawable
           mkdir -p gradle/wrapper
 
-          # 🛡️ Resources Fix (Naming matching)
-          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          # 1. Java Code Decoding
+          if [ -n "$JAVA_B64" ] && [ "$JAVA_B64" != "null" ]; then
+            echo "$JAVA_B64" | base64 -d > app/src/main/java/$PKG_PATH/MainActivity.java
+          else
+            echo -e "package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }" > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+          # 2. Layout XML Decoding
+          if [ -n "$XML_B64" ] && [ "$XML_B64" != "null" ]; then
+            echo "$XML_B64" | base64 -d > app/src/main/res/layout/activity_main.xml
+          else
+            echo -e "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<RelativeLayout xmlns:android=\"http://schemas.android.com/apk/res/android\" android:layout_width=\"match_parent\" android:layout_height=\"match_parent\" android:background=\"#0F0F0F\"></RelativeLayout>" > app/src/main/res/layout/activity_main.xml
+          fi
+
+          # 3. Manifest Decoding & Auto-Fix
+          if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
+            echo "$MANIFEST_B64" | base64 -d > app/src/main/AndroidManifest.xml
+            # AGP 8.4 کے لیے مینی فیسٹ سے پیکیج ہٹانا ضروری ہے
+            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          # 4. Icon Base64 Decoding (Primary Focus)
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            # ڈیفالٹ آئیکن لنکر (اگر اڈاپٹیو آئیکن کی ضرورت ہو)
+            mkdir -p app/src/main/res/mipmap-anydpi-v26
+            echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@mipmap/ic_launcher"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          else
+            # اگر آئیکن نہ آئے تو ایرر سے بچنے کے لیے ڈیفالٹ ویکٹر
+            echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
+            mkdir -p app/src/main/res/mipmap-anydpi-v26
+            echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          fi
+
+          # 5. Resources & Theme Sync (Fix for Theme.SystemPro Not Found)
           echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color></resources>' > app/src/main/res/values/colors.xml
-          
-          # تھیم کا نام مینی فیسٹ کے مطابق (Theme.SystemPro) رکھا گیا ہے
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item></style></resources>' > app/src/main/res/values/themes.xml
 
-          # ⚙️ Logic & Manifest Cleanup
-          if [ -z "$JAVA_CODE" ] || [ "$JAVA_CODE" = "null" ]; then
-            JAVA_CODE="package $PACKAGE_NAME;\nimport android.os.Bundle;\nimport androidx.appcompat.app.AppCompatActivity;\npublic class MainActivity extends AppCompatActivity { @Override protected void onCreate(Bundle savedInstanceState) { super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); } }"
-          fi
-          
-          if [ -z "$MANIFEST_XML" ] || [ "$MANIFEST_XML" = "null" ]; then
-             MANIFEST_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>"
-          else
-             # مینی فیسٹ سے پیکیج ہٹانا اور تھیم کو یقینی بنانا
-             MANIFEST_XML=$(echo "$MANIFEST_XML" | sed 's/package="[^"]*"//g')
-          fi
-
-          echo -e "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
-          echo -e "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
-          echo -e "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
-
-          # 🛠️ Configuration
+          # Gradle Settings
           cat <<EOF > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
@@ -69,7 +90,7 @@ jobs:
           include ':app'
           EOF
 
-          echo "plugins { id 'com.android.application' version '8.5.0' apply false }" > build.gradle
+          echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
 
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
@@ -86,9 +107,9 @@ jobs:
           sync
           chmod +x gradlew
           ./gradlew clean assembleDebug --no-daemon --max-workers=2
-          
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Output' }}
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-V840' }}
           path: app/build/outputs/apk/debug/*.apk
