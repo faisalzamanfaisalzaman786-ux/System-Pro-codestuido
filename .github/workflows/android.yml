@@ -37,133 +37,116 @@ jobs:
             APP_NAME="${{ github.event.client_payload.app_name }}"
             PKG_RAW="${{ github.event.client_payload.package_name }}"
           fi
-          # Force lowercase package name (Android requirement)
           PKG_NAME=$(echo "$PKG_RAW" | tr '[:upper:]' '[:lower:]')
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
-          echo "Using package: $PKG_NAME"
 
-      - name: Create fresh Android project from template
+      - name: Create fresh Android project from template (no heredoc)
         run: |
-          # Create minimal directory structure
           mkdir -p app/src/main/java/com/example/temp
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           
-          # Write a placeholder AndroidManifest.xml (NO package attribute)
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="AppPlaceholder" android:icon="@drawable/ic_launcher">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # AndroidManifest.xml
+          printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/AndroidManifest.xml
+          printf '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' >> app/src/main/AndroidManifest.xml
+          printf '    <application android:label="AppPlaceholder" android:icon="@drawable/ic_launcher">\n' >> app/src/main/AndroidManifest.xml
+          printf '        <activity android:name=".MainActivity" android:exported="true">\n' >> app/src/main/AndroidManifest.xml
+          printf '            <intent-filter>\n' >> app/src/main/AndroidManifest.xml
+          printf '                <action android:name="android.intent.action.MAIN"/>\n' >> app/src/main/AndroidManifest.xml
+          printf '                <category android:name="android.intent.category.LAUNCHER"/>\n' >> app/src/main/AndroidManifest.xml
+          printf '            </intent-filter>\n' >> app/src/main/AndroidManifest.xml
+          printf '        </activity>\n' >> app/src/main/AndroidManifest.xml
+          printf '    </application>\n' >> app/src/main/AndroidManifest.xml
+          printf '</manifest>\n' >> app/src/main/AndroidManifest.xml
           
-          # build.gradle (app level)
-          cat > app/build.gradle << 'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              compileSdk 34
-              namespace "com.example.temp"
-              defaultConfig {
-                  applicationId "com.example.temp"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes {
-                  debug {
-                      debuggable true
-                  }
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
+          # app/build.gradle
+          printf 'plugins {\n' > app/build.gradle
+          printf '    id "com.android.application"\n' >> app/build.gradle
+          printf '}\n' >> app/build.gradle
+          printf 'android {\n' >> app/build.gradle
+          printf '    compileSdk 34\n' >> app/build.gradle
+          printf '    namespace "com.example.temp"\n' >> app/build.gradle
+          printf '    defaultConfig {\n' >> app/build.gradle
+          printf '        applicationId "com.example.temp"\n' >> app/build.gradle
+          printf '        minSdk 21\n' >> app/build.gradle
+          printf '        targetSdk 34\n' >> app/build.gradle
+          printf '        versionCode 1\n' >> app/build.gradle
+          printf '        versionName "1.0"\n' >> app/build.gradle
+          printf '    }\n' >> app/build.gradle
+          printf '    buildTypes {\n' >> app/build.gradle
+          printf '        debug {\n' >> app/build.gradle
+          printf '            debuggable true\n' >> app/build.gradle
+          printf '        }\n' >> app/build.gradle
+          printf '    }\n' >> app/build.gradle
+          printf '}\n' >> app/build.gradle
+          printf 'dependencies {\n' >> app/build.gradle
+          printf '    implementation "androidx.appcompat:appcompat:1.6.1"\n' >> app/build.gradle
+          printf '}\n' >> app/build.gradle
           
           # Top-level build.gradle
-          cat > build.gradle << 'EOF'
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.5.0'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+          printf 'buildscript {\n' > build.gradle
+          printf '    repositories {\n' >> build.gradle
+          printf '        google()\n' >> build.gradle
+          printf '        mavenCentral()\n' >> build.gradle
+          printf '    }\n' >> build.gradle
+          printf '    dependencies {\n' >> build.gradle
+          printf '        classpath "com.android.tools.build:gradle:8.5.0"\n' >> build.gradle
+          printf '    }\n' >> build.gradle
+          printf '}\n' >> build.gradle
+          printf 'allprojects {\n' >> build.gradle
+          printf '    repositories {\n' >> build.gradle
+          printf '        google()\n' >> build.gradle
+          printf '        mavenCentral()\n' >> build.gradle
+          printf '    }\n' >> build.gradle
+          printf '}\n' >> build.gradle
           
           # settings.gradle
-          echo "include ':app'" > settings.gradle
+          printf "include ':app'\n" > settings.gradle
           
           # gradle wrapper
           gradle wrapper --gradle-version 8.5 --no-daemon
           chmod +x gradlew
 
-      - name: Inject user files into the fresh project
+      - name: Inject user files (no heredoc)
         run: |
           PKG="${{ steps.meta.outputs.pkg_name }}"
           APP_NAME="${{ steps.meta.outputs.app_name }}"
           
-          # Convert package path: com.example.app -> com/example/app
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
           DEST_JAVA_DIR="app/src/main/java/$PKG_PATH"
           mkdir -p "$DEST_JAVA_DIR"
           
           # MainActivity.java
           if [ -f workspace/MainActivity.java ]; then
-            # Fix package line
             sed -i "s/^package .*;/package $PKG;/" workspace/MainActivity.java
             cp workspace/MainActivity.java "$DEST_JAVA_DIR/MainActivity.java"
           else
-            # Create default MainActivity
-            cat > "$DEST_JAVA_DIR/MainActivity.java" << EOF
-            package $PKG;
-            import android.os.Bundle;
-            import androidx.appcompat.app.AppCompatActivity;
-            public class MainActivity extends AppCompatActivity {
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    setContentView(R.layout.activity_main);
-                }
-            }
-            EOF
+            printf 'package %s;\n' "$PKG" > "$DEST_JAVA_DIR/MainActivity.java"
+            printf 'import android.os.Bundle;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf 'import androidx.appcompat.app.AppCompatActivity;\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf 'public class MainActivity extends AppCompatActivity {\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '    @Override\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '    protected void onCreate(Bundle savedInstanceState) {\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '        super.onCreate(savedInstanceState);\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '        setContentView(R.layout.activity_main);\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '    }\n' >> "$DEST_JAVA_DIR/MainActivity.java"
+            printf '}\n' >> "$DEST_JAVA_DIR/MainActivity.java"
           fi
           
-          # Layout file
+          # Layout
           if [ -f workspace/res/layout/activity_main.xml ]; then
             cp workspace/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
           elif [ -f workspace/activity_main.xml ]; then
             cp workspace/activity_main.xml app/src/main/res/layout/activity_main.xml
           else
-            # Default layout
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-            <?xml version="1.0" encoding="utf-8"?>
-            <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:text="Hello from System Pro"
-                android:gravity="center"
-                android:textSize="24sp"/>
-            EOF
+            printf '<?xml version="1.0" encoding="utf-8"?>\n' > app/src/main/res/layout/activity_main.xml
+            printf '<TextView xmlns:android="http://schemas.android.com/apk/res/android"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:layout_width="match_parent"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:layout_height="match_parent"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:text="Hello from System Pro"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:gravity="center"\n' >> app/src/main/res/layout/activity_main.xml
+            printf '    android:textSize="24sp"/>\n' >> app/src/main/res/layout/activity_main.xml
           fi
           
           # Icon
@@ -172,18 +155,16 @@ jobs:
           elif [ -f workspace/ic_launcher.png ]; then
             cp workspace/ic_launcher.png app/src/main/res/drawable/ic_launcher.png
           else
-            # Create a dummy 1x1 transparent icon (to avoid missing resource)
+            # 1x1 transparent pixel PNG (base64)
             printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' > app/src/main/res/drawable/ic_launcher.png
           fi
           
-          # Update AndroidManifest.xml with correct app name
+          # Update AndroidManifest label
           sed -i "s/AppPlaceholder/$APP_NAME/" app/src/main/AndroidManifest.xml
           
-          # Update build.gradle with correct namespace and applicationId
+          # Update build.gradle namespace and applicationId
           sed -i "s/namespace \".*\"/namespace \"$PKG\"/" app/build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"$PKG\"/" app/build.gradle
-          
-          echo "✅ All files injected. Package: $PKG"
 
       - name: Build APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
