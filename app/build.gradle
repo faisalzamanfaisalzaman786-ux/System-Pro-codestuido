@@ -3,11 +3,14 @@ plugins {
 }
 
 android {
-    namespace 'com.system.pro'
+    // اگر ڈائنامک پیکیج دیا گیا ہے تو وہ استعمال ہوگا، ورنہ ڈیفالٹ com.system.pro
+    def dynamicPkg = project.hasProperty("dynamicPackage") ? project.property("dynamicPackage") : "com.system.pro"
+
+    namespace dynamicPkg
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.system.pro"
+        applicationId dynamicPkg
         minSdk 24
         targetSdk 34
         versionCode 1
@@ -21,6 +24,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
