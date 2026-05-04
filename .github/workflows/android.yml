@@ -5,6 +5,12 @@ on:
   repository_dispatch:
     types: [build-app]
 
+# ٹوکن کے لیے ضروری اجازتیں
+permissions:
+  contents: write
+  actions: write
+  packages: write
+
 jobs:
   build:
     name: "System Pro Build Engine"
@@ -13,6 +19,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # تمام ہسٹری نکالنے کے لیے تاکہ برانچ کا مسئلہ نہ ہو
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,53 +31,49 @@ jobs:
 
       - name: Extract and Sanitize Payload
         run: |
-          # 1. Download Payload from Dispatch
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || echo "" > temp_main.java
-          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || echo "" > temp_layout.xml
-          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || echo "" > temp_manifest.xml
+          # پے لوڈ ڈیٹا کو محفوظ طریقے سے نکالنا
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
+          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
+          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
           
-          # 2. Setup Directory Structure
+          # ڈائریکٹری اسٹرکچر تیار کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable-xxxhdpi
 
-          # 3. PYTHON NUCLEAR CLEANER (Fixes Prolog & Hidden Styles)
+          # پائتھون اسکرپٹ برائے صفائی (Prolog اور Styles کا خاتمہ)
           python3 -c "
-          import os
-          def clean_xml(content):
-              content = content.strip()
-              # XML Prolog Fix: Find first <?xml and cut everything before it
-              if '<?xml' in content:
-                  content = content[content.find('<?xml'):]
-              # Remove illegal styles injected in layout
-              if '<style' in content:
-                  import re
+          import os, re
+          def clean_xml(file_in, file_out):
+              try:
+                  with open(file_in, 'r', encoding='utf-8', errors='ignore') as f:
+                      content = f.read().strip()
+                  if not content: return
+                  # XML Prolog Fix
+                  if '<?xml' in content:
+                      content = content[content.find('<?xml'):]
+                  # Layout سے ناجائز اسٹائلز ہٹانا
                   content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
-              return content
+                  with open(file_out, 'w', encoding='utf-8') as f:
+                      f.write(content)
+              except Exception as e: print(f'Error cleaning {file_in}: {e}')
 
-          # Clean Layout
-          with open('temp_layout.xml', 'r', encoding='utf-8', errors='ignore') as f:
-              clean_l = clean_xml(f.read())
-          with open('app/src/main/res/layout/activity_main.xml', 'w') as f:
-              f.write(clean_l)
-
-          # Clean Manifest
-          with open('temp_manifest.xml', 'r', encoding='utf-8', errors='ignore') as f:
-              clean_m = clean_xml(f.read())
-          with open('app/src/main/AndroidManifest.xml', 'w') as f:
-              f.write(clean_m)
+          clean_xml('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
+          clean_xml('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
           "
 
-          # 4. Java Package Injection
-          {
-            echo "package $PKG_NAME;"
-            echo "import $PKG_NAME.R;"
-            sed '/package /d' temp_main.java | sed '/import .*R;/d'
-          } > app/src/main/java/$PKG_PATH/MainActivity.java
+          # جاوا فائل میں پیکیج انجیکشن
+          if [ -s temp_main.java ]; then
+            {
+              echo "package $PKG_NAME;"
+              echo "import $PKG_NAME.R;"
+              sed '/package /d' temp_main.java | sed '/import .*R;/d'
+            } > app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
 
-          # 5. Icon Processing
+          # آئیکن پروسیسنگ
           if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
             echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/drawable-xxxhdpi/ic_launcher.png
           fi
@@ -77,7 +81,8 @@ jobs:
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:clean :app:assembleDebug \
+          # کلین بلڈ تاکہ پرانے کیشے کا مسئلہ نہ ہو
+          ./gradlew clean :app:assembleDebug \
             -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
             -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
             --no-daemon --stacktrace
@@ -87,3 +92,4 @@ jobs:
         with:
           name: ${{ github.event.client_payload.app_name || 'SystemPro-Build' }}
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
