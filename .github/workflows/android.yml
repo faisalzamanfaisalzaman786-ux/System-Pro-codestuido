@@ -1,17 +1,17 @@
-name: System Pro Official Build
+name: UI APK Builder (No Compression)
 on:
-  workflow_dispatch: # مینوئلی رن کرنے کے لیے
   repository_dispatch:
     types: [build-app]
 
 jobs:
-  assemble-official-apk:
-    name: "System Pro: Official APK Generation"
+  build-from-ui:
+    name: 📦 Build APK from UI Payload
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -20,41 +20,189 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Validate Project Structure
+      - name: 📥 Extract UI Payload
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          echo "### 🛠️ System Pro: Pre-Build Validation" >> $GITHUB_STEP_SUMMARY
-          if [ -f "gradlew" ]; then
-            echo "| ⚙️ Gradle Wrapper | ✅ Found |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| ⚙️ Gradle Wrapper | ❌ Missing (Generating...) |" >> $GITHUB_STEP_SUMMARY
-            gradle wrapper --gradle-version 9.4.1
+          # Parse JSON payload
+          JAVA_CODE=$(echo "$PAYLOAD" | jq -r '.java // ""')
+          XML_LAYOUT=$(echo "$PAYLOAD" | jq -r '.xml // ""')
+          MANIFEST_XML=$(echo "$PAYLOAD" | jq -r '.manifest // ""')
+          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
+          PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
+          ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data // ""')
+
+          # Validate required fields
+          if [ -z "$JAVA_CODE" ] || [ -z "$XML_LAYOUT" ] || [ -z "$MANIFEST_XML" ]; then
+            echo "❌ Missing java, xml, or manifest in payload"
+            exit 1
           fi
 
-      - name: Grant Execute Permission to Gradlew
-        run: chmod +x gradlew
+          # Create directory structure
+          PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/values
+          mkdir -p gradle/wrapper
 
-      - name: Inject Payload Data (Optional Overwrite)
+          # Write files (raw text, no base64 decode needed)
+          echo "$JAVA_CODE" > app/src/main/java/$PKG_PATH/MainActivity.java
+          echo "$XML_LAYOUT" > app/src/main/res/layout/activity_main.xml
+          echo "$MANIFEST_XML" > app/src/main/AndroidManifest.xml
+
+          # Decode icon if provided (base64)
+          if [ -n "$ICON_B64" ]; then
+            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            echo "✅ Icon decoded"
+          fi
+
+          # Save metadata for later steps
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+
+          # Also copy to workspace for verification
+          echo "✅ UI payload extracted and files written"
+
+      - name: 🛡️ Inject Missing Resources (Crash Prevention)
         run: |
-          # اگر پے لوڈ کے ذریعے ڈیٹا آ رہا ہے تو یہ اسے فزیکل فائلوں پر اپلائی کرے گا
-          if [ -n "${{ github.event.client_payload.colors_b64 }}" ]; then
-            echo "${{ github.event.client_payload.colors_b64 }}" | base64 -d > app/src/main/res/values/colors.xml
-          fi
-          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          # Colors (always provide safe defaults)
+          cat <<EOF > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="bg_dark">#0F0F0F</color>
+              <color name="neon_blue">#00BFFF</color>
+              <color name="neon_purple">#9D00FF</color>
+              <color name="neon_green">#39FF14</color>
+              <color name="black">#000000</color>
+              <color name="white">#FFFFFF</color>
+              <color name="primary_color">#6200EE</color>
+              <color name="error_red">#FF0000</color>
+          </resources>
+          EOF
+
+          # Theme (ensure manifest's theme exists)
+          SAFE_THEME_NAME="Theme_${APP_NAME// /_}"
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.$SAFE_THEME_NAME" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">@color/primary_color</item>
+                  <item name="colorPrimaryDark">@color/bg_dark</item>
+                  <item name="colorAccent">@color/neon_green</item>
+              </style>
+          </resources>
+          EOF
+
+          # Strings.xml (required for app name)
+          cat <<EOF > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">$APP_NAME</string>
+          </resources>
+          EOF
+
+          # If manifest does not specify a theme, inject the safe one
+          MANIFEST_FILE="app/src/main/AndroidManifest.xml"
+          if ! grep -q "android:theme" "$MANIFEST_FILE"; then
+            sed -i "s|<application |<application android:theme=\"@style/Theme.$SAFE_THEME_NAME\" |" "$MANIFEST_FILE"
           fi
 
-      - name: Build Official Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: ⚙️ Generate Gradle Wrapper (9.4.1) & Build Scripts
+        run: |
+          # Gradle wrapper with version 9.4.1
+          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip
+          EOF
+          # Download wrapper jar (if not present)
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || echo "Wrapper jar exists"
+          cat <<'EOF' > gradlew
+          #!/bin/sh
+          exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "\$@"
+          EOF
+          chmod +x gradlew
 
-      - name: Upload System Pro Artifact
+          # settings.gradle
+          cat <<EOF > settings.gradle
+          rootProject.name = "$APP_NAME"
+          include ':app'
+          EOF
+
+          # root build.gradle
+          cat <<EOF > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.5.0'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # app/build.gradle
+          cat <<EOF > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$PACKAGE_NAME'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              buildFeatures {
+                  viewBinding true
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
+      - name: 🔍 Validate Project Files (Pre-build Check)
+        run: |
+          echo "=== Project structure ==="
+          find app/src -type f | head -20
+          echo "=== Check MainActivity exists ==="
+          ls -la app/src/main/java/$(echo $PACKAGE_NAME | tr '.' '/')/MainActivity.java
+          echo "=== Check layout ==="
+          ls -la app/src/main/res/layout/activity_main.xml
+          echo "=== Check manifest ==="
+          head -5 app/src/main/AndroidManifest.xml
+
+      - name: 📦 Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --stacktrace
+
+      - name: 📤 Upload APK Artifact (Named 'APK-Build' for nightly.link)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.client_payload.app_name || 'System-Pro-Official-Build' }}
+          name: APK-Build
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 5
+          retention-days: 7
 
-      - name: Build Success Summary
-        if: success()
+      - name: ✅ Success Notification
         run: |
-          echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "System Pro Official APK has been generated successfully with Gradle 9.4.1." >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK built successfully for $APP_NAME"
+          echo "Artifact name: APK-Build.zip"
