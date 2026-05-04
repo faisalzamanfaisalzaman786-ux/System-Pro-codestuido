@@ -1,17 +1,12 @@
-name: System Pro AI Build Engine
-
+name: System Pro Official Build
 on:
-  workflow_dispatch:
+  workflow_dispatch: # مینوئلی رن کرنے کے لیے
   repository_dispatch:
-    types: [build-app, build-from-zip]
-
-permissions:
-  contents: write
-  actions: write
+    types: [build-app]
 
 jobs:
-  build:
-    name: "System Pro AI Engine (Stable Sync)"
+  assemble-official-apk:
+    name: "System Pro: Official APK Generation"
     runs-on: ubuntu-latest
     
     steps:
@@ -25,68 +20,41 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Workspace & Payload Setup
+      - name: Validate Project Structure
         run: |
-          PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          mkdir -p app/src/main/res/layout
-
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
-          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
-          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
-
-          # AI Cleaner
-          python3 -c "
-          import os, re
-          def clean_xml(f_in, f_out):
-              if not os.path.exists(f_in) or os.stat(f_in).st_size == 0: return
-              with open(f_in, 'r', encoding='utf-8', errors='ignore') as f:
-                  c = f.read().strip()
-              if '<?xml' in c: c = c[c.find('<?xml'):]
-              c = re.sub(r'<style.*?>.*?</style>', '', c, flags=re.DOTALL)
-              with open(f_out, 'w', encoding='utf-8') as f: f.write(c)
-
-          clean_xml('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
-          clean_xml('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
-          "
-
-          if [ -s temp_main.java ]; then
-            {
-              echo "package $PKG_NAME;"
-              echo "import $PKG_NAME.R;"
-              sed '/package /d' temp_main.java | sed '/import .*R;/d'
-            } > app/src/main/java/$PKG_PATH/MainActivity.java
+          echo "### 🛠️ System Pro: Pre-Build Validation" >> $GITHUB_STEP_SUMMARY
+          if [ -f "gradlew" ]; then
+            echo "| ⚙️ Gradle Wrapper | ✅ Found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| ⚙️ Gradle Wrapper | ❌ Missing (Generating...) |" >> $GITHUB_STEP_SUMMARY
+            gradle wrapper --gradle-version 9.4.1
           fi
 
-      - name: Force Fix Dependencies & Gradle
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Inject Payload Data (Optional Overwrite)
         run: |
-          # 1. Force Gradle 8.5
-          mkdir -p gradle/wrapper
-          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
+          # اگر پے لوڈ کے ذریعے ڈیٹا آ رہا ہے تو یہ اسے فزیکل فائلوں پر اپلائی کرے گا
+          if [ -n "${{ github.event.client_payload.colors_b64 }}" ]; then
+            echo "${{ github.event.client_payload.colors_b64 }}" | base64 -d > app/src/main/res/values/colors.xml
+          fi
+          if [ -n "${{ github.event.client_payload.icon_data_b64 }}" ]; then
+            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
 
-          # 2. Force Android Gradle Plugin 8.2.2 (Stable for Gradle 8.5)
-          # یہ کمانڈ آپ کی build.gradle فائلز میں پلگ ان ورژن کو خود بخود ٹھیک کر دے گی
-          find . -name "build.gradle" -exec sed -i 's/com.android.tools.build:gradle:[^"]*/com.android.tools.build:gradle:8.2.2/g' {} +
-          find . -name "build.gradle" -exec sed -i 's/id "com.android.application" version [^"]*/id "com.android.application" version "8.2.2"/g' {} +
+      - name: Build Official Debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
-          chmod +x gradlew
-
-      - name: Build System Pro
-        run: |
-          # --stacktrace کے ساتھ رن کریں تاکہ اگر فیل ہو تو اصل وجہ پتہ چلے
-          ./gradlew clean assembleDebug \
-            -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
-            --no-daemon --stacktrace
-
-      - name: Upload Artifact
+      - name: Upload System Pro Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-V1400-Fixed
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Official-Build' }}
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 5
+
+      - name: Build Success Summary
+        if: success()
+        run: |
+          echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "System Pro Official APK has been generated successfully with Gradle 9.4.1." >> $GITHUB_STEP_SUMMARY
