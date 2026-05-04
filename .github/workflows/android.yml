@@ -21,17 +21,13 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Process ZIP Asset
+      - name: Process ZIP and Sanitize XML
         run: |
           # 1. Download ZIP
           ZIP_URL="${{ github.event.client_payload.zip_asset_url }}"
-          if [ -z "$ZIP_URL" ]; then
-            echo "Error: No ZIP URL provided"
-            exit 1
-          fi
           curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o project.zip "$ZIP_URL"
           
-          # 2. Package & Directory Setup
+          # 2. Setup Directories
           PACKAGE_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
           mkdir -p app/src/main/java/$PKG_PATH
@@ -42,7 +38,11 @@ jobs:
           # 3. Unzip
           unzip -o project.zip -d temp_src/
           
-          # 4. Move Files
+          # 4. XML SANITIZER (ایرر ختم کرنے کے لیے)
+          # یہ کمانڈ ہر XML فائل کے شروع سے خالی لائنیں اور کچرا صاف کر دے گی
+          find temp_src/ -name "*.xml" -type f -exec sed -i '1,/<[!?]xml/ { /<[!?]xml/!d }' {} +
+
+          # 5. Move Files
           if [ -f temp_src/MainActivity.java ]; then
             echo "package $PACKAGE_NAME;" > app/src/main/java/$PKG_PATH/MainActivity.java
             echo "import $PACKAGE_NAME.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
@@ -53,7 +53,7 @@ jobs:
           [ -f temp_src/AndroidManifest.xml ] && mv temp_src/AndroidManifest.xml app/src/main/
           [ -f temp_src/res/drawable/ic_launcher.png ] && mv temp_src/res/drawable/ic_launcher.png app/src/main/res/drawable/
 
-          # 5. Inject Mandatory Colors
+          # 6. Inject Mandatory Colors
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
