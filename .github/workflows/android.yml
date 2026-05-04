@@ -25,59 +25,50 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Setup Workspace and Sanitize
+      - name: Workspace Setup & Clean
         run: |
-          # ورک اسپیس کے اندر فولڈرز کی ترتیب [cite: 2026-05-01]
-          WS_DIR=$GITHUB_WORKSPACE
+          # ورک اسپیس ڈائریکٹری سیٹ کرنا
           PKG_NAME="${{ github.event.client_payload.package_name || 'com.system.pro' }}"
           PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
-          mkdir -p $WS_DIR/app/src/main/java/$PKG_PATH
-          mkdir -p $WS_DIR/app/src/main/res/layout
-          mkdir -p $WS_DIR/app/src/main/res/drawable-xxxhdpi
+          mkdir -p $GITHUB_WORKSPACE/app/src/main/java/$PKG_PATH
+          mkdir -p $GITHUB_WORKSPACE/app/src/main/res/layout
 
-          # پے لوڈ کو ورک اسپیس میں ڈی کوڈ کرنا [cite: 2026-05-03]
-          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > $WS_DIR/temp_main.java || touch $WS_DIR/temp_main.java
-          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > $WS_DIR/temp_layout.xml || touch $WS_DIR/temp_layout.xml
-          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > $WS_DIR/temp_manifest.xml || touch $WS_DIR/temp_manifest.xml
-          
-          # پائتھون کلینر کا استعمال (Prolog Fix) [cite: 2026-03-03]
+          # پے لوڈ کو ڈی کوڈ کرنا
+          echo "${{ github.event.client_payload.java_b64 }}" | base64 -d > temp_main.java || touch temp_main.java
+          echo "${{ github.event.client_payload.xml_b64 }}" | base64 -d > temp_layout.xml || touch temp_layout.xml
+          echo "${{ github.event.client_payload.manifest_b64 }}" | base64 -d > temp_manifest.xml || touch temp_manifest.xml
+
+          # پائتھون سے خودکار صفائی
           python3 -c "
           import os, re
-          ws = os.getenv('GITHUB_WORKSPACE')
-          def clean_xml(f_in, f_out):
-              path_in = os.path.join(ws, f_in)
-              path_out = os.path.join(ws, f_out)
-              if not os.path.exists(path_in): return
-              with open(path_in, 'r', encoding='utf-8', errors='ignore') as f:
-                  c = f.read().strip()
-              if '<?xml' in c: c = c[c.find('<?xml'):]
-              c = re.sub(r'<style.*?>.*?</style>', '', c, flags=re.DOTALL)
-              with open(path_out, 'w') as f: f.write(c)
+          def clean(f_in, f_out):
+              if not os.path.exists(f_in): return
+              with open(f_in, 'r', encoding='utf-8') as f: content = f.read().strip()
+              if '<?xml' in content: content = content[content.find('<?xml'):]
+              content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.DOTALL)
+              with open(f_out, 'w') as f: f.write(content)
 
-          clean_xml('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
-          clean_xml('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
+          clean('temp_layout.xml', 'app/src/main/res/layout/activity_main.xml')
+          clean('temp_manifest.xml', 'app/src/main/AndroidManifest.xml')
           "
 
-          # جاوا فائل کو ورک اسپیس میں سیٹ کرنا [cite: 2026-05-01]
-          if [ -s $WS_DIR/temp_main.java ]; then
+          # جاوا فائل انجکشن
+          if [ -s temp_main.java ]; then
             {
               echo "package $PKG_NAME;"
               echo "import $PKG_NAME.R;"
-              sed '/package /d' $WS_DIR/temp_main.java | sed '/import .*R;/d'
-            } > $WS_DIR/app/src/main/java/$PKG_PATH/MainActivity.java
+              sed '/package /d' temp_main.java | sed '/import .*R;/d'
+            } > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
 
-          # آئیکن کی منتقلی [cite: 2026-05-01]
-          if [ ! -z "${{ github.event.client_payload.icon_data_b64 }}" ]; then
-            echo "${{ github.event.client_payload.icon_data_b64 }}" | base64 -d > $WS_DIR/app/src/main/res/drawable-xxxhdpi/ic_launcher.png
-          fi
-
-      - name: Build Debug APK
+      - name: Build APK
         run: |
-          cd $GITHUB_WORKSPACE
           chmod +x gradlew
-          ./gradlew clean :app:assembleDebug \
-            -PdynamicPackage="${{ github.event.client_payload.package_name || 'com.system.pro' }}" \
-            -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}" \
-            --no-daemon
+          ./gradlew clean assembleDebug -PappName="${{ github.event.client_payload.app_name || 'SystemPro' }}"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'SystemPro' }}
+          path: app/build/outputs/apk/debug/*.apk
