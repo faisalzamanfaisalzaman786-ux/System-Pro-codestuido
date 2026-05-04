@@ -1,7 +1,121 @@
 name: Android APK Builder
 
 on:
+  workflow_dispatch:name: Android APK Builder
+
+on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [build-app]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Process Base64 Payload and Build
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          APP_NAME=$(echo "$PAYLOAD" | jq -r '.app_name // "SystemPro"')
+          PACKAGE_NAME=$(echo "$PAYLOAD" | jq -r '.package_name // "com.system.pro"')
+          
+          JAVA_B64=$(echo "$PAYLOAD" | jq -r '.java_b64 // ""')
+          XML_B64=$(echo "$PAYLOAD" | jq -r '.xml_b64 // ""')
+          MANIFEST_B64=$(echo "$PAYLOAD" | jq -r '.manifest_b64 // ""')
+          ICON_B64=$(echo "$PAYLOAD" | jq -r '.icon_data_b64 // ""')
+
+          PKG_PATH=$(echo "$PACKAGE_NAME" | tr '.' '/')
+          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          mkdir -p app/src/main/res/drawable
+          mkdir -p gradle/wrapper
+
+          # 1. FINAL ATTEMPT: Java Reconstruction (Clean & Inject)
+          if [ -n "$JAVA_B64" ] && [ "$JAVA_B64" != "null" ]; then
+            # ڈی کوڈ کر کے ایک عارضی فائل میں رکھنا
+            echo "$JAVA_B64" | base64 -d > raw_java.txt
+            
+            # تمام "package" اور "import .*R;" لائنز کو مکمل طور پر نکالنا
+            grep -v "package " raw_java.txt | grep -v "import .*R;" > clean_body.txt
+            
+            # فائل کو دوبارہ جوڑنا: نیا پیکیج + نیا امپورٹ + صاف ستھرا کوڈ
+            echo "package $PACKAGE_NAME;" > app/src/main/java/$PKG_PATH/MainActivity.java
+            echo "import $PACKAGE_NAME.R;" >> app/src/main/java/$PKG_PATH/MainActivity.java
+            cat clean_body.txt >> app/src/main/java/$PKG_PATH/MainActivity.java
+          fi
+
+          # 2. Resources Fix (Colors matching log errors)
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="bg_dark">#0F0F0F</color><color name="neon_blue">#00BFFF</color><color name="colorPrimaryDark">#000000</color><color name="colorPrimary">#00BFFF</color></resources>' > app/src/main/res/values/colors.xml
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">@color/neon_blue</item><item name="android:statusBarColor">@color/colorPrimaryDark</item></style></resources>' > app/src/main/res/values/themes.xml
+
+          # 3. Layout Injection
+          if [ -n "$XML_B64" ] && [ "$XML_B64" != "null" ]; then
+            echo "$XML_B64" | base64 -d > app/src/main/res/layout/activity_main.xml
+          fi
+
+          # 4. Manifest Fix
+          if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
+            echo "$MANIFEST_B64" | base64 -d > app/src/main/AndroidManifest.xml
+            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          else
+            echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:label=\"$APP_NAME\" android:icon=\"@mipmap/ic_launcher\" android:theme=\"@style/Theme.SystemPro\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > app/src/main/AndroidManifest.xml
+          fi
+
+          # 5. Icon Generation
+          echo '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#00BFFF" android:pathData="M0,0h108v108h-108z"/></vector>' > app/src/main/res/drawable/ic_launcher_foreground.xml
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            echo "$ICON_B64" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          fi
+          echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg_dark"/><foreground android:drawable="@drawable/ic_launcher_foreground"/></adaptive-icon>' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+
+          # 6. Build Setup (Locked Versions)
+          cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS); repositories { google(); mavenCentral() } }
+          rootProject.name = "$APP_NAME"
+          include ':app'
+          EOF
+
+          echo "plugins { id 'com.android.application' version '8.4.0' apply false }" > build.gradle
+
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace '$PACKAGE_NAME'
+              compileSdk 34
+              defaultConfig { applicationId '$PACKAGE_NAME'; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
+          }
+          dependencies { 
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip" > gradle/wrapper/gradle-wrapper.properties
+          
+          sync
+          chmod +x gradlew
+          ./gradlew clean assembleDebug --no-daemon --max-workers=2
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.client_payload.app_name || 'System-Pro-Success' }}
+          path: app/build/outputs/apk/debug/*.apk
+
   repository_dispatch:
     types: [build-app]
 
