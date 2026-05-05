@@ -11,17 +11,16 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Flutter Environment
+      - name: 🛠️ Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.0'
 
-      - name: 🧬 Universal Ingestion Engine
+      - name: 🧬 Titan Ingestion Engine
         run: |
           python3 - <<EOF
           import json, os, re, base64
 
-          # 1. ڈیٹا لوڈنگ (Safe Handling)
           try:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
@@ -30,61 +29,66 @@ jobs:
               app_name = config.get('app_display_name', 'System Pro App')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               
-              # 2. آئیکن انجن (Icon Fix)
+              # 1. Pubspec Cleanup (No more duplicates)
+              if os.path.exists('pubspec.yaml'):
+                  with open('pubspec.yaml', 'r') as f: lines = f.readlines()
+                  new_lines = []
+                  skip_keys = ['permission_handler', 'http'] # یہ کیز دوبارہ نہیں لکھیں گے
+                  for line in lines:
+                      if any(k in line for k in skip_keys) and '^' in line:
+                          continue
+                      new_lines.append(line)
+                  # آخر میں صرف ایک بار یہ کیز شامل کریں
+                  new_lines.insert(-1, "  permission_handler: ^11.3.0\n")
+                  new_lines.insert(-1, "  http: ^1.2.0\n")
+                  with open('pubspec.yaml', 'w') as f: f.writelines(new_lines)
+
+              # 2. Icon Engine (Deep Injection)
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
-                  # اگر Base64 میں ہیڈر (data:image/png;base64,) شامل ہو تو اسے ہٹانا
-                  if "," in icon_b64:
-                      icon_b64 = icon_b64.split(",")[1]
-                  
+                  if "," in icon_b64: icon_b64 = icon_b64.split(",")[1]
                   img_data = base64.b64decode(icon_b64)
                   res_dir = 'android/app/src/main/res/'
-                  # تمام میپ میپ فولڈرز (hdpi, xhdpi وغیرہ) میں آئیکن ڈالنا
-                  for folder in os.listdir(res_dir):
-                      if 'mipmap' in folder:
-                          target_path = os.path.join(res_dir, folder, 'ic_launcher.png')
-                          with open(target_path, 'wb') as f:
-                              f.write(img_data)
-                  print("✅ App Icon Successfully Updated")
+                  # تمام میپ میپ فولڈرز اور ڈرائبل میں آئیکن ڈالنا
+                  target_folders = [f for f in os.listdir(res_dir) if 'mipmap' in f or 'drawable' in f]
+                  for folder in target_folders:
+                      for filename in ['ic_launcher.png', 'launcher_icon.png']:
+                          target = os.path.join(res_dir, folder, filename)
+                          os.makedirs(os.path.dirname(target), exist_ok=True)
+                          with open(target, 'wb') as f: f.write(img_data)
+                  print("✅ Icon Injected in all folders")
 
-              # 3. پیکیج نیم اور لیبل (Global Search & Replace)
-              def replace_in_file(file_path, old, new):
-                  if os.path.exists(file_path):
-                      with open(file_path, 'r') as f: content = f.read()
-                      content = content.replace(old, new)
-                      with open(file_path, 'w') as f: f.write(content)
+              # 3. Branding (Name & Package)
+              m_path = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(m_path):
+                  with open(m_path, 'r') as f: c = f.read()
+                  c = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', c)
+                  c = c.replace('com.systempro.ultra', pkg_name)
+                  with open(m_path, 'w') as f: f.write(c)
 
-              # مینی فیسٹ میں نام اور پیکیج بدلنا
-              manifest_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(manifest_path):
-                  with open(manifest_path, 'r') as f: m_content = f.read()
-                  m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
-                  m_content = m_content.replace('com.systempro.ultra', pkg_name)
-                  with open(manifest_path, 'w') as f: f.write(m_content)
+              g_path = 'android/app/build.gradle'
+              if os.path.exists(g_path):
+                  with open(g_path, 'r') as f: c = f.read()
+                  c = c.replace('com.systempro.ultra', pkg_name)
+                  with open(g_path, 'w') as f: f.write(c)
 
-              # تمام Gradle فائلوں میں پیکیج نیم بدلنا
-              replace_in_file('android/app/build.gradle', 'com.systempro.ultra', pkg_name)
-              
-              # 4. سورس کوڈ (main.dart)
+              # 4. Source Code Injection
               main_code = data.get('source_files', {}).get('main_dart', '')
               if main_code:
                   os.makedirs('lib', exist_ok=True)
-                  with open('lib/main.dart', 'w', encoding='utf-8') as f:
-                      f.write(main_code)
+                  with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-              print(f"🚀 Success: Engine Configured for {app_name}")
+              print(f"🚀 Engine Optimized for {app_name}")
           except Exception as e:
-              print(f"❌ Error: {str(e)}")
-              exit(1)
+              print(f"❌ Error: {e}"); exit(1)
           EOF
 
-      - name: 🏗️ Build Optimized APK
+      - name: 🏗️ Build Pro APK
         run: |
-          flutter pub get
-          # سائز کم کرنے کے لیے --split-per-abi استعمال کر سکتے ہیں
+          flutter pub upgrade
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload Production APK
+      - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Release
