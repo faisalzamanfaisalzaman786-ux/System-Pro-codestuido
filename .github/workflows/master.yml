@@ -11,13 +11,14 @@ jobs:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 اسمارٹ فلٹر (No-Download Mode)
+      - name: 🚀 فلٹر ورژن لاک (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.24.5' # یہاں ورژن لاک کر دیا گیا ہے
           cache: true
 
-      - name: 🧬 اے آئی آٹو ریپیئر انجن
+      - name: 🧬 اسمارٹ انجن (Version Lock Logic)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -25,69 +26,55 @@ jobs:
           try:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
-              
               config = data.get('build_config', {})
               app_name = config.get('app_display_name', 'System Pro App')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. پب اسپیک فکس (Correct Versions)
+              # 1. کوٹلن اور گریڈل ورژن لاک کرنا (Incompatibility Fix)
+              gradle_path = 'android/build.gradle'
+              if os.path.exists(gradle_path):
+                  with open(gradle_path, 'r') as f: content = f.read()
+                  # کوٹلن کو 1.9.22 پر لاک کرنا
+                  content = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.22'", content)
+                  with open(gradle_path, 'w') as f: f.write(content)
+
+              # 2. پب اسپیک اور لائبریریز (Safe Mapping)
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  
-                  # لائبریریز کے درست ورژن جو پب ڈیو پر موجود ہیں
+                  # پکی لائبریریز جو ایرر نہیں دیں گی
                   libs = {
-                      'torch_light': '  torch_light: ^1.0.1\n', # torch کی جگہ torch_light زیادہ بہتر ہے
+                      'torch_light': '  torch_light: ^1.0.1\n',
                       'http': '  http: ^1.2.0\n',
                       'permission_handler': '  permission_handler: ^11.3.0\n'
                   }
-                  
                   clean_lines = [l for l in lines if not any(k.split('_')[0] in l for k in libs.keys())]
-                  
                   final_lines = []
                   for line in clean_lines:
                       final_lines.append(line)
                       if line.strip() == "dependencies:":
                           for key, value in libs.items():
-                              # اگر کوڈ میں torch یا torch_light کا ذکر ہے
-                              if "torch" in main_code.lower() and "torch" in key:
+                              if key in main_code or (key == 'torch_light' and 'torch' in main_code.lower()):
                                   final_lines.append(value)
-                              elif key in main_code and key != 'torch_light':
-                                  final_lines.append(value)
-                  
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 2. آئیکن انجن (Deep Injection)
+              # 3. آئیکن اور پیکیج ہینڈلنگ
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
-                  if "," in icon_b64: icon_b64 = icon_b64.split(",")[1]
-                  img_data = base64.b64decode(icon_b64)
-                  res_dir = 'android/app/src/main/res/'
-                  for root, dirs, files in os.walk(res_dir):
+                  img_data = base64.b64decode(icon_b64.split(",")[1] if "," in icon_b64 else icon_b64)
+                  for root, dirs, files in os.walk('android/app/src/main/res/'):
                       if any(x in root for x in ['mipmap', 'drawable']):
                           for name in ['ic_launcher.png', 'launcher_icon.png']:
                               with open(os.path.join(root, name), 'wb') as f: f.write(img_data)
 
-              # 3. برانڈنگ
-              def fix_file(path, old, new):
-                  if os.path.exists(path):
-                      with open(path, 'r') as f: c = f.read()
-                      with open(path, 'w') as f: f.write(c.replace(old, new))
-
-              fix_file('android/app/src/main/AndroidManifest.xml', 'com.systempro.ultra', pkg_name)
-              fix_file('android/app/build.gradle', 'com.systempro.ultra', pkg_name)
-
-              # 4. کوڈ انجکشن (Auto-fixing imports)
+              # 4. سورس کوڈ (Auto-Repair Imports)
               if main_code:
-                  # اگر پرانا torch امپورٹ ہے تو اسے نئے سے بدلنا تاکہ ایرر نہ آئے
-                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
-                  main_code = main_code.replace("Torch.", "TorchLight.")
-                  
+                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart").replace("Torch.", "TorchLight.")
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
           except Exception as e:
-              print(f"❌ Error: {str(e)}"); exit(1)
+              print(f"❌ Smart Logic Error: {str(e)}"); exit(1)
           EOF
 
       - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
@@ -95,8 +82,8 @@ jobs:
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 ڈاؤن لوڈ لنک جنریٹر
+      - name: 📤 اپ لوڈ سٹیبل APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Release
+          name: System-Pro-Locked-Build
           path: build/app/outputs/flutter-apk/*.apk
