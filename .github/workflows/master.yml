@@ -12,14 +12,25 @@ jobs:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 فلٹر سٹیبل (3.24.5)
+      - name: 🚀 فلٹر سیٹ اپ (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 سسٹم پرو الٹرا انجن (Deep Repair Edition)
+      - name: 🧬 آٹو میٹک ورژن اور پیکیج فکسر (The 5-Point Fix)
+        run: |
+          # 1 & 2: کوٹلن ورژن فکس (build.gradle & settings.gradle)
+          K_VER="1.9.22"
+          sed -i "s/id \"org.jetbrains.kotlin.android\" version \"[^\"]*\"/id \"org.jetbrains.kotlin.android\" version \"$K_VER\"/g" android/settings.gradle
+          sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '$K_VER'/g" android/build.gradle
+          
+          # 3: جاوا 17 اور JVM ٹارگٹ فکس (app/build.gradle)
+          sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
+          sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
+
+      - name: 🧬 ڈائنامک پیکیج اور کوڈ انجن
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -28,34 +39,11 @@ jobs:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
               config = data.get('build_config', {})
-              
               app_name = config.get('app_display_name', 'System Pro')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
-              
-              # 1. کوٹلن ورژن کی مکمل اوور ہال (Brute Force)
-              kotlin_v = "1.9.22" # Stable high version
-              
-              s_gradle = 'android/settings.gradle'
-              if os.path.exists(s_gradle):
-                  with open(s_gradle, 'r') as f: lines = f.readlines()
-                  with open(s_gradle, 'w') as f:
-                      for line in lines:
-                          # ہر قسم کے کوٹلن ورژن ڈیکلریشن کو بدلنا
-                          line = re.sub(r'id "org\.jetbrains\.kotlin\.android" version "[^"]*"', f'id "org.jetbrains.kotlin.android" version "{kotlin_v}"', line)
-                          f.write(line)
-              
-              r_gradle = 'android/build.gradle'
-              if os.path.exists(r_gradle):
-                  with open(r_gradle, 'r') as f: content = f.read()
-                  # اگر ext.kotlin_version موجود ہے تو اسے بدلیں، ورنہ نیا ڈالیں
-                  if 'ext.kotlin_version' in content:
-                      content = re.sub(r"ext\.kotlin_version = .*", f"ext.kotlin_version = '{kotlin_v}'", content)
-                  else:
-                      content = content.replace('buildscript {', f"buildscript {{\n    ext.kotlin_version = '{kotlin_v}'")
-                  with open(r_gradle, 'w') as f: f.write(content)
 
-              # 2. پب اسپیک کلین اپ (Unique Only)
+              # 4: پب اسپیک فکس (torch_light integration)
               pub_path = 'pubspec.yaml'
               if os.path.exists(pub_path):
                   with open(pub_path, 'r') as f: lines = f.readlines()
@@ -63,36 +51,34 @@ jobs:
                   cleaned = [l for l in lines if not any(t in l for t in targets)]
                   idx = next((i for i, s in enumerate(cleaned) if 'dependencies:' in s), -1)
                   if idx != -1:
-                      libs = [f'  {k}: {v}\n' for k, v in {'home_widget': '^0.7.0', 'torch_light': '^1.1.0', 'http': '^1.2.0', 'permission_handler': '^11.3.0'}.items()]
+                      libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
                       for lib in reversed(libs): cleaned.insert(idx + 1, lib)
                   with open(pub_path, 'w') as f: f.writelines(cleaned)
 
-              # 3. مینی فیسٹ اور پیکیج نیم فکسر
-              manifest_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(manifest_path):
-                  with open(manifest_path, 'r') as f: m = f.read()
-                  m = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', m)
-                  m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
-                  if 'ProWidgetProvider' not in m:
-                      receiver = f'\n        <receiver android:name=".ProWidgetProvider" android:exported="true"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/pro_widget_info" /></receiver>\n'
-                      m = m.replace('</activity>', f'</activity>{receiver}')
-                  with open(manifest_path, 'w') as f: f.write(m)
-
-              # 4. ویجٹ فائلز کی تیاری
-              res = 'android/app/src/main/res'
-              os.makedirs(f"{res}/layout", exist_ok=True); os.makedirs(f"{res}/xml", exist_ok=True)
-              with open(f"{res}/layout/pro_widget_layout.xml", 'w') as f: f.write(f'<?xml version="1.0" encoding="utf-8"?><RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#1A1A1A"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="{app_name}" android:textColor="#00FF00"/></RelativeLayout>')
-              with open(f"{res}/xml/pro_widget_info.xml", 'w') as f: f.write('<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>')
-
+              # 5: مین کوڈ فکس (Torch to TorchLight)
               if main_code:
+                  # آٹو میٹک امپورٹ اور کلاس ری پلیسمنٹ
+                  main_code = main_code.replace("import 'package:torch/torch.dart'", "import 'package:torch_light/torch_light.dart'")
+                  main_code = main_code.replace("Torch.hasTorch", "TorchLight.isTorchAvailable")
+                  main_code = main_code.replace("Torch.turnOn()", "TorchLight.enableTorch()")
+                  main_code = main_code.replace("Torch.turnOff()", "TorchLight.disableTorch()")
+                  
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
+              # اینڈرائیڈ مینی فیسٹ اور آئیکن لاجک (وہی پرانی)
+              m_path = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(m_path):
+                  with open(m_path, 'r') as f: m = f.read()
+                  m = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', m)
+                  m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
+                  with open(m_path, 'w') as f: f.write(m)
+                  
           except Exception as e:
               print(f"❌ Error: {str(e)}"); exit(1)
           EOF
 
-      - name: 🏗️ بلڈ APK
+      - name: 🏗️ بلڈ اینڈرائیڈ APK
         run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
@@ -100,5 +86,5 @@ jobs:
       - name: 📤 اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-Success
+          name: System-Pro-Ultra-Fix
           path: build/app/outputs/flutter-apk/*.apk
