@@ -21,6 +21,7 @@ jobs:
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
           fi
+          # پرانی اینڈرائیڈ فائلز ہٹانا تاکہ نئے ورژن انجیکٹ ہوں
           rm -rf android/app/build.gradle android/settings.gradle
 
       - name: Write Android Config
@@ -35,15 +36,28 @@ jobs:
           include ":app"
           EOF
 
+      - name: Clean & Inject Dependencies
+        run: |
+          # ڈپلیکیٹ کیز سے بچنے کے لیے پہلے صفائی
+          sed -i '/home_widget:/d' pubspec.yaml
+          sed -i '/torch_light:/d' pubspec.yaml
+          sed -i '/http:/d' pubspec.yaml
+          sed -i '/permission_handler:/d' pubspec.yaml
+          # اب ترتیب سے نئی ڈیپینڈینسیز ڈالنا
+          sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
+
       - name: Prepare Dart Code
         run: |
           mkdir -p lib
           printf '%s\n' "${{ github.event.client_payload.source_files.main_dart }}" > lib/main.dart
+          # ٹارچ اور اویٹ کے مسائل کا حل
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/await await/await/g" lib/main.dart
           sed -i "s/Torch.hasTorch/await TorchLight.isTorchAvailable()/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
+          # ڈبل اویٹ کی دوبارہ صفائی
+          sed -i "s/await await/await/g" lib/main.dart
 
       - name: Build APK
         run: |
@@ -53,5 +67,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V6-5
+          name: System-Pro-V6-6
           path: build/app/outputs/flutter-apk/*.apk
