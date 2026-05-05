@@ -9,37 +9,40 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: 📥 چیک آؤٹ
+      - name: 📥 Check out repository
         uses: actions/checkout@v4
 
-      - name: 🚀 فلٹر سیٹ اپ (Issue 7: Version 3.24.5)
+      - name: 🚀 Setup Flutter (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🛠️ اینڈرائیڈ فائلوں کی جنریشن (Issue 5: Missing Wrapper)
+      - name: 🛠️ Generate Android Files (Issue 5 Fix)
         run: |
-          # اگر گریڈل فائلیں غائب ہیں تو انہیں دوبارہ جنریٹ کرنا
-          flutter create --platforms=android .
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android .
+          fi
           cd android && chmod +x gradlew && cd ..
 
-      - name: 🧬 کوٹلن، جاوا اور ورژن انجن (Issue 1 & 2)
+      - name: 🧬 Force Fix Kotlin & Java (Issue 1, 2 & 5)
         run: |
-          # Issue 1: Kotlin 1.9.22 Force Fix
+          # settings.gradle میں ورژن لاک کرنا
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
+          
+          # build.gradle میں ورژن لاک کرنا
           if grep -q "ext.kotlin_version" android/build.gradle; then
             sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/g" android/build.gradle
           else
             sed -i "/buildscript {/a \    ext.kotlin_version = '1.9.22'" android/build.gradle
           fi
           
-          # Issue 2: Java & JVM Target 17
+          # Java 17 ٹارگٹ سیٹ کرنا
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🧬 پب اسپیک اور کوڈ ریپیئر (Issue 3, 4 & 8)
+      - name: 🧬 Repair Pubspec & Code (Issue 3, 4 & 8)
         shell: python
         run: |
           import json, os, re
@@ -52,7 +55,7 @@ jobs:
           pkg_name = config.get('package_name', 'com.systempro.ultra')
           main_code = data.get('source_files', {}).get('main_dart', '')
 
-          # Issue 8: پب اسپیک سے ڈپلیکیٹ ہٹانا
+          # پب اسپیک کلین اپ (ڈپلیکیٹ ہٹانا)
           pub_path = 'pubspec.yaml'
           if os.path.exists(pub_path):
               with open(pub_path, 'r') as f: lines = f.readlines()
@@ -64,20 +67,16 @@ jobs:
                   for lib in reversed(libs): cleaned.insert(idx + 1, lib)
               with open(pub_path, 'w') as f: f.writelines(cleaned)
 
-          # Issue 3 & 4: TorchLight API Correct usage
+          # مین کوڈ میں TorchLight API کی درستی
           if main_code:
-              # Imports درست کرنا
-              main_code = main_code.replace("import 'package:torch/torch.dart'", "import 'package:torch_light/torch_light.dart'")
-              # API Methods درست کرنا (Issue 4)
+              main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
               main_code = main_code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
-              main_code = main_code.replace("Torch.turnOn()", "await TorchLight.enableTorch()") # Note: turnOn() is enableTorch in some versions, but we use stable mapping
-              main_code = main_code.replace("TorchLight.turnOn()", "await TorchLight.enableTorch()")
-              main_code = main_code.replace("TorchLight.turnOff()", "await TorchLight.disableTorch()")
-              
+              main_code = main_code.replace("Torch.turnOn()", "await TorchLight.enableTorch()")
+              main_code = main_code.replace("Torch.turnOff()", "await TorchLight.disableTorch()")
               os.makedirs('lib', exist_ok=True)
               with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-          # پیکیج نیم اپ ڈیٹ
+          # مینی فیسٹ اپ ڈیٹ
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: m = f.read()
@@ -85,19 +84,19 @@ jobs:
               m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
               with open(m_path, 'w') as f: f.write(m)
 
-      - name: 🧹 گریڈل کلین (Issue 6)
+      - name: 🧹 Gradle Clean (Issue 6)
         run: |
           cd android
           ./gradlew clean
           cd ..
 
-      - name: 🏗️ بلڈ اینڈرائیڈ APK
+      - name: 🏗️ Build Release APK
         run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
 
-      - name: 📤 APK اپ لوڈ
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Master-Final
+          name: System-Pro-V4-Fixed
           path: build/app/outputs/flutter-apk/*.apk
