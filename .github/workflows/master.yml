@@ -16,39 +16,24 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Get package name and create Flutter project with it
+      - name: Create Flutter project with dynamic package name
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.default}"
-          # Extract domain (org) and project name from package
           ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
           echo "Using org=$ORG, project=$PROJ"
-          # Remove any existing android/ios folders to avoid conflicts
           rm -rf android ios
-          # Create fresh Flutter project with specified package name
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
 
-      - name: Decode and write source files from payload (overwrite main.dart and pubspec.yaml)
+      - name: Overwrite main.dart from payload (mandatory)
         run: |
-          set -e
-          echo "📦 Overwriting with payload files..."
-
-          decode_b64() {
-            local b64="$1" out="$2"
-            if [ -n "$b64" ] && [ "$b64" != "null" ]; then
-              echo "$b64" | base64 -d > "$out"
-              echo "✅ Updated $out from payload"
-              return 0
-            else
-              echo "❌ No valid base64 for $out"
-              return 1
-            fi
-          }
-
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
-          if ! decode_b64 "$MAIN_B64" lib/main.dart; then
-            echo "⚠️ No main.dart from payload, using fallback"
+          if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
+            echo "$MAIN_B64" | base64 -d > lib/main.dart
+            echo "✅ main.dart updated from payload"
+          else
+            echo "⚠️ No main.dart in payload, using fallback"
             cat > lib/main.dart <<'EOF'
           // Fallback main.dart
           import 'package:flutter/material.dart';
@@ -59,58 +44,29 @@ jobs:
           EOF
           fi
 
-          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
-          if decode_b64 "$PUBSPEC_B64" pubspec.yaml; then
-            echo "Using pubspec from payload"
-          else
-            echo "No pubspec from payload, writing clean default"
-            cat > pubspec.yaml <<'EOF'
-          name: system_pro_app
-          description: A new Flutter project.
-          version: 1.0.0+1
-          environment:
-            sdk: '>=3.4.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            cupertino_icons: ^1.0.8
-            permission_handler: ^11.3.0
-            http: ^1.2.0
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^4.0.0
-          flutter:
-            uses-material-design: true
-          EOF
-          fi
-
-      - name: Update app display name, permissions, icon, assets
+      - name: Update app label, SDK versions, permissions, icon, assets
         run: |
-          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
 
-          : "${NEW_PACKAGE:=com.systempro.default}"
           : "${APP_NAME:=System Pro App}"
           : "${MIN_SDK:=21}"
           : "${TARGET_SDK:=34}"
           : "${PROGUARD:=false}"
 
-          echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
+          echo "📱 App name: $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update app name in manifest
+          # Update app label in manifest
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
           # Update minSdk and targetSdk in build.gradle
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          # Fallback for no '=' sign
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           if [ "$PROGUARD" = "true" ]; then
