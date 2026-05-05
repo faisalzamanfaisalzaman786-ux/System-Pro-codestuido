@@ -1,22 +1,3 @@
-name: System Pro Master Engine
-
-on:
-  repository_dispatch:
-    types: [system_pro_build]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 🛠️ Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.0'
-          cache: true
-
       - name: 🧬 Intelligent Ingestion Engine
         run: |
           python3 - <<EOF
@@ -25,25 +6,37 @@ jobs:
           import base64
           import re
 
-          # ڈیٹا کو محفوظ طریقے سے انوائرمنٹ ویری ایبل سے اٹھائیں
           raw_data = r'''${{ toJson(github.event.client_payload) }}'''
           
           try:
-              # ڈیٹا لوڈنگ اور صفائی
               data = json.loads(raw_data)
-              
               app_name = data.get('build_config', {}).get('app_display_name', 'System Pro App')
               pkg_name = data.get('build_config', {}).get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
 
-              # 1. سورس کوڈ (main.dart) اپ ڈیٹ کریں
+              # 1. pubspec.yaml سے ڈپلیکیٹ ختم کرنا (نئی لاجک)
+              pubspec_path = 'pubspec.yaml'
+              if os.path.exists(pubspec_path):
+                  with open(pubspec_path, 'r') as f: lines = f.readlines()
+                  unique_lines = []
+                  seen_keys = set()
+                  for line in lines:
+                      key_match = re.match(r'^\s*([\w\-]+):', line)
+                      if key_match:
+                          key = key_match.group(1)
+                          # اگر یہ کی پہلے آ چکی ہے تو اسے دوبارہ نہیں لکھیں گے
+                          if key in ["permission_handler", "http"] and key in seen_keys:
+                              continue
+                          seen_keys.add(key)
+                      unique_lines.append(line)
+                  with open(pubspec_path, 'w') as f: f.writelines(unique_lines)
+
+              # 2. باقی تبدیلیاں وہی رہیں گی
               if main_code:
                   os.makedirs('lib', exist_ok=True)
-                  with open('lib/main.dart', 'w', encoding='utf-8') as f:
-                      f.write(main_code)
+                  with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-              # 2. مینی فیسٹ میں تبدیلیاں (نام اور پیکیج)
               manifest = 'android/app/src/main/AndroidManifest.xml'
               if os.path.exists(manifest):
                   with open(manifest, 'r') as f: content = f.read()
@@ -51,14 +44,12 @@ jobs:
                   content = content.replace('com.systempro.ultra', pkg_name)
                   with open(manifest, 'w') as f: f.write(content)
 
-              # 3. گریڈل فائل میں تبدیلی
               gradle = 'android/app/build.gradle'
               if os.path.exists(gradle):
                   with open(gradle, 'r') as f: content = f.read()
                   content = content.replace('com.systempro.ultra', pkg_name)
                   with open(gradle, 'w') as f: f.write(content)
 
-              # 4. ڈائنامک آئیکن انجن (Base64 Decoding)
               if icon_b64:
                   img_data = base64.b64decode(icon_b64)
                   res_dir = 'android/app/src/main/res/'
@@ -67,20 +58,9 @@ jobs:
                           target = os.path.join(res_dir, folder, 'ic_launcher.png')
                           with open(target, 'wb') as f: f.write(img_data)
               
-              print(f"✅ Configuration Applied for: {app_name}")
+              print(f"✅ Clean build ready for: {app_name}")
 
           except Exception as e:
               print(f"❌ Smart Engine Error: {str(e)}")
               exit(1)
           EOF
-
-      - name: 🏗️ Final Build Release
-        run: |
-          flutter pub get
-          flutter build apk --release
-
-      - name: 📤 Upload Enterprise APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Build
-          path: build/app/outputs/flutter-apk/*.apk
