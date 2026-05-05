@@ -41,10 +41,18 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
+          # Remove any existing activity
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
 
+          # Add the correct FlutterActivity (v2 embedding)
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
+          # Add the required flutterEmbedding meta-data for v2 embedding
+          if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
+            sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
+          fi
+
+          # Create MainActivity.kt
           PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
           cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
@@ -55,6 +63,7 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
 
+          # Remove old fixed package directory if different
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
