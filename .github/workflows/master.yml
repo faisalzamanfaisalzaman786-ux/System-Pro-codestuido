@@ -1,24 +1,4 @@
-name: System Pro Master Engine
-
-on:
-  repository_dispatch:
-    types: [system_pro_build]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 چیک آؤٹ
-        uses: actions/checkout@v4
-
-      - name: 🚀 فلٹر سٹیبل لاک (3.24.5)
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.24.5'
-          cache: true
-
-      - name: 🧬 اسمارٹ انجن (Code & Logic Repair)
+      - name: 🧬 الٹرا اسمارٹ اے آئی انجن (Full Fix)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -31,64 +11,69 @@ jobs:
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. کوٹلن ورژن لاک (1.9.22)
-              gradle_path = 'android/build.gradle'
-              if os.path.exists(gradle_path):
-                  with open(gradle_path, 'r') as f: content = f.read()
-                  content = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.22'", content)
-                  with open(gradle_path, 'w') as f: f.write(content)
+              # 1. ورژن لاکنگ (Kotlin & Gradle)
+              def fix_gradle():
+                  path = 'android/build.gradle'
+                  if os.path.exists(path):
+                      with open(path, 'r') as f: c = f.read()
+                      c = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.22'", c)
+                      with open(path, 'w') as f: f.write(c)
+              fix_gradle()
 
-              # 2. پب اسپیک فکس (Universal Dependencies)
+              # 2. اسمارٹ پیکج اور پرمیشن ڈیٹیکٹر
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  libs = {
-                      'torch_light': '  torch_light: ^1.1.0\n',
-                      'http': '  http: ^1.2.0\n',
-                      'permission_handler': '  permission_handler: ^11.3.0\n'
+                  
+                  # لائبریری میپنگ
+                  lib_map = {
+                      'torch': ('  torch_light: ^1.1.0\n', 'android.permission.FLASHLIGHT'),
+                      'http': ('  http: ^1.2.0\n', 'android.permission.INTERNET'),
+                      'camera': ('  camera: ^0.11.0\n', 'android.permission.CAMERA'),
+                      'permission_handler': ('  permission_handler: ^11.3.0\n', '')
                   }
-                  clean_lines = [l for l in lines if not any(k in l for k in libs.keys())]
+                  
+                  active_permissions = []
                   final_lines = []
-                  for line in clean_lines:
-                      final_lines.append(line)
-                      if line.strip() == "dependencies:":
-                          for key, value in libs.items():
-                              if key in main_code or (key == 'torch_light' and 'torch' in main_code.lower()):
-                                  final_lines.append(value)
+                  for line in lines:
+                      if "dependencies:" in line:
+                          final_lines.append(line)
+                          for key, (val, perm) in lib_map.items():
+                              if key in main_code.lower():
+                                  final_lines.append(val)
+                                  if perm: active_permissions.append(perm)
+                      elif not any(k in line for k in lib_map.keys()):
+                          final_lines.append(line)
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 3. آئیکن انجن
-              icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
-              if icon_b64:
-                  img_data = base64.b64decode(icon_b64.split(",")[1] if "," in icon_b64 else icon_b64)
+                  # 3. مینی فیسٹ میں پرمیشنز انجیکٹ کرنا
+                  manifest_path = 'android/app/src/main/AndroidManifest.xml'
+                  if os.path.exists(manifest_path):
+                      with open(manifest_path, 'r') as f: m_content = f.read()
+                      for p in set(active_permissions):
+                          if p not in m_content:
+                              m_content = m_content.replace('</manifest>', f'    <uses-permission android:name="{p}" />\n</manifest>')
+                      # پیکیج نیم اور ایپ کا نام بھی فکس کرنا
+                      m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
+                      m_content = m_content.replace('com.systempro.ultra', pkg_name)
+                      with open(manifest_path, 'w') as f: f.write(m_content)
+
+              # 4. آئیکن انجن (Payload سے آئیکن اٹھانا)
+              icon_data = data.get('assets', {}).get('app_icon_base64', '')
+              if icon_data:
+                  img = base64.b64decode(icon_data.split(",")[1] if "," in icon_data else icon_data)
                   for root, dirs, files in os.walk('android/app/src/main/res/'):
                       if any(x in root for x in ['mipmap', 'drawable']):
-                          for name in ['ic_launcher.png', 'launcher_icon.png']:
-                              with open(os.path.join(root, name), 'wb') as f: f.write(img_data)
+                          for n in ['ic_launcher.png', 'launcher_icon.png', 'ic_launcher_round.png']:
+                              with open(os.path.join(root, n), 'wb') as f: f.write(img)
 
-              # 4. ڈائنامک کوڈ ریپیئر (TorchLight Methods Fix)
+              # 5. سورس کوڈ ریپیئر
               if main_code:
-                  # پرانے امپورٹس اور فنکشنز کو نئے ورژن کے مطابق بدلنا
                   main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
-                  main_code = main_code.replace("Torch.", "TorchLight.")
-                  # نئے ورژن کے فنکشنز کے ناموں سے تبدیل کرنا
-                  main_code = main_code.replace("hasTorch", "isTorchAvailable")
-                  main_code = main_code.replace("turnOn()", "enableTorch()")
-                  main_code = main_code.replace("turnOff()", "disableTorch()")
-                  
+                  main_code = main_code.replace("Torch.", "TorchLight.").replace("hasTorch", "isTorchAvailable")
+                  main_code = main_code.replace("turnOn()", "enableTorch()").replace("turnOff()", "disableTorch()")
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
           except Exception as e:
-              print(f"❌ Smart Logic Error: {str(e)}"); exit(1)
+              print(f"❌ Smart Engine Error: {str(e)}"); exit(1)
           EOF
-
-      - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
-        run: |
-          flutter pub get
-          flutter build apk --release --no-tree-shake-icons
-
-      - name: 📤 اپ لوڈ سٹیبل APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Locked-Build
-          path: build/app/outputs/flutter-apk/*.apk
