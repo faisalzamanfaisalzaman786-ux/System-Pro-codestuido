@@ -16,36 +16,23 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Create Flutter-friendly Android project structure (declarative plugins)
+      - name: Create Android project skeleton (declarative plugins)
         run: |
           set -e
-          echo "🏗️ Creating Android project with declarative plugins..."
-
-          # Root build.gradle (minimal for declarative plugins)
+          echo "🏗️ Creating Android project..."
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.1'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          allprojects { repositories { google(); mavenCentral() } }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
-          # settings.gradle with pluginManagement for Flutter
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -56,19 +43,12 @@ jobs:
                   return flutterSdkPath
               }()
               includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
-          plugins {
-              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
-          }
+          plugins { id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false }
           include ":app"
           EOF
 
-          # Gradle wrapper
           mkdir -p android/gradle/wrapper
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -78,14 +58,12 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # gradle.properties
           cat > android/gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
-          # app/build.gradle using declarative plugins
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -97,14 +75,8 @@ jobs:
           if (localPropertiesFile.exists()) {
               localPropertiesFile.withInputStream { localProperties.load(it) }
           }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
+          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
           android {
               namespace "com.systempro.template"
               compileSdk 34
@@ -112,9 +84,7 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
+              kotlinOptions { jvmTarget = '17' }
               defaultConfig {
                   applicationId "com.systempro.template"
                   minSdk 21
@@ -122,40 +92,30 @@ jobs:
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
+              buildTypes { release { signingConfig signingConfigs.debug } }
           }
-          flutter {
-              source '../..'
-          }
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-          }
+          flutter { source '../..' }
+          dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version" }
           EOF
-          echo "✅ Android skeleton with declarative plugins created"
+          echo "✅ Android skeleton created"
 
-      - name: Decode base64 source files from payload
+      - name: Decode and write source files from payload (base64)
         run: |
           set -e
           echo "📦 Decoding base64 source files..."
           mkdir -p lib android/app/src/main
 
           decode_b64() {
-            local b64="$1"
-            local out="$2"
+            local b64="$1" out="$2"
             if [ -n "$b64" ] && [ "$b64" != "null" ]; then
               echo "$b64" | base64 -d > "$out"
               echo "✅ Created $out"
             else
-              echo "❌ Missing or null base64 for $out - using fallback"
+              echo "❌ Missing base64 for $out - using fallback"
               return 1
             fi
           }
 
-          # main.dart
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if ! decode_b64 "$MAIN_B64" lib/main.dart; then
             cat > lib/main.dart <<'EOF'
@@ -166,44 +126,28 @@ jobs:
             @override Widget build(BuildContext context) => MaterialApp(home: Scaffold(body: Center(child: Text('Error: No main.dart'))));
           }
           EOF
-            echo "⚠️ Using fallback main.dart"
           fi
 
-          # AndroidManifest.xml (simple, will be enhanced later)
           MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
           if ! decode_b64 "$MANIFEST_B64" android/app/src/main/AndroidManifest.xml; then
             cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.fallback">
-              <application android:label="Fallback App" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true"/>
+              <application android:label="Fallback App" android:icon="@mipmap/ic_launcher"/>
           </manifest>
           EOF
-            echo "⚠️ Using fallback AndroidManifest.xml"
           fi
 
-          # pubspec.yaml
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if ! decode_b64 "$PUBSPEC_B64" pubspec.yaml; then
             cat > pubspec.yaml <<'EOF'
           name: system_pro_app
-          description: Auto-generated fallback
+          description: Auto-generated
           version: 1.0.0+1
-          environment:
-            sdk: '>=3.4.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            cupertino_icons: ^1.0.8
-            permission_handler: ^11.3.0
-            http: ^1.2.0
-            shared_preferences: ^2.2.3
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^4.0.0
-          flutter:
-            uses-material-design: true
+          environment: { sdk: '>=3.4.0 <4.0.0' }
+          dependencies: { flutter: { sdk: flutter }, cupertino_icons: ^1.0.8, permission_handler: ^11.3.0, http: ^1.2.0 }
+          dev_dependencies: { flutter_test: { sdk: flutter }, flutter_lints: ^4.0.0 }
+          flutter: { uses-material-design: true }
           EOF
-            echo "⚠️ Using fallback pubspec.yaml"
           fi
 
       - name: Dynamic configuration (package, app name, SDK, activity, namespace)
@@ -222,16 +166,10 @@ jobs:
 
           echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
 
-          # Update AndroidManifest
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
 
-          # Update app/build.gradle: namespace, applicationId, minSdk, targetSdk, proguard
           sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" android/app/build.gradle
-          # Ensure namespace exists if missing
-          if ! grep -q 'namespace' android/app/build.gradle; then
-            sed -i '/android {/a \    namespace "'"${NEW_PACKAGE}"'"' android/app/build.gradle
-          fi
           sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
           sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
           sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
@@ -239,16 +177,15 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-          # Remove existing activity and add FlutterActivity
+          # Add activity and flutterEmbedding
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
-          # Add flutterEmbedding if missing
           if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
             sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
           fi
 
-          # Create MainActivity.kt
+          # MainActivity.kt
           PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
           cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
@@ -257,7 +194,7 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
 
-          # Remove old static package dir if exists and different
+          # Remove old static dir if different
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
@@ -268,7 +205,7 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! command -v jq &> /dev/null; then sudo apt-get update && sudo apt-get install -y jq; fi
           add_perm() {
-            local perm_xml="$1"; local perm_name="$2"
+            local perm_xml="$1" perm_name="$2"
             if ! grep -q "$perm_name" "$MANIFEST"; then
               sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
             fi
