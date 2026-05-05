@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: 📥 Get Code
         uses: actions/checkout@v4
 
       - name: 🚀 Setup Flutter
@@ -15,7 +15,7 @@ jobs:
           channel: stable
           flutter-version: 3.24.5
 
-      - name: 🛠️ Step 1: Initialize
+      - name: 🛠️ Step 1: Fix Android
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
@@ -31,7 +31,7 @@ jobs:
       - name: 🧬 Step 3: Inject Code
         run: |
           mkdir -p lib
-          cat <<EOF > lib/main.dart
+          cat <<'EOF' > lib/main.dart
           ${{ github.event.client_payload.source_files.main_dart }}
           EOF
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
@@ -49,14 +49,14 @@ jobs:
             sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
           fi
 
-      - name: 🏗️ Step 5: Build
+      - name: 🏗️ Step 5: Build APK
         run: |
           if [ -f "android/gradlew" ]; then chmod +x android/gradlew; fi
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload
+      - name: 📤 Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V5-5
+          name: System-Pro-Build
           path: build/app/outputs/flutter-apk/*.apk
