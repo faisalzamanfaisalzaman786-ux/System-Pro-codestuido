@@ -8,67 +8,83 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Flutter
+      - name: 🛠️ Setup Flutter Environment
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.19.0'
 
-      - name: 🧬 Smart Ingestion
+      - name: 🧬 Universal Ingestion Engine
         run: |
           python3 - <<EOF
           import json, os, re, base64
 
-          # ڈیٹا لوڈنگ
+          # 1. ڈیٹا لوڈنگ (Safe Handling)
           try:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
               
-              # 1. Pubspec.yaml کی صفائی (Duplicate Error Fix)
-              if os.path.exists('pubspec.yaml'):
-                  with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  final_lines = []
-                  seen = set()
-                  for line in lines:
-                      match = re.match(r'^\s*([\w\-]+):', line)
-                      if match:
-                          key = match.group(1)
-                          if key in ["permission_handler", "http"] and key in seen: continue
-                          seen.add(key)
-                      final_lines.append(line)
-                  with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
-
-              # 2. ڈائنامک فائل انجکشن
-              app_name = data.get('build_config', {}).get('app_display_name', 'System Pro')
-              pkg_name = data.get('build_config', {}).get('package_name', 'com.systempro.ultra')
+              config = data.get('build_config', {})
+              app_name = config.get('app_display_name', 'System Pro App')
+              pkg_name = config.get('package_name', 'com.systempro.ultra')
               
-              # Main.dart Update
-              os.makedirs('lib', exist_ok=True)
-              with open('lib/main.dart', 'w') as f:
-                  f.write(data.get('source_files', {}).get('main_dart', ''))
+              # 2. آئیکن انجن (Icon Fix)
+              icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
+              if icon_b64:
+                  # اگر Base64 میں ہیڈر (data:image/png;base64,) شامل ہو تو اسے ہٹانا
+                  if "," in icon_b64:
+                      icon_b64 = icon_b64.split(",")[1]
+                  
+                  img_data = base64.b64decode(icon_b64)
+                  res_dir = 'android/app/src/main/res/'
+                  # تمام میپ میپ فولڈرز (hdpi, xhdpi وغیرہ) میں آئیکن ڈالنا
+                  for folder in os.listdir(res_dir):
+                      if 'mipmap' in folder:
+                          target_path = os.path.join(res_dir, folder, 'ic_launcher.png')
+                          with open(target_path, 'wb') as f:
+                              f.write(img_data)
+                  print("✅ App Icon Successfully Updated")
 
-              # Manifest Update
-              m_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(m_path):
-                  with open(m_path, 'r') as f: c = f.read()
-                  c = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', c)
-                  c = c.replace('com.systempro.ultra', pkg_name)
-                  with open(m_path, 'w') as f: f.write(c)
+              # 3. پیکیج نیم اور لیبل (Global Search & Replace)
+              def replace_in_file(file_path, old, new):
+                  if os.path.exists(file_path):
+                      with open(file_path, 'r') as f: content = f.read()
+                      content = content.replace(old, new)
+                      with open(file_path, 'w') as f: f.write(content)
+
+              # مینی فیسٹ میں نام اور پیکیج بدلنا
+              manifest_path = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(manifest_path):
+                  with open(manifest_path, 'r') as f: m_content = f.read()
+                  m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
+                  m_content = m_content.replace('com.systempro.ultra', pkg_name)
+                  with open(manifest_path, 'w') as f: f.write(m_content)
+
+              # تمام Gradle فائلوں میں پیکیج نیم بدلنا
+              replace_in_file('android/app/build.gradle', 'com.systempro.ultra', pkg_name)
               
-              print("✅ Configuration Applied Successfully")
+              # 4. سورس کوڈ (main.dart)
+              main_code = data.get('source_files', {}).get('main_dart', '')
+              if main_code:
+                  os.makedirs('lib', exist_ok=True)
+                  with open('lib/main.dart', 'w', encoding='utf-8') as f:
+                      f.write(main_code)
+
+              print(f"🚀 Success: Engine Configured for {app_name}")
           except Exception as e:
-              print(f"❌ Error: {e}")
+              print(f"❌ Error: {str(e)}")
               exit(1)
           EOF
 
-      - name: 🏗️ Build APK
+      - name: 🏗️ Build Optimized APK
         run: |
           flutter pub get
-          flutter build apk --release
+          # سائز کم کرنے کے لیے --split-per-abi استعمال کر سکتے ہیں
+          flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload
+      - name: 📤 Upload Production APK
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-Release
