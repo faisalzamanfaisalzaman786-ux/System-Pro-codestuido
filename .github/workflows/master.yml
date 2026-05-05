@@ -1,4 +1,23 @@
-      - name: 🧬 Dynamic Ingestion Engine
+name: System Pro Master Engine
+
+on:
+  repository_dispatch:
+    types: [system_pro_build]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          cache: true
+
+      - name: 🧬 Intelligent Ingestion Engine
         run: |
           python3 - <<EOF
           import json
@@ -6,45 +25,40 @@
           import base64
           import re
 
-          # ڈیٹا کو محفوظ طریقے سے لوڈ کرنے کے لیے انوائرمنٹ ویری ایبل کا استعمال
-          raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
+          # ڈیٹا کو محفوظ طریقے سے انوائرمنٹ ویری ایبل سے اٹھائیں
+          raw_data = r'''${{ toJson(github.event.client_payload) }}'''
           
           try:
-              # پے لوڈ کو ڈکشنری میں تبدیل کریں
-              payload = json.loads(raw_payload)
+              # ڈیٹا لوڈنگ اور صفائی
+              data = json.loads(raw_data)
               
-              config = payload.get('build_config', {})
-              app_name = config.get('app_display_name', 'System Pro App')
-              pkg_name = config.get('package_name', 'com.systempro.ultra')
-              
-              source = payload.get('source_files', {})
-              main_dart = source.get('main_dart', '')
-              
-              assets = payload.get('assets', {})
-              icon_b64 = assets.get('app_icon_base64', None)
+              app_name = data.get('build_config', {}).get('app_display_name', 'System Pro App')
+              pkg_name = data.get('build_config', {}).get('package_name', 'com.systempro.ultra')
+              main_code = data.get('source_files', {}).get('main_dart', '')
+              icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
 
-              # 1. lib/main.dart اپ ڈیٹ کرنا
-              if main_dart:
+              # 1. سورس کوڈ (main.dart) اپ ڈیٹ کریں
+              if main_code:
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f:
-                      f.write(main_dart)
+                      f.write(main_code)
 
-              # 2. مینی فیسٹ میں تبدیلیاں (Label and Package)
-              m_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(m_path):
-                  with open(m_path, 'r') as f: content = f.read()
+              # 2. مینی فیسٹ میں تبدیلیاں (نام اور پیکیج)
+              manifest = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(manifest):
+                  with open(manifest, 'r') as f: content = f.read()
                   content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', content)
                   content = content.replace('com.systempro.ultra', pkg_name)
-                  with open(m_path, 'w') as f: f.write(content)
+                  with open(manifest, 'w') as f: f.write(content)
 
-              # 3. گریڈل میں پیکیج نیم کی تبدیلی
-              g_path = 'android/app/build.gradle'
-              if os.path.exists(g_path):
-                  with open(g_path, 'r') as f: content = f.read()
+              # 3. گریڈل فائل میں تبدیلی
+              gradle = 'android/app/build.gradle'
+              if os.path.exists(gradle):
+                  with open(gradle, 'r') as f: content = f.read()
                   content = content.replace('com.systempro.ultra', pkg_name)
-                  with open(g_path, 'w') as f: f.write(content)
+                  with open(gradle, 'w') as f: f.write(content)
 
-              # 4. ڈائنامک آئیکن انجن
+              # 4. ڈائنامک آئیکن انجن (Base64 Decoding)
               if icon_b64:
                   img_data = base64.b64decode(icon_b64)
                   res_dir = 'android/app/src/main/res/'
@@ -53,9 +67,20 @@
                           target = os.path.join(res_dir, folder, 'ic_launcher.png')
                           with open(target, 'wb') as f: f.write(img_data)
               
-              print(f"✅ Configuration Complete for {app_name}")
+              print(f"✅ Configuration Applied for: {app_name}")
 
           except Exception as e:
               print(f"❌ Smart Engine Error: {str(e)}")
               exit(1)
           EOF
+
+      - name: 🏗️ Final Build Release
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: 📤 Upload Enterprise APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Build
+          path: build/app/outputs/flutter-apk/*.apk
