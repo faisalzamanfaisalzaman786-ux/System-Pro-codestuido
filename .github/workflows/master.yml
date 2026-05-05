@@ -2,17 +2,20 @@ name: System Pro Master Engine
 on:
   repository_dispatch:
     types: [system_pro_build]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Get Code
         uses: actions/checkout@v4
+
       - name: 🚀 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.24.5
+
       - name: 🛠️ Step 1: Initialize
         run: |
           if [ ! -f "pubspec.yaml" ]; then
@@ -20,10 +23,12 @@ jobs:
           elif [ ! -d "android" ]; then
             flutter create --platforms=android --no-overwrite .
           fi
+
       - name: 🧬 Step 2: Fix Packages
         run: |
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d; /torch:/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
+
       - name: 🧬 Step 3: Inject Code
         run: |
           mkdir -p lib
@@ -34,6 +39,7 @@ jobs:
           sed -i "s/Torch.hasTorch/await TorchLight.hasTorch/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
+
       - name: 🏗️ Step 4: System Fixes
         run: |
           if [ -f "android/settings.gradle" ]; then
@@ -43,11 +49,13 @@ jobs:
             sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
             sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
           fi
+
       - name: 🏗️ Step 5: Build APK
         run: |
           if [ -f "android/gradlew" ]; then chmod +x android/gradlew; fi
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
+
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
