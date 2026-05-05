@@ -14,54 +14,54 @@ jobs:
           channel: stable
           flutter-version: 3.24.5
 
-      - name: Initialize & Setup
+      - name: 🛠️ Initialize & Clean
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
           fi
+          # پرانی تمام کنفیگریشنز صاف کرنا تاکہ کلین بلڈ ہو
+          rm -rf android/app/build.gradle android/settings.gradle
 
-      - name: Inject Dependencies
+      - name: 🧬 Step 1: Force Inject Correct Config
+        run: |
+          # نئی settings.gradle بنانا (Kotlin 1.9.22 کے ساتھ)
+          cat <<EOF > android/settings.gradle
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          plugins {
+              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
+              id "com.android.application" version "8.2.1" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          }
+          include ":app"
+          EOF
+
+      - name: 🧬 Step 2: Inject Dependencies
         run: |
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d; /torch:/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
-      - name: Fix Dart Syntax (Anti-Double Await)
+      - name: 🧬 Step 3: Fixed Code Injection (Clean Dart)
         run: |
           mkdir -p lib
           printf '%s\n' "${{ github.event.client_payload.source_files.main_dart }}" > lib/main.dart
-          # ٹارچ لائٹ کے صحیح فنکشنز اور ڈبل اویٹ کا خاتمہ
+          # کوڈ میں موجود غلطیوں کی صفائی
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/await await/await/g" lib/main.dart
-          sed -i "s/Torch.hasTorch/await TorchLight.isTorchAvailable/g" lib/main.dart
+          sed -i "s/Torch.hasTorch/await TorchLight.isTorchAvailable()/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
+          # اگر کہیں غلطی سے double await رہ گیا ہو تو اسے دوبارہ صاف کریں
+          sed -i "s/await await/await/g" lib/main.dart
 
-      - name: Kotlin & Gradle Precision Fix
+      - name: 🏗️ Step 4: Final Build
         run: |
-          # 1. Settings.gradle میں کوٹلن ورژن فورس کرنا
-          if [ -f "android/settings.gradle" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
-          fi
-          
-          # 2. Build.gradle میں نل ویلیو اور کوٹلن ورژن کا علاج
-          if [ -f "android/app/build.gradle" ]; then
-            # minSdkVersion اور دیگر کو ہارڈ کوڈ کرنا تاکہ 'Value is null' نہ آئے
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle
-            sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle
-            # جاوا 17 کی مطابقت
-            sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
-            sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
-          fi
-
-      - name: Execute Build
-        run: |
-          if [ -f "android/gradlew" ]; then chmod +x android/gradlew; fi
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload APK
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V6-3-Fixed
+          name: System-Pro-V6-4
           path: build/app/outputs/flutter-apk/*.apk
