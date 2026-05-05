@@ -1,27 +1,153 @@
 name: System Pro Builder
 
 on:
-  workflow_dispatch:
+  repository_dispatch:
+    types: [system_pro_build]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Create source files from payload
+        run: |
+          # lib/main.dart
+          mkdir -p lib
+          echo '${{ github.event.client_payload.source_files.main_dart }}' | sed 's/\\n/\n/g' > lib/main.dart
+          
+          # AndroidManifest.xml
+          mkdir -p android/app/src/main
+          echo '${{ github.event.client_payload.source_files.android_manifest }}' | sed 's/\\n/\n/g' > android/app/src/main/AndroidManifest.xml
+          
+          # build.gradle
+          echo '${{ github.event.client_payload.source_files.build_gradle }}' | sed 's/\\n/\n/g' > android/app/build.gradle
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Apply dynamic configuration
+        run: |
+          PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
+          APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
+          MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
+          TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
+          PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
+
+          # Update AndroidManifest.xml
+          sed -i "s/package=\".*\"/package=\"${PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
+          sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
+
+          # Update build.gradle
+          sed -i "s/applicationId \".*\"/applicationId \"${PACKAGE}\"/" android/app/build.gradle
+          sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
+          sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
+          if [ "$PROGUARD" = "true" ]; then
+            sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
+          fi
+
+      - name: Add permissions
+        run: |
+          PERMS='${{ toJson(github.event.client_payload.permissions) }}'
+          # Extract true permissions
+          echo "$PERMS" | jq -r 'to_entries[] | select(.value==true) | .key' > perms.txt
+          while read perm; do
+            case $perm in
+              storage)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              camera)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              bluetooth)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              microphone)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              contacts)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.READ_CONTACTS" />\n    <uses-permission android:name="android.permission.WRITE_CONTACTS" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              notif)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              foreground)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              sms)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.SEND_SMS" />\n    <uses-permission android:name="android.permission.READ_SMS" />' android/app/src/main/AndroidManifest.xml
+                ;;
+              vibrate)
+                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.VIBRATE" />' android/app/src/main/AndroidManifest.xml
+                ;;
+            esac
+          done < perms.txt
+          # Location granularity
+          LOC=$(echo "$PERMS" | jq -r '.location_granularity // ""')
+          if [ "$LOC" = "fine" ]; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          elif [ "$LOC" = "coarse" ]; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          fi
+
+      - name: Set app icon
+        run: |
+          ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
+          if [ -n "$ICON_B64" ]; then
+            mkdir -p android/app/src/main/res/mipmap-hdpi
+            echo "$ICON_B64" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            # Copy to other densities (simplified)
+            for density in mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$density
+              cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/
+            done
+          fi
+
+      - name: Place additional assets
+        run: |
+          ASSETS='${{ toJson(github.event.client_payload.assets.additional_assets) }}'
+          echo "$ASSETS" | jq -c '.[]' 2>/dev/null | while read asset; do
+            NAME=$(echo "$asset" | jq -r '.name')
+            B64=$(echo "$asset" | jq -r '.base64')
+            mkdir -p assets
+            echo "$B64" | base64 -d > "assets/$NAME"
+          done
+
+      - name: Create default pubspec.yaml if missing
+        run: |
+          if [ ! -f pubspec.yaml ]; then
+            cat << 'EOF' > pubspec.yaml
+            name: system_pro_app
+            description: Auto-generated by System Pro
+            version: 1.0.0+1
+            environment:
+              sdk: '>=3.4.0 <4.0.0'
+            dependencies:
+              flutter:
+                sdk: flutter
+              permission_handler: ^11.3.0
+              http: ^1.2.0
+            dev_dependencies:
+              flutter_test:
+                sdk: flutter
+              flutter_lints: ^4.0.0
+            flutter:
+              uses-material-design: true
+            EOF
+          fi
+
+      - name: Install dependencies and build
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build
+          name: SystemPro-Build-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
