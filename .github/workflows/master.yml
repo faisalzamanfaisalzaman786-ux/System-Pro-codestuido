@@ -14,7 +14,7 @@ jobs:
           channel: stable
           flutter-version: 3.24.5
 
-      - name: Initialize
+      - name: Initialize Project
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
@@ -22,7 +22,7 @@ jobs:
             flutter create --platforms=android --no-overwrite .
           fi
 
-      - name: Fix Packages
+      - name: Fix Dependencies
         run: |
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d; /torch:/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
@@ -31,22 +31,26 @@ jobs:
         run: |
           mkdir -p lib
           printf '%s\n' "${{ github.event.client_payload.source_files.main_dart }}" > lib/main.dart
-          # ڈبل اویٹ اور غلط فنکشنز کو ایک ہی بار میں درست کرنا
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/await await/await/g" lib/main.dart
           sed -i "s/TorchLight.hasTorch/TorchLight.isTorchAvailable/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
 
-      - name: System Fixes
+      - name: Force Fix Android Config
         run: |
-          # کوٹلن ورژن کو 1.9.22 پر فورس کرنا تاکہ ان کمپیٹیبلٹی ختم ہو جائے
+          # کوٹلن اور جاوا ورژن کو جڑ سے ٹھیک کرنا
           if [ -f "android/settings.gradle" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
+            echo 'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' > android/settings.gradle
+            echo 'plugins { id "com.android.application" version "8.2.1" apply false; id "org.jetbrains.kotlin.android" version "1.9.22" apply false; id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false }' >> android/settings.gradle
+            echo 'include ":app"' >> android/settings.gradle
           fi
+          
+          # build.gradle کی نل ویلیو (Null Value) ختم کرنے کے لیے سیف سیٹنگز
           if [ -f "android/app/build.gradle" ]; then
+            sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 34/g' android/app/build.gradle
+            sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 34/g' android/app/build.gradle
             sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
-            sed -i "s/targetSdkVersion [0-9]*/targetSdkVersion 34/g" android/app/build.gradle
             sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
           fi
 
@@ -59,5 +63,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V5-8
+          name: System-Pro-V6-0
           path: build/app/outputs/flutter-apk/*.apk
