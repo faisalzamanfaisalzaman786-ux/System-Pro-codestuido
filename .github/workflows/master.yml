@@ -19,11 +19,39 @@ jobs:
       - name: Create source files from payload
         run: |
           mkdir -p lib android/app/src/main
+          # main.dart
           echo '${{ github.event.client_payload.source_files.main_dart }}' | sed 's/\\n/\n/g' > lib/main.dart
+          # AndroidManifest.xml
           echo '${{ github.event.client_payload.source_files.android_manifest }}' | sed 's/\\n/\n/g' > android/app/src/main/AndroidManifest.xml
+          # build.gradle
           echo '${{ github.event.client_payload.source_files.build_gradle }}' | sed 's/\\n/\n/g' > android/app/build.gradle
+          # pubspec.yaml
+          if [ -n "${{ github.event.client_payload.source_files.pubspec }}" ]; then
+            echo '${{ github.event.client_payload.source_files.pubspec }}' | sed 's/\\n/\n/g' > pubspec.yaml
+          else
+            # Default fallback pubspec (minimal)
+            cat > pubspec.yaml <<EOF
+          name: system_pro_app
+          description: Auto-generated
+          version: 1.0.0+1
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+            cupertino_icons: ^1.0.8
+            permission_handler: ^11.3.0
+            http: ^1.2.0
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^4.0.0
+          flutter:
+            uses-material-design: true
+          EOF
+          fi
 
-      - name: Dynamic package name replacement across all files
+      - name: Dynamic package and app configuration
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -31,9 +59,11 @@ jobs:
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
 
+          # AndroidManifest.xml
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
 
+          # build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
           sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
           sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
@@ -41,18 +71,18 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-          # Remove any existing activity
+          # Remove existing activity to avoid duplicates
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
 
-          # Add the correct FlutterActivity (v2 embedding)
+          # Add FlutterActivity (v2)
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
-          # Add the required flutterEmbedding meta-data for v2 embedding
+          # Add flutterEmbedding meta-data if missing
           if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
             sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
           fi
 
-          # Create MainActivity.kt
+          # Create MainActivity.kt with correct package path
           PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
           cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
@@ -63,7 +93,7 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
 
-          # Remove old fixed package directory if different
+          # Remove possible old static package directory if different
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
@@ -81,11 +111,7 @@ jobs:
             local perm_xml="$1"
             local perm_name="$2"
             if ! grep -q "$perm_name" "$MANIFEST"; then
-              if grep -q "<manifest" "$MANIFEST"; then
-                sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
-              else
-                sed -i "1a $perm_xml" "$MANIFEST"
-              fi
+              sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
             fi
           }
 
@@ -94,9 +120,7 @@ jobs:
             exit 0
           fi
 
-          echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' > perms.txt
-
-          while read perm; do
+          echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
             case $perm in
               storage)
                 add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
@@ -123,7 +147,7 @@ jobs:
               vibrate)
                 add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
             esac
-          done < perms.txt
+          done
 
           LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
           if [ "$LOC" = "fine" ]; then
@@ -153,29 +177,6 @@ jobs:
             mkdir -p assets
             echo "$B64" | base64 -d > "assets/$NAME"
           done
-
-      - name: Override pubspec.yaml with clean version
-        run: |
-          cat > pubspec.yaml <<'EOF'
-          name: system_pro_app
-          description: Auto-generated by System Pro
-          version: 1.0.0+1
-          environment:
-            sdk: '>=3.4.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            cupertino_icons: ^1.0.8
-            permission_handler: ^11.3.0
-            http: ^1.2.0
-            shared_preferences: ^2.2.3
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^4.0.0
-          flutter:
-            uses-material-design: true
-          EOF
 
       - name: Build APK
         run: |
