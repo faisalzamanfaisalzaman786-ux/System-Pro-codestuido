@@ -1,18 +1,17 @@
-name: System Pro Builder
+name: System Pro Universal Builder
 
 on:
   repository_dispatch:
     types: [system_pro_build]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.24.5
           channel: stable
@@ -24,104 +23,85 @@ jobs:
           echo '${{ github.event.client_payload.source_files.android_manifest }}' | sed 's/\\n/\n/g' > android/app/src/main/AndroidManifest.xml
           echo '${{ github.event.client_payload.source_files.build_gradle }}' | sed 's/\\n/\n/g' > android/app/build.gradle
 
-      - name: Apply dynamic configuration and clean manifest
+      - name: Dynamic package name replacement across all files
         run: |
-          PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
+          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
 
-          # پیکیج نیم اور لیبل تبدیل کریں
-          sed -i "s/package=\".*\"/package=\"${PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
+          # 1. AndroidManifest.xml : package attribute and label
+          sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
-          sed -i "s/applicationId \".*\"/applicationId \"${PACKAGE}\"/" android/app/build.gradle
+
+          # 2. build.gradle : applicationId, minSdk, targetSdk, proguard
+          sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
           sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
           sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
           if [ "$PROGUARD" = "true" ]; then
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-          # مینیفیسٹ میں کوئی بھی موجودہ ایکٹیویٹی ہٹائیں (ڈپلیکیٹ سے بچنے کے لیے)
+          # 3. Remove any existing activity (to avoid duplicates)
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
 
-          # اب صحیح ایکٹیویٹی شامل کریں (FlutterActivity v2)
+          # 4. Add correct FlutterActivity (v2 embedding)
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
-          # MainActivity.kt بنائیں (v2 embedding)
-          PKG_PATH=$(echo "$PACKAGE" | tr '.' '/')
+          # 5. Create MainActivity.kt with correct package path
+          PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
           cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
-          package ${PACKAGE}
+          package ${NEW_PACKAGE}
 
           import io.flutter.embedding.android.FlutterActivity
 
           class MainActivity : FlutterActivity()
           EOF
 
-      - name: Add missing permissions (avoid duplicates)
+          # 6. Remove any old kotlin directories that might conflict (optional, keep base template)
+          # We only keep the newly created one; delete old fixed package if exists and different
+          if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
+            rm -rf "android/app/src/main/kotlin/com/systempro/template"
+          fi
+
+      - name: Add permissions (no duplicates)
         run: |
           PERMS='${{ toJson(github.event.client_payload.permissions) }}'
-          # صرف وہ پرمیشنز لیں جو true ہیں
-          echo "$PERMS" | jq -r 'to_entries[] | select(.value==true) | .key' > perms.txt
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          add_if_missing() {
-            local perm_line=$1
+          
+          add_perm() {
+            local perm_xml=$1
             local perm_name=$2
             if ! grep -q "$perm_name" "$MANIFEST"; then
-              sed -i "/<manifest/a \    $perm_line" "$MANIFEST"
-              echo "Added $perm_name"
-            else
-              echo "Skipped duplicate $perm_name"
+              sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
             fi
           }
 
-          while read perm; do
+          echo "$PERMS" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
             case $perm in
-              storage)
-                add_if_missing '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
-                add_if_missing '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
-                ;;
-              camera)
-                add_if_missing '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
-                ;;
-              bluetooth)
-                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
-                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
-                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
-                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
-                ;;
-              microphone)
-                add_if_missing '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
-                ;;
-              contacts)
-                add_if_missing '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
-                add_if_missing '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
-                ;;
-              notif)
-                add_if_missing '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
-                ;;
-              foreground)
-                add_if_missing '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
-                ;;
-              sms)
-                add_if_missing '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
-                add_if_missing '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
-                ;;
-              vibrate)
-                add_if_missing '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
-                ;;
+              storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
+                        add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
+              camera)   add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
+              bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
+                         add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
+                         add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
+                         add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
+              microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
+              contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
+                         add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
+              notif)    add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+              foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
+              sms)      add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
+                        add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
+              vibrate)  add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
             esac
-          done < perms.txt
-
-          # لوکیشن گرینولیرٹی
+          done
+          
           LOC=$(echo "$PERMS" | jq -r '.location_granularity // ""')
-          if [ "$LOC" = "fine" ] && ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "$MANIFEST"
-          elif [ "$LOC" = "coarse" ] && ! grep -q "ACCESS_COARSE_LOCATION" "$MANIFEST"; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
-          fi
+          [ "$LOC" = "fine" ] && add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
+          [ "$LOC" = "coarse" ] && add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
 
       - name: Set app icon
         run: |
@@ -135,7 +115,7 @@ jobs:
             done
           fi
 
-      - name: Place additional assets
+      - name: Additional assets
         run: |
           ASSETS='${{ toJson(github.event.client_payload.assets.additional_assets) }}'
           echo "$ASSETS" | jq -c '.[]' 2>/dev/null | while read asset; do
@@ -145,10 +125,10 @@ jobs:
             echo "$B64" | base64 -d > "assets/$NAME"
           done
 
-      - name: Create default pubspec.yaml if missing
+      - name: Ensure pubspec.yaml
         run: |
           if [ ! -f pubspec.yaml ]; then
-            cat > pubspec.yaml <<EOF
+            cat > pubspec.yaml <<'EOF'
           name: system_pro_app
           description: Auto-generated by System Pro
           version: 1.0.0+1
@@ -168,7 +148,7 @@ jobs:
           EOF
           fi
 
-      - name: Install dependencies and build
+      - name: Build APK
         run: |
           flutter clean
           flutter pub get
