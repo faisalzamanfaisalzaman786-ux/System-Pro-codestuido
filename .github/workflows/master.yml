@@ -18,9 +18,7 @@ jobs:
 
       - name: Create Flutter project with dynamic package name
         run: |
-          # پہلے pubspec.yaml کو حذف کریں تاکہ پرانی خراب dependency ختم ہو
           rm -f pubspec.yaml
-          
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.default}"
           ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
@@ -28,8 +26,25 @@ jobs:
           echo "Using org=$ORG, project=$PROJ"
           rm -rf android ios
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
+          echo "✅ Flutter project created"
 
-      - name: Overwrite main.dart from payload
+      - name: Override pubspec.yaml from UI payload (if valid)
+        run: |
+          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
+            if grep -q "^name:" pubspec.yaml.new && grep -q "^dependencies:" pubspec.yaml.new; then
+              mv pubspec.yaml.new pubspec.yaml
+              echo "✅ Using pubspec.yaml from UI payload"
+            else
+              echo "⚠️ UI pubspec invalid, keeping default"
+              rm -f pubspec.yaml.new
+            fi
+          else
+            echo "ℹ️ No pubspec in payload, using default"
+          fi
+
+      - name: Overwrite main.dart from UI payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
@@ -42,7 +57,10 @@ jobs:
           import 'package:flutter/material.dart';
           void main() => runApp(MyApp());
           class MyApp extends StatelessWidget {
-            @override Widget build(BuildContext context) => MaterialApp(home: Scaffold(body: Center(child: Text('Hello from System Pro'))));
+            @override Widget build(BuildContext context) => MaterialApp(
+              title: 'System Pro',
+              home: Scaffold(body: Center(child: Text('Hello from System Pro'))),
+            );
           }
           EOF
           fi
@@ -64,8 +82,10 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
+          # Update app label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
+          # Update minSdk and targetSdk in build.gradle
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
@@ -74,31 +94,74 @@ jobs:
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
+          # --- Permissions with duplicate filtering ---
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
-          if ! command -v jq &> /dev/null; then sudo apt-get update && sudo apt-get install -y jq; fi
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+
+          # Helper function: add permission only if not already present
           add_perm() {
-            local perm_xml="$1" perm_name="$2"
+            local perm_xml="$1"
+            local perm_name="$2"
             if ! grep -q "$perm_name" "$MANIFEST"; then
               sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
+              echo "  + Added $perm_name"
+            else
+              echo "  - Already present: $perm_name"
             fi
           }
+
           if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
-            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
+            echo "🔐 Processing permissions from payload..."
+            # Extract only true permissions
+            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' > perms_list.txt
+            
+            while read perm; do
               case $perm in
-                storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"; add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
-                camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
-                bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
-                microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
-                contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"; add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
-                notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
-                foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
-                sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"; add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
-                vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
+                storage)
+                  add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
+                  add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
+                  ;;
+                camera)
+                  add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
+                  ;;
+                bluetooth)
+                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
+                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
+                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
+                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
+                  ;;
+                microphone)
+                  add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
+                  ;;
+                contacts)
+                  add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
+                  add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
+                  ;;
+                notif)
+                  add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
+                  ;;
+                foreground)
+                  add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
+                  ;;
+                sms)
+                  add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
+                  add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
+                  ;;
+                vibrate)
+                  add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
+                  ;;
               esac
-            done
+            done < perms_list.txt
+            
+            # Location granularity
             LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
-            if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
-            elif [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"; fi
+            if [ "$LOC" = "fine" ]; then
+              add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
+            elif [ "$LOC" = "coarse" ]; then
+              add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
+            fi
           else
             echo "ℹ️ No permissions payload"
           fi
@@ -114,7 +177,9 @@ jobs:
               cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/
             done
             echo "✅ App icon set"
-          else echo "ℹ️ No icon provided"; fi
+          else
+            echo "ℹ️ No icon provided"
+          fi
 
       - name: Additional assets
         run: |
@@ -127,7 +192,9 @@ jobs:
               echo "$B64" | base64 -d > "assets/$NAME"
             done
             echo "✅ Additional assets added"
-          else echo "ℹ️ No additional assets"; fi
+          else
+            echo "ℹ️ No additional assets"
+          fi
 
       - name: Build APK
         run: |
