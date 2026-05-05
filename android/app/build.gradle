@@ -6,7 +6,7 @@ if (localPropertiesFile.exists()) {
 
 def flutterRoot = localProperties.getProperty('flutter.sdk')
 if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+    throw new GradleException("Flutter SDK not found.")
 }
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -25,7 +25,7 @@ apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     compileSdk 34
-    ndkVersion "26.1.10909125"  // مستحکم ورژن
+    ndkVersion "26.1.10909125"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.systempro.template"  // آپ اسے بدل سکتے ہیں ہر ایپ میں
+        applicationId "com.systempro.template"  // dynamic
         minSdk 21
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
@@ -51,9 +51,13 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug   // پروڈکشن کے لیے اپنی کلید رکھیں
+            signingConfig signingConfigs.debug
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
         }
     }
 }
@@ -65,5 +69,8 @@ flutter {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     implementation 'androidx.multidex:multidex:2.0.1'
-    // یہاں دیگر libraries ڈالی جا سکتی ہیں (جیسے Firebase, Camera, وغیرہ)
+    implementation 'androidx.core:core-ktx:1.12.0'
+    
+    // Firebase BoM (optional, but good)
+    implementation platform('com.google.firebase:firebase-bom:33.1.0')
 }
