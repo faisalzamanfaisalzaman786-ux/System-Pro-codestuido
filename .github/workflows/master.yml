@@ -11,13 +11,13 @@ jobs:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 اسمارٹ فلٹر سیٹ اپ
+      - name: 🚀 اسمارٹ فلٹر (No-Download Mode)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: true # یہ فلٹر کو بار بار ڈاؤن لوڈ ہونے سے روکے گا
+          cache: true
 
-      - name: 🧬 اے آئی اسمارٹ انجکشن (Auto-Fixer)
+      - name: 🧬 اے آئی آٹو ریپیئر انجن
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -31,25 +31,33 @@ jobs:
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. پب اسپیک میں آٹو فکسنگ
+              # 1. پب اسپیک فکس (Correct Versions)
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  needed_libs = {
-                      'torch': '  torch: ^1.0.0\n',
+                  
+                  # لائبریریز کے درست ورژن جو پب ڈیو پر موجود ہیں
+                  libs = {
+                      'torch_light': '  torch_light: ^1.0.1\n', # torch کی جگہ torch_light زیادہ بہتر ہے
                       'http': '  http: ^1.2.0\n',
                       'permission_handler': '  permission_handler: ^11.3.0\n'
                   }
-                  clean_lines = [l for l in lines if not any(k in l for k in needed_libs.keys())]
+                  
+                  clean_lines = [l for l in lines if not any(k.split('_')[0] in l for k in libs.keys())]
+                  
                   final_lines = []
                   for line in clean_lines:
                       final_lines.append(line)
                       if line.strip() == "dependencies:":
-                          for key, value in needed_libs.items():
-                              if key in main_code:
+                          for key, value in libs.items():
+                              # اگر کوڈ میں torch یا torch_light کا ذکر ہے
+                              if "torch" in main_code.lower() and "torch" in key:
                                   final_lines.append(value)
+                              elif key in main_code and key != 'torch_light':
+                                  final_lines.append(value)
+                  
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 2. آئیکن انجن (Force Injection)
+              # 2. آئیکن انجن (Deep Injection)
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
                   if "," in icon_b64: icon_b64 = icon_b64.split(",")[1]
@@ -57,39 +65,38 @@ jobs:
                   res_dir = 'android/app/src/main/res/'
                   for root, dirs, files in os.walk(res_dir):
                       if any(x in root for x in ['mipmap', 'drawable']):
-                          for name in ['ic_launcher.png', 'launcher_icon.png', 'ic_launcher_round.png']:
+                          for name in ['ic_launcher.png', 'launcher_icon.png']:
                               with open(os.path.join(root, name), 'wb') as f: f.write(img_data)
 
-              # 3. پیکیج نیم اور لیبل فکس
-              manifest = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(manifest):
-                  with open(manifest, 'r') as f: c = f.read()
-                  c = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', c)
-                  c = c.replace('com.systempro.ultra', pkg_name)
-                  with open(manifest, 'w') as f: f.write(c)
+              # 3. برانڈنگ
+              def fix_file(path, old, new):
+                  if os.path.exists(path):
+                      with open(path, 'r') as f: c = f.read()
+                      with open(path, 'w') as f: f.write(c.replace(old, new))
 
-              gradle = 'android/app/build.gradle'
-              if os.path.exists(gradle):
-                  with open(gradle, 'r') as f: c = f.read()
-                  c = c.replace('com.systempro.ultra', pkg_name)
-                  with open(gradle, 'w') as f: f.write(c)
+              fix_file('android/app/src/main/AndroidManifest.xml', 'com.systempro.ultra', pkg_name)
+              fix_file('android/app/build.gradle', 'com.systempro.ultra', pkg_name)
 
-              # 4. کوڈ انجکشن
+              # 4. کوڈ انجکشن (Auto-fixing imports)
               if main_code:
+                  # اگر پرانا torch امپورٹ ہے تو اسے نئے سے بدلنا تاکہ ایرر نہ آئے
+                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
+                  main_code = main_code.replace("Torch.", "TorchLight.")
+                  
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
           except Exception as e:
-              print(f"❌ Smart Logic Error: {str(e)}"); exit(1)
+              print(f"❌ Error: {str(e)}"); exit(1)
           EOF
 
-      - name: 🏗️ بلڈ APK
+      - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
         run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 آرٹفیکٹ اپ لوڈ
+      - name: 📤 ڈاؤن لوڈ لنک جنریٹر
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-AI-Build
+          name: System-Pro-Release
           path: build/app/outputs/flutter-apk/*.apk
