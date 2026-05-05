@@ -37,17 +37,15 @@ jobs:
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
 
-      - name: Force Fix Android Config
+      - name: Smart Android Fix
         run: |
-          # کوٹلن اور جاوا ورژن کو جڑ سے ٹھیک کرنا
+          # کوٹلن ورژن کو سیف طریقے سے بدلنا بغیر فائل مٹائے
           if [ -f "android/settings.gradle" ]; then
-            echo 'pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }' > android/settings.gradle
-            echo 'plugins { id "com.android.application" version "8.2.1" apply false; id "org.jetbrains.kotlin.android" version "1.9.22" apply false; id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false }' >> android/settings.gradle
-            echo 'include ":app"' >> android/settings.gradle
+            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
           fi
           
-          # build.gradle کی نل ویلیو (Null Value) ختم کرنے کے لیے سیف سیٹنگز
           if [ -f "android/app/build.gradle" ]; then
+            # نل ویلیو (Null Value) سے بچنے کے لیے براہ راست ویلیوز سیٹ کرنا
             sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 34/g' android/app/build.gradle
             sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 34/g' android/app/build.gradle
             sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
@@ -63,5 +61,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V6-0
+          name: System-Pro-V6-1
           path: build/app/outputs/flutter-apk/*.apk
