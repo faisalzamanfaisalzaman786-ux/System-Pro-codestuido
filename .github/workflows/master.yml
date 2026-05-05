@@ -1,9 +1,7 @@
 name: System Pro Master Engine
-
 on:
   repository_dispatch:
     types: [system_pro_build]
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,7 +15,7 @@ jobs:
           channel: stable
           flutter-version: 3.24.5
 
-      - name: 🛠️ Step 1: Initialize Android
+      - name: 🛠️ Step 1: Initialize
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
@@ -30,18 +28,18 @@ jobs:
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d; /torch:/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
-      - name: 🧬 Step 3: Fast Code Injection
+      - name: 🧬 Step 3: Inject Code
         run: |
           mkdir -p lib
-          # پے لوڈ سے کوڈ نکال کر فائل میں ڈالنا (بغیر پائتھن کے)
-          echo '${{ github.event.client_payload.source_files.main_dart }}' > lib/main.dart
-          # ٹارچ لائٹ کی مطابقت درست کرنا
+          cat <<EOF > lib/main.dart
+          ${{ github.event.client_payload.source_files.main_dart }}
+          EOF
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/Torch.hasTorch/await TorchLight.hasTorch/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
           sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
 
-      - name: 🧬 Step 4: System Overrides
+      - name: 🏗️ Step 4: System Fixes
         run: |
           if [ -f "android/settings.gradle" ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
@@ -51,7 +49,7 @@ jobs:
             sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
           fi
 
-      - name: 🏗️ Step 5: Execute Build
+      - name: 🏗️ Step 5: Build
         run: |
           if [ -f "android/gradlew" ]; then chmod +x android/gradlew; fi
           flutter pub get
@@ -60,5 +58,5 @@ jobs:
       - name: 📤 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V5-4
+          name: System-Pro-V5-5
           path: build/app/outputs/flutter-apk/*.apk
