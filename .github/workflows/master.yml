@@ -18,6 +18,9 @@ jobs:
 
       - name: Create Flutter project with dynamic package name
         run: |
+          # پہلے pubspec.yaml کو حذف کریں تاکہ پرانی خراب dependency ختم ہو
+          rm -f pubspec.yaml
+          
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.default}"
           ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
@@ -26,7 +29,7 @@ jobs:
           rm -rf android ios
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
 
-      - name: Overwrite main.dart from payload (mandatory)
+      - name: Overwrite main.dart from payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
@@ -61,10 +64,8 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update app label in manifest
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # Update minSdk and targetSdk in build.gradle
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
@@ -73,7 +74,6 @@ jobs:
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
-          # Add permissions (no duplicates)
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           if ! command -v jq &> /dev/null; then sudo apt-get update && sudo apt-get install -y jq; fi
           add_perm() {
