@@ -21,10 +21,14 @@ jobs:
 
       - name: 🛠️ Generate Android Files (Issue 5 Fix)
         run: |
-          if [ ! -d "android" ]; then
+          # اگر اینڈرائیڈ فولڈر یا گریڈل غائب ہے تو جنریٹ کریں
+          if [ ! -f "android/gradlew" ]; then
             flutter create --platforms=android .
           fi
-          cd android && chmod +x gradlew && cd ..
+          # درست ڈائریکٹری میں جا کر پرمیشن دینا
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
 
       - name: 🧬 Force Fix Kotlin & Java (Issue 1, 2 & 5)
         run: |
@@ -47,7 +51,7 @@ jobs:
         run: |
           import json, os, re
 
-          # ڈیٹا لوڈ کرنا
+          # پے لوڈ لوڈ کرنا
           raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
           data = json.loads(raw_payload)
           config = data.get('build_config', {})
@@ -55,7 +59,7 @@ jobs:
           pkg_name = config.get('package_name', 'com.systempro.ultra')
           main_code = data.get('source_files', {}).get('main_dart', '')
 
-          # پب اسپیک کلین اپ (ڈپلیکیٹ ہٹانا)
+          # 1. پب اسپیک سے ڈپلیکیٹ ہٹانا
           pub_path = 'pubspec.yaml'
           if os.path.exists(pub_path):
               with open(pub_path, 'r') as f: lines = f.readlines()
@@ -67,22 +71,29 @@ jobs:
                   for lib in reversed(libs): cleaned.insert(idx + 1, lib)
               with open(pub_path, 'w') as f: f.writelines(cleaned)
 
-          # مین کوڈ میں TorchLight API کی درستی
+          # 2. مین کوڈ میں TorchLight API درست کرنا
           if main_code:
               main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
+              # صحیح API: hasTorch (bool), enableTorch(), disableTorch()
               main_code = main_code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
               main_code = main_code.replace("Torch.turnOn()", "await TorchLight.enableTorch()")
               main_code = main_code.replace("Torch.turnOff()", "await TorchLight.disableTorch()")
               os.makedirs('lib', exist_ok=True)
               with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-          # مینی فیسٹ اپ ڈیٹ
+          # 3. پیکیج نیم اور لیبل اپ ڈیٹ
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: m = f.read()
               m = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', m)
               m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
               with open(m_path, 'w') as f: f.write(m)
+
+          g_path = 'android/app/build.gradle'
+          if os.path.exists(g_path):
+              with open(g_path, 'r') as f: g = f.read()
+              g = re.sub(r'applicationId "[^"]*"', f'applicationId "{pkg_name}"', g)
+              with open(g_path, 'w') as f: f.write(g)
 
       - name: 🧹 Gradle Clean (Issue 6)
         run: |
@@ -98,5 +109,5 @@ jobs:
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V4-Fixed
+          name: System-Pro-V4-1-Success
           path: build/app/outputs/flutter-apk/*.apk
