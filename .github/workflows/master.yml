@@ -8,58 +8,58 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Check out repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🚀 Setup Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-          flutter-version: '3.24.5'
+          channel: stable
+          flutter-version: 3.24.5
 
-      - name: 🛠️ Step 1: Project Setup
+      - name: Setup Android Project
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
           elif [ ! -d "android" ]; then
             flutter create --platforms=android --no-overwrite .
           fi
-          [ -f "android/gradlew" ] && chmod +x android/gradlew
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
 
-      - name: 🧬 Step 2: Clean and Add Deps
+      - name: Fix Dependencies
         run: |
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
-      - name: 🧬 Step 3: Source Code Update
+      - name: Inject Source Code
         shell: python
         run: |
           import json, os
-          try:
-              raw = r'''${{ toJson(github.event.client_payload) }}'''
-              data = json.loads(raw)
-              code = data.get('source_files', {}).get('main_dart', '')
-              if code:
-                  os.makedirs('lib', exist_ok=True)
-                  with open('lib/main.dart', 'w', encoding='utf-8') as f:
-                      f.write(code)
-          except Exception as e:
-              print(f"Payload error: {e}")
+          with open(os.environ['GITHUB_EVENT_PATH'], 'r') as f:
+              event = json.load(f)
+          payload = event.get('client_payload', {})
+          code = payload.get('source_files', {}).get('main_dart', '')
+          if code:
+              os.makedirs('lib', exist_ok=True)
+              with open('lib/main.dart', 'w', encoding='utf-8') as f:
+                  f.write(code)
 
-      - name: 🧬 Step 4: Final System Fixes
+      - name: Update Android Settings
         run: |
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🏗️ Step 5: Build APK
+      - name: Build APK
         run: |
           cd android && ./gradlew clean && cd ..
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload Result
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V5-Build
+          name: System-Pro-Build
           path: build/app/outputs/flutter-apk/*.apk
