@@ -29,36 +29,42 @@ jobs:
               app_name = config.get('app_display_name', 'System Pro App')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               
-              # 1. Pubspec Cleanup (No more duplicates)
+              # 1. Pubspec Correct Placement (Dependencies Fix)
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
+                  
                   new_lines = []
-                  skip_keys = ['permission_handler', 'http'] # یہ کیز دوبارہ نہیں لکھیں گے
+                  # پرانی ڈوپلیکیٹ لائنز نکالنا
                   for line in lines:
-                      if any(k in line for k in skip_keys) and '^' in line:
-                          continue
-                      new_lines.append(line)
-                  # آخر میں صرف ایک بار یہ کیز شامل کریں
-                  new_lines.insert(-1, "  permission_handler: ^11.3.0\n")
-                  new_lines.insert(-1, "  http: ^1.2.0\n")
-                  with open('pubspec.yaml', 'w') as f: f.writelines(new_lines)
+                      if not any(k in line for k in ['permission_handler', 'http']):
+                          new_lines.append(line)
+                  
+                  # اب "dependencies:" ڈھونڈ کر اس کے ٹھیک نیچے لائبریریز ڈالنا
+                  final_lines = []
+                  for line in new_lines:
+                      final_lines.append(line)
+                      if line.strip() == "dependencies:":
+                          final_lines.append("  permission_handler: ^11.3.0\n")
+                          final_lines.append("  http: ^1.2.0\n")
+                  
+                  with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 2. Icon Engine (Deep Injection)
+              # 2. Icon Engine (All Folders Fix)
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
                   if "," in icon_b64: icon_b64 = icon_b64.split(",")[1]
                   img_data = base64.b64decode(icon_b64)
                   res_dir = 'android/app/src/main/res/'
-                  # تمام میپ میپ فولڈرز اور ڈرائبل میں آئیکن ڈالنا
-                  target_folders = [f for f in os.listdir(res_dir) if 'mipmap' in f or 'drawable' in f]
-                  for folder in target_folders:
-                      for filename in ['ic_launcher.png', 'launcher_icon.png']:
-                          target = os.path.join(res_dir, folder, filename)
-                          os.makedirs(os.path.dirname(target), exist_ok=True)
-                          with open(target, 'wb') as f: f.write(img_data)
-                  print("✅ Icon Injected in all folders")
+                  
+                  # تمام ممکنہ فولڈرز میں آئیکن پش کرنا
+                  for root, dirs, files in os.walk(res_dir):
+                      if 'mipmap' in root or 'drawable' in root:
+                          for icon_name in ['ic_launcher.png', 'launcher_icon.png']:
+                              with open(os.path.join(root, icon_name), 'wb') as f:
+                                  f.write(img_data)
+                  print("✅ Icon Updated in all resource folders")
 
-              # 3. Branding (Name & Package)
+              # 3. Branding & Package
               m_path = 'android/app/src/main/AndroidManifest.xml'
               if os.path.exists(m_path):
                   with open(m_path, 'r') as f: c = f.read()
@@ -72,20 +78,19 @@ jobs:
                   c = c.replace('com.systempro.ultra', pkg_name)
                   with open(g_path, 'w') as f: f.write(c)
 
-              # 4. Source Code Injection
+              # 4. Source Code
               main_code = data.get('source_files', {}).get('main_dart', '')
               if main_code:
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-              print(f"🚀 Engine Optimized for {app_name}")
           except Exception as e:
               print(f"❌ Error: {e}"); exit(1)
           EOF
 
       - name: 🏗️ Build Pro APK
         run: |
-          flutter pub upgrade
+          flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
       - name: 📤 Upload
