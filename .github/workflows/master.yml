@@ -82,7 +82,7 @@ jobs:
           EOF
           fi
 
-      - name: Apply dynamic configuration (package name, app name, permissions, icon)
+      - name: Dynamically update package name, app name, SDK and namespace (safe method)
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -101,18 +101,32 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update manifest
+          # Update AndroidManifest.xml
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" "$MANIFEST"
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # Update build.gradle: namespace (with = sign), applicationId, minSdk, targetSdk
-          sed -i "s/namespace = \".*\"/namespace = \"${NEW_PACKAGE}\"/" "$GRADLE"
-          sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" "$GRADLE"
-          sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" "$GRADLE"
-          sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" "$GRADLE"
+          # --- Safer handling of build.gradle ---
+          # 1. Remove existing namespace line completely (any format)
+          sed -i '/^[[:space:]]*namespace[[:space:]]*=/d' "$GRADLE"
+          # 2. Insert new namespace line right after 'android {' opening line
+          sed -i '/^[[:space:]]*android[[:space:]]*{/a \    namespace = "'"${NEW_PACKAGE}"'"' "$GRADLE"
+
+          # 3. Update applicationId (similar pattern, may also have =)
+          sed -i "s/applicationId[[:space:]]*=[[:space:]]*\".*\"/applicationId = \"${NEW_PACKAGE}\"/" "$GRADLE"
+          # 4. Update minSdk and targetSdk (they may be written as minSdk = 21 or minSdk 21)
+          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
+          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
+          # Fallback if no '=' sign
+          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
+          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
+
           if [ "$PROGUARD" = "true" ]; then
-            sed -i "s/minifyEnabled false/minifyEnabled true/" "$GRADLE"
+            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
+
+          # Remove any duplicate namespace lines that might have been added by accident
+          # (Not needed, as we deleted first, but just in case)
+          # We'll trust the above.
 
           # Add permissions (no duplicates)
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
