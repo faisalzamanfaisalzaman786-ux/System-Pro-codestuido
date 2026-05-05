@@ -1,4 +1,25 @@
-      - name: 🧬 الٹرا اسمارٹ اے آئی انجن (Full Fix)
+name: System Pro Master Engine
+
+on:
+  repository_dispatch:
+    types: [system_pro_build]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # سست انٹرنیٹ کے لیے زیادہ وقت
+    steps:
+      - name: 📥 چیک آؤٹ
+        uses: actions/checkout@v4
+
+      - name: 🚀 اسٹیبل فلٹر لاک (3.24.5)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.24.5' # مستقل ورژن
+          cache: true
+
+      - name: 🧬 الٹرا اسمارٹ اے آئی انجن (Pre-Fixing Logic)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -11,7 +32,7 @@
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. ورژن لاکنگ (Kotlin & Gradle)
+              # 1. گریڈل اور کوٹلن ورژن لاکنگ (1.9.22)
               def fix_gradle():
                   path = 'android/build.gradle'
                   if os.path.exists(path):
@@ -20,11 +41,11 @@
                       with open(path, 'w') as f: f.write(c)
               fix_gradle()
 
-              # 2. اسمارٹ پیکج اور پرمیشن ڈیٹیکٹر
+              # 2. اسمارٹ لائبریری اور پرمیشن ڈیٹیکٹر
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
                   
-                  # لائبریری میپنگ
+                  # لائبریری اور ان کی پرمیشنز کا نقشہ
                   lib_map = {
                       'torch': ('  torch_light: ^1.1.0\n', 'android.permission.FLASHLIGHT'),
                       'http': ('  http: ^1.2.0\n', 'android.permission.INTERNET'),
@@ -35,29 +56,28 @@
                   active_permissions = []
                   final_lines = []
                   for line in lines:
-                      if "dependencies:" in line:
-                          final_lines.append(line)
+                      final_lines.append(line)
+                      if line.strip() == "dependencies:":
                           for key, (val, perm) in lib_map.items():
                               if key in main_code.lower():
                                   final_lines.append(val)
                                   if perm: active_permissions.append(perm)
-                      elif not any(k in line for k in lib_map.keys()):
-                          final_lines.append(line)
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-                  # 3. مینی فیسٹ میں پرمیشنز انجیکٹ کرنا
+                  # 3. مینی فیسٹ آٹو انجکشن
                   manifest_path = 'android/app/src/main/AndroidManifest.xml'
                   if os.path.exists(manifest_path):
                       with open(manifest_path, 'r') as f: m_content = f.read()
+                      # پرمیشنز شامل کرنا
                       for p in set(active_permissions):
                           if p not in m_content:
                               m_content = m_content.replace('</manifest>', f'    <uses-permission android:name="{p}" />\n</manifest>')
-                      # پیکیج نیم اور ایپ کا نام بھی فکس کرنا
+                      # برانڈنگ فکس
                       m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
                       m_content = m_content.replace('com.systempro.ultra', pkg_name)
                       with open(manifest_path, 'w') as f: f.write(m_content)
 
-              # 4. آئیکن انجن (Payload سے آئیکن اٹھانا)
+              # 4. فل فورس آئیکن ری پلیسمنٹ
               icon_data = data.get('assets', {}).get('app_icon_base64', '')
               if icon_data:
                   img = base64.b64decode(icon_data.split(",")[1] if "," in icon_data else icon_data)
@@ -66,7 +86,7 @@
                           for n in ['ic_launcher.png', 'launcher_icon.png', 'ic_launcher_round.png']:
                               with open(os.path.join(root, n), 'wb') as f: f.write(img)
 
-              # 5. سورس کوڈ ریپیئر
+              # 5. سورس کوڈ آٹو ریپیئر (Methods Mapping)
               if main_code:
                   main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
                   main_code = main_code.replace("Torch.", "TorchLight.").replace("hasTorch", "isTorchAvailable")
@@ -77,3 +97,14 @@
           except Exception as e:
               print(f"❌ Smart Engine Error: {str(e)}"); exit(1)
           EOF
+
+      - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
+        run: |
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+
+      - name: 📤 فائنل APK اپ لوڈ
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Ultra-Build
+          path: build/app/outputs/flutter-apk/*.apk
