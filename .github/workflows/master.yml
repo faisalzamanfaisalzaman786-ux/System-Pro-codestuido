@@ -19,35 +19,52 @@ jobs:
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🛠️ Smart Project Setup (Hybrid Fix)
+      - name: 🧬 Step 1: Pre-Clean Pubspec (Fixing Duplicate Error)
+        shell: python
         run: |
-          # اگر pubspec موجود نہیں ہے تو مکمل نیا پروجیکٹ بنائیں
+          import os, json
+          # پے لوڈ حاصل کرنا
+          raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
+          data = json.loads(raw_payload)
+          main_code = data.get('source_files', {}).get('main_dart', '')
+
+          pub_path = 'pubspec.yaml'
+          if os.path.exists(pub_path):
+              with open(pub_path, 'r') as f: lines = f.readlines()
+              # تمام ٹارگٹ پیکیجز نکال دیں تاکہ ڈپلیکیٹ کا نام و نشان نہ رہے
+              targets = ['home_widget', 'torch_light', 'http', 'permission_handler', 'flutter_local_notifications']
+              new_lines = [l for l in lines if not any(t in l for t in targets)]
+              
+              # اب دوبارہ صاف طریقے سے ایک بار شامل کریں
+              idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
+              if idx != -1:
+                  libs = [
+                      "  home_widget: ^0.7.0\n",
+                      "  torch_light: ^1.1.0\n",
+                      "  http: ^1.2.0\n",
+                      "  permission_handler: ^11.3.0\n"
+                  ]
+                  for lib in reversed(libs):
+                      new_lines.insert(idx + 1, lib)
+              with open(pub_path, 'w') as f: f.writelines(new_lines)
+              print("✅ Pubspec cleaned successfully before flutter create.")
+
+      - name: 🛠️ Step 2: Smart Project Setup
+        run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "pubspec.yaml missing. Creating new project..."
             flutter create --platforms=android --project-name=system_pro .
           else
-            # اگر پروجیکٹ ہے مگر اینڈرائیڈ فولڈر غائب یا ادھورا ہے
             if [ ! -d "android" ] || [ ! -f "android/gradlew" ]; then
-              echo "Android folder or gradlew missing. Regenerating..."
-              # پرانی اینڈرائیڈ ڈائریکٹری صاف کریں اگر موجود ہو
               rm -rf android/ || true
-              # زبردستی اینڈرائیڈ فائلیں جنریٹ کریں
               flutter create --platforms=android --no-overwrite .
             fi
           fi
-          
-          # فائل بننے کے بعد پرمیشن دینا
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-          else
-            echo "❌ Error: gradlew still not found!" && exit 1
-          fi
+          [ -f "android/gradlew" ] && chmod +x android/gradlew
 
-      - name: 🧬 Repair Pubspec & Code Engine
+      - name: 🧬 Step 3: Repair Code & Manifest
         shell: python
         run: |
           import json, os, re
-
           raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
           data = json.loads(raw_payload)
           config = data.get('build_config', {})
@@ -55,19 +72,7 @@ jobs:
           pkg_name = config.get('package_name', 'com.systempro.ultra')
           main_code = data.get('source_files', {}).get('main_dart', '')
 
-          # 1. پب اسپیک سے ڈپلیکیٹ کا مکمل خاتمہ
-          pub_path = 'pubspec.yaml'
-          if os.path.exists(pub_path):
-              with open(pub_path, 'r') as f: lines = f.readlines()
-              targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
-              new_lines = [l for l in lines if not any(t in l for t in targets)]
-              idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
-              if idx != -1:
-                  libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
-                  for lib in reversed(libs): new_lines.insert(idx + 1, lib)
-              with open(pub_path, 'w') as f: f.writelines(new_lines)
-
-          # 2. کوڈ میں ٹارچ لائٹ API فکس
+          # مین کوڈ میں TorchLight API درست کرنا
           if main_code:
               main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
               main_code = main_code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
@@ -76,7 +81,7 @@ jobs:
               os.makedirs('lib', exist_ok=True)
               with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-          # 3. اینڈرائیڈ مینی فیسٹ اور پیکیج نیم
+          # پیکیج نیم اپ ڈیٹ
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: m = f.read()
@@ -84,7 +89,7 @@ jobs:
               m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
               with open(m_path, 'w') as f: f.write(m)
 
-      - name: 🧬 Force Fix Kotlin & Java
+      - name: 🧬 Step 4: Force Fix Kotlin & Java
         run: |
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
           if grep -q "ext.kotlin_version" android/build.gradle; then
@@ -95,19 +100,14 @@ jobs:
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🧹 Gradle Clean
+      - name: 🏗️ Step 5: Final Build
         run: |
-          cd android
-          ./gradlew clean
-          cd ..
-
-      - name: 🏗️ Build Release APK
-        run: |
+          cd android && ./gradlew clean && cd ..
           flutter pub get
           flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
 
-      - name: 📤 Upload Artifact
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Smart-V4-4
+          name: System-Pro-Final-V4-5
           path: build/app/outputs/flutter-apk/*.apk
