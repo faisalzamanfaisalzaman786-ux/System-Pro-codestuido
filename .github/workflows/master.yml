@@ -1,83 +1,75 @@
-name: System Pro Master Engine
-on:
-  repository_dispatch:
-    types: [system_pro_build]
+name: system_pro_app
+description: "Universal Flutter template for games, social apps, Firebase, utilities, etc."
+publish_to: 'none'
+version: 1.0.0+1
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+environment:
+  sdk: '>=3.4.0 <4.0.0'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.24.5
+dependencies:
+  flutter:
+    sdk: flutter
 
-      - name: Force Reconstruction
-        run: |
-          # مکمل صفائی تاکہ کوئی پرانی فائل مداخلت نہ کرے
-          rm -rf android lib pubspec.yaml
-          
-          # بالکل نئی pubspec.yaml فائل بنانا (بغیر کسی ڈپلیکیٹ کے)
-          cat <<EOF > pubspec.yaml
-          name: system_pro
-          description: "System Pro Build Engine"
-          version: 1.0.0+1
-          publish_to: 'none'
-          environment:
-            sdk: '>=3.4.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            home_widget: ^0.7.0
-            torch_light: ^1.1.0
-            http: ^1.2.0
-            permission_handler: ^11.3.0
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-          flutter:
-            uses-material-design: true
-          EOF
+  # UI & Icons
+  cupertino_icons: ^1.0.8
+  # flutter_svg: ^2.0.9         # SVG support
+  # lottie: ^3.1.0              # animations
 
-          # اب پروجیکٹ اسٹرکچر بنانا
-          flutter create --platforms=android --project-name=system_pro .
+  # Storage & Networking
+  shared_preferences: ^2.2.3
+  http: ^1.2.0
+  # dio: ^5.4.0                 # advanced HTTP client
 
-      - name: Write Modern Android Config
-        run: |
-          # اینڈرائیڈ کی سیٹنگز کو جدید ترین ورژن پر فورس کرنا
-          cat <<EOF > android/settings.gradle
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          plugins {
-              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
-              id "com.android.application" version "8.2.1" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
-          }
-          include ":app"
-          EOF
+  # Permissions & Hardware
+  permission_handler: ^11.3.0
+  # camera: ^0.10.5             # camera access
+  # image_picker: ^1.0.7        # gallery/camera picker
+  # torch_light: ^1.1.0         # flashlight
+  # vibration: ^1.9.0           # vibrate device
 
-      - name: Inject Clean Dart Code
-        run: |
-          mkdir -p lib
-          printf '%s\n' "${{ github.event.client_payload.source_files.main_dart }}" > lib/main.dart
-          # کوڈ کے اندر ٹارچ اور اویٹ کے ممکنہ مسائل درست کرنا
-          sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
-          sed -i "s/await await/await/g" lib/main.dart
-          sed -i "s/Torch.hasTorch/await TorchLight.isTorchAvailable()/g" lib/main.dart
-          sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
-          sed -i "s/Torch.turnOff()/await TorchLight.disableTorch()/g" lib/main.dart
-          sed -i "s/await await/await/g" lib/main.dart
+  # Location & Maps
+  # geolocator: ^12.0.0         # GPS location
+  # google_maps_flutter: ^2.7.0 # Google Maps
 
-      - name: Final Build Execution
-        run: |
-          flutter pub get
-          flutter build apk --release --no-tree-shake-icons
+  # Firebase (full suite)
+  # firebase_core: ^3.1.0
+  # firebase_auth: ^5.1.0
+  # cloud_firestore: ^5.0.0
+  # firebase_storage: ^12.0.0
+  # firebase_messaging: ^15.0.0 # push notifications
 
-      - name: Upload System Pro APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-V6-8
-          path: build/app/outputs/flutter-apk/*.apk
+  # Social / Authentication
+  # google_sign_in: ^6.2.1
+  # sign_in_with_apple: ^5.0.0
+
+  # Ads
+  # google_mobile_ads: ^5.0.0
+
+  # Games & Multimedia
+  # flame: ^1.17.0              # game engine
+  # audioplayers: ^6.0.0        # sound effects
+
+  # Utilities
+  # path_provider: ^2.1.3
+  # url_launcher: ^6.3.0
+  # connectivity_plus: ^6.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Assets folder structure (uncomment when needed)
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
+  #   - assets/animations/
+
+  # Fonts (uncomment when needed)
+  # fonts:
+  #   - family: CustomFont
+  #     fonts:
+  #       - asset: fonts/CustomFont-Regular.ttf
