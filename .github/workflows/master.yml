@@ -32,7 +32,7 @@ jobs:
       - name: 🧬 Step 3: Inject Code
         run: |
           mkdir -p lib
-          cat <<'EOF' > lib/main.dart
+          cat > lib/main.dart <<EOF
           ${{ github.event.client_payload.source_files.main_dart }}
           EOF
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
