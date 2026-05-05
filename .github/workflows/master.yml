@@ -8,58 +8,56 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: 🚀 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.24.5
 
-      - name: Setup Android Project
+      - name: 🛠️ Step 1: Project & Android Fix
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             flutter create --platforms=android --project-name=system_pro .
           elif [ ! -d "android" ]; then
             flutter create --platforms=android --no-overwrite .
           fi
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
+          # Kotlin Version Force Fix (لائن 20 کا مسئلہ حل کرنے کے لیے)
+          if [ -f "android/settings.gradle" ]; then
+            sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
           fi
 
-      - name: Fix Dependencies
+      - name: 🧬 Step 2: Clean Deps
         run: |
-          sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d' pubspec.yaml
+          sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d; /torch:/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
-      - name: Inject Source Code
+      - name: 🧬 Step 3: Repair Source Code (Torch Fix)
         shell: python
         run: |
           import json, os
           with open(os.environ['GITHUB_EVENT_PATH'], 'r') as f:
-              event = json.load(f)
-          payload = event.get('client_payload', {})
-          code = payload.get('source_files', {}).get('main_dart', '')
+              data = json.load(f).get('client_payload', {})
+          code = data.get('source_files', {}).get('main_dart', '')
           if code:
+              # پرانے ٹارچ پیکیج کو نئے ٹارچ لائٹ سے بدلنا
+              code = code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
+              code = code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
+              code = code.replace("Torch.turnOn()", "await TorchLight.enableTorch()")
+              code = code.replace("Torch.turnOff()", "await TorchLight.disableTorch()")
               os.makedirs('lib', exist_ok=True)
-              with open('lib/main.dart', 'w', encoding='utf-8') as f:
-                  f.write(code)
+              with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(code)
 
-      - name: Update Android Settings
+      - name: 🏗️ Step 4: Final Build
         run: |
-          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
-          sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
-          sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
-
-      - name: Build APK
-        run: |
-          cd android && ./gradlew clean && cd ..
+          if [ -f "android/gradlew" ]; then chmod +x android/gradlew; fi
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload APK
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Build
+          name: System-Pro-V5-2-Success
           path: build/app/outputs/flutter-apk/*.apk
