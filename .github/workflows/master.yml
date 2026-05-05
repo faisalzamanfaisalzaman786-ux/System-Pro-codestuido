@@ -12,76 +12,73 @@ jobs:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 فلٹر سیٹ اپ (Step 1: 3.24.5)
+      - name: 🚀 فلٹر سیٹ اپ (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 کوٹلن اور جاوا ورژن لاک (Step 3, 4 & 5)
+      - name: 🧬 ورژن اور جاوا فکسر
         run: |
-          # Step 4: settings.gradle میں کوٹلن 1.9.22
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
-          
-          # Step 3: build.gradle میں کوٹلن 1.9.22
           if grep -q "ext.kotlin_version" android/build.gradle; then
             sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/g" android/build.gradle
           else
             sed -i "/buildscript {/a \    ext.kotlin_version = '1.9.22'" android/build.gradle
           fi
-
-          # Step 5: Java اور Kotlin ٹارگٹ 17 کرنا
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🧬 پب اسپیک اور کوڈ ریپیئر انجن (Step 6 & 7)
+      - name: 🧬 پب اسپیک اور کوڈ انجن
+        shell: python
         run: |
-          python3 - <<EOF
           import json, os, re, base64
 
-          try:
-              raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
-              data = json.loads(raw_payload)
-              config = data.get('build_config', {})
-              app_name = config.get('app_display_name', 'System Pro')
-              pkg_name = config.get('package_name', 'com.systempro.ultra')
-              main_code = data.get('source_files', {}).get('main_dart', '')
+          # پے لوڈ حاصل کرنا
+          raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
+          data = json.loads(raw_payload)
+          config = data.get('build_config', {})
+          app_name = config.get('app_display_name', 'System Pro')
+          pkg_name = config.get('package_name', 'com.systempro.ultra')
+          main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # Step 7: پب اسپیک سے ڈپلیکیٹ ہٹانا اور کلین اپ
-              pub_path = 'pubspec.yaml'
-              if os.path.exists(pub_path):
-                  with open(pub_path, 'r') as f: lines = f.readlines()
-                  targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
-                  cleaned = [l for l in lines if not any(t in l for t in targets)]
-                  idx = next((i for i, s in enumerate(cleaned) if 'dependencies:' in s), -1)
-                  if idx != -1:
-                      libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
-                      for lib in reversed(libs): cleaned.insert(idx + 1, lib)
-                  with open(pub_path, 'w') as f: f.writelines(cleaned)
+          # 1. پب اسپیک کلین اپ
+          pub_path = 'pubspec.yaml'
+          if os.path.exists(pub_path):
+              with open(pub_path, 'r') as f: lines = f.readlines()
+              targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
+              cleaned = [l for l in lines if not any(t in l for t in targets)]
+              idx = next((i for i, s in enumerate(cleaned) if 'dependencies:' in s), -1)
+              if idx != -1:
+                  libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
+                  for lib in reversed(libs): cleaned.insert(idx + 1, lib)
+              with open(pub_path, 'w') as f: f.writelines(cleaned)
 
-              # Step 6: main.dart میں TorchLight کی درستگی
-              if main_code:
-                  main_code = main_code.replace("import 'package:torch/torch.dart'", "import 'package:torch_light/torch_light.dart'")
-                  main_code = main_code.replace("Torch.hasTorch", "TorchLight.isTorchAvailable")
-                  main_code = main_code.replace("Torch.turnOn()", "TorchLight.enableTorch()")
-                  main_code = main_code.replace("Torch.turnOff()", "TorchLight.disableTorch()")
-                  os.makedirs('lib', exist_ok=True)
-                  with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
+          # 2. مین کوڈ فکس (Torch to TorchLight)
+          if main_code:
+              main_code = main_code.replace("import 'package:torch/torch.dart'", "import 'package:torch_light/torch_light.dart'")
+              main_code = main_code.replace("Torch.hasTorch", "TorchLight.isTorchAvailable")
+              main_code = main_code.replace("Torch.turnOn()", "TorchLight.enableTorch()")
+              main_code = main_code.replace("Torch.turnOff()", "TorchLight.disableTorch()")
+              os.makedirs('lib', exist_ok=True)
+              with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-              # پیکیج نیم اور مینی فیسٹ اپ ڈیٹ
-              m_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(m_path):
-                  with open(m_path, 'r') as f: m = f.read()
-                  m = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', m)
-                  m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
-                  with open(m_path, 'w') as f: f.write(m)
-                  
-          except Exception as e:
-              print(f"❌ Error: {str(e)}"); exit(1)
-          EOF
+          # 3. پیکیج نیم اور مینی فیسٹ
+          m_path = 'android/app/src/main/AndroidManifest.xml'
+          if os.path.exists(m_path):
+              with open(m_path, 'r') as f: m = f.read()
+              m = re.sub(r'package="[^"]*"', f'package="{pkg_name}"', m)
+              m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
+              with open(m_path, 'w') as f: f.write(m)
 
-      - name: 🧹 گریڈل کلین (Step 2)
+          g_path = 'android/app/build.gradle'
+          if os.path.exists(g_path):
+              with open(g_path, 'r') as f: g = f.read()
+              g = re.sub(r'applicationId "[^"]*"', f'applicationId "{pkg_name}"', g)
+              with open(g_path, 'w') as f: f.write(g)
+
+      - name: 🧹 گریڈل کلین
         run: |
           cd android
           chmod +x gradlew
@@ -96,5 +93,5 @@ jobs:
       - name: 📤 APK اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V3-Ultimate
+          name: System-Pro-Syntax-Fixed
           path: build/app/outputs/flutter-apk/*.apk
