@@ -11,14 +11,14 @@ jobs:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 فلٹر ورژن لاک (3.24.5)
+      - name: 🚀 فلٹر سٹیبل لاک (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.24.5' # یہاں ورژن لاک کر دیا گیا ہے
+          flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 اسمارٹ انجن (Version Lock Logic)
+      - name: 🧬 اسمارٹ انجن (Code & Logic Repair)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -31,24 +31,22 @@ jobs:
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. کوٹلن اور گریڈل ورژن لاک کرنا (Incompatibility Fix)
+              # 1. کوٹلن ورژن لاک (1.9.22)
               gradle_path = 'android/build.gradle'
               if os.path.exists(gradle_path):
                   with open(gradle_path, 'r') as f: content = f.read()
-                  # کوٹلن کو 1.9.22 پر لاک کرنا
                   content = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.22'", content)
                   with open(gradle_path, 'w') as f: f.write(content)
 
-              # 2. پب اسپیک اور لائبریریز (Safe Mapping)
+              # 2. پب اسپیک فکس (Universal Dependencies)
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  # پکی لائبریریز جو ایرر نہیں دیں گی
                   libs = {
-                      'torch_light': '  torch_light: ^1.0.1\n',
+                      'torch_light': '  torch_light: ^1.1.0\n',
                       'http': '  http: ^1.2.0\n',
                       'permission_handler': '  permission_handler: ^11.3.0\n'
                   }
-                  clean_lines = [l for l in lines if not any(k.split('_')[0] in l for k in libs.keys())]
+                  clean_lines = [l for l in lines if not any(k in l for k in libs.keys())]
                   final_lines = []
                   for line in clean_lines:
                       final_lines.append(line)
@@ -58,7 +56,7 @@ jobs:
                                   final_lines.append(value)
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 3. آئیکن اور پیکیج ہینڈلنگ
+              # 3. آئیکن انجن
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
                   img_data = base64.b64decode(icon_b64.split(",")[1] if "," in icon_b64 else icon_b64)
@@ -67,9 +65,16 @@ jobs:
                           for name in ['ic_launcher.png', 'launcher_icon.png']:
                               with open(os.path.join(root, name), 'wb') as f: f.write(img_data)
 
-              # 4. سورس کوڈ (Auto-Repair Imports)
+              # 4. ڈائنامک کوڈ ریپیئر (TorchLight Methods Fix)
               if main_code:
-                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart").replace("Torch.", "TorchLight.")
+                  # پرانے امپورٹس اور فنکشنز کو نئے ورژن کے مطابق بدلنا
+                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
+                  main_code = main_code.replace("Torch.", "TorchLight.")
+                  # نئے ورژن کے فنکشنز کے ناموں سے تبدیل کرنا
+                  main_code = main_code.replace("hasTorch", "isTorchAvailable")
+                  main_code = main_code.replace("turnOn()", "enableTorch()")
+                  main_code = main_code.replace("turnOff()", "disableTorch()")
+                  
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
