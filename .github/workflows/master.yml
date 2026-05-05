@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - name: 📥 Check out repository
         uses: actions/checkout@v4
@@ -19,35 +18,20 @@ jobs:
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 Step 1: Pre-Clean Pubspec (Fixing Duplicate Error)
+      - name: 🧬 Step 1: Clean Pubspec
         shell: python
         run: |
-          import os, json
-          # پے لوڈ حاصل کرنا
-          raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
-          data = json.loads(raw_payload)
-          main_code = data.get('source_files', {}).get('main_dart', '')
-
+          import os
           pub_path = 'pubspec.yaml'
           if os.path.exists(pub_path):
               with open(pub_path, 'r') as f: lines = f.readlines()
-              # تمام ٹارگٹ پیکیجز نکال دیں تاکہ ڈپلیکیٹ کا نام و نشان نہ رہے
-              targets = ['home_widget', 'torch_light', 'http', 'permission_handler', 'flutter_local_notifications']
+              targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
               new_lines = [l for l in lines if not any(t in l for t in targets)]
-              
-              # اب دوبارہ صاف طریقے سے ایک بار شامل کریں
               idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
               if idx != -1:
-                  libs = [
-                      "  home_widget: ^0.7.0\n",
-                      "  torch_light: ^1.1.0\n",
-                      "  http: ^1.2.0\n",
-                      "  permission_handler: ^11.3.0\n"
-                  ]
-                  for lib in reversed(libs):
-                      new_lines.insert(idx + 1, lib)
+                  libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
+                  for lib in reversed(libs): new_lines.insert(idx + 1, lib)
               with open(pub_path, 'w') as f: f.writelines(new_lines)
-              print("✅ Pubspec cleaned successfully before flutter create.")
 
       - name: 🛠️ Step 2: Smart Project Setup
         run: |
@@ -61,18 +45,18 @@ jobs:
           fi
           [ -f "android/gradlew" ] && chmod +x android/gradlew
 
-      - name: 🧬 Step 3: Repair Code & Manifest
+      - name: 🧬 Step 3: Fix Code & Package
         shell: python
         run: |
           import json, os, re
-          raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
-          data = json.loads(raw_payload)
+          # Payload Handling
+          raw_data = r'''${{ toJson(github.event.client_payload) }}'''
+          data = json.loads(raw_data)
           config = data.get('build_config', {})
-          app_name = config.get('app_display_name', 'System Pro')
           pkg_name = config.get('package_name', 'com.systempro.ultra')
+          app_name = config.get('app_display_name', 'System Pro')
           main_code = data.get('source_files', {}).get('main_dart', '')
 
-          # مین کوڈ میں TorchLight API درست کرنا
           if main_code:
               main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
               main_code = main_code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
@@ -81,7 +65,6 @@ jobs:
               os.makedirs('lib', exist_ok=True)
               with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-          # پیکیج نیم اپ ڈیٹ
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: m = f.read()
@@ -89,25 +72,20 @@ jobs:
               m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
               with open(m_path, 'w') as f: f.write(m)
 
-      - name: 🧬 Step 4: Force Fix Kotlin & Java
+      - name: 🧬 Step 4: Final Android Fixes
         run: |
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
-          if grep -q "ext.kotlin_version" android/build.gradle; then
-            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/g" android/build.gradle
-          else
-            sed -i "/buildscript {/a \    ext.kotlin_version = '1.9.22'" android/build.gradle
-          fi
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🏗️ Step 5: Final Build
+      - name: 🏗️ Step 5: Build APK
         run: |
           cd android && ./gradlew clean && cd ..
           flutter pub get
           flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
 
-      - name: 📤 Upload APK
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Final-V4-5
+          name: System-Pro-V4-6-Success
           path: build/app/outputs/flutter-apk/*.apk
