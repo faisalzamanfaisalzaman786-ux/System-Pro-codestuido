@@ -1,4 +1,23 @@
-      - name: 🧬 ڈائنامک انجن (Python Smart Logic)
+name: System Pro Master Builder
+
+on:
+  repository_dispatch:
+    types: [system_pro_build]
+
+jobs:
+  dynamic_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          cache: true
+
+      - name: 🧬 Dynamic Ingestion Engine
         run: |
           python3 - <<EOF
           import json
@@ -6,49 +25,67 @@
           import base64
           import re
 
-          # 'null' کے مسئلے کو حل کرنے کے لیے ڈیٹا کو پائتھن کے مطابق ڈھالنا
-          payload_raw = '''${{ toJson(github.event.client_payload) }}'''
-          # یہاں ہم جاوا سکرپٹ کے null کو پائتھن کے None میں بدل رہے ہیں
-          payload = json.loads(payload_raw.replace(': null', ': None'))
+          # Payload handling with null-to-none safety
+          raw_data = '''${{ toJson(github.event.client_payload) }}'''
+          clean_data = raw_data.replace(': null', ': None').replace(': true', ': True').replace(': false', ': False')
           
-          # باقی لاجک وہی رہے گی، بس پے لوڈ اب محفوظ طریقے سے لوڈ ہوگا
           try:
-              new_app_name = payload.get('build_config', {}).get('app_display_name', 'System Pro App')
-              new_pkg = payload.get('build_config', {}).get('package_name', 'com.systempro.ultra')
-              main_code = payload.get('source_files', {}).get('main_dart', '')
+              payload = eval(clean_data)
+              
+              app_name = payload.get('build_config', {}).get('app_display_name', 'System Pro App')
+              pkg_name = payload.get('build_config', {}).get('package_name', 'com.systempro.ultra')
+              main_dart = payload.get('source_files', {}).get('main_dart', '')
               icon_b64 = payload.get('assets', {}).get('app_icon_base64', None)
 
-              # سورس کوڈ (main.dart) اپ ڈیٹ کریں
-              if main_code:
+              # Update lib/main.dart
+              if main_dart:
+                  os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w') as f:
-                      f.write(main_code)
+                      f.write(main_dart)
 
-              # مینی فیسٹ اور گریڈل میں تبدیلیاں کریں
+              # Update AndroidManifest.xml (App Name & Package)
               manifest_path = 'android/app/src/main/AndroidManifest.xml'
               if os.path.exists(manifest_path):
-                  with open(manifest_path, 'r') as f: content = f.read()
-                  content = re.sub(r'android:label="[^"]*"', f'android:label="{new_app_name}"', content)
-                  content = content.replace('com.systempro.ultra', new_pkg)
-                  with open(manifest_path, 'w') as f: f.write(content)
+                  with open(manifest_path, 'r') as f:
+                      m_content = f.read()
+                  m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
+                  m_content = m_content.replace('com.systempro.ultra', pkg_name)
+                  with open(manifest_path, 'w') as f:
+                      f.write(m_content)
 
+              # Update build.gradle (Package ID)
               gradle_path = 'android/app/build.gradle'
               if os.path.exists(gradle_path):
-                  with open(gradle_path, 'r') as f: content = f.read()
-                  content = content.replace('com.systempro.ultra', new_pkg)
-                  with open(gradle_path, 'w') as f: f.write(content)
+                  with open(gradle_path, 'r') as f:
+                      g_content = f.read()
+                  g_content = g_content.replace('com.systempro.ultra', pkg_name)
+                  with open(gradle_path, 'w') as f:
+                      f.write(g_content)
 
-              # آئیکن انجن
+              # Inject App Icon
               if icon_b64:
-                  icon_data = base64.b64decode(icon_b64)
-                  res_path = 'android/app/src/main/res/'
-                  for folder in os.listdir(res_path):
+                  img_data = base64.b64decode(icon_b64)
+                  res_dir = 'android/app/src/main/res/'
+                  for folder in os.listdir(res_dir):
                       if 'mipmap' in folder:
-                          icon_file = os.path.join(res_path, folder, 'ic_launcher.png')
-                          with open(icon_file, 'wb') as f: f.write(icon_data)
+                          target = os.path.join(res_dir, folder, 'ic_launcher.png')
+                          with open(target, 'wb') as f:
+                              f.write(img_data)
               
-              print(f"✅ Build configured for: {new_app_name}")
+              print(f"✅ Success: Ready to build {app_name}")
 
           except Exception as e:
-              print(f"❌ Error in script: {e}")
+              print(f"❌ Error: {str(e)}")
               exit(1)
           EOF
+
+      - name: 🏗️ Build APK
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: 📤 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Build
+          path: build/app/outputs/flutter-apk/*.apk
