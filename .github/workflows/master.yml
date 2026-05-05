@@ -59,10 +59,11 @@ jobs:
             echo "⚠️ Using fallback AndroidManifest.xml"
           fi
 
-          # build.gradle (with namespace)
+          # build.gradle (with namespace and kotlin_version)
           GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
           if ! decode_b64 "$GRADLE_B64" android/app/build.gradle; then
             cat > android/app/build.gradle <<'EOF'
+          ext.kotlin_version = '1.9.22'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) { localPropertiesFile.withInputStream { localProperties.load(it) } }
@@ -101,7 +102,7 @@ jobs:
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
           }
           EOF
-            echo "⚠️ Using fallback build.gradle with namespace"
+            echo "⚠️ Using fallback build.gradle with namespace and kotlin_version"
           fi
 
           # pubspec.yaml
@@ -152,7 +153,6 @@ jobs:
 
           # Update build.gradle: namespace, applicationId, minSdk, targetSdk, proguard
           sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" android/app/build.gradle
-          # Ensure namespace exists if not
           if ! grep -q 'namespace' android/app/build.gradle; then
             sed -i '/android {/a \    namespace "'"${NEW_PACKAGE}"'"' android/app/build.gradle
           fi
