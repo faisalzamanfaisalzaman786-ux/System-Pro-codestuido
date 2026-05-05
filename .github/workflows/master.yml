@@ -19,7 +19,7 @@ jobs:
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 سسٹم پرو الٹرا انجن (Kotlin Fix Edition)
+      - name: 🧬 سسٹم پرو الٹرا انجن (Clean Logic Edition)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -33,25 +33,51 @@ jobs:
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
               
-              # 1. کوٹلن اور گریڈل ورژن فکس (For Home Widget compatibility)
-              def fix_gradle_versions():
-                  # Root build.gradle میں ورژن اپ ڈیٹ کرنا
-                  root_gradle = 'android/build.gradle'
-                  if os.path.exists(root_gradle):
-                      with open(root_gradle, 'r') as f: c = f.read()
+              # 1. کوٹلن اور گریڈل فکس
+              def fix_gradle():
+                  r_gradle = 'android/build.gradle'
+                  if os.path.exists(r_gradle):
+                      with open(r_gradle, 'r') as f: c = f.read()
                       c = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.10'", c)
-                      with open(root_gradle, 'w') as f: f.write(c)
+                      with open(r_gradle, 'w') as f: f.write(c)
                   
-                  # settings.gradle میں ورژن اپ ڈیٹ کرنا
-                  settings_gradle = 'android/settings.gradle'
-                  if os.path.exists(settings_gradle):
-                      with open(settings_gradle, 'r') as f: s = f.read()
+                  s_gradle = 'android/settings.gradle'
+                  if os.path.exists(s_gradle):
+                      with open(s_gradle, 'r') as f: s = f.read()
                       s = re.sub(r'id "org\.jetbrains\.kotlin\.android" version "[^"]*"', 'id "org.jetbrains.kotlin.android" version "1.9.10"', s)
-                      with open(settings_gradle, 'w') as f: f.write(s)
+                      with open(s_gradle, 'w') as f: f.write(s)
 
-              fix_gradle_versions()
+              fix_gradle()
 
-              # 2. پیکیج نیم اور مینی فیسٹ فکسر
+              # 2. پب اسپیک کلین اپ (Advanced Duplicate Prevention)
+              pub_path = 'pubspec.yaml'
+              if os.path.exists(pub_path):
+                  with open(pub_path, 'r') as f: lines = f.readlines()
+                  
+                  # ان لائبریریز کو مٹانا جو ڈپلیکیٹ ہو سکتی ہیں
+                  targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
+                  cleaned_lines = []
+                  for line in lines:
+                      if not any(t in line for t in targets):
+                          cleaned_lines.append(line)
+                  
+                  # نئی لائبریریز کو محفوظ طریقے سے شامل کرنا
+                  final_libs = [
+                      '  home_widget: ^0.7.0\n',
+                      '  torch_light: ^1.1.0\n',
+                      '  http: ^1.2.0\n',
+                      '  permission_handler: ^11.3.0\n'
+                  ]
+                  
+                  for i, line in enumerate(cleaned_lines):
+                      if 'dependencies:' in line:
+                          for lib in final_libs:
+                              cleaned_lines.insert(i + 1, lib)
+                          break
+                  
+                  with open(pub_path, 'w') as f: f.writelines(cleaned_lines)
+
+              # 3. مینی فیسٹ اور پیکیج نیم (Dynamic)
               manifest_path = 'android/app/src/main/AndroidManifest.xml'
               if os.path.exists(manifest_path):
                   with open(manifest_path, 'r') as f: m = f.read()
@@ -66,38 +92,21 @@ jobs:
               if os.path.exists(app_gradle):
                   with open(app_gradle, 'r') as f: g = f.read()
                   g = re.sub(r'applicationId "[^"]*"', 'applicationId "' + pkg_name + '"', g)
-                  # کوٹلن کمپائلر آپشنز شامل کرنا
-                  if 'kotlinOptions' not in g:
-                      g = g.replace('android {', 'android {\n    kotlinOptions {\n        jvmTarget = "1.8"\n    }')
                   with open(app_gradle, 'w') as f: f.write(g)
 
-              # 3. ریسورسز اور ویجٹ (Auto-Template)
+              # 4. ویجٹ اور کوڈ انجکشن
               res_dir = 'android/app/src/main/res'
               os.makedirs(res_dir + '/layout', exist_ok=True); os.makedirs(res_dir + '/xml', exist_ok=True)
-              default_xml = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#1A1A1A" android:padding="10dp"><TextView android:id="@+id/widget_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="' + app_name + '" android:textColor="#00E676" android:textSize="18sp" android:textStyle="bold" /><TextView android:layout_below="@id/widget_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tap to Open" android:textColor="#FFFFFF" android:textSize="12sp" /></RelativeLayout>'
-              with open(res_dir + '/layout/pro_widget_layout.xml', 'w') as f: f.write(default_xml)
-              w_info = '<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="40dp" android:minHeight="40dp" android:updatePeriodMillis="86400000" android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>'
-              with open(res_dir + '/xml/pro_widget_info.xml', 'w') as f: f.write(w_info)
+              with open(res_dir + '/layout/pro_widget_layout.xml', 'w') as f: f.write('<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#1A1A1A"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="' + app_name + '" android:textColor="#00FF00"/></RelativeLayout>')
+              with open(res_dir + '/xml/pro_widget_info.xml', 'w') as f: f.write('<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>')
 
-              # 4. پب اسپیک کلین اپ
-              pub_path = 'pubspec.yaml'
-              if os.path.exists(pub_path):
-                  with open(pub_path, 'r') as f: p_lines = f.readlines()
-                  required_libs = {'home_widget': '  home_widget: ^0.7.0\n', 'torch_light': '  torch_light: ^1.1.0\n', 'permission_handler': '  permission_handler: ^11.3.0\n'}
-                  new_lines = [l for l in p_lines if not any(k in l for k in required_libs.keys())]
-                  idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
-                  if idx != -1:
-                      for lib_val in required_libs.values(): new_lines.insert(idx + 1, lib_val)
-                  with open(pub_path, 'w') as f: f.writelines(new_lines)
-
-              # 5. سورس کوڈ انجکشن
               if main_code:
                   main_code = main_code.replace("hasTorch", "isTorchAvailable").replace("turnOn()", "enableTorch()")
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
           except Exception as e:
-              print(f"❌ Error: {str(e)}"); exit(1)
+              print(f"❌ Smart Error: {str(e)}"); exit(1)
           EOF
 
       - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
@@ -108,5 +117,5 @@ jobs:
       - name: 📤 APK اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Kotlin-Fixed-Build
+          name: System-Pro-Success-Build
           path: build/app/outputs/flutter-apk/*.apk
