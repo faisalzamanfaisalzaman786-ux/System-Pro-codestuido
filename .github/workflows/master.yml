@@ -130,9 +130,8 @@ jobs:
           : "${TARGET_SDK:=34}"
           : "${PROGUARD:=false}"
 
-          echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK, proguard=$PROGUARD"
+          echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
 
-          # Update manifest and gradle
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
@@ -142,11 +141,11 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-          # Remove existing activity and add new FlutterActivity
+          # Remove old activity and add FlutterActivity
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
-          # Add flutterEmbedding meta-data if missing
+          # Add flutterEmbedding if missing
           if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
             sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
           fi
@@ -159,7 +158,7 @@ jobs:
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity : FlutterActivity()
           EOF
-          # Remove old static package dir if exists
+
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
@@ -193,7 +192,7 @@ jobs:
           if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
           elif [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"; fi
 
-      - name: Set app icon (if provided)
+      - name: Set app icon
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -217,7 +216,7 @@ jobs:
               echo "$B64" | base64 -d > "assets/$NAME"
             done
             echo "✅ Additional assets added"
-          else echo "ℹ️ No assets"; fi
+          else echo "ℹ️ No additional assets"; fi
 
       - name: Build APK
         run: |
