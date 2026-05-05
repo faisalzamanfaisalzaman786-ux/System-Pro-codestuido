@@ -72,7 +72,6 @@ jobs:
             cupertino_icons: ^1.0.8
             permission_handler: ^11.3.0
             http: ^1.2.0
-            shared_preferences: ^2.2.3
           dev_dependencies:
             flutter_test:
               sdk: flutter
@@ -82,7 +81,7 @@ jobs:
           EOF
           fi
 
-      - name: Dynamically update package name, app name, SDK and namespace (safe method)
+      - name: Dynamically update package, app name, SDK, namespace and fix MainActivity.kt
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -105,28 +104,41 @@ jobs:
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" "$MANIFEST"
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # --- Safer handling of build.gradle ---
-          # 1. Remove existing namespace line completely (any format)
+          # --- Safe update of build.gradle ---
+          # Remove any existing namespace line
           sed -i '/^[[:space:]]*namespace[[:space:]]*=/d' "$GRADLE"
-          # 2. Insert new namespace line right after 'android {' opening line
+          # Insert correct namespace after android {
           sed -i '/^[[:space:]]*android[[:space:]]*{/a \    namespace = "'"${NEW_PACKAGE}"'"' "$GRADLE"
 
-          # 3. Update applicationId (similar pattern, may also have =)
+          # Update applicationId, minSdk, targetSdk
           sed -i "s/applicationId[[:space:]]*=[[:space:]]*\".*\"/applicationId = \"${NEW_PACKAGE}\"/" "$GRADLE"
-          # 4. Update minSdk and targetSdk (they may be written as minSdk = 21 or minSdk 21)
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          # Fallback if no '=' sign
+          # Fallback for versions without '='
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-
           if [ "$PROGUARD" = "true" ]; then
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
-          # Remove any duplicate namespace lines that might have been added by accident
-          # (Not needed, as we deleted first, but just in case)
-          # We'll trust the above.
+          # --- Remove ALL previous MainActivity.kt files (old packages) ---
+          rm -rf android/app/src/main/kotlin/com/example
+          rm -rf android/app/src/main/kotlin/com/systempro/template
+          # Also remove any other leftover from previous runs
+          find android/app/src/main/kotlin -type f -name "MainActivity.kt" -delete
+
+          # --- Create new MainActivity.kt in correct package directory ---
+          PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
+          mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
+          cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
+          package ${NEW_PACKAGE}
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity : FlutterActivity()
+          EOF
+
+          echo "✅ MainActivity.kt created for package ${NEW_PACKAGE}"
 
           # Add permissions (no duplicates)
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
