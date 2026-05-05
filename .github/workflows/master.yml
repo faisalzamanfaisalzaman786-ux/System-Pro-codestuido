@@ -30,11 +30,11 @@ jobs:
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
       - name: 🧬 Step 3: Inject Code
+        env:
+          MAIN_DART: ${{ github.event.client_payload.source_files.main_dart }}
         run: |
           mkdir -p lib
-          cat > lib/main.dart <<EOF
-          ${{ github.event.client_payload.source_files.main_dart }}
-          EOF
+          echo "$MAIN_DART" > lib/main.dart
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/Torch.hasTorch/await TorchLight.hasTorch/g" lib/main.dart
           sed -i "s/Torch.turnOn()/await TorchLight.enableTorch()/g" lib/main.dart
