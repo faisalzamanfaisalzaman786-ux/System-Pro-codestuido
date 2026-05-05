@@ -19,7 +19,7 @@ jobs:
           flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 آٹو ویجٹ اینڈ الٹرا انجن
+      - name: 🧬 سسٹم پرو الٹرا انجن (Ultimate dynamic version)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -28,64 +28,57 @@ jobs:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
               config = data.get('build_config', {})
+              
+              # 1. ڈائنامک ڈیٹا حاصل کرنا
               app_name = config.get('app_display_name', 'System Pro')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
               
-              # ڈیفالٹ ویجٹ ڈیزائن (Clean string format to avoid YAML line 54 error)
-              default_xml = '<?xml version="1.0" encoding="utf-8"?>\n'
-              default_xml += '<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" '
-              default_xml += 'android:layout_width="match_parent" android:layout_height="match_parent" '
-              default_xml += 'android:background="#1A1A1A" android:padding="10dp">\n'
-              default_xml += '    <TextView android:id="@+id/widget_title" android:layout_width="wrap_content" '
-              default_xml += 'android:layout_height="wrap_content" android:text="' + app_name + '" '
-              default_xml += 'android:textColor="#00E676" android:textSize="18sp" android:textStyle="bold" />\n'
-              default_xml += '    <TextView android:layout_below="@id/widget_title" android:layout_width="wrap_content" '
-              default_xml += 'android:layout_height="wrap_content" android:text="Tap to Open" '
-              default_xml += 'android:textColor="#FFFFFF" android:textSize="12sp" />\n'
-              default_xml += '</RelativeLayout>'
-              
+              # ڈیفالٹ ویجٹ ٹیمپلیٹ
+              default_xml = '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#1A1A1A" android:padding="10dp"><TextView android:id="@+id/widget_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="' + app_name + '" android:textColor="#00E676" android:textSize="18sp" android:textStyle="bold" /><TextView android:layout_below="@id/widget_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tap to Open" android:textColor="#FFFFFF" android:textSize="12sp" /></RelativeLayout>'
               widget_xml = data.get('assets', {}).get('widget_layout_xml', default_xml)
 
-              # 1. فولڈرز کی تیاری
-              res_dir = 'android/app/src/main/res'
-              os.makedirs(res_dir + '/layout', exist_ok=True)
-              os.makedirs(res_dir + '/xml', exist_ok=True)
-              
-              with open(res_dir + '/layout/pro_widget_layout.xml', 'w') as f: f.write(widget_xml)
-              
-              w_info = '<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" '
-              w_info += 'android:minWidth="40dp" android:minHeight="40dp" android:updatePeriodMillis="86400000" '
-              w_info += 'android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>'
-              with open(res_dir + '/xml/pro_widget_info.xml', 'w') as f: f.write(w_info)
-
-              # 2. مینی فیسٹ کنفیگریشن
+              # 2. اینڈرائیڈ مینی فیسٹ اور گریڈل کی تبدیلی (Package Name Fixer)
               manifest_path = 'android/app/src/main/AndroidManifest.xml'
               if os.path.exists(manifest_path):
                   with open(manifest_path, 'r') as f: m = f.read()
-                  if 'ProWidgetProvider' not in m:
-                      w_receiver = '\n        <receiver android:name=".ProWidgetProvider" android:exported="true">\n'
-                      w_receiver += '            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>\n'
-                      w_receiver += '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/pro_widget_info" />\n'
-                      w_receiver += '        </receiver>\n'
-                      m = m.replace('</activity>', '</activity>' + w_receiver)
-                  
+                  m = re.sub(r'package="[^"]*"', 'package="' + pkg_name + '"', m)
                   m = re.sub(r'android:label="[^"]*"', 'android:label="' + app_name + '"', m)
-                  m = m.replace('com.systempro.ultra', pkg_name)
+                  if 'ProWidgetProvider' not in m:
+                      w_receiver = '\n        <receiver android:name=".ProWidgetProvider" android:exported="true"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/pro_widget_info" /></receiver>\n'
+                      m = m.replace('</activity>', '</activity>' + w_receiver)
                   with open(manifest_path, 'w') as f: f.write(m)
 
-              # 3. پب اسپیک میں مستقل لائبریریز
-              if os.path.exists('pubspec.yaml'):
-                  with open('pubspec.yaml', 'a') as f:
-                      f.write("\n  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n")
+              app_gradle = 'android/app/build.gradle'
+              if os.path.exists(app_gradle):
+                  with open(app_gradle, 'r') as f: g = f.read()
+                  g = re.sub(r'applicationId "[^"]*"', 'applicationId "' + pkg_name + '"', g)
+                  with open(app_gradle, 'w') as f: f.write(g)
 
-              # 4. کوڈ فکسر
+              # 3. ویجٹ اور ریسورسز کی تیاری
+              res_dir = 'android/app/src/main/res'
+              os.makedirs(res_dir + '/layout', exist_ok=True); os.makedirs(res_dir + '/xml', exist_ok=True)
+              with open(res_dir + '/layout/pro_widget_layout.xml', 'w') as f: f.write(widget_xml)
+              w_info = '<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="40dp" android:minHeight="40dp" android:updatePeriodMillis="86400000" android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>'
+              with open(res_dir + '/xml/pro_widget_info.xml', 'w') as f: f.write(w_info)
+
+              # 4. پب اسپیک کلین اپ (Duplicate Fixer)
+              pub_path = 'pubspec.yaml'
+              if os.path.exists(pub_path):
+                  with open(pub_path, 'r') as f: p_lines = f.readlines()
+                  required_libs = {'home_widget': '  home_widget: ^0.7.0\n', 'torch_light': '  torch_light: ^1.1.0\n', 'http': '  http: ^1.2.0\n', 'permission_handler': '  permission_handler: ^11.3.0\n'}
+                  new_lines = [l for l in p_lines if not any(k in l for k in required_libs.keys())]
+                  idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
+                  if idx != -1:
+                      for lib_val in required_libs.values(): new_lines.insert(idx + 1, lib_val)
+                  with open(pub_path, 'w') as f: f.writelines(new_lines)
+
+              # 5. سورس کوڈ اور آئیکن انجکشن
               if main_code:
                   main_code = main_code.replace("hasTorch", "isTorchAvailable").replace("turnOn()", "enableTorch()")
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
-
-              # 5. آئیکن انجکشن
+              
               icon_data = data.get('assets', {}).get('app_icon_base64', '')
               if icon_data:
                   img = base64.b64decode(icon_data.split(",")[1] if "," in icon_data else icon_data)
@@ -95,10 +88,10 @@ jobs:
                               with open(os.path.join(root, n), 'wb') as f: f.write(img)
 
           except Exception as e:
-              print(f"❌ Smart Engine Error: {str(e)}"); exit(1)
+              print(f"❌ Error: {str(e)}"); exit(1)
           EOF
 
-      - name: 🏗️ بلڈ اینڈرائیڈ APK
+      - name: 🏗️ بلڈ اینڈرائیڈ ریلیز (Advanced)
         run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
@@ -106,5 +99,5 @@ jobs:
       - name: 📤 APK اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Permanent-Widget-Build
+          name: System-Pro-Ultra-Build
           path: build/app/outputs/flutter-apk/*.apk
