@@ -16,31 +16,31 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Validate and create source files
+      - name: Decode and write source files from payload (using jq)
         run: |
           set -e
-          echo "📦 Validating client payload..."
-
-          # Helper function for safe decoding
-          safe_decode() {
+          echo "📦 Decoding payload with jq..."
+          
+          mkdir -p lib android/app/src/main
+          
+          # Helper to decode JSON-encoded string
+          decode() {
             local input="$1"
             local output_file="$2"
             if [ -n "$input" ] && [ "$input" != "null" ]; then
-              echo "$input" | sed 's/\\n/\n/g' > "$output_file"
+              echo "$input" | jq -r '.' > "$output_file"
               echo "✅ Created $output_file"
+              return 0
             else
-              echo "❌ Missing or null content for $output_file - using fallback"
+              echo "❌ Missing or null content for $output_file"
               return 1
             fi
           }
-
-          # Create directories
-          mkdir -p lib android/app/src/main
-
+          
           # main.dart
-          MAIN_DART='${{ github.event.client_payload.source_files.main_dart }}'
-          if safe_decode "$MAIN_DART" lib/main.dart; then
-            echo "main.dart decoded successfully"
+          MAIN_DART_JSON='${{ toJson(github.event.client_payload.source_files.main_dart) }}'
+          if decode "$MAIN_DART_JSON" lib/main.dart; then
+            echo "main.dart decoded OK"
           else
             cat > lib/main.dart <<'EOF'
           // Fallback main.dart
@@ -53,24 +53,24 @@ jobs:
           EOF
             echo "⚠️ Using fallback main.dart"
           fi
-
+          
           # AndroidManifest.xml
-          MANIFEST='${{ github.event.client_payload.source_files.android_manifest }}'
-          if safe_decode "$MANIFEST" android/app/src/main/AndroidManifest.xml; then
-            echo "AndroidManifest.xml decoded successfully"
+          MANIFEST_JSON='${{ toJson(github.event.client_payload.source_files.android_manifest) }}'
+          if decode "$MANIFEST_JSON" android/app/src/main/AndroidManifest.xml; then
+            echo "AndroidManifest.xml decoded OK"
           else
             cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.fallback">
-              <application android:label="Fallback App" android:icon="@mipmap/ic_launcher"/>
+              <application android:label="Fallback App" android:icon="@mipmap/ic_launcher" android:usesCleartextTraffic="true"/>
           </manifest>
           EOF
             echo "⚠️ Using fallback AndroidManifest.xml"
           fi
-
+          
           # build.gradle
-          GRADLE='${{ github.event.client_payload.source_files.build_gradle }}'
-          if safe_decode "$GRADLE" android/app/build.gradle; then
-            echo "build.gradle decoded successfully"
+          GRADLE_JSON='${{ toJson(github.event.client_payload.source_files.build_gradle) }}'
+          if decode "$GRADLE_JSON" android/app/build.gradle; then
+            echo "build.gradle decoded OK"
           else
             cat > android/app/build.gradle <<'EOF'
           def localProperties = new Properties()
@@ -99,12 +99,11 @@ jobs:
           EOF
             echo "⚠️ Using fallback build.gradle"
           fi
-
+          
           # pubspec.yaml
-          PUBSPEC='${{ github.event.client_payload.source_files.pubspec }}'
-          if [ -n "$PUBSPEC" ] && [ "$PUBSPEC" != "null" ]; then
-            echo "$PUBSPEC" | sed 's/\\n/\n/g' > pubspec.yaml
-            echo "✅ pubspec.yaml from payload"
+          PUBSPEC_JSON='${{ toJson(github.event.client_payload.source_files.pubspec) }}'
+          if decode "$PUBSPEC_JSON" pubspec.yaml; then
+            echo "pubspec.yaml decoded OK"
           else
             cat > pubspec.yaml <<'EOF'
           name: system_pro_app
@@ -129,7 +128,7 @@ jobs:
             echo "⚠️ Using fallback pubspec.yaml"
           fi
 
-      - name: Dynamic configuration (package name, app name, SDK)
+      - name: Dynamic package and app configuration
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -137,7 +136,6 @@ jobs:
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
 
-          # Set defaults if missing
           : "${NEW_PACKAGE:=com.systempro.default}"
           : "${APP_NAME:=System Pro App}"
           : "${MIN_SDK:=21}"
@@ -146,31 +144,27 @@ jobs:
 
           echo "📱 Configuring: package=$NEW_PACKAGE, app=$APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK, proguard=$PROGUARD"
 
-          # Update files only if they exist
-          if [ -f android/app/src/main/AndroidManifest.xml ]; then
+          [ -f android/app/src/main/AndroidManifest.xml ] && {
             sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
             sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
-          fi
+          }
 
-          if [ -f android/app/build.gradle ]; then
+          [ -f android/app/build.gradle ] && {
             sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
             sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
             sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
-            if [ "$PROGUARD" = "true" ]; then
-              sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
-            fi
-          fi
+            [ "$PROGUARD" = "true" ] && sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
+          }
 
-          # Remove existing activity (safe)
+          # Remove existing activities
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
 
           # Add FlutterActivity (v2)
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
-          # Add flutterEmbedding meta-data
-          if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
+          # Add flutterEmbedding meta-data if missing
+          grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml || 
             sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
-          fi
 
           # Create MainActivity.kt
           PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
@@ -183,12 +177,12 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
 
-          # Remove old static package directory safely
+          # Remove old static package dir if exists and different
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
 
-      - name: Add permissions (idempotent, no duplicates)
+      - name: Add permissions (no duplicates)
         run: |
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           MANIFEST="android/app/src/main/AndroidManifest.xml"
