@@ -21,32 +21,14 @@ jobs:
 
       - name: 🛠️ Generate Android Files (Issue 5 Fix)
         run: |
-          # اگر اینڈرائیڈ فولڈر یا گریڈل غائب ہے تو جنریٹ کریں
-          if [ ! -f "android/gradlew" ]; then
+          # اینڈرائیڈ فائلز جنریشن
+          if [ ! -d "android" ]; then
             flutter create --platforms=android .
           fi
-          # درست ڈائریکٹری میں جا کر پرمیشن دینا
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-          fi
+          # پرمیشن سیٹ کرنا
+          [ -f "android/gradlew" ] && chmod +x android/gradlew
 
-      - name: 🧬 Force Fix Kotlin & Java (Issue 1, 2 & 5)
-        run: |
-          # settings.gradle میں ورژن لاک کرنا
-          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
-          
-          # build.gradle میں ورژن لاک کرنا
-          if grep -q "ext.kotlin_version" android/build.gradle; then
-            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/g" android/build.gradle
-          else
-            sed -i "/buildscript {/a \    ext.kotlin_version = '1.9.22'" android/build.gradle
-          fi
-          
-          # Java 17 ٹارگٹ سیٹ کرنا
-          sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
-          sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
-
-      - name: 🧬 Repair Pubspec & Code (Issue 3, 4 & 8)
+      - name: 🧬 Repair Pubspec & Code (Issue 3, 4, 7 & 8)
         shell: python
         run: |
           import json, os, re
@@ -59,29 +41,42 @@ jobs:
           pkg_name = config.get('package_name', 'com.systempro.ultra')
           main_code = data.get('source_files', {}).get('main_dart', '')
 
-          # 1. پب اسپیک سے ڈپلیکیٹ ہٹانا
+          # 1. پب اسپیک سے ڈپلیکیٹ کا مکمل خاتمہ
           pub_path = 'pubspec.yaml'
           if os.path.exists(pub_path):
               with open(pub_path, 'r') as f: lines = f.readlines()
+              
+              # ان تمام لائنز کو نکال دیں جن میں ہماری لائبریریز کا ذکر ہے
               targets = ['home_widget', 'torch_light', 'http', 'permission_handler']
-              cleaned = [l for l in lines if not any(t in l for t in targets)]
-              idx = next((i for i, s in enumerate(cleaned) if 'dependencies:' in s), -1)
+              new_lines = []
+              for line in lines:
+                  if not any(t in line for t in targets):
+                      new_lines.append(line)
+              
+              # اب دوبارہ صاف طریقے سے لائبریریز شامل کریں
+              idx = next((i for i, s in enumerate(new_lines) if 'dependencies:' in s), -1)
               if idx != -1:
-                  libs = ["  home_widget: ^0.7.0\n", "  torch_light: ^1.1.0\n", "  http: ^1.2.0\n", "  permission_handler: ^11.3.0\n"]
-                  for lib in reversed(libs): cleaned.insert(idx + 1, lib)
-              with open(pub_path, 'w') as f: f.writelines(cleaned)
+                  libs = [
+                      "  home_widget: ^0.7.0\n",
+                      "  torch_light: ^1.1.0\n",
+                      "  http: ^1.2.0\n",
+                      "  permission_handler: ^11.3.0\n"
+                  ]
+                  for lib in reversed(libs):
+                      new_lines.insert(idx + 1, lib)
+              
+              with open(pub_path, 'w') as f: f.writelines(new_lines)
 
           # 2. مین کوڈ میں TorchLight API درست کرنا
           if main_code:
               main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
-              # صحیح API: hasTorch (bool), enableTorch(), disableTorch()
               main_code = main_code.replace("Torch.hasTorch", "await TorchLight.hasTorch")
               main_code = main_code.replace("Torch.turnOn()", "await TorchLight.enableTorch()")
               main_code = main_code.replace("Torch.turnOff()", "await TorchLight.disableTorch()")
               os.makedirs('lib', exist_ok=True)
               with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-          # 3. پیکیج نیم اور لیبل اپ ڈیٹ
+          # 3. اینڈرائیڈ مینی فیسٹ اور پیکیج آئی ڈی
           m_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(m_path):
               with open(m_path, 'r') as f: m = f.read()
@@ -95,7 +90,18 @@ jobs:
               g = re.sub(r'applicationId "[^"]*"', f'applicationId "{pkg_name}"', g)
               with open(g_path, 'w') as f: f.write(g)
 
-      - name: 🧹 Gradle Clean (Issue 6)
+      - name: 🧬 Force Fix Kotlin & Java (Issue 1 & 2)
+        run: |
+          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
+          if grep -q "ext.kotlin_version" android/build.gradle; then
+            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.9.22'/g" android/build.gradle
+          else
+            sed -i "/buildscript {/a \    ext.kotlin_version = '1.9.22'" android/build.gradle
+          fi
+          sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
+          sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
+
+      - name: 🧹 Gradle Clean
         run: |
           cd android
           ./gradlew clean
@@ -109,5 +115,5 @@ jobs:
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V4-1-Success
+          name: System-Pro-V4-2-Success
           path: build/app/outputs/flutter-apk/*.apk
