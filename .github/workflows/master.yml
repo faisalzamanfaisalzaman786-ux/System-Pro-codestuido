@@ -16,6 +16,66 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
+      - name: Create entire Android project structure (if missing)
+        run: |
+          set -e
+          echo "🛠️ Creating Android project skeleton..."
+
+          # Root build.gradle
+          cat > android/build.gradle <<'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # settings.gradle
+          cat > android/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          include ':app'
+          EOF
+
+          # gradle wrapper properties
+          mkdir -p android/gradle/wrapper
+          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.3-all.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          # gradle.properties (optional, for performance)
+          cat > android/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+          echo "✅ Android skeleton created"
+
       - name: Decode base64 source files from payload
         run: |
           set -e
@@ -59,11 +119,10 @@ jobs:
             echo "⚠️ Using fallback AndroidManifest.xml"
           fi
 
-          # build.gradle (with namespace and kotlin_version)
+          # build.gradle (app level) - with namespace and kotlin_version
           GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
           if ! decode_b64 "$GRADLE_B64" android/app/build.gradle; then
             cat > android/app/build.gradle <<'EOF'
-          ext.kotlin_version = '1.9.22'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
           if (localPropertiesFile.exists()) { localPropertiesFile.withInputStream { localProperties.load(it) } }
@@ -102,7 +161,7 @@ jobs:
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
           }
           EOF
-            echo "⚠️ Using fallback build.gradle with namespace and kotlin_version"
+            echo "⚠️ Using fallback app/build.gradle with namespace"
           fi
 
           # pubspec.yaml
@@ -151,7 +210,7 @@ jobs:
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
 
-          # Update build.gradle: namespace, applicationId, minSdk, targetSdk, proguard
+          # Update app/build.gradle: namespace, applicationId, minSdk, targetSdk, proguard
           sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" android/app/build.gradle
           if ! grep -q 'namespace' android/app/build.gradle; then
             sed -i '/android {/a \    namespace "'"${NEW_PACKAGE}"'"' android/app/build.gradle
