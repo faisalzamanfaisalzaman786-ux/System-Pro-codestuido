@@ -16,141 +16,49 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Create Android project skeleton (declarative plugins)
+      - name: Create Flutter project (fresh template)
+        run: |
+          # نیا پروجیکٹ بنائیں
+          flutter create --project-name=system_pro_app --platforms=android,ios .
+          # تمام ڈیفالٹ فائلز overwrite ہو جائیں گی، لیکن ہمیں بعد میں main.dart اور pubspec.yaml بدلنا ہے
+
+      - name: Decode and write source files from payload (overwrite)
         run: |
           set -e
-          echo "🏗️ Creating Android project..."
-          cat > android/build.gradle <<'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
-          EOF
-
-          cat > android/settings.gradle <<'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          plugins { id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false }
-          include ":app"
-          EOF
-
-          mkdir -p android/gradle/wrapper
-          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.3-all.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-          cat > android/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-
-          cat > android/app/build.gradle <<'EOF'
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withInputStream { localProperties.load(it) }
-          }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
-          def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
-          android {
-              namespace "com.systempro.template"
-              compileSdk 34
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions { jvmTarget = '17' }
-              defaultConfig {
-                  applicationId "com.systempro.template"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-              }
-              buildTypes { release { signingConfig signingConfigs.debug } }
-          }
-          flutter { source '../..' }
-          dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version" }
-          EOF
-          echo "✅ Android skeleton created"
-
-      - name: Decode and write source files from payload (base64)
-        run: |
-          set -e
-          echo "📦 Decoding base64 source files..."
-          mkdir -p lib android/app/src/main
+          echo "📦 Overwriting with payload files..."
 
           decode_b64() {
             local b64="$1" out="$2"
             if [ -n "$b64" ] && [ "$b64" != "null" ]; then
               echo "$b64" | base64 -d > "$out"
-              echo "✅ Created $out"
+              echo "✅ Updated $out"
+              return 0
             else
-              echo "❌ Missing base64 for $out - using fallback"
+              echo "❌ Missing or null base64 for $out - keeping existing"
               return 1
             fi
           }
 
+          # main.dart (overwrite)
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if ! decode_b64 "$MAIN_B64" lib/main.dart; then
-            cat > lib/main.dart <<'EOF'
-          // Fallback main.dart
-          import 'package:flutter/material.dart';
-          void main() => runApp(MyApp());
-          class MyApp extends StatelessWidget {
-            @override Widget build(BuildContext context) => MaterialApp(home: Scaffold(body: Center(child: Text('Error: No main.dart'))));
-          }
-          EOF
+            echo "⚠️ No main.dart from payload, using existing (default hello world)"
           fi
 
-          MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
-          if ! decode_b64 "$MANIFEST_B64" android/app/src/main/AndroidManifest.xml; then
-            cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.systempro.fallback">
-              <application android:label="Fallback App" android:icon="@mipmap/ic_launcher"/>
-          </manifest>
-          EOF
-          fi
-
+          # pubspec.yaml (overwrite if provided, otherwise keep existing)
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if ! decode_b64 "$PUBSPEC_B64" pubspec.yaml; then
-            cat > pubspec.yaml <<'EOF'
-          name: system_pro_app
-          description: Auto-generated
-          version: 1.0.0+1
-          environment: { sdk: '>=3.4.0 <4.0.0' }
-          dependencies: { flutter: { sdk: flutter }, cupertino_icons: ^1.0.8, permission_handler: ^11.3.0, http: ^1.2.0 }
-          dev_dependencies: { flutter_test: { sdk: flutter }, flutter_lints: ^4.0.0 }
-          flutter: { uses-material-design: true }
-          EOF
+            echo "ℹ️ No pubspec.yaml from payload, keeping existing"
           fi
 
-      - name: Dynamic configuration (package, app name, SDK, activity, namespace)
+          # AndroidManifest.xml (ignore – we will modify only necessary parts, but keep default)
+          # We'll NOT overwrite it fully; instead we will update package and label dynamically
+          # But we need to keep the default activity and flutterEmbedding
+          # So we will just apply the dynamic changes on the existing file
+
+          # Note: We are NOT overwriting android/app/build.gradle, because we trust flutter create
+
+      - name: Apply dynamic configuration (package name, app name, permissions, icon)
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -166,43 +74,24 @@ jobs:
 
           echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
 
-          sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
-          sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
-
-          sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" android/app/build.gradle
-          sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
-          sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
-          sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
-          if [ "$PROGUARD" = "true" ]; then
-            sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
-          fi
-
-          # Add activity and flutterEmbedding
-          sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
-
-          if ! grep -q "flutterEmbedding" android/app/src/main/AndroidManifest.xml; then
-            sed -i '/<\/application>/i \        <meta-data android:name="flutterEmbedding" android:value="2" />' android/app/src/main/AndroidManifest.xml
-          fi
-
-          # MainActivity.kt
-          PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
-          mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
-          cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
-          package ${NEW_PACKAGE}
-          import io.flutter.embedding.android.FlutterActivity
-          class MainActivity : FlutterActivity()
-          EOF
-
-          # Remove old static dir if different
-          if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
-            rm -rf "android/app/src/main/kotlin/com/systempro/template"
-          fi
-
-      - name: Add permissions (no duplicates)
-        run: |
-          PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
+          # Update AndroidManifest.xml (only package, label, and permissions)
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" "$MANIFEST"
+          sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
+
+          # Update build.gradle (app level) for namespace, applicationId, minSdk, targetSdk
+          GRADLE="android/app/build.gradle"
+          # Ensure namespace exists (it does in modern template)
+          sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" "$GRADLE"
+          sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" "$GRADLE"
+          sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" "$GRADLE"
+          sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" "$GRADLE"
+          if [ "$PROGUARD" = "true" ]; then
+            sed -i "s/minifyEnabled false/minifyEnabled true/" "$GRADLE"
+          fi
+
+          # Add permissions (no duplicates)
+          PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           if ! command -v jq &> /dev/null; then sudo apt-get update && sudo apt-get install -y jq; fi
           add_perm() {
             local perm_xml="$1" perm_name="$2"
@@ -210,23 +99,26 @@ jobs:
               sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
             fi
           }
-          if [ -z "$PERMS_JSON" ] || [ "$PERMS_JSON" = "null" ]; then echo "ℹ️ No permissions payload"; exit 0; fi
-          echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
-            case $perm in
-              storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"; add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
-              camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
-              bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
-              microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
-              contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"; add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
-              notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
-              foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
-              sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"; add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
-              vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
-            esac
-          done
-          LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
-          if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
-          elif [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"; fi
+          if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
+            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
+              case $perm in
+                storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"; add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
+                camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
+                bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
+                microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
+                contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"; add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
+                notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+                foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
+                sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"; add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
+                vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
+              esac
+            done
+            LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
+            if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
+            elif [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"; fi
+          else
+            echo "ℹ️ No permissions payload"
+          fi
 
       - name: Set app icon (if provided)
         run: |
@@ -241,7 +133,7 @@ jobs:
             echo "✅ App icon set"
           else echo "ℹ️ No icon provided"; fi
 
-      - name: Additional assets (if any)
+      - name: Additional assets
         run: |
           ASSETS='${{ toJson(github.event.client_payload.assets.additional_assets) }}'
           if [ -n "$ASSETS" ] && [ "$ASSETS" != "null" ] && [ "$ASSETS" != "[]" ]; then
