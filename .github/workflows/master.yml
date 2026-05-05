@@ -11,7 +11,7 @@ jobs:
       - name: 📥 Check out repository
         uses: actions/checkout@v4
 
-      - name: 🚀 Setup Flutter (3.24.5)
+      - name: 🚀 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -26,30 +26,40 @@ jobs:
           fi
           [ -f "android/gradlew" ] && chmod +x android/gradlew
 
-      - name: 🧬 Step 2: Fix Pubspec & Code
+      - name: 🧬 Step 2: Clean and Add Deps
         run: |
-          # پیکیجز کی صفائی
           sed -i '/home_widget/d; /torch_light/d; /http/d; /permission_handler/d' pubspec.yaml
           sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
-          
-          # کوڈ ریپلیسمنٹ (سادہ طریقے سے)
-          mkdir -p lib
-          echo "import 'package:flutter/material.dart';import 'package:torch_light/torch_light.dart';void main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('System Pro Success')))));" > lib/main.dart
 
-      - name: 🧬 Step 3: Android System Fix
+      - name: 🧬 Step 3: Source Code Update
+        shell: python
+        run: |
+          import json, os
+          try:
+              raw = r'''${{ toJson(github.event.client_payload) }}'''
+              data = json.loads(raw)
+              code = data.get('source_files', {}).get('main_dart', '')
+              if code:
+                  os.makedirs('lib', exist_ok=True)
+                  with open('lib/main.dart', 'w', encoding='utf-8') as f:
+                      f.write(code)
+          except Exception as e:
+              print(f"Payload error: {e}")
+
+      - name: 🧬 Step 4: Final System Fixes
         run: |
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.22"/g' android/settings.gradle
           sed -i "s/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g" android/app/build.gradle
           sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" android/app/build.gradle
 
-      - name: 🏗️ Step 4: Build APK
+      - name: 🏗️ Step 5: Build APK
         run: |
           cd android && ./gradlew clean && cd ..
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload
+      - name: 📤 Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V4-9
+          name: System-Pro-V5-Build
           path: build/app/outputs/flutter-apk/*.apk
