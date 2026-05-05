@@ -1,22 +1,4 @@
-name: System Pro Master Engine
-
-on:
-  repository_dispatch:
-    types: [system_pro_build]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: 🛠️ Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.0'
-
-      - name: 🧬 Titan Ingestion Engine
+      - name: 🧬 Titan Ingestion Engine (V2)
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -28,58 +10,53 @@ jobs:
               config = data.get('build_config', {})
               app_name = config.get('app_display_name', 'System Pro App')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
-              
-              # 1. Pubspec Correct Placement (Dependencies Fix)
+              main_code = data.get('source_files', {}).get('main_dart', '')
+
+              # 1. پب اسپیک صفائی اور آٹو لائبریری ڈیٹیکشن
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
                   
-                  new_lines = []
-                  # پرانی ڈوپلیکیٹ لائنز نکالنا
-                  for line in lines:
-                      if not any(k in line for k in ['permission_handler', 'http']):
-                          new_lines.append(line)
+                  # ڈوپلیکیٹ نکالنا
+                  clean_lines = [l for l in lines if not any(k in l for l in ['permission_handler', 'http', 'torch'])]
                   
-                  # اب "dependencies:" ڈھونڈ کر اس کے ٹھیک نیچے لائبریریز ڈالنا
                   final_lines = []
-                  for line in new_lines:
+                  for line in clean_lines:
                       final_lines.append(line)
                       if line.strip() == "dependencies:":
                           final_lines.append("  permission_handler: ^11.3.0\n")
                           final_lines.append("  http: ^1.2.0\n")
+                          # اگر کوڈ میں torch استعمال ہوا ہے تو اسے شامل کرنا
+                          if "package:torch/torch.dart" in main_code:
+                              final_lines.append("  torch: ^1.0.0\n")
                   
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
-              # 2. Icon Engine (All Folders Fix)
+              # 2. آئیکن انجن (Universal Fix)
               icon_b64 = data.get('assets', {}).get('app_icon_base64', None)
               if icon_b64:
                   if "," in icon_b64: icon_b64 = icon_b64.split(",")[1]
                   img_data = base64.b64decode(icon_b64)
                   res_dir = 'android/app/src/main/res/'
-                  
-                  # تمام ممکنہ فولڈرز میں آئیکن پش کرنا
                   for root, dirs, files in os.walk(res_dir):
                       if 'mipmap' in root or 'drawable' in root:
                           for icon_name in ['ic_launcher.png', 'launcher_icon.png']:
-                              with open(os.path.join(root, icon_name), 'wb') as f:
-                                  f.write(img_data)
-                  print("✅ Icon Updated in all resource folders")
+                              with open(os.path.join(root, icon_name), 'wb') as f: f.write(img_data)
 
-              # 3. Branding & Package
-              m_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(m_path):
-                  with open(m_path, 'r') as f: c = f.read()
+              # 3. مینی فیسٹ اور گریڈل اپ ڈیٹ
+              manifest = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(manifest):
+                  with open(manifest, 'r') as f: c = f.read()
                   c = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', c)
                   c = c.replace('com.systempro.ultra', pkg_name)
-                  with open(m_path, 'w') as f: f.write(c)
+                  with open(manifest, 'w') as f: f.write(c)
 
-              g_path = 'android/app/build.gradle'
-              if os.path.exists(g_path):
-                  with open(g_path, 'r') as f: c = f.read()
+              gradle = 'android/app/build.gradle'
+              if os.path.exists(gradle):
+                  with open(gradle, 'r') as f: c = f.read()
                   c = c.replace('com.systempro.ultra', pkg_name)
-                  with open(g_path, 'w') as f: f.write(c)
+                  with open(gradle, 'w') as f: f.write(c)
 
-              # 4. Source Code
-              main_code = data.get('source_files', {}).get('main_dart', '')
+              # 4. کوڈ انجکشن
               if main_code:
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
@@ -87,14 +64,3 @@ jobs:
           except Exception as e:
               print(f"❌ Error: {e}"); exit(1)
           EOF
-
-      - name: 🏗️ Build Pro APK
-        run: |
-          flutter pub get
-          flutter build apk --release --no-tree-shake-icons
-
-      - name: 📤 Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Release
-          path: build/app/outputs/flutter-apk/*.apk
