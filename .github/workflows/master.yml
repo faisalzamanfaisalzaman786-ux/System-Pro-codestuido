@@ -25,7 +25,7 @@ jobs:
         run: |
           flutter create --project-name=system_pro_app --platforms=android,ios .
 
-      - name: Decode and write source files from payload (overwrite everything)
+      - name: Decode and write source files from payload (overwrite)
         run: |
           set -e
           echo "📦 Overwriting with payload files..."
@@ -42,7 +42,6 @@ jobs:
             fi
           }
 
-          # main.dart (mandatory)
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if ! decode_b64 "$MAIN_B64" lib/main.dart; then
             echo "⚠️ No main.dart from payload, using fallback"
@@ -56,7 +55,6 @@ jobs:
           EOF
           fi
 
-          # pubspec.yaml (always override with either payload or clean default)
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if decode_b64 "$PUBSPEC_B64" pubspec.yaml; then
             echo "Using pubspec from payload"
@@ -84,9 +82,6 @@ jobs:
           EOF
           fi
 
-          # Note: We are NOT overwriting AndroidManifest.xml or build.gradle fully.
-          # We will only modify them dynamically later.
-
       - name: Apply dynamic configuration (package name, app name, permissions, icon)
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
@@ -106,12 +101,12 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update package and label in manifest
+          # Update manifest
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" "$MANIFEST"
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # Update namespace, applicationId, minSdk, targetSdk in build.gradle
-          sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" "$GRADLE"
+          # Update build.gradle: namespace (with = sign), applicationId, minSdk, targetSdk
+          sed -i "s/namespace = \".*\"/namespace = \"${NEW_PACKAGE}\"/" "$GRADLE"
           sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" "$GRADLE"
           sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" "$GRADLE"
