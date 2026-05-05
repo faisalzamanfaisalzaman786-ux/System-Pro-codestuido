@@ -34,7 +34,6 @@ jobs:
             fi
           }
 
-          # main.dart
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if ! decode_b64 "$MAIN_B64" lib/main.dart; then
             cat > lib/main.dart <<'EOF'
@@ -48,7 +47,6 @@ jobs:
             echo "⚠️ Using fallback main.dart"
           fi
 
-          # AndroidManifest.xml
           MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
           if ! decode_b64 "$MANIFEST_B64" android/app/src/main/AndroidManifest.xml; then
             cat > android/app/src/main/AndroidManifest.xml <<'EOF'
@@ -59,9 +57,9 @@ jobs:
             echo "⚠️ Using fallback AndroidManifest.xml"
           fi
 
-          # build.gradle
           GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
           if ! decode_b64 "$GRADLE_B64" android/app/build.gradle; then
+            # Updated template with namespace
             cat > android/app/build.gradle <<'EOF'
           def localProperties = new Properties()
           def localPropertiesFile = rootProject.file('local.properties')
@@ -72,25 +70,38 @@ jobs:
           apply plugin: 'kotlin-android'
           apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
           android {
+              namespace "com.systempro.template"
               compileSdk 34
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-              kotlinOptions { jvmTarget = '17' }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
               defaultConfig {
-                  applicationId "com.systempro.fallback"
+                  applicationId "com.systempro.template"
                   minSdk 21
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { signingConfig signingConfigs.debug } }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
           }
-          flutter { source '../..' }
-          dependencies { implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version" }
+          flutter {
+              source '../..'
+          }
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+          }
           EOF
-            echo "⚠️ Using fallback build.gradle"
+            echo "⚠️ Using fallback build.gradle with namespace"
           fi
 
-          # pubspec.yaml
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if ! decode_b64 "$PUBSPEC_B64" pubspec.yaml; then
             cat > pubspec.yaml <<'EOF'
@@ -116,7 +127,7 @@ jobs:
             echo "⚠️ Using fallback pubspec.yaml"
           fi
 
-      - name: Dynamic configuration (package, app name, SDK, activity)
+      - name: Dynamic configuration (package, app name, SDK, activity, namespace)
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -132,8 +143,12 @@ jobs:
 
           echo "📱 Config: $NEW_PACKAGE, $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
 
+          # Update AndroidManifest
           sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
+
+          # Update build.gradle: namespace, applicationId, minSdk, targetSdk, proguard
+          sed -i "s/namespace \".*\"/namespace \"${NEW_PACKAGE}\"/" android/app/build.gradle
           sed -i "s/applicationId \".*\"/applicationId \"${NEW_PACKAGE}\"/" android/app/build.gradle
           sed -i "s/minSdk [0-9]\+/minSdk ${MIN_SDK}/" android/app/build.gradle
           sed -i "s/targetSdk [0-9]\+/targetSdk ${TARGET_SDK}/" android/app/build.gradle
@@ -141,7 +156,7 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-          # Remove old activity and add FlutterActivity
+          # Remove existing activity and add FlutterActivity
           sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
           sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
 
@@ -159,6 +174,7 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
 
+          # Remove old static package dir if exists and different
           if [ -d "android/app/src/main/kotlin/com/systempro/template" ] && [ "$PKG_PATH" != "com/systempro/template" ]; then
             rm -rf "android/app/src/main/kotlin/com/systempro/template"
           fi
@@ -192,7 +208,7 @@ jobs:
           if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
           elif [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"; fi
 
-      - name: Set app icon
+      - name: Set app icon (if provided)
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -205,7 +221,7 @@ jobs:
             echo "✅ App icon set"
           else echo "ℹ️ No icon provided"; fi
 
-      - name: Additional assets
+      - name: Additional assets (if any)
         run: |
           ASSETS='${{ toJson(github.event.client_payload.assets.additional_assets) }}'
           if [ -n "$ASSETS" ] && [ "$ASSETS" != "null" ] && [ "$ASSETS" != "[]" ]; then
