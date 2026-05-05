@@ -24,7 +24,7 @@ jobs:
           echo '${{ github.event.client_payload.source_files.android_manifest }}' | sed 's/\\n/\n/g' > android/app/src/main/AndroidManifest.xml
           echo '${{ github.event.client_payload.source_files.build_gradle }}' | sed 's/\\n/\n/g' > android/app/build.gradle
 
-      - name: Apply dynamic configuration
+      - name: Apply dynamic configuration and clean manifest
         run: |
           PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -32,6 +32,7 @@ jobs:
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
 
+          # پیکیج نیم اور لیبل تبدیل کریں
           sed -i "s/package=\".*\"/package=\"${PACKAGE}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" android/app/src/main/AndroidManifest.xml
           sed -i "s/applicationId \".*\"/applicationId \"${PACKAGE}\"/" android/app/build.gradle
@@ -41,46 +42,85 @@ jobs:
             sed -i "s/minifyEnabled false/minifyEnabled true/" android/app/build.gradle
           fi
 
-      - name: Add permissions
+          # مینیفیسٹ میں کوئی بھی موجودہ ایکٹیویٹی ہٹائیں (ڈپلیکیٹ سے بچنے کے لیے)
+          sed -i '/<activity/,/<\/activity>/d' android/app/src/main/AndroidManifest.xml
+
+          # اب صحیح ایکٹیویٹی شامل کریں (FlutterActivity v2)
+          sed -i '/<application>/a \        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:launchMode="singleTop"\n            android:theme="@style/LaunchTheme"\n            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN"/>\n                <category android:name="android.intent.category.LAUNCHER"/>\n            </intent-filter>\n        </activity>' android/app/src/main/AndroidManifest.xml
+
+          # MainActivity.kt بنائیں (v2 embedding)
+          PKG_PATH=$(echo "$PACKAGE" | tr '.' '/')
+          mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
+          cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
+          package ${PACKAGE}
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity : FlutterActivity()
+          EOF
+
+      - name: Add missing permissions (avoid duplicates)
         run: |
           PERMS='${{ toJson(github.event.client_payload.permissions) }}'
+          # صرف وہ پرمیشنز لیں جو true ہیں
           echo "$PERMS" | jq -r 'to_entries[] | select(.value==true) | .key' > perms.txt
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          add_if_missing() {
+            local perm_line=$1
+            local perm_name=$2
+            if ! grep -q "$perm_name" "$MANIFEST"; then
+              sed -i "/<manifest/a \    $perm_line" "$MANIFEST"
+              echo "Added $perm_name"
+            else
+              echo "Skipped duplicate $perm_name"
+            fi
+          }
+
           while read perm; do
             case $perm in
               storage)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
+                add_if_missing '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
                 ;;
               camera)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
                 ;;
               bluetooth)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
+                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
+                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
+                add_if_missing '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
                 ;;
               microphone)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
                 ;;
               contacts)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.READ_CONTACTS" />\n    <uses-permission android:name="android.permission.WRITE_CONTACTS" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
+                add_if_missing '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
                 ;;
               notif)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
                 ;;
               foreground)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
                 ;;
               sms)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.SEND_SMS" />\n    <uses-permission android:name="android.permission.READ_SMS" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
+                add_if_missing '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
                 ;;
               vibrate)
-                sed -i '/<manifest/a \    <uses-permission android:name="android.permission.VIBRATE" />' android/app/src/main/AndroidManifest.xml
+                add_if_missing '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
                 ;;
             esac
           done < perms.txt
+
+          # لوکیشن گرینولیرٹی
           LOC=$(echo "$PERMS" | jq -r '.location_granularity // ""')
-          if [ "$LOC" = "fine" ]; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-          elif [ "$LOC" = "coarse" ]; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+          if [ "$LOC" = "fine" ] && ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "$MANIFEST"
+          elif [ "$LOC" = "coarse" ] && ! grep -q "ACCESS_COARSE_LOCATION" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
           fi
 
       - name: Set app icon
