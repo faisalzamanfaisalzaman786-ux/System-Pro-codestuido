@@ -18,17 +18,37 @@ jobs:
 
       - name: Force Reconstruction
         run: |
-          # اینڈرائیڈ فولڈر کو مکمل جڑ سے ختم کرنا تاکہ سپورٹ کا مسئلہ نہ رہے
-          rm -rf android
-          # نیا پروجیکٹ اسٹرکچر بنانا
+          # مکمل صفائی تاکہ کوئی پرانی فائل مداخلت نہ کرے
+          rm -rf android lib pubspec.yaml
+          
+          # بالکل نئی pubspec.yaml فائل بنانا (بغیر کسی ڈپلیکیٹ کے)
+          cat <<EOF > pubspec.yaml
+          name: system_pro
+          description: "System Pro Build Engine"
+          version: 1.0.0+1
+          publish_to: 'none'
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+            home_widget: ^0.7.0
+            torch_light: ^1.1.0
+            http: ^1.2.0
+            permission_handler: ^11.3.0
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+          flutter:
+            uses-material-design: true
+          EOF
+
+          # اب پروجیکٹ اسٹرکچر بنانا
           flutter create --platforms=android --project-name=system_pro .
-          # ڈپلیکیٹ انٹریز سے پاک پب اسپیک بنانا
-          sed -i '/home_widget:/d; /torch_light:/d; /http:/d; /permission_handler:/d' pubspec.yaml
-          sed -i '/dependencies:/a \  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n  http: ^1.2.0\n  permission_handler: ^11.3.0' pubspec.yaml
 
       - name: Write Modern Android Config
         run: |
-          # جدید ترین کوٹلن اور گریڈل سیٹنگز ڈالنا
+          # اینڈرائیڈ کی سیٹنگز کو جدید ترین ورژن پر فورس کرنا
           cat <<EOF > android/settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           plugins {
@@ -43,7 +63,7 @@ jobs:
         run: |
           mkdir -p lib
           printf '%s\n' "${{ github.event.client_payload.source_files.main_dart }}" > lib/main.dart
-          # کوڈ کے اندر ٹارچ اور اویٹ کے مسائل درست کرنا
+          # کوڈ کے اندر ٹارچ اور اویٹ کے ممکنہ مسائل درست کرنا
           sed -i "s/package:torch\/torch.dart/package:torch_light\/torch_light.dart/g" lib/main.dart
           sed -i "s/await await/await/g" lib/main.dart
           sed -i "s/Torch.hasTorch/await TorchLight.isTorchAvailable()/g" lib/main.dart
@@ -59,5 +79,5 @@ jobs:
       - name: Upload System Pro APK
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-V6-7
+          name: System-Pro-V6-8
           path: build/app/outputs/flutter-apk/*.apk
