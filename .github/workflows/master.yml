@@ -1,4 +1,4 @@
-name: System Pro Master Engine
+name: System Pro Ultimate Engine
 
 on:
   repository_dispatch:
@@ -7,19 +7,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15 # سست انٹرنیٹ کے لیے زیادہ وقت
+    timeout-minutes: 30 
     steps:
       - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🚀 اسٹیبل فلٹر لاک (3.24.5)
+      - name: 🚀 فلٹر لاک (3.24.5)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.24.5' # مستقل ورژن
+          flutter-version: '3.24.5'
           cache: true
 
-      - name: 🧬 الٹرا اسمارٹ اے آئی انجن (Pre-Fixing Logic)
+      - name: 🧬 الٹرا ویجٹ اینڈ اے آئی انجن
         run: |
           python3 - <<EOF
           import json, os, re, base64
@@ -28,83 +28,71 @@ jobs:
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
               config = data.get('build_config', {})
-              app_name = config.get('app_display_name', 'System Pro App')
+              app_name = config.get('app_display_name', 'System Pro')
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
+              widget_xml = data.get('assets', {}).get('widget_layout_xml', '')
 
-              # 1. گریڈل اور کوٹلن ورژن لاکنگ (1.9.22)
-              def fix_gradle():
-                  path = 'android/build.gradle'
-                  if os.path.exists(path):
-                      with open(path, 'r') as f: c = f.read()
-                      c = re.sub(r"ext\.kotlin_version = .*", "ext.kotlin_version = '1.9.22'", c)
-                      with open(path, 'w') as f: f.write(c)
-              fix_gradle()
+              # 1. ویجٹ انجکشن (XML & Provider)
+              if widget_xml:
+                  layout_dir = 'android/app/src/main/res/layout'
+                  xml_dir = 'android/app/src/main/res/xml'
+                  os.makedirs(layout_dir, exist_ok=True)
+                  os.makedirs(xml_dir, exist_ok=True)
+                  # ویجٹ کا ڈیزائن بنانا
+                  with open(os.path.join(layout_dir, 'pro_widget_layout.xml'), 'w') as f: f.write(widget_xml)
+                  # ویجٹ کی کنفیگریشن
+                  w_info = '<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="40dp" android:minHeight="40dp" android:updatePeriodMillis="86400000" android:initialLayout="@layout/pro_widget_layout"></appwidget-provider>'
+                  with open(os.path.join(xml_dir, 'pro_widget_info.xml'), 'w') as f: f.write(w_info)
 
-              # 2. اسمارٹ لائبریری اور پرمیشن ڈیٹیکٹر
+              # 2. مینی فیسٹ اپ ڈیٹ (Widget & Permissions)
+              manifest_path = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(manifest_path):
+                  with open(manifest_path, 'r') as f: m = f.read()
+                  if widget_xml and 'AppWidgetProvider' not in m:
+                      w_receiver = '''
+        <receiver android:name=".ProWidgetProvider" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/pro_widget_info" />
+        </receiver>
+                      '''
+                      m = m.replace('</activity>', '</activity>' + w_receiver)
+                  
+                  # برانڈنگ اور پیکیج فکس
+                  m = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m)
+                  m = m.replace('com.systempro.ultra', pkg_name)
+                  with open(manifest_path, 'w') as f: f.write(m)
+
+              # 3. لائبریری اور سورس کوڈ فکسر
               if os.path.exists('pubspec.yaml'):
-                  with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  
-                  # لائبریری اور ان کی پرمیشنز کا نقشہ
-                  lib_map = {
-                      'torch': ('  torch_light: ^1.1.0\n', 'android.permission.FLASHLIGHT'),
-                      'http': ('  http: ^1.2.0\n', 'android.permission.INTERNET'),
-                      'camera': ('  camera: ^0.11.0\n', 'android.permission.CAMERA'),
-                      'permission_handler': ('  permission_handler: ^11.3.0\n', '')
-                  }
-                  
-                  active_permissions = []
-                  final_lines = []
-                  for line in lines:
-                      final_lines.append(line)
-                      if line.strip() == "dependencies:":
-                          for key, (val, perm) in lib_map.items():
-                              if key in main_code.lower():
-                                  final_lines.append(val)
-                                  if perm: active_permissions.append(perm)
-                  with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
+                  with open('pubspec.yaml', 'a') as f:
+                      f.write("\n  home_widget: ^0.7.0\n  torch_light: ^1.1.0\n")
 
-                  # 3. مینی فیسٹ آٹو انجکشن
-                  manifest_path = 'android/app/src/main/AndroidManifest.xml'
-                  if os.path.exists(manifest_path):
-                      with open(manifest_path, 'r') as f: m_content = f.read()
-                      # پرمیشنز شامل کرنا
-                      for p in set(active_permissions):
-                          if p not in m_content:
-                              m_content = m_content.replace('</manifest>', f'    <uses-permission android:name="{p}" />\n</manifest>')
-                      # برانڈنگ فکس
-                      m_content = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', m_content)
-                      m_content = m_content.replace('com.systempro.ultra', pkg_name)
-                      with open(manifest_path, 'w') as f: f.write(m_content)
-
-              # 4. فل فورس آئیکن ری پلیسمنٹ
-              icon_data = data.get('assets', {}).get('app_icon_base64', '')
-              if icon_data:
-                  img = base64.b64decode(icon_data.split(",")[1] if "," in icon_data else icon_data)
-                  for root, dirs, files in os.walk('android/app/src/main/res/'):
-                      if any(x in root for x in ['mipmap', 'drawable']):
-                          for n in ['ic_launcher.png', 'launcher_icon.png', 'ic_launcher_round.png']:
-                              with open(os.path.join(root, n), 'wb') as f: f.write(img)
-
-              # 5. سورس کوڈ آٹو ریپیئر (Methods Mapping)
               if main_code:
-                  main_code = main_code.replace("package:torch/torch.dart", "package:torch_light/torch_light.dart")
-                  main_code = main_code.replace("Torch.", "TorchLight.").replace("hasTorch", "isTorchAvailable")
-                  main_code = main_code.replace("turnOn()", "enableTorch()").replace("turnOff()", "disableTorch()")
+                  main_code = main_code.replace("hasTorch", "isTorchAvailable").replace("turnOn()", "enableTorch()")
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
+              # 4. آئیکن انجکشن
+              icon_data = data.get('assets', {}).get('app_icon_base64', '')
+              if icon_data:
+                  img = base64.b64decode(icon_data.split(",")[1] if "," in icon_data else icon_data)
+                  for root, _, _ in os.walk('android/app/src/main/res/'):
+                      if any(x in root for x in ['mipmap', 'drawable']):
+                          for n in ['ic_launcher.png', 'ic_launcher_round.png']:
+                              with open(os.path.join(root, n), 'wb') as f: f.write(img)
+
           except Exception as e:
-              print(f"❌ Smart Engine Error: {str(e)}"); exit(1)
+              print(f"❌ Error: {str(e)}"); exit(1)
           EOF
 
-      - name: 🏗️ بلڈ اینڈرائیڈ ریلیز
+      - name: 🏗️ بلڈ الٹی میٹ APK
         run: |
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=./debug
 
-      - name: 📤 فائنل APK اپ لوڈ
+      - name: 📤 APK اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
-          name: System-Pro-Ultra-Build
+          name: System-Pro-Ultra-Widget-Build
           path: build/app/outputs/flutter-apk/*.apk
