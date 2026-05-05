@@ -16,16 +16,20 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Remove old pubspec.yaml to avoid bad dependencies
+      - name: Get package name and create Flutter project with it
         run: |
-          rm -f pubspec.yaml
-          echo "Removed existing pubspec.yaml"
+          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
+          : "${NEW_PACKAGE:=com.systempro.default}"
+          # Extract domain (org) and project name from package
+          ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
+          echo "Using org=$ORG, project=$PROJ"
+          # Remove any existing android/ios folders to avoid conflicts
+          rm -rf android ios
+          # Create fresh Flutter project with specified package name
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
 
-      - name: Create Flutter project (fresh template)
-        run: |
-          flutter create --project-name=system_pro_app --platforms=android,ios .
-
-      - name: Decode and write source files from payload (overwrite)
+      - name: Decode and write source files from payload (overwrite main.dart and pubspec.yaml)
         run: |
           set -e
           echo "📦 Overwriting with payload files..."
@@ -81,7 +85,7 @@ jobs:
           EOF
           fi
 
-      - name: Dynamically update package, app name, SDK, namespace and fix MainActivity.kt
+      - name: Update app display name, permissions, icon, assets
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -100,45 +104,18 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update AndroidManifest.xml
-          sed -i "s/package=\".*\"/package=\"${NEW_PACKAGE}\"/" "$MANIFEST"
+          # Update app name in manifest
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # --- Safe update of build.gradle ---
-          # Remove any existing namespace line
-          sed -i '/^[[:space:]]*namespace[[:space:]]*=/d' "$GRADLE"
-          # Insert correct namespace after android {
-          sed -i '/^[[:space:]]*android[[:space:]]*{/a \    namespace = "'"${NEW_PACKAGE}"'"' "$GRADLE"
-
-          # Update applicationId, minSdk, targetSdk
-          sed -i "s/applicationId[[:space:]]*=[[:space:]]*\".*\"/applicationId = \"${NEW_PACKAGE}\"/" "$GRADLE"
+          # Update minSdk and targetSdk in build.gradle
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          # Fallback for versions without '='
+          # Fallback for no '=' sign
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           if [ "$PROGUARD" = "true" ]; then
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
-
-          # --- Remove ALL previous MainActivity.kt files (old packages) ---
-          rm -rf android/app/src/main/kotlin/com/example
-          rm -rf android/app/src/main/kotlin/com/systempro/template
-          # Also remove any other leftover from previous runs
-          find android/app/src/main/kotlin -type f -name "MainActivity.kt" -delete
-
-          # --- Create new MainActivity.kt in correct package directory ---
-          PKG_PATH=$(echo "$NEW_PACKAGE" | tr '.' '/')
-          mkdir -p "android/app/src/main/kotlin/${PKG_PATH}"
-          cat > "android/app/src/main/kotlin/${PKG_PATH}/MainActivity.kt" <<EOF
-          package ${NEW_PACKAGE}
-
-          import io.flutter.embedding.android.FlutterActivity
-
-          class MainActivity : FlutterActivity()
-          EOF
-
-          echo "✅ MainActivity.kt created for package ${NEW_PACKAGE}"
 
           # Add permissions (no duplicates)
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
