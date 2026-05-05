@@ -8,13 +8,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 ریپوزٹری چیک آؤٹ
+      - name: 📥 چیک آؤٹ
         uses: actions/checkout@v4
 
-      - name: 🛠️ فلٹر انجن (اسمارٹ لوڈ)
+      - name: 🚀 اسمارٹ فلٹر سیٹ اپ
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true # یہ فلٹر کو بار بار ڈاؤن لوڈ ہونے سے روکے گا
 
       - name: 🧬 اے آئی اسمارٹ انجکشن (Auto-Fixer)
         run: |
@@ -22,7 +23,6 @@ jobs:
           import json, os, re, base64
 
           try:
-              # ڈیٹا حاصل کرنا
               raw_payload = r'''${{ toJson(github.event.client_payload) }}'''
               data = json.loads(raw_payload)
               
@@ -31,30 +31,22 @@ jobs:
               pkg_name = config.get('package_name', 'com.systempro.ultra')
               main_code = data.get('source_files', {}).get('main_dart', '')
 
-              # 1. خودکار لائبریری ڈیٹیکٹر (Self-Healing)
+              # 1. پب اسپیک میں آٹو فکسنگ
               if os.path.exists('pubspec.yaml'):
                   with open('pubspec.yaml', 'r') as f: lines = f.readlines()
-                  
-                  # عام لائبریریز کی لسٹ جو ایرر دے سکتی ہیں
                   needed_libs = {
                       'torch': '  torch: ^1.0.0\n',
                       'http': '  http: ^1.2.0\n',
-                      'permission_handler': '  permission_handler: ^11.3.0\n',
-                      'shared_preferences': '  shared_preferences: ^2.2.2\n'
+                      'permission_handler': '  permission_handler: ^11.3.0\n'
                   }
-                  
-                  # پرانی ڈوپلیکیٹ لائنز صاف کرنا
                   clean_lines = [l for l in lines if not any(k in l for k in needed_libs.keys())]
-                  
                   final_lines = []
                   for line in clean_lines:
                       final_lines.append(line)
                       if line.strip() == "dependencies:":
-                          # کوڈ اسکین کر کے ضروری لائبریری شامل کرنا
                           for key, value in needed_libs.items():
-                              if key in main_code or (key == 'permission_handler'):
+                              if key in main_code:
                                   final_lines.append(value)
-                  
                   with open('pubspec.yaml', 'w') as f: f.writelines(final_lines)
 
               # 2. آئیکن انجن (Force Injection)
@@ -67,40 +59,36 @@ jobs:
                       if any(x in root for x in ['mipmap', 'drawable']):
                           for name in ['ic_launcher.png', 'launcher_icon.png', 'ic_launcher_round.png']:
                               with open(os.path.join(root, name), 'wb') as f: f.write(img_data)
-                  print("✅ Icon Injected Successfully")
 
-              # 3. برانڈنگ (Package & App Name)
-              def update_file(path, old, new):
-                  if os.path.exists(path):
-                      with open(path, 'r') as f: content = f.read()
-                      with open(path, 'w') as f: f.write(content.replace(old, new))
-
-              update_file('android/app/src/main/AndroidManifest.xml', 'com.systempro.ultra', pkg_name)
-              update_file('android/app/build.gradle', 'com.systempro.ultra', pkg_name)
-              
-              # ایپ کا نام مینی فیسٹ میں سیٹ کرنا
-              m_path = 'android/app/src/main/AndroidManifest.xml'
-              if os.path.exists(m_path):
-                  with open(m_path, 'r') as f: c = f.read()
+              # 3. پیکیج نیم اور لیبل فکس
+              manifest = 'android/app/src/main/AndroidManifest.xml'
+              if os.path.exists(manifest):
+                  with open(manifest, 'r') as f: c = f.read()
                   c = re.sub(r'android:label="[^"]*"', f'android:label="{app_name}"', c)
-                  with open(m_path, 'w') as f: f.write(c)
+                  c = c.replace('com.systempro.ultra', pkg_name)
+                  with open(manifest, 'w') as f: f.write(c)
 
-              # 4. مین کوڈ انجکشن
+              gradle = 'android/app/build.gradle'
+              if os.path.exists(gradle):
+                  with open(gradle, 'r') as f: c = f.read()
+                  c = c.replace('com.systempro.ultra', pkg_name)
+                  with open(gradle, 'w') as f: f.write(c)
+
+              # 4. کوڈ انجکشن
               if main_code:
                   os.makedirs('lib', exist_ok=True)
                   with open('lib/main.dart', 'w', encoding='utf-8') as f: f.write(main_code)
 
-              print(f"🚀 AI Engine ready for {app_name}")
           except Exception as e:
               print(f"❌ Smart Logic Error: {str(e)}"); exit(1)
           EOF
 
-      - name: 🏗️ بلڈ اینڈرائیڈ (Auto-Repair Build)
+      - name: 🏗️ بلڈ APK
         run: |
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 اے آئی جنریٹڈ APK اپ لوڈ
+      - name: 📤 آرٹفیکٹ اپ لوڈ
         uses: actions/upload-artifact@v4
         with:
           name: System-Pro-AI-Build
