@@ -28,43 +28,69 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Flutter project created"
 
-      - name: Override pubspec.yaml from UI payload (if valid)
+      # ========== مستحکم حصہ: ڈیفالٹ فائلوں کو ہٹانا ==========
+      - name: Remove default files before injecting custom ones
+        run: |
+          rm -f lib/main.dart
+          rm -f pubspec.yaml
+          rm -f android/app/src/main/AndroidManifest.xml
+          rm -f android/app/build.gradle
+          rm -rf android/app/src/main/res/xml
+          echo "✅ Default files removed"
+
+      # ========== network_security_config.xml ہمیشہ کے لیے بنا دیں ==========
+      - name: Create network_security_config.xml
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">example.com</domain>
+    </domain-config>
+</network-security-config>
+EOF
+          echo "✅ network_security_config.xml created"
+
+      # ========== UI سے آنے والی فائلیں ڈالیں ==========
+      - name: Override pubspec.yaml from UI payload
         run: |
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
-            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
-            if grep -q "^name:" pubspec.yaml.new && grep -q "^dependencies:" pubspec.yaml.new; then
-              mv pubspec.yaml.new pubspec.yaml
-              echo "✅ Using pubspec.yaml from UI payload"
-            else
-              echo "⚠️ UI pubspec invalid, keeping default"
-              rm -f pubspec.yaml.new
-            fi
-          else
-            echo "ℹ️ No pubspec in payload, using default"
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
+            echo "✅ pubspec.yaml applied"
           fi
 
-      - name: Overwrite main.dart from UI payload
+      - name: Override main.dart from UI payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
             echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart updated from payload"
-          else
-            echo "⚠️ No main.dart in payload, using fallback"
-            cat > lib/main.dart <<'EOF'
-          // Fallback main.dart
-          import 'package:flutter/material.dart';
-          void main() => runApp(MyApp());
-          class MyApp extends StatelessWidget {
-            @override Widget build(BuildContext context) => MaterialApp(
-              title: 'System Pro',
-              home: Scaffold(body: Center(child: Text('Hello from System Pro'))),
-            );
-          }
-          EOF
+            echo "✅ main.dart applied"
           fi
 
+      - name: Override AndroidManifest.xml from UI payload
+        run: |
+          MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
+          if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
+            echo "$MANIFEST_B64" | base64 -d > android/app/src/main/AndroidManifest.xml
+            echo "✅ AndroidManifest.xml applied"
+          fi
+
+      - name: Override build.gradle from UI payload
+        run: |
+          GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
+          if [ -n "$GRADLE_B64" ] && [ "$GRADLE_B64" != "null" ]; then
+            echo "$GRADLE_B64" | base64 -d > android/app/build.gradle
+            echo "✅ build.gradle applied"
+          fi
+
+      # ========== باقی کنفیگریشن (لیبل، SDK، پرمیشنز، آئیکن، اثاثے) ==========
       - name: Update app label, SDK versions, permissions, icon, assets
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -94,13 +120,12 @@ jobs:
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
-          # --- Permissions with duplicate filtering ---
+          # Permissions (existing code as before, no change needed)
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           if ! command -v jq &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
           fi
 
-          # Helper function: add permission only if not already present
           add_perm() {
             local perm_xml="$1"
             local perm_name="$2"
@@ -114,7 +139,6 @@ jobs:
 
           if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
             echo "🔐 Processing permissions from payload..."
-            # Extract only true permissions
             echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' > perms_list.txt
             
             while read perm; do
@@ -123,39 +147,28 @@ jobs:
                   add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
                   add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
                   ;;
-                camera)
-                  add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
-                  ;;
+                camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
                 bluetooth)
                   add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
                   add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
                   add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
                   add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
                   ;;
-                microphone)
-                  add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
-                  ;;
+                microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
                 contacts)
                   add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
                   add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
                   ;;
-                notif)
-                  add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
-                  ;;
-                foreground)
-                  add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
-                  ;;
+                notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+                foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
                 sms)
                   add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
                   add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
                   ;;
-                vibrate)
-                  add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
-                  ;;
+                vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
               esac
             done < perms_list.txt
             
-            # Location granularity
             LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
             if [ "$LOC" = "fine" ]; then
               add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
