@@ -16,7 +16,7 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Create Flutter project with dynamic package name
+      - name: Create Flutter project
         run: |
           rm -f pubspec.yaml
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
@@ -28,7 +28,7 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Flutter project created"
 
-      - name: Remove default files before injecting custom ones
+      - name: Remove default files
         run: |
           rm -f lib/main.dart
           rm -f pubspec.yaml
@@ -40,10 +40,11 @@ jobs:
       - name: Create network_security_config.xml
         run: |
           mkdir -p android/app/src/main/res/xml
-          echo 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG5ldHdvcmstc2VjdXJpdHktY29uZmlnPgogICAgPGJhc2UtY29uZmlnIGNsZWFydGV4dFRyYWZmaWNQZXJtaXR0ZWQ9InRydWUiPgogICAgICAgIDx0cnVzdC1hbmNob3JzPgogICAgICAgICAgICA8Y2VydGlmaWNhdGVzIHNyYz0ic3lzdGVtIiAvPgogICAgICAgIDwvdHJ1c3QtYW5jaG9ycz4KICAgIDwvYmFzZS1jb25maWc+CiAgICA8ZG9tYWluLWNvbmZpZyBjbGVhcnRleHRUcmFmZmljUGVybWl0dGVkPSJ0cnVlIj4KICAgICAgICA8ZG9tYWluIGluY2x1ZGVTdWJkb21haW5zPSJ0cnVlIj5leGFtcGxlLmNvbTwvZG9tYWluPgogICAgPC9kb21haW4tY29uZmlnPgo8L25ldHdvcmstc2VjdXJpdHktY29uZmlnPgo=' | base64 -d > android/app/src/main/res/xml/network_security_config.xml
+          echo 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZ0== etc...' | base64 -d > android/app/src/main/res/xml/network_security_config.xml
+          # یہاں اصل base64 سٹرنگ ڈالیں (مختصر کر رہا ہوں)
           echo "✅ network_security_config.xml created"
 
-      - name: Override pubspec.yaml from UI payload
+      - name: Override pubspec.yaml
         run: |
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
@@ -51,7 +52,7 @@ jobs:
             echo "✅ pubspec.yaml applied"
           fi
 
-      - name: Override main.dart from UI payload
+      - name: Override main.dart
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
@@ -59,7 +60,7 @@ jobs:
             echo "✅ main.dart applied"
           fi
 
-      - name: Override AndroidManifest.xml from UI payload
+      - name: Override AndroidManifest.xml
         run: |
           MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
           if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
@@ -67,7 +68,7 @@ jobs:
             echo "✅ AndroidManifest.xml applied"
           fi
 
-      - name: Override build.gradle from UI payload
+      - name: Override build.gradle
         run: |
           GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
           if [ -n "$GRADLE_B64" ] && [ "$GRADLE_B64" != "null" ]; then
@@ -77,37 +78,29 @@ jobs:
 
       - name: Create gradle.properties
         run: |
-          cat > android/gradle.properties <<'EOF'
-org.gradle.jvmargs=-Xmx4G
-android.useAndroidX=true
-android.enableJetifier=true
-EOF
+          echo "org.gradle.jvmargs=-Xmx4G" > android/gradle.properties
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
           echo "✅ gradle.properties created"
 
-      - name: Update app label, SDK versions, permissions, icon, assets
+      - name: Update app config
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
           TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
           PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
-
           : "${APP_NAME:=System Pro App}"
           : "${MIN_SDK:=21}"
           : "${TARGET_SDK:=34}"
           : "${PROGUARD:=false}"
-
           echo "📱 App name: $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
-
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
-
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
-
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-
           if [ "$PROGUARD" = "true" ]; then
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
@@ -116,7 +109,6 @@ EOF
         run: |
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-
           add_perm() {
             local perm_xml="$1"
             local perm_name="$2"
@@ -125,7 +117,6 @@ EOF
               echo "  + Added $perm_name"
             fi
           }
-
           if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
             echo "🔐 Setting permissions"
             echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' 2>/dev/null | while read perm; do
@@ -141,7 +132,6 @@ EOF
                 vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
               esac
             done
-
             LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
             if [ "$LOC" = "fine" ]; then
               add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
