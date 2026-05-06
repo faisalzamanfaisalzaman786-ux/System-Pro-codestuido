@@ -16,7 +16,7 @@ jobs:
           flutter-version: 3.24.5
           channel: stable
 
-      - name: Create Flutter project with dynamic package name
+      - name: Create Flutter project
         run: |
           rm -f pubspec.yaml
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
@@ -28,7 +28,7 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Flutter project created"
 
-      - name: Remove default files before injecting custom ones
+      - name: Remove default files
         run: |
           rm -f lib/main.dart
           rm -f pubspec.yaml
@@ -37,23 +37,13 @@ jobs:
           rm -rf android/app/src/main/res/xml
           echo "✅ Default files removed"
 
-      - name: Create network_security_config.xml
+      - name: Create network_security_config.xml using base64
         run: |
           mkdir -p android/app/src/main/res/xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/network_security_config.xml
-          echo '<network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    <base-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '        <trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '            <certificates src="system" />' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '        </trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    </base-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    <domain-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '        <domain includeSubdomains="true">example.com</domain>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    </domain-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '</network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG5ldHdvcmstc2VjdXJpdHktY29uZmlnPgogICAgPGJhc2UtY29uZmlnIGNsZWFydGV4dFRyYWZmaWNQZXJtaXR0ZWQ9InRydWUiPgogICAgICAgIDx0cnVzdC1hbmNob3JzPgogICAgICAgICAgICA8Y2VydGlmaWNhdGVzIHNyYz0ic3lzdGVtIiAvPgogICAgICAgIDwvdHJ1c3QtYW5jaG9ycz4KICAgIDwvYmFzZS1jb25maWc+CiAgICA8ZG9tYWluLWNvbmZpZyBjbGVhcnRleHRUcmFmZmljUGVybWl0dGVkPSJ0cnVlIj4KICAgICAgICA8ZG9tYWluIGluY2x1ZGVTdWJkb21haW5zPSJ0cnVlIj5leGFtcGxlLmNvbTwvZG9tYWluPgogICAgPC9kb21haW4tY29uZmlnPgo8L25ldHdvcmstc2VjdXJpdHktY29uZmlnPgo=" | base64 -d > android/app/src/main/res/xml/network_security_config.xml
           echo "✅ network_security_config.xml created"
 
-      - name: Override pubspec.yaml from UI payload
+      - name: Override pubspec.yaml
         run: |
           PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
           if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
@@ -61,7 +51,7 @@ jobs:
             echo "✅ pubspec.yaml applied"
           fi
 
-      - name: Override main.dart from UI payload
+      - name: Override main.dart
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
@@ -69,7 +59,7 @@ jobs:
             echo "✅ main.dart applied"
           fi
 
-      - name: Override AndroidManifest.xml from UI payload
+      - name: Override AndroidManifest.xml
         run: |
           MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
           if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
@@ -77,7 +67,7 @@ jobs:
             echo "✅ AndroidManifest.xml applied"
           fi
 
-      - name: Override build.gradle from UI payload
+      - name: Override build.gradle
         run: |
           GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
           if [ -n "$GRADLE_B64" ] && [ "$GRADLE_B64" != "null" ]; then
@@ -85,7 +75,7 @@ jobs:
             echo "✅ build.gradle applied"
           fi
 
-      - name: Update app label, SDK versions, permissions, icon, assets
+      - name: Update app config
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
@@ -113,10 +103,10 @@ jobs:
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
+      - name: Set permissions
+        run: |
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
-          if ! command -v jq &> /dev/null; then
-            sudo apt-get update && sudo apt-get install -y jq
-          fi
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
 
           add_perm() {
             local perm_xml="$1"
@@ -124,51 +114,24 @@ jobs:
             if ! grep -q "$perm_name" "$MANIFEST"; then
               sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
               echo "  + Added $perm_name"
-            else
-              echo "  - Already present: $perm_name"
             fi
           }
 
           if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
-            echo "🔐 Processing permissions from payload..."
-            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' > perms_list.txt
-            while read perm; do
+            echo "🔐 Setting permissions"
+            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' 2>/dev/null | while read perm; do
               case $perm in
-                storage)
-                  add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
-                  add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
-                  ;;
-                camera)
-                  add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
-                  ;;
-                bluetooth)
-                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
-                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
-                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
-                  add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
-                  ;;
-                microphone)
-                  add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
-                  ;;
-                contacts)
-                  add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
-                  add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
-                  ;;
-                notif)
-                  add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
-                  ;;
-                foreground)
-                  add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
-                  ;;
-                sms)
-                  add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
-                  add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
-                  ;;
-                vibrate)
-                  add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
-                  ;;
+                storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"; add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
+                camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
+                bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
+                microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
+                contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"; add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
+                notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+                foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
+                sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"; add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
+                vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
               esac
-            done < perms_list.txt
+            done
 
             LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
             if [ "$LOC" = "fine" ]; then
@@ -176,11 +139,9 @@ jobs:
             elif [ "$LOC" = "coarse" ]; then
               add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
             fi
-          else
-            echo "ℹ️ No permissions payload"
           fi
 
-      - name: Set app icon (if provided)
+      - name: Set app icon
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -191,8 +152,6 @@ jobs:
               cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/
             done
             echo "✅ App icon set"
-          else
-            echo "ℹ️ No icon provided"
           fi
 
       - name: Additional assets
@@ -206,8 +165,6 @@ jobs:
               echo "$B64" | base64 -d > "assets/$NAME"
             done
             echo "✅ Additional assets added"
-          else
-            echo "ℹ️ No additional assets"
           fi
 
       - name: Build APK
