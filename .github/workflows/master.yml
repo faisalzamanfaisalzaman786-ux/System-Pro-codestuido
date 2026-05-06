@@ -40,19 +40,17 @@ jobs:
       - name: Create network_security_config.xml
         run: |
           mkdir -p android/app/src/main/res/xml
-          cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
-      <?xml version="1.0" encoding="utf-8"?>
-      <network-security-config>
-          <base-config cleartextTrafficPermitted="true">
-              <trust-anchors>
-                  <certificates src="system" />
-              </trust-anchors>
-          </base-config>
-          <domain-config cleartextTrafficPermitted="true">
-              <domain includeSubdomains="true">example.com</domain>
-          </domain-config>
-      </network-security-config>
-      EOF
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/network_security_config.xml
+          echo '<network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    <base-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '        <trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '            <certificates src="system" />' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '        </trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    </base-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    <domain-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '        <domain includeSubdomains="true">example.com</domain>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    </domain-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '</network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
           echo "✅ network_security_config.xml created"
 
       - name: Override pubspec.yaml from UI payload
