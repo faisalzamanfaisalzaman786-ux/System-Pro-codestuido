@@ -1,4 +1,4 @@
-name: 🔥 Final Stable Build (Safe YAML - No quoting issues)
+name: 🔥 Final Safe Build (No toJSON in YAML)
 
 on:
   repository_dispatch:
@@ -19,7 +19,6 @@ jobs:
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'pubspec.yaml' -exec rm -rf {} +
           rm -rf .dart_tool .packages pubspec.lock build android/.gradle ios/.symlinks android/app/build android/build .gradle
-          echo "✅ Clean done"
 
       - name: ⚙️ Setup Flutter 3.29.2
         uses: subosito/flutter-action@v2
@@ -30,27 +29,18 @@ jobs:
       - name: 📱 Create Flutter project
         run: |
           cp pubspec.yaml pubspec.yaml.backup
-          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
-          : "${NEW_PACKAGE:=com.systempro.ultra}"
+          NEW_PACKAGE=$(jq -r '.client_payload.build_config.package_name // "com.systempro.ultra"' "$GITHUB_EVENT_PATH")
           ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           mv pubspec.yaml.backup pubspec.yaml
           echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
 
-      # Write entire client_payload to a JSON file for safe parsing
-      - name: 💾 Save payload to JSON file
-        run: |
-          cat > payload.json << 'EOF'
-          ${{ toJSON(github.event.client_payload) }}
-          EOF
-          echo "✅ Payload saved"
-
       - name: 🔧 Fix Kotlin version
         run: |
           sed -i 's/id("org.jetbrains.kotlin.android") version "[^"]*"/id("org.jetbrains.kotlin.android") version "2.0.20"/' android/settings.gradle.kts
 
-      - name: 🏗️ Fix Gradle files (NDK, minSdk, targetSdk)
+      - name: 🏗️ Fix Gradle files
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           if ! grep -q "ndkVersion" "$APP_GRADLE"; then
@@ -63,15 +53,11 @@ jobs:
 
       - name: 📄 Apply pubspec.yaml
         run: |
-          PUBSPEC_B64=$(jq -r '.source_files.pubspec // empty' payload.json)
+          PUBSPEC_B64=$(jq -r '.client_payload.source_files.pubspec // empty' "$GITHUB_EVENT_PATH")
           if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
-            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
-            if grep -q "^name:" pubspec.yaml.new; then
-              mv pubspec.yaml.new pubspec.yaml
-              echo "✅ pubspec.yaml from payload"
-            fi
-          fi
-          if [ ! -f pubspec.yaml ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
+            echo "✅ pubspec.yaml from payload"
+          else
             cat > pubspec.yaml << 'EOF'
 name: system_pro_ultra
 description: Base project
@@ -96,7 +82,7 @@ EOF
 
       - name: 🎨 Override main.dart
         run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // empty' payload.json)
+          MAIN_B64=$(jq -r '.client_payload.source_files.main_dart // empty' "$GITHUB_EVENT_PATH")
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
             echo "$MAIN_B64" | base64 -d > lib/main.dart
             echo "✅ main.dart applied"
@@ -104,7 +90,7 @@ EOF
 
       - name: 🖼️ Override app icon
         run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // empty' payload.json)
+          ICON_B64=$(jq -r '.client_payload.assets.app_icon_base64 // empty' "$GITHUB_EVENT_PATH")
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             mkdir -p android/app/src/main/res/mipmap-hdpi
             echo "$ICON_B64" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
@@ -124,12 +110,12 @@ EOF
           done
           flutter pub upgrade || true
 
-      - name: ⚙️ Apply app config (name, SDK, permissions)
+      - name: ⚙️ Apply app config and permissions
         run: |
-          APP_NAME=$(jq -r '.build_config.app_display_name // "System Pro Ultra"' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
-          PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
+          APP_NAME=$(jq -r '.client_payload.build_config.app_display_name // "System Pro Ultra"' "$GITHUB_EVENT_PATH")
+          MIN_SDK=$(jq -r '.client_payload.build_config.min_sdk // 21' "$GITHUB_EVENT_PATH")
+          TARGET_SDK=$(jq -r '.client_payload.build_config.target_sdk // 34' "$GITHUB_EVENT_PATH")
+          PROGUARD=$(jq -r '.client_payload.build_config.use_proguard // false' "$GITHUB_EVENT_PATH")
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           APP_GRADLE="android/app/build.gradle.kts"
@@ -142,10 +128,6 @@ EOF
             sed -i "s/isMinifyEnabled[[:space:]]*=[[:space:]]*false/isMinifyEnabled = true/" "$APP_GRADLE"
           fi
 
-          # Extract permissions from payload.json
-          PERMS_FILE="perms.json"
-          jq '.permissions' payload.json > "$PERMS_FILE"
-
           add_perm() {
             if ! grep -q "$2" "$MANIFEST"; then
               sed -i "/<manifest>/a \    $1" "$MANIFEST"
@@ -154,68 +136,58 @@ EOF
 
           add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
 
-          # Storage
-          if [ "$(jq -r '.storage // false' "$PERMS_FILE")" = "true" ]; then
+          # Read permissions using jq
+          PERMS=$(jq -c '.client_payload.permissions' "$GITHUB_EVENT_PATH")
+          if [ "$(echo "$PERMS" | jq -r '.storage')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
             add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
           fi
-          # Camera
-          if [ "$(jq -r '.camera // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.camera')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
           fi
-          # Bluetooth
-          if [ "$(jq -r '.bluetooth // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.bluetooth')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
             add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
             add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
             add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
           fi
-          # Microphone
-          if [ "$(jq -r '.microphone // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.microphone')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
           fi
-          # Contacts
-          if [ "$(jq -r '.contacts // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.contacts')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
             add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
           fi
-          # Notifications
-          if [ "$(jq -r '.notifications // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.notifications')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
           fi
-          # Foreground service
-          if [ "$(jq -r '.foreground_service // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.foreground_service')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
           fi
-          # SMS
-          if [ "$(jq -r '.sms // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.sms')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
             add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
           fi
-          # Vibrate
-          if [ "$(jq -r '.vibrate // false' "$PERMS_FILE")" = "true" ]; then
+          if [ "$(echo "$PERMS" | jq -r '.vibrate')" = "true" ]; then
             add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
           fi
 
-          LOC=$(jq -r '.location_granularity // ""' "$PERMS_FILE")
+          LOC=$(echo "$PERMS" | jq -r '.location_granularity // ""')
           if [ "$LOC" = "fine" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
           elif [ "$LOC" = "coarse" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
           fi
 
-      - name: 🛠️ Final manifest and namespace fix
+      - name: 🛠️ Final manifest fix
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/package="[^"]*" //' "$MANIFEST"
           sed -i 's/package="[^"]*"//' "$MANIFEST"
-
           APP_GRADLE="android/app/build.gradle.kts"
-          PACKAGE_NAME="${{ env.PACKAGE_NAME }}"
           if ! grep -q "namespace" "$APP_GRADLE"; then
             sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$APP_GRADLE"
           fi
-
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/styles.xml << 'STY'
 <?xml version="1.0" encoding="utf-8"?>
