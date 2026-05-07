@@ -1,4 +1,4 @@
-name: 🔥 Final Build with Deduplicated Permissions & Defaults
+name: 🔥 Final Fixed Build with Corrected Pubspec
 
 on:
   repository_dispatch:
@@ -15,9 +15,7 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      # ============================================================
-      # MULTI-STAGE CLEANING (رائےٹ کچرہ)
-      # ============================================================
+      # تین بار کلین (مکمل صفائی)
       - name: 🧹 First clean - remove everything except .git and .github
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' -exec rm -rf {} +
@@ -39,11 +37,8 @@ jobs:
           flutter-version: '3.27.0'
           channel: stable
 
-      # ============================================================
-      # CREATE PROJECT WITH DYNAMIC PACKAGE NAME
-      # ============================================================
-      - name: 📱 Create Flutter project
-        id: create
+      # ڈائنامک پیکیج نیم کے ساتھ پروجیکٹ بنائیں
+      - name: 📱 Create Flutter project with dynamic package name
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.ultra}"
@@ -52,40 +47,42 @@ jobs:
           echo "Using org=$ORG, project=$PROJ"
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
-          echo "✅ Project created: $NEW_PACKAGE"
+          echo "✅ Project created with package: $NEW_PACKAGE"
 
-      # ============================================================
-      # OVERRIDE WITH UI PAYLOAD (main.dart, pubspec, icon)
-      # ============================================================
-      - name: 🎨 Override main.dart from UI
+      # درست انڈینٹیشن کے ساتھ pubspec.yaml بنائیں
+      - name: 📄 Write correct pubspec.yaml (with proper indentation)
+        run: |
+          cat > pubspec.yaml << 'EOF'
+          name: system_pro_ultra
+          description: System Pro Ultra with FlexColorScheme
+          version: 1.0.0+1
+          environment:
+            sdk: ">=3.4.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+            flex_color_scheme: ^8.1.1
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^4.0.0
+          flutter:
+            uses-material-design: true
+          EOF
+          echo "✅ pubspec.yaml created with correct indentation"
+
+      # UI پے لوڈ سے main.dart اور آئیکن اوور رائڈ کریں
+      - name: 🎨 Override main.dart from UI payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
             echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart from UI"
-          fi
-
-      - name: 📄 Override pubspec.yaml (add flex_color_scheme if missing)
-        run: |
-          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
-          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
-            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
-            if grep -q "^name:" pubspec.yaml.new; then
-              mv pubspec.yaml.new pubspec.yaml
-              if ! grep -q "flex_color_scheme:" pubspec.yaml; then
-                echo -e "\n  flex_color_scheme: ^8.1.1" >> pubspec.yaml
-              fi
-              echo "✅ pubspec.yaml from UI"
-            else
-              rm -f pubspec.yaml.new
-            fi
+            echo "✅ main.dart from UI payload"
           else
-            if ! grep -q "flex_color_scheme:" pubspec.yaml; then
-              echo -e "\n  flex_color_scheme: ^8.1.1" >> pubspec.yaml
-            fi
+            echo "ℹ️ No main.dart in payload, using fallback"
           fi
 
-      - name: 🖼️ Override app icon from UI
+      - name: 🖼️ Override app icon from UI payload
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -95,10 +92,13 @@ jobs:
               mkdir -p android/app/src/main/res/mipmap-$density
               cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/ 2>/dev/null || true
             done
-            echo "✅ App icon from UI"
+            echo "✅ App icon from UI payload"
+          else
+            echo "ℹ️ No icon in payload, using default"
           fi
 
-      - name: ⚙️ Apply app name, SDK versions from payload
+      # پرمیشنز اور دیگر کنفیگریشنز
+      - name: ⚙️ Apply app name, SDK versions, permissions from payload
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
@@ -112,85 +112,59 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
+          # Update app label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
+
+          # Update minSdk / targetSdk
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
+
           if [ "$PROGUARD" = "true" ]; then
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
-      # ============================================================
-      # PERMISSIONS HANDLING (Deduplicated + Defaults)
-      # ============================================================
-      - name: 🔐 Set permissions (from payload + defaults, no duplicates)
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          
-          # Helper function: add permission only if not already present
-          add_perm() {
-            local perm_line="$1"
-            local perm_name="$2"
-            if ! grep -q "$perm_name" "$MANIFEST"; then
-              sed -i "/<manifest>/a \    $perm_line" "$MANIFEST"
-              echo "  + Added $perm_name"
-            else
-              echo "  - Already present: $perm_name"
-            fi
-          }
-
-          # 1. ALWAYS add INTERNET (must-have)
-          add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
-
-          # 2. Check if payload contains permissions
+          # Permissions
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
-          HAS_PAYLOAD_PERMS=false
-
-          if command -v jq &> /dev/null || { sudo apt-get update && sudo apt-get install -y jq; }; then
+          if command -v jq &> /dev/null || sudo apt-get update && sudo apt-get install -y jq; then
             if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
-              HAS_PAYLOAD_PERMS=true
-              echo "📦 Processing permissions from UI payload..."
-              # Extract only true permissions
+              add_perm() {
+                if ! grep -q "$2" "$MANIFEST"; then
+                  sed -i "/<manifest>/a \    $1" "$MANIFEST"
+                fi
+              }
+              # Always add INTERNET
+              add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
+              
               echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
                 case $perm in
                   storage)
                     add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
-                    add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
                   camera)
-                    add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
                   bluetooth)
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
-                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
                   microphone)
-                    add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
                   contacts)
                     add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
-                    add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
                   notif)
-                    add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
                   foreground)
-                    add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
                   sms)
                     add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
-                    add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
                   vibrate)
-                    add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
-                    ;;
+                    add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
                 esac
               done
-
-              # Location granularity
               LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
               if [ "$LOC" = "fine" ]; then
                 add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
@@ -200,40 +174,22 @@ jobs:
             fi
           fi
 
-          # 3. If NO permissions payload OR payload didn't contain storage, add default storage (READ/WRITE)
-          if [ "$HAS_PAYLOAD_PERMS" = false ] || ! echo "$PERMS_JSON" | jq -e '.storage == true' >/dev/null 2>&1; then
-            echo "📁 No storage permission in payload - adding default storage permissions"
-            add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
-            add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE"
-          fi
-
-          echo "✅ Permissions setup complete (duplicates prevented, defaults added)"
-
-      # ============================================================
-      # FIX ANDROID MANIFEST (remove package attribute, add namespace)
-      # ============================================================
-      - name: 🛠️ Fix AndroidManifest and namespace (dynamic)
+      # اینڈرائڈ مینیفیسٹ اور نیم اسپیس کو درست کریں
+      - name: 🛠️ Fix AndroidManifest and namespace
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Remove package attribute from manifest (if any)
+          # Remove package attribute from manifest
           sed -i 's/package="[^"]*" //' "$MANIFEST"
           sed -i 's/package="[^"]*"//' "$MANIFEST"
 
-          # Ensure namespace in build.gradle (based on actual package from flutter create)
+          # Add namespace to build.gradle
           GRADLE="android/app/build.gradle"
-          # Try to extract package from build.gradle defaultConfig.applicationId
-          PACKAGE=$(grep -E "applicationId" "$GRADLE" | sed 's/.*applicationId "\(.*\)".*/\1/')
-          if [ -z "$PACKAGE" ]; then
-            PACKAGE="${{ env.PACKAGE_NAME }}"
-          fi
-          if [ -z "$PACKAGE" ]; then
-            PACKAGE="com.systempro.ultra"
-          fi
+          PACKAGE_NAME="com.systempro.ultra"
           if ! grep -q "namespace" "$GRADLE"; then
-            sed -i "/android {/a \    namespace \"$PACKAGE\"" "$GRADLE"
+            sed -i "/android {/a \    namespace \"$PACKAGE_NAME\"" "$GRADLE"
           fi
 
-          # Correct styles.xml (no AppCompat)
+          # Correct styles.xml
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/styles.xml << 'STY'
           <?xml version="1.0" encoding="utf-8"?>
@@ -243,11 +199,9 @@ jobs:
               </style>
           </resources>
           STY
-          echo "✅ Android manifest fixed, namespace set to $PACKAGE"
+          echo "✅ Android manifest fixed"
 
-      # ============================================================
-      # BUILD APK
-      # ============================================================
+      # APK بنائیں
       - name: 🏗️ Build APK
         run: |
           flutter clean
@@ -260,10 +214,10 @@ jobs:
           name: SystemPro-Final-Build-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
 
-      - name: 💾 (Optional) Commit state
+      - name: 💾 Commit clean state (optional)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with deduped permissions + defaults"
+          git diff --cached --quiet || git commit -m "Final build with corrected pubspec indentation"
           git push || true
