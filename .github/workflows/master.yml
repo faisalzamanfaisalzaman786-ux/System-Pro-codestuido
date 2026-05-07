@@ -1,4 +1,4 @@
-name: 🔥 Auto-Detect & Add Dependencies + Build
+name: 🔥 Final Stable Build with Auto-Gradle Fix
 
 on:
   repository_dispatch:
@@ -15,9 +15,6 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      # ============================================================
-      # MULTI-STAGE CLEANING (but preserve pubspec.yaml)
-      # ============================================================
       - name: 🧹 First clean - remove everything except .git, .github, and pubspec.yaml
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'pubspec.yaml' -exec rm -rf {} +
@@ -40,30 +37,99 @@ jobs:
           channel: stable
 
       # ============================================================
+      # 🔥 CRITICAL FIX: Inject stable build.gradle
+      # ============================================================
+      - name: 🏗️ Inject Stable build.gradle
+        run: |
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+          echo "✅ build.gradle replaced with stable template"
+
+      # ============================================================
       # CREATE PROJECT WITH DYNAMIC PACKAGE NAME
       # ============================================================
       - name: 📱 Create Flutter project with dynamic package name
         run: |
-          # Backup existing pubspec.yaml temporarily
           cp pubspec.yaml pubspec.yaml.backup
-          
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.ultra}"
           ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
           echo "Using org=$ORG, project=$PROJ"
-          
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          
-          # Restore original pubspec.yaml (we will auto-add dependencies later)
           mv pubspec.yaml.backup pubspec.yaml
-          
           echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
           echo "✅ Project created with package: $NEW_PACKAGE (pubspec.yaml restored)"
 
-      # ============================================================
-      # OVERRIDE main.dart FROM UI PAYLOAD
-      # ============================================================
+      - name: 📄 Apply pubspec.yaml from UI payload or create default
+        run: |
+          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
+            if grep -q "^name:" pubspec.yaml.new && grep -q "^dependencies:" pubspec.yaml.new; then
+              mv pubspec.yaml.new pubspec.yaml
+              echo "✅ pubspec.yaml from UI payload applied"
+            else
+              rm -f pubspec.yaml.new
+              echo "⚠️ UI pubspec invalid, using default"
+            fi
+          else
+            echo "ℹ️ No pubspec in payload, using default"
+          fi
+
+          if [ ! -f pubspec.yaml ]; then
+            cat > pubspec.yaml << 'EOF'
+            name: system_pro_ultra
+            description: Base project
+            version: 1.0.0+1
+            environment:
+              sdk: ">=3.4.0 <4.0.0"
+            dependencies:
+              flutter:
+                sdk: flutter
+              permission_handler: ^12.0.1
+              path_provider: ^2.1.5
+              webview_flutter: ^4.13.0
+            dev_dependencies:
+              flutter_test:
+                sdk: flutter
+              flutter_lints: ^5.0.0
+            flutter:
+              uses-material-design: true
+            EOF
+            echo "✅ Default pubspec.yaml created (webview_flutter, permission_handler, path_provider)"
+          fi
+
       - name: 🎨 Override main.dart from UI payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
@@ -74,9 +140,6 @@ jobs:
             echo "ℹ️ No main.dart in payload, using fallback"
           fi
 
-      # ============================================================
-      # OVERRIDE ICON FROM UI PAYLOAD
-      # ============================================================
       - name: 🖼️ Override app icon from UI payload
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
@@ -93,44 +156,24 @@ jobs:
           fi
 
       # ============================================================
-      # 🔥 AUTO-DETECT AND ADD DEPENDENCIES FROM main.dart
+      # Auto-Detect and Add Dependencies
       # ============================================================
       - name: 📦 Auto-detect imports and add missing dependencies
         run: |
           echo "🔍 Scanning lib/main.dart for package imports..."
-          
-          # Extract all package names from import statements
-          # Matches: import 'package:some_package/...' or import 'package:some_package'
-          IMPORTS=$(grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u)
-          
+          IMPORTS=$(grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u || true)
           if [ -z "$IMPORTS" ]; then
-            echo "ℹ️ No external package imports found in main.dart"
-            exit 0
+            echo "ℹ️ No external package imports found"
+          else
+            echo "📋 Found packages: $IMPORTS"
+            for pkg in $IMPORTS; do
+              echo "➕ Adding package: $pkg"
+              dart pub add "$pkg" || echo "⚠️ Failed to add $pkg (ignoring)"
+            done
           fi
-          
-          echo "📋 Found packages: $IMPORTS"
-          
-          # Add each package using dart pub add (handles version conflicts)
-          FAILED=""
-          for pkg in $IMPORTS; do
-            echo "➕ Adding package: $pkg"
-            if dart pub add "$pkg" >> pub_add.log 2>&1; then
-              echo "✅ Successfully added $pkg"
-            else
-              echo "⚠️ Failed to add $pkg (might be a core/internal package or invalid name)"
-              FAILED="$FAILED $pkg"
-            fi
-          done
-          
-          if [ -n "$FAILED" ]; then
-            echo "⚠️ Some packages failed: $FAILED. Continuing anyway."
-          fi
-          
-          # Now upgrade all dependencies to latest compatible versions
-          echo "⬆️ Upgrading all dependencies to latest versions..."
-          flutter pub upgrade
-          
-          echo "✅ Dependency auto-add and upgrade complete"
+          echo "⬆️ Upgrading all dependencies..."
+          flutter pub upgrade || echo "⚠️ Upgrade had issues but continuing"
+          echo "✅ Dependencies handled"
 
       # ============================================================
       # APPLY APP NAME, SDK VERSIONS, PERMISSIONS FROM PAYLOAD
@@ -180,27 +223,20 @@ jobs:
                   storage)
                     add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
                     add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
-                  camera)
-                    add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
+                  camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
                   bluetooth)
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
                     add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
-                  microphone)
-                    add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
-                  contacts)
-                    add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
-                    add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
-                  notif)
-                    add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
-                  foreground)
-                    add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
-                  sms)
-                    add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
-                    add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
-                  vibrate)
-                    add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
+                  microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
+                  contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
+                            add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
+                  notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+                  foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
+                  sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
+                       add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
+                  vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
                 esac
               done
               LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
@@ -232,7 +268,6 @@ jobs:
             sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$GRADLE_FILE"
           fi
 
-          # Set NDK version to satisfy plugins
           if ! grep -q "ndkVersion" "$GRADLE_FILE"; then
             sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE_FILE"
           else
@@ -251,7 +286,7 @@ jobs:
           echo "✅ Android manifest fixed, NDK version set to 27.0.12077973"
 
       # ============================================================
-      # 🏗️ BUILD APK (after dependencies are auto-added)
+      # 🏗️ BUILD APK
       # ============================================================
       - name: 🏗️ Build APK
         run: |
@@ -262,7 +297,7 @@ jobs:
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-AutoDeps-Build-${{ github.run_id }}
+          name: SystemPro-Stable-Build-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
 
       - name: 💾 Commit updated pubspec.yaml and pubspec.lock (if changed)
