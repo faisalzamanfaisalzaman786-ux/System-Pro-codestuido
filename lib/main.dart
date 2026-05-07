@@ -9,7 +9,6 @@ void main() async {
 }
 
 Future<void> _requestPermissions() async {
-  // Android 13+ کے لیے سٹوریج کی اجازت
   await [
     Permission.storage,
     Permission.manageExternalStorage,
@@ -40,7 +39,7 @@ class BrowserScreen extends StatefulWidget {
 class _BrowserScreenState extends State<BrowserScreen> {
   late final WebViewController _controller;
   String _currentUrl = "https://www.google.com";
-  String _statusMessage = "✅ Storage permission granted";
+  String _statusMessage = "Loading...";
 
   @override
   void initState() {
@@ -53,15 +52,29 @@ class _BrowserScreenState extends State<BrowserScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (url) => setState(() => _currentUrl = url),
+          onPageStarted: (url) {
+            setState(() => _currentUrl = url);
+            setState(() => _statusMessage = "Loading $url");
+          },
+          onPageFinished: (url) {
+            setState(() => _statusMessage = "Page loaded");
+          },
+          onWebResourceError: (error) {
+            setState(() => _statusMessage = "Error: ${error.description}");
+            print("WebView error: ${error.description}");
+          },
         ),
       )
+      ..setBackgroundColor(Colors.black)
+      ..enableZoom(true)
+      ..clearCache()
       ..loadRequest(Uri.parse(_currentUrl));
   }
 
   void _goToUrl(String url) {
     if (!url.startsWith("http")) url = "https://$url";
     _controller.loadRequest(Uri.parse(url));
+    setState(() => _currentUrl = url);
   }
 
   @override
@@ -78,7 +91,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
             icon: const Icon(Icons.folder),
             onPressed: () {
               setState(() {
-                _statusMessage = "✅ Storage permission is active. You can now save files.";
+                _statusMessage = "✅ Storage permission active. You can save files.";
               });
             },
             tooltip: 'Storage Info',
