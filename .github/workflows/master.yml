@@ -121,17 +121,25 @@ jobs:
           : "${PROGUARD:=false}"
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          GRADLE="android/app/build.gradle"
 
+          # Check which Gradle file exists (Groovy or Kotlin DSL)
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+          else
+            GRADLE_FILE="android/app/build.gradle.kts"
+          fi
+
+          # Update app label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
-          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
-          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
+          # Update minSdk / targetSdk (works for both .gradle and .gradle.kts)
+          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
+          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
+          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
+          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
 
           if [ "$PROGUARD" = "true" ]; then
-            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
+            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE_FILE"
           fi
 
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
@@ -187,10 +195,16 @@ jobs:
           sed -i 's/package="[^"]*" //' "$MANIFEST"
           sed -i 's/package="[^"]*"//' "$MANIFEST"
 
-          GRADLE="android/app/build.gradle"
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+          else
+            GRADLE_FILE="android/app/build.gradle.kts"
+          fi
+
           PACKAGE_NAME="com.systempro.ultra"
-          if ! grep -q "namespace" "$GRADLE"; then
-            sed -i "/android {/a \    namespace \"$PACKAGE_NAME\"" "$GRADLE"
+          if ! grep -q "namespace" "$GRADLE_FILE"; then
+            # For .kts files, the syntax is slightly different but we add a line after 'android {'
+            sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$GRADLE_FILE"
           fi
 
           mkdir -p android/app/src/main/res/values
@@ -221,5 +235,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with Flutter 3.29.2 (AGP 8.3.0)"
+          git diff --cached --quiet || git commit -m "Final build with Flutter 3.29.2 (AGP 8.3.0) and .kts support"
           git push || true
