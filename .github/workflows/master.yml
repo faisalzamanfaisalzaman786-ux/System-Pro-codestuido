@@ -1,4 +1,4 @@
-name: 🔥 Final Build with Correct AGP 8.2.1
+name: 🔥 Final Build with Flutter 3.29.2 (AGP 8.3.0)
 
 on:
   repository_dispatch:
@@ -33,10 +33,13 @@ jobs:
           rm -rf android/app/build android/build .gradle
           echo "✅ Third clean done"
 
-      - name: ⚙️ Setup Flutter 3.27.0
+      # ============================================================
+      # SETUP FLUTTER 3.29.2 (COMES WITH AGP 8.3.0)
+      # ============================================================
+      - name: ⚙️ Setup Flutter 3.29.2
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          flutter-version: '3.29.2'
           channel: stable
 
       # ============================================================
@@ -73,23 +76,25 @@ jobs:
           fi
 
           if [ ! -f pubspec.yaml ]; then
-            echo "name: system_pro_browser" > pubspec.yaml
-            echo "description: Web browser with storage permissions" >> pubspec.yaml
-            echo "version: 1.0.0+1" >> pubspec.yaml
-            echo "environment:" >> pubspec.yaml
-            echo "  sdk: \">=3.4.0 <4.0.0\"" >> pubspec.yaml
-            echo "dependencies:" >> pubspec.yaml
-            echo "  flutter:" >> pubspec.yaml
-            echo "    sdk: flutter" >> pubspec.yaml
-            echo "  webview_flutter: ^4.8.0" >> pubspec.yaml
-            echo "  permission_handler: ^11.3.0" >> pubspec.yaml
-            echo "  path_provider: ^2.1.3" >> pubspec.yaml
-            echo "dev_dependencies:" >> pubspec.yaml
-            echo "  flutter_test:" >> pubspec.yaml
-            echo "    sdk: flutter" >> pubspec.yaml
-            echo "  flutter_lints: ^4.0.0" >> pubspec.yaml
-            echo "flutter:" >> pubspec.yaml
-            echo "  uses-material-design: true" >> pubspec.yaml
+            cat > pubspec.yaml << 'PUBS'
+            name: system_pro_browser
+            description: Web browser with storage permissions
+            version: 1.0.0+1
+            environment:
+              sdk: ">=3.4.0 <4.0.0"
+            dependencies:
+              flutter:
+                sdk: flutter
+              webview_flutter: ^4.8.0
+              permission_handler: ^11.3.0
+              path_provider: ^2.1.3
+            dev_dependencies:
+              flutter_test:
+                sdk: flutter
+              flutter_lints: ^4.0.0
+            flutter:
+              uses-material-design: true
+            PUBS
             echo "✅ Default pubspec.yaml created (webview_flutter, permission_handler, path_provider)"
           fi
 
@@ -141,10 +146,8 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # Update app label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # Update minSdk / targetSdk
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
@@ -154,7 +157,6 @@ jobs:
             sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
           fi
 
-          # Permissions
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
           if command -v jq &> /dev/null || sudo apt-get update && sudo apt-get install -y jq; then
             if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
@@ -163,9 +165,8 @@ jobs:
                   sed -i "/<manifest>/a \    $1" "$MANIFEST"
                 fi
               }
-              # Always add INTERNET
               add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
-
+              
               echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
                 case $perm in
                   storage)
@@ -209,18 +210,15 @@ jobs:
       - name: 🛠️ Fix AndroidManifest and namespace
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Remove package attribute from manifest
           sed -i 's/package="[^"]*" //' "$MANIFEST"
           sed -i 's/package="[^"]*"//' "$MANIFEST"
 
-          # Add namespace to build.gradle (app level)
           GRADLE="android/app/build.gradle"
           PACKAGE_NAME="com.systempro.ultra"
           if ! grep -q "namespace" "$GRADLE"; then
             sed -i "/android {/a \    namespace \"$PACKAGE_NAME\"" "$GRADLE"
           fi
 
-          # Correct styles.xml
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/styles.xml << 'STY'
           <?xml version="1.0" encoding="utf-8"?>
@@ -233,46 +231,7 @@ jobs:
           echo "✅ Android manifest fixed"
 
       # ============================================================
-      # ✅ CRITICAL FIX: Override top-level build.gradle with AGP 8.2.1
-      # ============================================================
-      - name: 🔧 Force upgrade Android Gradle Plugin to 8.2.1
-        run: |
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.24'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-          echo "✅ Top-level build.gradle replaced with AGP 8.2.1 and Kotlin 1.9.24"
-
-      # ============================================================
-      # BUILD APK
+      # BUILD APK (no manual AGP override needed - Flutter 3.29.2 provides AGP 8.3.0)
       # ============================================================
       - name: 🏗️ Build APK
         run: |
@@ -291,5 +250,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with AGP 8.2.1 override"
+          git diff --cached --quiet || git commit -m "Final build with Flutter 3.29.2 (AGP 8.3.0)"
           git push || true
