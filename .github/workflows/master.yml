@@ -37,7 +37,23 @@ jobs:
           channel: stable
 
       # ============================================================
-      # 🔥 CRITICAL FIX: Inject stable build.gradle
+      # CREATE PROJECT FIRST (so android folder exists)
+      # ============================================================
+      - name: 📱 Create Flutter project with dynamic package name
+        run: |
+          cp pubspec.yaml pubspec.yaml.backup
+          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
+          : "${NEW_PACKAGE:=com.systempro.ultra}"
+          ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
+          echo "Using org=$ORG, project=$PROJ"
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
+          mv pubspec.yaml.backup pubspec.yaml
+          echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
+          echo "✅ Project created with package: $NEW_PACKAGE (pubspec.yaml restored)"
+
+      # ============================================================
+      # 🔥 CRITICAL FIX: Inject stable build.gradle AFTER project creation
       # ============================================================
       - name: 🏗️ Inject Stable build.gradle
         run: |
@@ -74,22 +90,6 @@ jobs:
           }
           EOF
           echo "✅ build.gradle replaced with stable template"
-
-      # ============================================================
-      # CREATE PROJECT WITH DYNAMIC PACKAGE NAME
-      # ============================================================
-      - name: 📱 Create Flutter project with dynamic package name
-        run: |
-          cp pubspec.yaml pubspec.yaml.backup
-          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
-          : "${NEW_PACKAGE:=com.systempro.ultra}"
-          ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
-          echo "Using org=$ORG, project=$PROJ"
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          mv pubspec.yaml.backup pubspec.yaml
-          echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
-          echo "✅ Project created with package: $NEW_PACKAGE (pubspec.yaml restored)"
 
       - name: 📄 Apply pubspec.yaml from UI payload or create default
         run: |
