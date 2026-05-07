@@ -98,3 +98,6 @@ flutter:
   #   - family: CustomFont
   #     fonts:
   #       - asset: assets/fonts/CustomFont-Regular.ttf
+
+  flex_color_scheme:
+    path: packages/flex_color_scheme
