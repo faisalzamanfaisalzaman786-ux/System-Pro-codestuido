@@ -1,4 +1,4 @@
-name: 🔥 Final Fixed Build with Corrected Pubspec
+name: 🔥 Final Fixed Build with Corrected Pubspec & WebView Support
 
 on:
   repository_dispatch:
@@ -15,7 +15,9 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      # تین بار کلین (مکمل صفائی)
+      # ============================================================
+      # MULTI-STAGE CLEANING
+      # ============================================================
       - name: 🧹 First clean - remove everything except .git and .github
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' -exec rm -rf {} +
@@ -37,7 +39,9 @@ jobs:
           flutter-version: '3.27.0'
           channel: stable
 
-      # ڈائنامک پیکیج نیم کے ساتھ پروجیکٹ بنائیں
+      # ============================================================
+      # CREATE PROJECT WITH DYNAMIC PACKAGE NAME
+      # ============================================================
       - name: 📱 Create Flutter project with dynamic package name
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
@@ -49,29 +53,53 @@ jobs:
           echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
           echo "✅ Project created with package: $NEW_PACKAGE"
 
-      # درست انڈینٹیشن کے ساتھ pubspec.yaml بنائیں
-      - name: 📄 Write correct pubspec.yaml (with proper indentation)
+      # ============================================================
+      # OVERRIDE PUBSPEC.YAML FROM UI PAYLOAD (IF ANY)
+      # ============================================================
+      - name: 📄 Apply pubspec.yaml from UI payload (or create default with webview deps)
         run: |
-          cat > pubspec.yaml << 'EOF'
-          name: system_pro_ultra
-          description: System Pro Ultra with FlexColorScheme
-          version: 1.0.0+1
-          environment:
-            sdk: ">=3.4.0 <4.0.0"
-          dependencies:
-            flutter:
-              sdk: flutter
-            flex_color_scheme: ^8.1.1
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^4.0.0
-          flutter:
-            uses-material-design: true
-          EOF
-          echo "✅ pubspec.yaml created with correct indentation"
+          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
+            if grep -q "^name:" pubspec.yaml.new && grep -q "^dependencies:" pubspec.yaml.new; then
+              mv pubspec.yaml.new pubspec.yaml
+              echo "✅ pubspec.yaml from UI payload applied"
+            else
+              rm -f pubspec.yaml.new
+              echo "⚠️ UI pubspec invalid, using default"
+              # Fall through to default
+            fi
+          else
+            echo "ℹ️ No pubspec in payload, using default"
+          fi
 
-      # UI پے لوڈ سے main.dart اور آئیکن اوور رائڈ کریں
+          # If no pubspec from UI (or invalid), create a default one with all required dependencies
+          if [ ! -f pubspec.yaml ]; then
+            cat > pubspec.yaml << 'EOF'
+            name: system_pro_browser
+            description: Web browser with storage permissions
+            version: 1.0.0+1
+            environment:
+              sdk: ">=3.4.0 <4.0.0"
+            dependencies:
+              flutter:
+                sdk: flutter
+              webview_flutter: ^4.8.0
+              permission_handler: ^11.3.0
+              path_provider: ^2.1.3
+            dev_dependencies:
+              flutter_test:
+                sdk: flutter
+              flutter_lints: ^4.0.0
+            flutter:
+              uses-material-design: true
+            EOF
+            echo "✅ Default pubspec.yaml created (with webview_flutter, permission_handler, path_provider)"
+          fi
+
+      # ============================================================
+      # OVERRIDE MAIN.DART FROM UI PAYLOAD
+      # ============================================================
       - name: 🎨 Override main.dart from UI payload
         run: |
           MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
@@ -82,6 +110,9 @@ jobs:
             echo "ℹ️ No main.dart in payload, using fallback"
           fi
 
+      # ============================================================
+      # OVERRIDE ICON FROM UI PAYLOAD
+      # ============================================================
       - name: 🖼️ Override app icon from UI payload
         run: |
           ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
@@ -97,7 +128,9 @@ jobs:
             echo "ℹ️ No icon in payload, using default"
           fi
 
-      # پرمیشنز اور دیگر کنفیگریشنز
+      # ============================================================
+      # APPLY APP NAME, SDK VERSIONS, PERMISSIONS FROM PAYLOAD
+      # ============================================================
       - name: ⚙️ Apply app name, SDK versions, permissions from payload
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
@@ -136,7 +169,7 @@ jobs:
               }
               # Always add INTERNET
               add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
-              
+
               echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
                 case $perm in
                   storage)
@@ -174,7 +207,9 @@ jobs:
             fi
           fi
 
-      # اینڈرائڈ مینیفیسٹ اور نیم اسپیس کو درست کریں
+      # ============================================================
+      # FIX ANDROID MANIFEST AND NAMESPACE
+      # ============================================================
       - name: 🛠️ Fix AndroidManifest and namespace
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -201,7 +236,9 @@ jobs:
           STY
           echo "✅ Android manifest fixed"
 
-      # APK بنائیں
+      # ============================================================
+      # BUILD APK
+      # ============================================================
       - name: 🏗️ Build APK
         run: |
           flutter clean
@@ -219,5 +256,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with corrected pubspec indentation"
+          git diff --cached --quiet || git commit -m "Final build with webview dependencies and pubspec override"
           git push || true
