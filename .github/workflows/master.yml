@@ -1,4 +1,4 @@
-name: 🔥 Final Stable Build with Auto-Gradle Fix
+name: 🔥 Final Stable Build with Auto-Gradle Fix (Kotlin DSL Fixed)
 
 on:
   repository_dispatch:
@@ -53,46 +53,43 @@ jobs:
           echo "✅ Project created with package: $NEW_PACKAGE (pubspec.yaml restored)"
 
       # ============================================================
-      # 🔥 CRITICAL FIX: Inject stable build.gradle AFTER project creation
+      # 🔥 FIX: Update Kotlin version in settings.gradle.kts
       # ============================================================
-      - name: 🏗️ Inject Stable build.gradle
+      - name: 🔧 Update Kotlin plugin version to 2.0.20
         run: |
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.1'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-          echo "✅ build.gradle replaced with stable template"
+          SETTINGS="android/settings.gradle.kts"
+          if [ -f "$SETTINGS" ]; then
+            # Replace the kotlin version in the plugins block
+            sed -i 's/id("org.jetbrains.kotlin.android") version "[^"]*"/id("org.jetbrains.kotlin.android") version "2.0.20"/' "$SETTINGS"
+            echo "✅ Updated Kotlin plugin version to 2.0.20 in settings.gradle.kts"
+          else
+            echo "⚠️ settings.gradle.kts not found"
+          fi
 
       # ============================================================
-      # APPLY PUBSPEC.YAML FROM UI OR CREATE DEFAULT (using echo to avoid heredoc issues)
+      # 🔥 FIX: Update NDK version and Kotlin in app/build.gradle.kts
+      # ============================================================
+      - name: 🏗️ Fix app/build.gradle.kts (NDK, Kotlin, minSdk, targetSdk)
+        run: |
+          APP_GRADLE="android/app/build.gradle.kts"
+          if [ -f "$APP_GRADLE" ]; then
+            # Set ndkVersion
+            if ! grep -q "ndkVersion" "$APP_GRADLE"; then
+              sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
+            else
+              sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*"[^"]*"/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
+            fi
+            # Set compileSdk, minSdk, targetSdk from payload (will be overwritten later but set defaults)
+            sed -i 's/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = 21/' "$APP_GRADLE"
+            sed -i 's/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = 34/' "$APP_GRADLE"
+            sed -i 's/compileSdk[[:space:]]*=[[:space:]]*[0-9]\+/compileSdk = 34/' "$APP_GRADLE"
+            echo "✅ app/build.gradle.kts updated with NDK 27.0.12077973"
+          else
+            echo "⚠️ app/build.gradle.kts not found"
+          fi
+
+      # ============================================================
+      # APPLY PUBSPEC.YAML FROM UI OR CREATE DEFAULT
       # ============================================================
       - name: 📄 Apply pubspec.yaml from UI payload or create default
         run: |
@@ -111,24 +108,26 @@ jobs:
           fi
 
           if [ ! -f pubspec.yaml ]; then
-            echo "name: system_pro_ultra" > pubspec.yaml
-            echo "description: Base project" >> pubspec.yaml
-            echo "version: 1.0.0+1" >> pubspec.yaml
-            echo "environment:" >> pubspec.yaml
-            echo "  sdk: \">=3.4.0 <4.0.0\"" >> pubspec.yaml
-            echo "dependencies:" >> pubspec.yaml
-            echo "  flutter:" >> pubspec.yaml
-            echo "    sdk: flutter" >> pubspec.yaml
-            echo "  permission_handler: ^12.0.1" >> pubspec.yaml
-            echo "  path_provider: ^2.1.5" >> pubspec.yaml
-            echo "  webview_flutter: ^4.13.0" >> pubspec.yaml
-            echo "dev_dependencies:" >> pubspec.yaml
-            echo "  flutter_test:" >> pubspec.yaml
-            echo "    sdk: flutter" >> pubspec.yaml
-            echo "  flutter_lints: ^5.0.0" >> pubspec.yaml
-            echo "flutter:" >> pubspec.yaml
-            echo "  uses-material-design: true" >> pubspec.yaml
-            echo "✅ Default pubspec.yaml created (webview_flutter, permission_handler, path_provider)"
+            cat > pubspec.yaml << 'EOF'
+name: system_pro_ultra
+description: Base project
+version: 1.0.0+1
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  permission_handler: ^12.0.1
+  path_provider: ^2.1.5
+  webview_flutter: ^4.13.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
+EOF
+            echo "✅ Default pubspec.yaml created"
           fi
 
       - name: 🎨 Override main.dart from UI payload
@@ -168,8 +167,11 @@ jobs:
           else
             echo "📋 Found packages: $IMPORTS"
             for pkg in $IMPORTS; do
-              echo "➕ Adding package: $pkg"
-              dart pub add "$pkg" || echo "⚠️ Failed to add $pkg (ignoring)"
+              # Skip flutter itself
+              if [ "$pkg" != "flutter" ]; then
+                echo "➕ Adding package: $pkg"
+                dart pub add "$pkg" || echo "⚠️ Failed to add $pkg (ignoring)"
+              fi
             done
           fi
           echo "⬆️ Upgrading all dependencies..."
@@ -178,6 +180,7 @@ jobs:
 
       # ============================================================
       # APPLY APP NAME, SDK VERSIONS, PERMISSIONS FROM PAYLOAD
+      # (Modified for Kotlin DSL)
       # ============================================================
       - name: ⚙️ Apply app name, SDK versions, permissions from payload
         run: |
@@ -191,26 +194,23 @@ jobs:
           : "${PROGUARD:=false}"
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+          APP_GRADLE="android/app/build.gradle.kts"
 
-          if [ -f "android/app/build.gradle" ]; then
-            GRADLE_FILE="android/app/build.gradle"
-          else
-            GRADLE_FILE="android/app/build.gradle.kts"
-          fi
-
+          # Update app label in manifest
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
-          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
-          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
-          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
+          # Update minSdk, targetSdk in app/build.gradle.kts
+          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$APP_GRADLE"
+          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$APP_GRADLE"
 
           if [ "$PROGUARD" = "true" ]; then
-            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE_FILE"
+            sed -i "s/isMinifyEnabled[[:space:]]*=[[:space:]]*false/isMinifyEnabled = true/" "$APP_GRADLE"
+            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$APP_GRADLE"
           fi
 
+          # Permissions: same logic but using jq
           PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
-          if command -v jq &> /dev/null || sudo apt-get update && sudo apt-get install -y jq; then
+          if command -v jq &> /dev/null || (sudo apt-get update && sudo apt-get install -y jq); then
             if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
               add_perm() {
                 if ! grep -q "$2" "$MANIFEST"; then
@@ -250,31 +250,23 @@ jobs:
           fi
 
       # ============================================================
-      # FIX ANDROID MANIFEST, NAMESPACE, AND NDK VERSION
+      # FIX ANDROID MANIFEST, NAMESPACE (for Kotlin DSL)
       # ============================================================
-      - name: 🛠️ Fix AndroidManifest, namespace, and set NDK version
+      - name: 🛠️ Fix AndroidManifest and namespace
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Remove package attribute if present (namespace now in build.gradle.kts)
           sed -i 's/package="[^"]*" //' "$MANIFEST"
           sed -i 's/package="[^"]*"//' "$MANIFEST"
 
-          if [ -f "android/app/build.gradle" ]; then
-            GRADLE_FILE="android/app/build.gradle"
-          else
-            GRADLE_FILE="android/app/build.gradle.kts"
+          APP_GRADLE="android/app/build.gradle.kts"
+          PACKAGE_NAME="${{ env.PACKAGE_NAME }}"
+          # Add namespace if missing
+          if ! grep -q "namespace" "$APP_GRADLE"; then
+            sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$APP_GRADLE"
           fi
 
-          PACKAGE_NAME="com.systempro.ultra"
-          if ! grep -q "namespace" "$GRADLE_FILE"; then
-            sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$GRADLE_FILE"
-          fi
-
-          if ! grep -q "ndkVersion" "$GRADLE_FILE"; then
-            sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE_FILE"
-          else
-            sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*".*"/ndkVersion = "27.0.12077973"/' "$GRADLE_FILE"
-          fi
-
+          # Ensure styles.xml exists
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/styles.xml << 'STY'
           <?xml version="1.0" encoding="utf-8"?>
@@ -284,7 +276,7 @@ jobs:
               </style>
           </resources>
           STY
-          echo "✅ Android manifest fixed, NDK version set to 27.0.12077973"
+          echo "✅ Android manifest fixed, namespace set"
 
       # ============================================================
       # 🏗️ BUILD APK
@@ -304,7 +296,7 @@ jobs:
       - name: 💾 Commit updated pubspec.yaml and pubspec.lock (if changed)
         run: |
           git config user.name "github-actions[bot]"
-          git config.user.email "github-actions[bot]@users.noreply.github.com"
-          git add pubspec.yaml pubspec.lock
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml pubspec.lock || true
           git diff --cached --quiet || git commit -m "Auto-update dependencies (dart pub add + upgrade)"
           git push || true
