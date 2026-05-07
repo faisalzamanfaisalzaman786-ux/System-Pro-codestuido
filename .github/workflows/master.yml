@@ -1,4 +1,4 @@
-لname: Download FlexColorScheme into Repository
+name: Download FlexColorScheme into Repository
 
 on:
   workflow_dispatch:
