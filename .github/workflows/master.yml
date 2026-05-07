@@ -1,4 +1,4 @@
-name: 🔥 Ultimate Build with FlexColorScheme (Compatible)
+name: 🔥 Fixed Build with FlexColorScheme 8.1.1
 
 on:
   repository_dispatch:
@@ -19,13 +19,13 @@ jobs:
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' -exec rm -rf {} +
 
-      - name: ⚙️ Setup Flutter (3.27.0)
+      - name: ⚙️ Setup Flutter 3.27.0
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
           channel: stable
 
-      - name: 📱 Create fresh Flutter project
+      - name: 📱 Create fresh Flutter project (dynamic package name)
         run: |
           NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
           : "${NEW_PACKAGE:=com.systempro.ultra}"
@@ -33,11 +33,11 @@ jobs:
           PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
           echo "Using org=$ORG, project=$PROJ"
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "✅ Project created"
+          echo "✅ Fresh project created"
 
-      - name: 📄 Write pubspec.yaml (with flex_color_scheme 8.1.1)
+      - name: 📄 Write pubspec.yaml (flex_color_scheme 8.1.1)
         run: |
-          cat > pubspec.yaml << 'PUBS'
+          cat > pubspec.yaml << 'EOF'
           name: system_pro_ultra
           description: System Pro Ultra with FlexColorScheme
           version: 1.0.0+1
@@ -53,10 +53,10 @@ jobs:
             flutter_lints: ^4.0.0
           flutter:
             uses-material-design: true
-          PUBS
+          EOF
           echo "✅ pubspec.yaml ready"
 
-      - name: 🎨 Write main.dart with FlexColorScheme theme
+      - name: 🎨 Write main.dart (FlexColorScheme theme)
         run: |
           cat > lib/main.dart << 'MAIN'
           import 'package:flutter/material.dart';
@@ -93,7 +93,7 @@ jobs:
               return Scaffold(
                 appBar: AppBar(title: const Text('System Pro Ultra')),
                 body: const Center(
-                  child: Text('FlexColorScheme working!'),
+                  child: Text('FlexColorScheme 8.1.1 working!'),
                 ),
               );
             }
@@ -101,13 +101,11 @@ jobs:
           MAIN
           echo "✅ main.dart ready"
 
-      - name: 🛠️ Fix Android theme files (No AppCompat)
+      - name: 🛠️ Fix Android files (remove package from manifest, add namespace to build.gradle)
         run: |
-          rm -f android/app/src/main/AndroidManifest.xml
-          rm -f android/app/src/main/res/values/styles.xml
+          # Correct AndroidManifest.xml without package attribute
           cat > android/app/src/main/AndroidManifest.xml << 'MANI'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.systempro.ultra">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application
                   android:label="System Pro Ultra"
@@ -115,7 +113,9 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true"
                   android:theme="@style/LaunchTheme">
-                  <meta-data android:name="flutterEmbedding" android:value="2" />
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -132,6 +132,8 @@ jobs:
               </application>
           </manifest>
           MANI
+
+          # Correct styles.xml
           mkdir -p android/app/src/main/res/values
           cat > android/app/src/main/res/values/styles.xml << 'STY'
           <?xml version="1.0" encoding="utf-8"?>
@@ -141,9 +143,16 @@ jobs:
               </style>
           </resources>
           STY
-          echo "✅ Theme files fixed"
 
-      - name: 🔄 Apply UI payload (app name, SDK, permissions, icon)
+          # Add namespace to build.gradle (if not present)
+          GRADLE="android/app/build.gradle"
+          if ! grep -q "namespace" "$GRADLE"; then
+            # Insert namespace after android { line
+            sed -i '/android {/a \    namespace "com.systempro.ultra"' "$GRADLE"
+          fi
+          echo "✅ Android files fixed (no package in manifest, namespace added)"
+
+      - name: 🔄 Apply UI payload (app name, SDK versions, permissions, icon)
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
@@ -159,6 +168,7 @@ jobs:
 
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
+          # Update minSdk / targetSdk (both in defaultConfig)
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
@@ -216,7 +226,7 @@ jobs:
             echo "✅ App icon applied"
           fi
 
-      - name: 🏗️ Get dependencies and build APK
+      - name: 🏗️ Build APK
         run: |
           flutter clean
           flutter pub get
@@ -225,7 +235,7 @@ jobs:
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Ultra-Build-${{ github.run_id }}
+          name: SystemPro-Build-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
 
       - name: 💾 Commit clean state (optional)
@@ -233,5 +243,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "🧹 Fresh build with FlexColorScheme 8.1.1"
+          git diff --cached --quiet || git commit -m "🧹 Fixed Android manifest (no package attribute) + FlexColorScheme 8.1.1"
           git push || true
