@@ -1,4 +1,4 @@
-name: Download FlexColorScheme into Repository
+لname: Download FlexColorScheme into Repository
 
 on:
   workflow_dispatch:
@@ -13,21 +13,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Flutter (Dart 3.6+)
+      - name: Setup Flutter (compatible with flex_color_scheme 8.3.0)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          flutter-version: '3.27.0'   # یا 3.24.5، دونوں چلیں گے
           channel: stable
 
-      - name: Download flex_color_scheme package
+      - name: Download flex_color_scheme 8.3.0
         run: |
           mkdir -p packages
-          dart pub unpack flex_color_scheme -o ./packages
+          dart pub unpack flex_color_scheme --version 8.3.0 -o ./packages
 
-      - name: Update pubspec.yaml to use local path
+      - name: Update pubspec.yaml to use local path (version 8.3.0)
         run: |
           if ! grep -q "flex_color_scheme:" pubspec.yaml; then
-            echo -e "\n  flex_color_scheme:\n    path: packages/flex_color_scheme-8.4.0" >> pubspec.yaml
+            echo -e "\n  flex_color_scheme:\n    path: packages/flex_color_scheme-8.3.0" >> pubspec.yaml
           fi
 
       - name: Replace main.dart with full theme support
@@ -67,7 +67,7 @@ jobs:
               return Scaffold(
                 appBar: AppBar(title: const Text('System Pro Ultra')),
                 body: const Center(
-                  child: Text('FlexColorScheme is ready!'),
+                  child: Text('FlexColorScheme (8.3.0) is ready!'),
                 ),
               );
             }
@@ -79,5 +79,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/ pubspec.yaml lib/main.dart
-          git diff --cached --quiet || git commit -m "Add flex_color_scheme and theme"
+          git diff --cached --quiet || git commit -m "Add flex_color_scheme 8.3.0 and theme"
           git push
