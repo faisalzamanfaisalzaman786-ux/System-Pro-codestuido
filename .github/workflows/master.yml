@@ -13,10 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Flutter (for Dart commands)
+      - name: Setup Flutter (Dart 3.6+)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
+          flutter-version: '3.27.0'
           channel: stable
 
       - name: Download flex_color_scheme package
