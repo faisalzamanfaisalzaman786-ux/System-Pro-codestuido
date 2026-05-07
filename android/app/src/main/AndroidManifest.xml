@@ -1,25 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.systempro.ultra">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-
     <application
         android:label="System Pro Ultra"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
-        android:requestLegacyExternalStorage="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar">
-
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
-
+        android:theme="@style/LaunchTheme">
+        <meta-data android:name="flutterEmbedding" android:value="2" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
