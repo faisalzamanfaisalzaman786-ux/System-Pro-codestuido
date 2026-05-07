@@ -1,178 +1,87 @@
-name: System Pro Universal Builder
+name: Setup Offline Theme
 
 on:
-  repository_dispatch:
-    types: [system_pro_build]
-  workflow_dispatch:
+  workflow_dispatch:   # آپ manual طور پر اسے run کریں گے
 
 jobs:
-  build-android:
+  setup:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: write   # تاکہ push کر سکے
 
-      - uses: subosito/flutter-action@v2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (for Dart commands)
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.24.5
+          flutter-version: '3.24.5'
           channel: stable
 
-      - name: Create Flutter project
+      - name: Download flex_color_scheme package
         run: |
-          rm -f pubspec.yaml
-          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
-          : "${NEW_PACKAGE:=com.systempro.default}"
-          ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
-          echo "Using org=$ORG, project=$PROJ"
-          rm -rf android ios
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "✅ Flutter project created"
+          mkdir -p packages
+          dart pub unpack flex_color_scheme --output-directory ./packages
+          echo "✅ flex_color_scheme downloaded into packages/"
 
-      - name: Remove default files
+      - name: Update pubspec.yaml with local path
         run: |
-          rm -f lib/main.dart
-          rm -f pubspec.yaml
-          rm -f android/app/src/main/AndroidManifest.xml
-          rm -f android/app/build.gradle
-          rm -rf android/app/src/main/res/xml
-          echo "✅ Default files removed"
-
-      - name: Create network_security_config.xml
-        run: |
-          mkdir -p android/app/src/main/res/xml
-          echo 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG5ldHdvcmstc2VjdXJpdHktY29uZmlnPgogICAgPGJhc2UtY29uZmlnIGNsZWFydGV4dFRyYWZmaWNQZXJtaXR0ZWQ9InRydWUiPgogICAgICAgIDx0cnVzdC1hbmNob3JzPgogICAgICAgICAgICA8Y2VydGlmaWNhdGVzIHNyYz0ic3lzdGVtIiAvPgogICAgICAgIDwvdHJ1c3QtYW5jaG9ycz4KICAgIDwvYmFzZS1jb25maWc+CiAgICA8ZG9tYWluLWNvbmZpZyBjbGVhcnRleHRUcmFmZmljUGVybWl0dGVkPSJ0cnVlIj4KICAgICAgICA8ZG9tYWluIGluY2x1ZGVTdWJkb21haW5zPSJ0cnVlIj5leGFtcGxlLmNvbTwvZG9tYWluPgogICAgPC9kb21haW4tY29uZmlnPgo8L25ldHdvcmstc2VjdXJpdHktY29uZmlnPgo=' | base64 -d > android/app/src/main/res/xml/network_security_config.xml
-          echo "✅ network_security_config.xml created"
-
-      - name: Override pubspec.yaml from UI payload
-        run: |
-          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
-          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
-            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
-            echo "✅ pubspec.yaml applied"
+          # اگر پہلے سے موجود نہیں تو شامل کریں
+          if ! grep -q "flex_color_scheme:" pubspec.yaml; then
+            echo -e "\n  flex_color_scheme:\n    path: packages/flex_color_scheme-8.4.0" >> pubspec.yaml
+            echo "✅ pubspec.yaml updated"
+          else
+            echo "ℹ️ flex_color_scheme already in pubspec.yaml"
           fi
 
-      - name: Override main.dart from UI payload
+      - name: Replace lib/main.dart with theme-enabled version
         run: |
-          MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
-          if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
-            echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart applied"
-          fi
+          cat > lib/main.dart << 'EOF'
+import 'package:flutter/material.dart';
+import 'package:flex_color_scheme/flex_color_scheme.dart';
 
-      - name: Override AndroidManifest.xml from UI payload
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'System Pro Ultra',
+      theme: FlexThemeData.light(
+        scheme: FlexScheme.mango,
+        useMaterial3: true,
+      ),
+      darkTheme: FlexThemeData.dark(
+        scheme: FlexScheme.mango,
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
+      home: const MyHomePage(),
+    );
+  }
+}
+
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('System Pro Ultra')),
+      body: const Center(child: Text('System Pro Ultra with FlexColorScheme!')),
+    );
+  }
+}
+EOF
+          echo "✅ lib/main.dart replaced with theme support"
+
+      - name: Commit and push changes
         run: |
-          MANIFEST_B64='${{ github.event.client_payload.source_files.android_manifest }}'
-          if [ -n "$MANIFEST_B64" ] && [ "$MANIFEST_B64" != "null" ]; then
-            echo "$MANIFEST_B64" | base64 -d > android/app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest.xml applied"
-          fi
-
-      - name: Override build.gradle from UI payload
-        run: |
-          GRADLE_B64='${{ github.event.client_payload.source_files.build_gradle }}'
-          if [ -n "$GRADLE_B64" ] && [ "$GRADLE_B64" != "null" ]; then
-            echo "$GRADLE_B64" | base64 -d > android/app/build.gradle
-            echo "✅ build.gradle applied"
-          fi
-
-      - name: Create gradle.properties
-        run: |
-          echo "org.gradle.jvmargs=-Xmx4G" > android/gradle.properties
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          echo "✅ gradle.properties created"
-
-      - name: Update app config
-        run: |
-          APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
-          MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
-          TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
-          PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
-          : "${APP_NAME:=System Pro App}"
-          : "${MIN_SDK:=21}"
-          : "${TARGET_SDK:=34}"
-          : "${PROGUARD:=false}"
-          echo "📱 App name: $APP_NAME, minSdk=$MIN_SDK, targetSdk=$TARGET_SDK"
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          GRADLE="android/app/build.gradle"
-          sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
-          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
-          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
-          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
-          if [ "$PROGUARD" = "true" ]; then
-            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE"
-          fi
-
-      - name: Set permissions
-        run: |
-          PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          add_perm() {
-            local perm_xml="$1"
-            local perm_name="$2"
-            if ! grep -q "$perm_name" "$MANIFEST"; then
-              sed -i "/<manifest>/a \    $perm_xml" "$MANIFEST"
-              echo "  + Added $perm_name"
-            fi
-          }
-          if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
-            echo "🔐 Setting permissions"
-            echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' 2>/dev/null | while read perm; do
-              case $perm in
-                storage) add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"; add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
-                camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
-                bluetooth) add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"; add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
-                microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
-                contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"; add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
-                notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
-                foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
-                sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"; add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
-                vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
-              esac
-            done
-            LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
-            if [ "$LOC" = "fine" ]; then
-              add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
-            elif [ "$LOC" = "coarse" ]; then
-              add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
-            fi
-          fi
-
-      - name: Set app icon
-        run: |
-          ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            mkdir -p android/app/src/main/res/mipmap-hdpi
-            echo "$ICON_B64" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            for density in mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/
-            done
-            echo "✅ App icon set"
-          fi
-
-      - name: Additional assets
-        run: |
-          ASSETS='${{ toJson(github.event.client_payload.assets.additional_assets) }}'
-          if [ -n "$ASSETS" ] && [ "$ASSETS" != "null" ] && [ "$ASSETS" != "[]" ]; then
-            echo "$ASSETS" | jq -c '.[]' | while read asset; do
-              NAME=$(echo "$asset" | jq -r '.name')
-              B64=$(echo "$asset" | jq -r '.base64')
-              mkdir -p assets
-              echo "$B64" | base64 -d > "assets/$NAME"
-            done
-            echo "✅ Additional assets added"
-          fi
-
-      - name: Build APK
-        run: |
-          flutter clean
-          flutter pub get
-          flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SystemPro-Build-${{ github.run_id }}
-          path: build/app/outputs/flutter-apk/*.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/ pubspec.yaml lib/main.dart
+          git diff --cached --quiet || git commit -m "Add offline flex_color_scheme and theme setup"
+          git push
