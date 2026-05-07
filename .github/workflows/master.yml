@@ -1,45 +1,99 @@
-name: Download FlexColorScheme into Repository
+name: 🔥 Mega Clean & Build (One-click solution)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # manually run
+  # اگر چاہیں تو push پر بھی کر سکتے ہیں
+  # push:
+  #   branches: [ main ]
 
 jobs:
-  setup:
+  clean-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # to commit changes back (optional)
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download and extract flex_color_scheme 8.3.0
+      # ============================================================
+      # STEP 1: Wipe out everything except .git and workflows
+      # ============================================================
+      - name: 🧹 Wipe entire project (keep only .git and .github)
+        run: |
+          echo "🗑️ Deleting all old files..."
+          # Remove all files and folders except .git and .github
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' -exec rm -rf {} +
+          echo "✅ Repository cleaned. Only .git and .github remain."
+
+      # ============================================================
+      # STEP 2: Create fresh Flutter project
+      # ============================================================
+      - name: ⚙️ Setup Flutter (latest stable)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.0'   # کام کرنے والا ورژن
+          channel: stable
+
+      - name: 📱 Create new Flutter project
+        run: |
+          flutter create --org com.systempro --project-name system_pro_ultra --platforms=android,ios .
+          echo "✅ Fresh Flutter project created."
+
+      # ============================================================
+      # STEP 3: Download flex_color_scheme locally (offline ready)
+      # ============================================================
+      - name: 📦 Download flex_color_scheme 8.3.0 (offline)
         run: |
           mkdir -p packages
           cd packages
           curl -L https://pub.dev/packages/flex_color_scheme/versions/8.3.0.tar.gz -o package.tar.gz
           tar -xzf package.tar.gz
           rm package.tar.gz
-          # Extract ہونے کے بعد جو بھی فولڈر بنا، اسے ڈھونڈ کر flex_color_scheme رکھ دیں
-          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "flex_color_scheme*" | head -1)
-          if [ -z "$EXTRACTED_DIR" ]; then
-            # اگر flex_color_scheme سے شروع نہیں ہوتا تو کوئی بھی ڈائریکٹری لے لو (except current)
-            EXTRACTED_DIR=$(find . -maxdepth 1 -type d ! -name . | head -1)
+          # Find extracted folder (name may vary)
+          EXTRACTED=$(find . -maxdepth 1 -type d -name "flex_color_scheme*" | head -1)
+          if [ -z "$EXTRACTED" ]; then
+            # fallback: any folder except current
+            EXTRACTED=$(find . -maxdepth 1 -type d ! -name . | head -1)
           fi
-          if [ -n "$EXTRACTED_DIR" ] && [ "$EXTRACTED_DIR" != "./flex_color_scheme" ]; then
-            mv "$EXTRACTED_DIR" flex_color_scheme
+          if [ -n "$EXTRACTED" ] && [ "$EXTRACTED" != "./flex_color_scheme" ]; then
+            rm -rf flex_color_scheme 2>/dev/null || true
+            mv "$EXTRACTED" flex_color_scheme
           fi
           cd ..
+          echo "✅ flex_color_scheme installed in packages/flex_color_scheme"
 
-      - name: Update pubspec.yaml with local path
+      # ============================================================
+      # STEP 4: Configure pubspec.yaml with local dependency
+      # ============================================================
+      - name: 📄 Setup pubspec.yaml (with local flex_color_scheme)
         run: |
-          if ! grep -q "flex_color_scheme:" pubspec.yaml; then
-            echo -e "\n  flex_color_scheme:\n    path: packages/flex_color_scheme" >> pubspec.yaml
-          fi
+          cat > pubspec.yaml << 'PUBS'
+          name: system_pro_ultra
+          description: System Pro Ultra with FlexColorScheme
+          version: 1.0.0+1
+          environment:
+            sdk: ">=3.4.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+            flex_color_scheme:
+              path: packages/flex_color_scheme
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^4.0.0
+          flutter:
+            uses-material-design: true
+          PUBS
+          echo "✅ pubspec.yaml created with local dependency"
 
-      - name: Replace main.dart with theme support
+      # ============================================================
+      # STEP 5: Replace main.dart with flex_color_scheme theme
+      # ============================================================
+      - name: 🎨 Write main.dart (with FlexColorScheme)
         run: |
-          cat > lib/main.dart << 'EOF'
+          cat > lib/main.dart << 'MAIN'
           import 'package:flutter/material.dart';
           import 'package:flex_color_scheme/flex_color_scheme.dart';
 
@@ -74,17 +128,107 @@ jobs:
               return Scaffold(
                 appBar: AppBar(title: const Text('System Pro Ultra')),
                 body: const Center(
-                  child: Text('FlexColorScheme 8.3.0 is ready!'),
+                  child: Text('FlexColorScheme is ready!'),
                 ),
               );
             }
           }
-          EOF
+          MAIN
+          echo "✅ main.dart updated with FlexColorScheme"
 
-      - name: Commit and push changes
+      # ============================================================
+      # STEP 6: Fix AndroidManifest.xml and styles.xml (No AppCompat)
+      # ============================================================
+      - name: 🛠️ Fix Android theme files
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          STYLES="android/app/src/main/res/values/styles.xml"
+          
+          # Delete old if exists
+          rm -f "$MANIFEST"
+          rm -f "$STYLES"
+          
+          # Create correct AndroidManifest.xml
+          cat > "$MANIFEST" << 'MANI'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.systempro.ultra">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="System Pro Ultra"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@style/LaunchTheme">
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANI
+          
+          # Create styles.xml without AppCompat
+          mkdir -p android/app/src/main/res/values
+          cat > "$STYLES" << 'STY'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+              </style>
+          </resources>
+          STY
+          
+          echo "✅ AndroidManifest.xml and styles.xml fixed (No AppCompat)"
+
+      # ============================================================
+      # STEP 7: (Optional) Apply permissions, icon, assets from payload
+      # You can remove this if you don't need payload. Keep for flexibility.
+      # ============================================================
+      - name: 📦 (Optional) Process payload if available
+        run: |
+          echo "ℹ️ This step can be extended to accept payload from repository_dispatch"
+          echo "Currently building with default settings."
+          # You can add your payload logic here using github.event.client_payload
+          # For now, nothing extra.
+
+      # ============================================================
+      # STEP 8: Build APK (offline, all dependencies local)
+      # ============================================================
+      - name: 🏗️ Build APK (clean, offline)
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+
+      # ============================================================
+      # STEP 9: Upload APK as artifact
+      # ============================================================
+      - name: 📤 Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SystemPro-Ultra-APK
+          path: build/app/outputs/flutter-apk/*.apk
+
+      # ============================================================
+      # (Optional) Commit the new clean state back to repo
+      # So that you always have a clean template
+      # ============================================================
+      - name: 💾 Commit cleaned project (optional)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/ pubspec.yaml lib/main.dart
-          git diff --cached --quiet || git commit -m "Add flex_color_scheme 8.3.0 (robust extraction)"
-          git push
+          git add .
+          git diff --cached --quiet || git commit -m "🧹 Mega clean and setup with FlexColorScheme (offline)"
+          git push || echo "No changes or push failed"
