@@ -1,4 +1,4 @@
-name: 🔥 Ultimate Fully Automated Build (with Cache)
+name: 🔥 Ultimate Build with FlexColorScheme (Compatible)
 
 on:
   repository_dispatch:
@@ -15,27 +15,15 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      # صاف کرو سب کچھ (سوائے .git اور .github)
-      - name: 🧹 Full clean
+      - name: 🧹 Clean everything except .git and .github
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' -exec rm -rf {} +
 
-      - name: ⚙️ Setup Flutter
+      - name: ⚙️ Setup Flutter (3.27.0)
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
           channel: stable
-
-      # کیشنگ - تاکہ اگلی بار پب ڈیپنڈنسیز دوبارہ ڈاؤن لوڈ نہ ہوں
-      - name: 💾 Cache pub dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            .pub-cache
-            .dart_tool
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
 
       - name: 📱 Create fresh Flutter project
         run: |
@@ -47,7 +35,7 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Project created"
 
-      - name: 📄 Write pubspec.yaml with flex_color_scheme (online)
+      - name: 📄 Write pubspec.yaml (with flex_color_scheme 8.1.1)
         run: |
           cat > pubspec.yaml << 'PUBS'
           name: system_pro_ultra
@@ -58,7 +46,7 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            flex_color_scheme: ^8.3.0
+            flex_color_scheme: ^8.1.1
           dev_dependencies:
             flutter_test:
               sdk: flutter
@@ -155,8 +143,7 @@ jobs:
           STY
           echo "✅ Theme files fixed"
 
-      # یہاں آپ کا UI پے لوڈ (آئیکن، پرمیشنز، پیکج نیم، ایپ نیم، وغیرہ) لاگو ہو سکتا ہے
-      - name: 🔄 Apply UI payload (icon, permissions, app name, SDK versions)
+      - name: 🔄 Apply UI payload (app name, SDK, permissions, icon)
         run: |
           APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
           MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
@@ -170,10 +157,8 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle"
 
-          # App label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # SDK versions
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE"
@@ -233,7 +218,6 @@ jobs:
 
       - name: 🏗️ Get dependencies and build APK
         run: |
-          export PUB_CACHE="$HOME/.pub-cache"
           flutter clean
           flutter pub get
           flutter build apk --release
@@ -249,5 +233,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "🧹 Fresh build with FlexColorScheme and cache"
+          git diff --cached --quiet || git commit -m "🧹 Fresh build with FlexColorScheme 8.1.1"
           git push || true
