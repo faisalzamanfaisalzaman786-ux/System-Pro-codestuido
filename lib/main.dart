@@ -32,7 +32,7 @@ class MyHomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('System Pro Ultra')),
       body: const Center(
-        child: Text('FlexColorScheme working!'),
+        child: Text('FlexColorScheme 8.1.1 working!'),
       ),
     );
   }

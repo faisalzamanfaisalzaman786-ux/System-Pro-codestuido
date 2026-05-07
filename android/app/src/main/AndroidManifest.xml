@@ -1,13 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.systempro.ultra">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="System Pro Ultra"
+        android:label="System Pro Ultra ui"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:theme="@style/LaunchTheme">
-        <meta-data android:name="flutterEmbedding" android:value="2" />
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,4 +1,4 @@
-package com.systempro.ultra
+package com.systempro.ui
 
 import io.flutter.embedding.android.FlutterActivity
 
