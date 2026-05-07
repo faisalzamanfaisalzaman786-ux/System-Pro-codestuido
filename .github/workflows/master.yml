@@ -13,15 +13,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download flex_color_scheme 8.3.0 tar.gz
+      - name: Download and extract flex_color_scheme 8.3.0
         run: |
           mkdir -p packages
           cd packages
-          curl -L https://pub.dev/packages/flex_color_scheme/versions/8.3.0.tar.gz -o flex_color_scheme.tar.gz
-          tar -xzf flex_color_scheme.tar.gz
-          rm flex_color_scheme.tar.gz
-          # extracted folder name is usually "flex_color_scheme-8.3.0"
-          mv flex_color_scheme-8.3.0 flex_color_scheme
+          curl -L https://pub.dev/packages/flex_color_scheme/versions/8.3.0.tar.gz -o package.tar.gz
+          tar -xzf package.tar.gz
+          rm package.tar.gz
+          # Extract ہونے کے بعد جو بھی فولڈر بنا، اسے ڈھونڈ کر flex_color_scheme رکھ دیں
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "flex_color_scheme*" | head -1)
+          if [ -z "$EXTRACTED_DIR" ]; then
+            # اگر flex_color_scheme سے شروع نہیں ہوتا تو کوئی بھی ڈائریکٹری لے لو (except current)
+            EXTRACTED_DIR=$(find . -maxdepth 1 -type d ! -name . | head -1)
+          fi
+          if [ -n "$EXTRACTED_DIR" ] && [ "$EXTRACTED_DIR" != "./flex_color_scheme" ]; then
+            mv "$EXTRACTED_DIR" flex_color_scheme
+          fi
           cd ..
 
       - name: Update pubspec.yaml with local path
@@ -79,5 +86,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/ pubspec.yaml lib/main.dart
-          git diff --cached --quiet || git commit -m "Add flex_color_scheme 8.3.0 via curl"
+          git diff --cached --quiet || git commit -m "Add flex_color_scheme 8.3.0 (robust extraction)"
           git push
