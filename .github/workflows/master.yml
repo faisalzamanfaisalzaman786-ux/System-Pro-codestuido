@@ -1,4 +1,4 @@
-name: 🔥 Final Fixed Build with WebView Support
+name: 🔥 Final Build with WebView Support & AGP 8.2.1
 
 on:
   repository_dispatch:
@@ -233,6 +233,18 @@ jobs:
           echo "✅ Android manifest fixed"
 
       # ============================================================
+      # UPGRADE ANDROID GRADLE PLUGIN (AGP) TO 8.2.1
+      # ============================================================
+      - name: ⬆️ Upgrade Android Gradle Plugin to 8.2.1
+        run: |
+          BUILD_GRADLE="android/build.gradle"
+          # Replace AGP version from 8.1.0 to 8.2.1
+          sed -i 's/classpath "com.android.tools.build:gradle:8\.1\.0"/classpath "com.android.tools.build:gradle:8.2.1"/' "$BUILD_GRADLE"
+          # Also upgrade kotlin_version for better compatibility
+          sed -i 's/ext.kotlin_version = "1.9.22"/ext.kotlin_version = "1.9.24"/' "$BUILD_GRADLE"
+          echo "✅ AGP upgraded to 8.2.1, Kotlin to 1.9.24"
+
+      # ============================================================
       # BUILD APK
       # ============================================================
       - name: 🏗️ Build APK
@@ -252,5 +264,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with webview dependencies and pubspec override"
+          git diff --cached --quiet || git commit -m "Final build with AGP 8.2.1 and webview support"
           git push || true
