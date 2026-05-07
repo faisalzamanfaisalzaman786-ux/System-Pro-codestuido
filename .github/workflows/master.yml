@@ -1,4 +1,4 @@
-name: 🔥 Final Build with Flutter 3.29.2 (AGP 8.3.0)
+name: 🔥 Final Build with Flutter 3.29.2 (NDK 27.0)
 
 on:
   repository_dispatch:
@@ -122,17 +122,14 @@ jobs:
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
-          # Check which Gradle file exists (Groovy or Kotlin DSL)
           if [ -f "android/app/build.gradle" ]; then
             GRADLE_FILE="android/app/build.gradle"
           else
             GRADLE_FILE="android/app/build.gradle.kts"
           fi
 
-          # Update app label
           sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
 
-          # Update minSdk / targetSdk (works for both .gradle and .gradle.kts)
           sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
           sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
           sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
@@ -189,7 +186,7 @@ jobs:
             fi
           fi
 
-      - name: 🛠️ Fix AndroidManifest and namespace
+      - name: 🛠️ Fix AndroidManifest, namespace, and set NDK version
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/package="[^"]*" //' "$MANIFEST"
@@ -203,8 +200,14 @@ jobs:
 
           PACKAGE_NAME="com.systempro.ultra"
           if ! grep -q "namespace" "$GRADLE_FILE"; then
-            # For .kts files, the syntax is slightly different but we add a line after 'android {'
             sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$GRADLE_FILE"
+          fi
+
+          # Set NDK version to satisfy plugins
+          if ! grep -q "ndkVersion" "$GRADLE_FILE"; then
+            sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE_FILE"
+          else
+            sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*".*"/ndkVersion = "27.0.12077973"/' "$GRADLE_FILE"
           fi
 
           mkdir -p android/app/src/main/res/values
@@ -216,7 +219,7 @@ jobs:
               </style>
           </resources>
           STY
-          echo "✅ Android manifest fixed"
+          echo "✅ Android manifest fixed, NDK version set to 27.0.12077973"
 
       - name: 🏗️ Build APK
         run: |
@@ -235,5 +238,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Final build with Flutter 3.29.2 (AGP 8.3.0) and .kts support"
+          git diff --cached --quiet || git commit -m "Final build with NDK 27.0 and fixed WebView"
           git push || true
