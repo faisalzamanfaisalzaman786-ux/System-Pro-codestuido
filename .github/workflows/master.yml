@@ -22,7 +22,7 @@ jobs:
       - name: Download flex_color_scheme package
         run: |
           mkdir -p packages
-          dart pub unpack flex_color_scheme --output-directory ./packages
+          dart pub unpack flex_color_scheme -o ./packages
 
       - name: Update pubspec.yaml to use local path
         run: |
