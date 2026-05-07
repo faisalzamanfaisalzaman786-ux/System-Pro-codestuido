@@ -1,16 +1,16 @@
-name: Setup Offline Theme
+name: Download FlexColorScheme into Repository
 
 on:
-  workflow_dispatch:   # آپ manual طور پر اسے run کریں گے
+  workflow_dispatch:
 
 jobs:
   setup:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # تاکہ push کر سکے
+      contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Flutter (for Dart commands)
@@ -23,65 +23,61 @@ jobs:
         run: |
           mkdir -p packages
           dart pub unpack flex_color_scheme --output-directory ./packages
-          echo "✅ flex_color_scheme downloaded into packages/"
 
-      - name: Update pubspec.yaml with local path
+      - name: Update pubspec.yaml to use local path
         run: |
-          # اگر پہلے سے موجود نہیں تو شامل کریں
           if ! grep -q "flex_color_scheme:" pubspec.yaml; then
             echo -e "\n  flex_color_scheme:\n    path: packages/flex_color_scheme-8.4.0" >> pubspec.yaml
-            echo "✅ pubspec.yaml updated"
-          else
-            echo "ℹ️ flex_color_scheme already in pubspec.yaml"
           fi
 
-      - name: Replace lib/main.dart with theme-enabled version
+      - name: Replace main.dart with full theme support
         run: |
           cat > lib/main.dart << 'EOF'
-import 'package:flutter/material.dart';
-import 'package:flex_color_scheme/flex_color_scheme.dart';
+          import 'package:flutter/material.dart';
+          import 'package:flex_color_scheme/flex_color_scheme.dart';
 
-void main() => runApp(const MyApp());
+          void main() => runApp(const MyApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'System Pro Ultra',
-      theme: FlexThemeData.light(
-        scheme: FlexScheme.mango,
-        useMaterial3: true,
-      ),
-      darkTheme: FlexThemeData.dark(
-        scheme: FlexScheme.mango,
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system,
-      home: const MyHomePage(),
-    );
-  }
-}
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'System Pro Ultra',
+                theme: FlexThemeData.light(
+                  scheme: FlexScheme.mango,
+                  useMaterial3: true,
+                ),
+                darkTheme: FlexThemeData.dark(
+                  scheme: FlexScheme.mango,
+                  useMaterial3: true,
+                ),
+                themeMode: ThemeMode.system,
+                home: const MyHomePage(),
+              );
+            }
+          }
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key});
+          class MyHomePage extends StatelessWidget {
+            const MyHomePage({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('System Pro Ultra')),
-      body: const Center(child: Text('System Pro Ultra with FlexColorScheme!')),
-    );
-  }
-}
-EOF
-          echo "✅ lib/main.dart replaced with theme support"
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('System Pro Ultra')),
+                body: const Center(
+                  child: Text('FlexColorScheme is ready!'),
+                ),
+              );
+            }
+          }
+          EOF
 
-      - name: Commit and push changes
+      - name: Commit and push all changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/ pubspec.yaml lib/main.dart
-          git diff --cached --quiet || git commit -m "Add offline flex_color_scheme and theme setup"
+          git diff --cached --quiet || git commit -m "Add flex_color_scheme and theme"
           git push
