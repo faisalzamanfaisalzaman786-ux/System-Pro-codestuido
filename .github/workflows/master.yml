@@ -1,5 +1,5 @@
-# File: .github/workflows/build-apk.yml
-name: پلیٹ فارم ایپلیکیشن بلڈر اور اپ لوڈر
+# File: .github/workflows/master.yml
+name: 🔥 Final Stable Build - V2 Embedding Fix
 
 on:
   workflow_dispatch:
@@ -8,8 +8,8 @@ on:
 
 env:
   FLUTTER_VERSION: '3.29.2'
-  NDK_VERSION: '27.0.12077973'
-  KOTLIN_VERSION: '1.9.24'
+  NDK_VERSION: '26.3.11579264'
+  KOTLIN_VERSION: '2.0.20'
   JAVA_VERSION: '17'
 
 jobs:
@@ -19,171 +19,90 @@ jobs:
       contents: write
 
     steps:
-      - name: 📥 پہلے سے موجود پروجیکٹ کو چیک کریں
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📂 کلائنٹ پے لوڈ کو محفوظ کریں
+      - name: 💾 Save Client Payload
         run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
 
-      - name: ☕ Java 17 ترتیب دیں
+      - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
 
-      - name: ⚙️ Flutter ترتیب دیں
+      - name: ⚙️ Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: 📦 لوازمات (dependencies) ترتیب دیں
+      - name: 📦 Get Flutter Dependencies
         run: flutter pub get
 
-      - name: 📱 اینڈرائیڈ کنفیگریشن مرتب کریں
+      - name: 📱 Configure Android Project (V2 Embedding + Gradle Fixes)
         run: |
-          # Kotlin/Gradle configuration
-          ANDROID_DIR="android"
-          mkdir -p $ANDROID_DIR/app/src/main/res/values
-
-          # `gradle/libs.versions.toml` (version catalog) بنائیں
-          mkdir -p $ANDROID_DIR/gradle
-          cat > $ANDROID_DIR/gradle/libs.versions.toml << 'EOF'
-          [versions]
-          agp = "8.2.1"
-          kotlin = "${{ env.KOTLIN_VERSION }}"
-
-          [plugins]
-          android-application = { id = "com.android.application", version.ref = "agp" }
-          kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-
-          [libraries]
-          EOF
-
-          # `settings.gradle.kts` (dependency management) فائل بنائیں
-          cat > $ANDROID_DIR/settings.gradle.kts << 'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "MyApp"
-          include(":app")
-          EOF
-
-          # `build.gradle.kts` (build logic) فائل بنائیں
-          cat > $ANDROID_DIR/build.gradle.kts << 'EOF'
-          plugins {
-              alias(libs.plugins.android.application) apply false
-              alias(libs.plugins.kotlin.android) apply false
-          }
-          EOF
-
-          # `app/build.gradle.kts` (app-specific build logic) فائل بنائیں
-          cat > $ANDROID_DIR/app/build.gradle.kts << 'EOF'
-          plugins {
-              id("com.android.application")
-              id("org.jetbrains.kotlin.android")
-          }
-
-          android {
-              namespace = "com.systempro.app"
-              compileSdk = 34
-
-              ndkVersion = "${{ env.NDK_VERSION }}"
-
-              defaultConfig {
-                  applicationId = "com.systempro.app"
-                  minSdk = 21
-                  targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0"
-              }
-
-              buildTypes {
-                  release {
-                      isMinifyEnabled = false
-                      signingConfig = signingConfigs.getByName("debug")
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_1_8
-                  targetCompatibility = JavaVersion.VERSION_1_8
-              }
-              kotlinOptions {
-                  jvmTarget = "1.8"
-              }
-          }
-
-          dependencies {
-              implementation("androidx.core:core-ktx:1.12.0")
-              implementation("androidx.appcompat:appcompat:1.6.1")
-              implementation("com.google.android.material:material:1.11.0")
-          }
-          EOF
-
-          # AndroidManifest.xml تیار کریں
-          cat > $ANDROID_DIR/app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:label="System Pro"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # MainActivity.kt تیار کریں
-          mkdir -p $ANDROID_DIR/app/src/main/kotlin/com/systempro/app
-          cat > $ANDROID_DIR/app/src/main/kotlin/com/systempro/app/MainActivity.kt << 'EOF'
-          package com.systempro.app
-          import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()
-          EOF
-
-      - name: 🔄 lib/main.dart کو اصلی main.dart سے بدلیں (مگر صرف اس وقت جب وہ پے لوڈ میں ہو)
-        run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // empty' payload.json)
-          if [[ -n "$MAIN_B64" && "$MAIN_B64" != "null" ]]; then
-            echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart pico se replace ho gya."
+          # 1. AndroidManifest.xml میں V2 Embedding کا میٹا-ڈیٹا شامل کریں
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            # پہلے سے موجود APPLICATION ٹیگ کے اندر میٹا-ڈیٹا شامل کریں
+            sed -i '/<application/,/<\/application>/ s|<application|<application>\n        <meta-data android:name="flutterEmbedding" android:value="2" />|' "$MANIFEST_PATH"
+            echo "✅ AndroidManifest.xml updated with V2 embedding metadata"
           else
-            echo "⚠️ koi main.dart payload mein nahi mila, default use hoga."
+            echo "::warning::AndroidManifest.xml not found, skipping."
           fi
 
-      - name: 🛠️ نئے منحصر کردہ پیکجز خودکار طور پر شامل کریں
-        run: |
-          # باقاعدہ اظہار کے ذریعے درآمدات (imports) ڈھونڈیں اور اپنے آپ شامل کریں
-          grep -oE "import 'package:([^/']+)/" lib/main.dart | sed "s/import 'package://; s/.$//" | sort -u | while read pkg; do
-            if [[ "$pkg" != "flutter" ]]; then
-              echo "packages add kr rahey hain: $pkg"
-              flutter pub add "$pkg" || echo "⚠️ $pkg add nahi ho saka, ignoring"
-            fi
-          done
-          flutter pub get
+          # 2. Kotlin ورژن کو Settings Gradle میں اپڈیٹ کریں
+          SETTINGS_GRADLE="android/settings.gradle.kts"
+          if [ -f "$SETTINGS_GRADLE" ]; then
+            sed -i 's/kotlin = "[^"]*"/kotlin = "${{ env.KOTLIN_VERSION }}"/' "$SETTINGS_GRADLE"
+            echo "✅ Updated Kotlin version to ${{ env.KOTLIN_VERSION }} in settings.gradle.kts"
+          else
+            echo "::warning::settings.gradle.kts not found."
+          fi
 
-      - name: 📤 اشتہار بنائیں
+          # 3. App Gradle میں NDK ورژن سیٹ کریں
+          APP_GRADLE="android/app/build.gradle.kts"
+          if [ -f "$APP_GRADLE" ]; then
+            if ! grep -q "ndkVersion" "$APP_GRADLE"; then
+              sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
+            else
+              sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*"[^"]*"/ndkVersion = "${{ env.NDK_VERSION }}"/' "$APP_GRADLE"
+            fi
+            echo "✅ NDK version set to ${{ env.NDK_VERSION }} in app/build.gradle.kts"
+          else
+            echo "::warning::app/build.gradle.kts not found."
+          fi
+
+      - name: 🎨 Override main.dart (if in payload)
+        run: |
+          MAIN_B64=$(jq -r '.client_payload.source_files.main_dart // empty' payload.json)
+          if [[ -n "$MAIN_B64" && "$MAIN_B64" != "null" ]]; then
+            echo "$MAIN_B64" | base64 -d > lib/main.dart
+            echo "✅ main.dart replaced from payload."
+          else
+            echo "ℹ️ No main.dart in payload, keeping existing."
+          fi
+
+      - name: 🛠️ Auto-add Dependencies
+        run: |
+          if grep -q "import 'package:" lib/main.dart; then
+            grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u | while read pkg; do
+              if [[ "$pkg" != "flutter" ]]; then
+                echo "📦 Adding package: $pkg"
+                flutter pub add "$pkg" || echo "⚠️ Failed to add $pkg"
+              fi
+            done
+            flutter pub get
+          else
+            echo "ℹ️ No external packages found in main.dart"
+          fi
+
+      - name: 🔨 Build Release APK
         run: flutter build apk --release
 
-      - name: 💾 APK اپ لوڈ کریں
+      - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: SystemPro-APK-${{ github.run_id }}
+          path: build/app/outputs/flutter-apk/*.apk
