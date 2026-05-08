@@ -1,4 +1,4 @@
-name: Dynamic APK Builder (Universal)
+name: Dynamic APK Builder (Safe V2 - Auto Kotlin)
 
 on:
   workflow_dispatch:
@@ -8,9 +8,9 @@ on:
         required: true
         default: '{"package_name":"com.example.app","app_display_name":"MyApp","min_sdk":21,"target_sdk":34,"use_proguard":false}'
       source_files:
-        description: 'Source files: main_dart, pubspec, OR index_html (base64)'
+        description: 'Source files (JSON with base64 for main_dart, pubspec, android_manifest, build_gradle)'
         required: true
-        default: '{"main_dart":"","pubspec":"","index_html":""}'
+        default: '{"main_dart":"","pubspec":"","android_manifest":"","build_gradle":""}'
       permissions:
         description: 'Permissions JSON'
         required: true
@@ -35,18 +35,20 @@ jobs:
           flutter-version: '3.29.2'
           channel: 'stable'
 
-      - name: Build payload from inputs or dispatch
+      - name: Build payload from inputs (if manual run)
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            jq -n \
-              --argjson build_config '${{ toJson(github.event.inputs.build_config) }}' \
-              --argjson source_files '${{ toJson(github.event.inputs.source_files) }}' \
-              --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
-              --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
-              '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
-          else
-            echo '${{ toJson(github.event.client_payload) }}' > payload.json
-          fi
+          jq -n \
+            --argjson build_config '${{ toJson(github.event.inputs.build_config) }}' \
+            --argjson source_files '${{ toJson(github.event.inputs.source_files) }}' \
+            --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
+            --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
+            '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
+
+      - name: Save payload to file (from dispatch)
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo '${{ toJson(github.event.client_payload) }}' > payload.json
 
       - name: Extract build config
         run: |
@@ -62,107 +64,29 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project
+      - name: Create fresh Flutter v2 project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "✅ Project created"
+          echo "✅ Fresh v2 project created"
 
-      - name: Write source files
+      - name: Write source files from payload
         run: |
-          # Write main.dart and pubspec if provided
-          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart 2>/dev/null || true
-          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml 2>/dev/null || true
-          
-          # Write index.html if provided
-          INDEX_HTML=$(jq -r '.source_files.index_html // ""' payload.json)
-          if [ -n "$INDEX_HTML" ] && [ "$INDEX_HTML" != "null" ]; then
-            mkdir -p assets
-            echo "$INDEX_HTML" | base64 -d > assets/index.html
-            echo "✅ HTML asset written"
-            export IS_HTML_APP=true
-          else
-            export IS_HTML_APP=false
-          fi
-          
-          # Save flag for later steps
-          echo "IS_HTML_APP=$IS_HTML_APP" >> $GITHUB_ENV
+          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
+          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
+          jq -r '.source_files.android_manifest // ""' payload.json | base64 -d > android/app/src/main/AndroidManifest.xml
+          jq -r '.source_files.build_gradle // ""' payload.json | base64 -d > android/app/build.gradle
+          echo "✅ All source files written"
 
-      - name: Add dependencies (and WebView if HTML app)
+      - name: Add dependencies (if needed)
         run: |
           flutter pub get
-          if [ "${{ env.IS_HTML_APP }}" = "true" ]; then
-            flutter pub add webview_flutter permission_handler path_provider 2>/dev/null || true
-          else
-            flutter pub add permission_handler path_provider 2>/dev/null || true
-          fi
+          # Add any missing common dependencies; ignore errors if already present
+          flutter pub add webview_flutter permission_handler path_provider 2>/dev/null || true
           flutter pub get
-
-      - name: Configure Flutter entry point (main.dart) for HTML mode
-        if: env.IS_HTML_APP == 'true'
-        run: |
-          # Create a main.dart that loads index.html in WebView
-          cat > lib/main.dart << 'MAIN_DART'
-          import 'package:flutter/material.dart';
-          import 'package:webview_flutter/webview_flutter.dart';
-          import 'package:permission_handler/permission_handler.dart';
-
-          void main() => runApp(const SalatClockApp());
-
-          class SalatClockApp extends StatelessWidget {
-            const SalatClockApp({super.key});
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'Salat Clock',
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData.dark(),
-                home: const SalatClockPage(),
-              );
-            }
-          }
-
-          class SalatClockPage extends StatefulWidget {
-            const SalatClockPage({super.key});
-            @override
-            State<SalatClockPage> createState() => _SalatClockPageState();
-          }
-
-          class _SalatClockPageState extends State<SalatClockPage> {
-            late final WebViewController _controller;
-
-            @override
-            void initState() {
-              super.initState();
-              [Permission.location, Permission.microphone, Permission.notification].request();
-              _controller = WebViewController()
-                ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(Colors.transparent)
-                ..loadFlutterAsset('assets/index.html');
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(body: SafeArea(child: WebViewWidget(controller: _controller)));
-            }
-          }
-          MAIN_DART
-          echo "✅ main.dart written for HTML WebView"
-
-      - name: Ensure pubspec.yaml includes assets (if HTML mode)
-        if: env.IS_HTML_APP == 'true'
-        run: |
-          if ! grep -q "assets/index.html" pubspec.yaml; then
-            if grep -q "assets:" pubspec.yaml; then
-              sed -i '/assets:/a \    - assets/index.html' pubspec.yaml
-            else
-              sed -i '/flutter:/a \  assets:\n    - assets/index.html' pubspec.yaml
-            fi
-          fi
-          echo "✅ pubspec.yaml updated"
 
       - name: Extract permissions and icon
         run: |
@@ -174,9 +98,11 @@ jobs:
       - name: Apply permissions to AndroidManifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Ensure INTERNET permission
           if ! grep -q "INTERNET" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
+          # Ensure POST_NOTIFICATIONS for newer Android
           if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
@@ -216,6 +142,7 @@ jobs:
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
             rm icon.png
+            echo "✅ Icon applied"
           fi
 
       - name: Apply additional assets
@@ -228,48 +155,58 @@ jobs:
               B64=$(_jq '.base64')
               echo "$B64" | base64 -d > "assets/images/$NAME"
             done
+            # Ensure pubspec.yaml includes assets/images
             if ! grep -q "assets/images" pubspec.yaml; then
-              sed -i '/assets:/a \    - assets/images/' pubspec.yaml
+              sed -i '/flutter:/a \  assets:\n    - assets/images/' pubspec.yaml
             fi
+            echo "✅ Additional assets added"
           fi
 
-      - name: Configure Gradle (Java 17, Kotlin 2.0.20)
+      - name: Configure Gradle (Java 17, Kotlin 2.0.20, NDK)
         run: |
-          APP_GRADLE="android/app/build.gradle.kts"
+          APP_GRADLE="android/app/build.gradle"
           PKG="${{ env.PACKAGE_NAME }}"
 
+          # Ensure compileOptions for Java 17
           if ! grep -q "compileOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }' "$APP_GRADLE"
+            sed -i '/android {/a \    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }' "$APP_GRADLE"
           else
-            sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
-            sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
+            sed -i 's/sourceCompatibility .*/sourceCompatibility JavaVersion.VERSION_17/' "$APP_GRADLE"
+            sed -i 's/targetCompatibility .*/targetCompatibility JavaVersion.VERSION_17/' "$APP_GRADLE"
           fi
 
+          # Set namespace
           if grep -q "namespace" "$APP_GRADLE"; then
-            sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$APP_GRADLE"
+            sed -i 's/namespace .*/namespace "'"$PKG"'"/' "$APP_GRADLE"
           else
-            sed -i '/android {/a \    namespace("'"$PKG"'")' "$APP_GRADLE"
+            sed -i '/android {/a \    namespace "'"$PKG"'"' "$APP_GRADLE"
           fi
 
+          # Set applicationId
           if grep -q "applicationId" "$APP_GRADLE"; then
-            sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$APP_GRADLE"
+            sed -i 's/applicationId .*/applicationId "'"$PKG"'"/' "$APP_GRADLE"
           else
-            sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
+            sed -i '/defaultConfig {/a \        applicationId "'"$PKG"'"' "$APP_GRADLE"
           fi
 
-          if grep -q "ndkVersion" "$APP_GRADLE"; then
-            sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
+          # Set NDK version
+          if ! grep -q "ndkVersion" "$APP_GRADLE"; then
+            sed -i '/android {/a \    ndkVersion "27.0.12077973"' "$APP_GRADLE"
           else
-            sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
+            sed -i 's/ndkVersion .*/ndkVersion "27.0.12077973"/' "$APP_GRADLE"
           fi
 
-          sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
-          sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
+          # Set minSdk and targetSdk
+          sed -i 's/minSdk .*/minSdk '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
+          sed -i 's/targetSdk .*/targetSdk '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
 
+          # Proguard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
-            sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
-            sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
+            sed -i 's/minifyEnabled .*/minifyEnabled true/' "$APP_GRADLE"
+            sed -i 's/shrinkResources .*/shrinkResources true/' "$APP_GRADLE"
           fi
+
+          echo "✅ Gradle configured"
 
       - name: Enable cleartext traffic
         run: |
@@ -281,24 +218,25 @@ jobs:
       - name: Force Kotlin 2.0.20
         run: |
           KOTLIN_VERSION="2.0.20"
-          SETTINGS="android/settings.gradle.kts"
+          SETTINGS="android/settings.gradle"
           if [ -f "$SETTINGS" ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$KOTLIN_VERSION"'"/' "$SETTINGS"
           fi
+          # Also create gradle.properties for memory and options
           cat > android/gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
           EOF
-          APP_GRADLE="android/app/build.gradle.kts"
-          sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
-          sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION\")" "$APP_GRADLE"
+          # Ensure kotlinOptions.jvmTarget = 17 in app/build.gradle
+          APP_GRADLE="android/app/build.gradle"
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
           else
             sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
           fi
+          echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=17"
 
       - name: Build release APK
         run: |
@@ -306,7 +244,7 @@ jobs:
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
