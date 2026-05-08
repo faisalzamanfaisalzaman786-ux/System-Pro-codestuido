@@ -50,10 +50,11 @@ jobs:
           jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
           echo "✅ main.dart and pubspec.yaml written"
 
-      - name: Add dependencies
+      - name: Add dependencies with fixed versions
         run: |
           flutter pub get
-          flutter pub add webview_flutter permission_handler path_provider 2>/dev/null || true
+          # package_info_plus version that supports Kotlin 2.0
+          flutter pub add webview_flutter permission_handler path_provider package_info_plus:^8.0.0 2>/dev/null || true
           flutter pub get
 
       - name: Extract permissions and icon
@@ -161,42 +162,40 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      - name: 🚀 Force Kotlin Compatibility
+      - name: 🔧 Fix Kotlin version (2.0.20)
         run: |
-          # 1. Update settings.gradle.kts with a stable Kotlin version
+          # Use Kotlin 2.0.20 which is stable and compatible
+          KOTLIN_VERSION="2.0.20"
+          
+          # Update settings.gradle.kts
           SETTINGS="android/settings.gradle.kts"
-          REQUIRED_VERSION="1.9.24"
           if [ -f "$SETTINGS" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$REQUIRED_VERSION"'"/' "$SETTINGS"
-            echo "✅ Kotlin plugin version set to $REQUIRED_VERSION"
-          else
-            echo "ℹ️ settings.gradle.kts not found, skipping plugin version update"
+            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$KOTLIN_VERSION"'"/' "$SETTINGS"
           fi
 
-          # 2. Create android/gradle.properties with memory settings
+          # Create gradle.properties
           cat > android/gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
           EOF
-          echo "✅ gradle.properties updated"
 
-          # 3. Update app/build.gradle.kts to set jvmTarget and ensure Kotlin compatibility
+          # Force kotlin-stdlib version in app/build.gradle.kts
           APP_GRADLE="android/app/build.gradle.kts"
-          if [ -f "$APP_GRADLE" ]; then
-            # Remove any rogue kotlin blocks
-            sed -i '/^kotlin {/,/^}/d' "$APP_GRADLE"
-            # Ensure kotlinOptions inside android block
-            if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
-              sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
-            else
-              sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
-            fi
-            echo "✅ app Gradle fixed"
+          # Remove any existing kotlin-stdlib dependency
+          sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
+          # Add correct version inside dependencies block
+          sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION\")" "$APP_GRADLE"
+          
+          # Set kotlinOptions jvmTarget
+          if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
+            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
+          else
+            sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
           fi
-
-          echo "✅ Kotlin compatibility steps completed"
+          
+          echo "✅ Kotlin forced to $KOTLIN_VERSION"
 
       - name: Build release APK
         run: |
