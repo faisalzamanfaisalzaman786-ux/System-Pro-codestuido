@@ -2,8 +2,8 @@ name: Dynamic APK Builder (Full Sequence)
 
 on:
   workflow_dispatch:
-    inputs:
-      package_name:
+  repository_dispatch:
+    types: [system_pro_build]   # یہ UI کے event_type سے match کرے گا
         description: 'New Package Name (e.g., com.systempro.ultra3)'
         required: true
         default: 'com.systempro.ultra3'
