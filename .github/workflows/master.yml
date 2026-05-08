@@ -161,9 +161,19 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      # ✅ PERMANENT FIX: Auto-detect Kotlin version without breaking build.gradle.kts
-      - name: 🔄 Auto-detect and set required Kotlin version
+      # ✅ PERMANENT FIX: Auto-detect Kotlin version + Memory + AndroidX
+      - name: 🔧 Optimize Gradle and set Kotlin version
         run: |
+          # 1. Create gradle.properties with memory settings and AndroidX flags
+          cat > android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
+          EOF
+          echo "✅ Gradle properties configured with 2GB memory and AndroidX"
+
+          # 2. Auto-detect Kotlin version
           SETTINGS="android/settings.gradle.kts"
           REQUIRED_VERSION=$(grep -h "kotlin_version" ~/.pub-cache/hosted/pub.dev/*/android/build.gradle* 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | sort -V | tail -1)
           if [ -z "$REQUIRED_VERSION" ]; then
@@ -172,14 +182,14 @@ jobs:
           sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$REQUIRED_VERSION"'"/' "$SETTINGS"
           echo "✅ Kotlin plugin version set to $REQUIRED_VERSION"
 
-          # Set kotlin.version in gradle.properties
-          echo "kotlin.version=$REQUIRED_VERSION" > android/gradle.properties
-          echo "kotlin.code.style=official" >> android/gradle.properties
+          # 3. Set kotlin.version in gradle.properties
+          echo "kotlin.version=$REQUIRED_VERSION" >> android/gradle.properties
 
+          # 4. Fix app/build.gradle.kts: ensure kotlinOptions is correct and no rogue blocks
           APP_GRADLE="android/app/build.gradle.kts"
-          # Remove any previously added invalid compilerOptions block if present
+          # Remove any previously added invalid kotlin block completely
           sed -i '/^kotlin {/,/^}/d' "$APP_GRADLE"
-          # Ensure kotlinOptions block exists and set jvmTarget correctly
+          # Ensure kotlinOptions exists inside android block
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
           else
@@ -188,13 +198,14 @@ jobs:
           # Update kotlin-stdlib dependency
           sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
           sed -i '/dependencies {/a \    implementation("org.jetbrains.kotlin:kotlin-stdlib:'"$REQUIRED_VERSION"'")' "$APP_GRADLE"
-          echo "✅ Kotlin $REQUIRED_VERSION configured safely"
+          echo "✅ Kotlin $REQUIRED_VERSION configured with correct jvmTarget"
 
       - name: Build release APK
         run: |
           flutter clean
           flutter pub get
-          flutter build apk --release
+          # Use --no-daemon to avoid daemon crashes due to memory thrashing
+          flutter build apk --release --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
