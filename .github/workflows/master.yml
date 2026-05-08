@@ -20,7 +20,6 @@ jobs:
       - name: Save payload to file
         run: |
           echo '${{ toJson(github.event.client_payload) }}' > payload.json
-          cat payload.json
 
       - name: Extract build config
         id: config
@@ -39,45 +38,35 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Extract source files and decode
-        run: |
-          mkdir -p lib android/app/src/main
-          # Decode main.dart
-          jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
-          # Decode AndroidManifest.xml
-          jq -r '.source_files.android_manifest' payload.json | base64 -d > android/app/src/main/AndroidManifest.xml
-          # Decode build.gradle
-          jq -r '.source_files.build_gradle' payload.json | base64 -d > android/app/build.gradle
-          # Decode pubspec.yaml
-          jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
-          echo "✅ Source files written"
-
-      - name: Extract permissions and settings
-        run: |
-          # Permissions as JSON
-          jq '.permissions' payload.json > perms.json
-          # Additional assets
-          jq '.assets.additional_assets' payload.json > assets_list.json
-          # Icon base64
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
-          echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
-
       - name: Create fresh Flutter project with correct package name
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
+          # Delete old android/ios if any
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh project created with package: $PKG"
 
-      - name: Overwrite with user-provided source files
+      - name: Write source files from payload (overwrite generated ones)
         run: |
-          # Copy already decoded files into the new project
-          cp lib/main.dart lib/ 2>/dev/null || true
-          cp android/app/src/main/AndroidManifest.xml android/app/src/main/ 2>/dev/null || true
-          cp android/app/build.gradle android/app/ 2>/dev/null || true
-          cp pubspec.yaml . 2>/dev/null || true
+          # Decode and write main.dart
+          jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
+          # Decode and write AndroidManifest.xml
+          jq -r '.source_files.android_manifest' payload.json | base64 -d > android/app/src/main/AndroidManifest.xml
+          # Decode and write build.gradle (Groovy) – remove .kts first
+          rm -f android/app/build.gradle.kts android/build.gradle.kts
+          jq -r '.source_files.build_gradle' payload.json | base64 -d > android/app/build.gradle
+          # Decode and write pubspec.yaml
+          jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
+          echo "✅ Source files written"
+
+      - name: Extract permissions and icon
+        run: |
+          jq '.permissions' payload.json > perms.json
+          jq '.assets.additional_assets' payload.json > assets_list.json
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
+          echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
       - name: Add dependencies
         run: |
@@ -85,44 +74,49 @@ jobs:
           flutter pub add webview_flutter permission_handler path_provider
           flutter pub get
 
-      - name: Apply permissions from perms.json
+      - name: Apply permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Always add internet and cleartext traffic support
+          # Always add internet and POST_NOTIFICATIONS
           if ! grep -q "INTERNET" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
           if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
-          # Add permissions based on perms.json
+          # Helper function
           add_perm() {
             if ! grep -q "$2" "$MANIFEST"; then
               sed -i "/<manifest/a \    $1" "$MANIFEST"
             fi
           }
+          # Camera
           if jq -e '.camera == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
           fi
+          # Microphone
           if jq -e '.microphone == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
           fi
+          # Vibrate
           if jq -e '.vibrate == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
           fi
+          # Location
           LOC=$(jq -r '.location_granularity // "none"' perms.json)
           if [ "$LOC" = "fine" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
           elif [ "$LOC" = "coarse" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
           fi
+          echo "✅ Permissions added"
 
       - name: Set app display name
         run: |
           APP_NAME="${{ env.APP_NAME }}"
           sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Apply app icon if provided
+      - name: Apply custom icon if provided
         run: |
           if [ -n "${{ env.ICON_B64 }}" ] && [ "${{ env.ICON_B64 }}" != "null" ]; then
             echo "${{ env.ICON_B64 }}" | base64 -d > icon.png
@@ -146,7 +140,6 @@ jobs:
               B64=$(_jq '.base64')
               echo "$B64" | base64 -d > "assets/images/$NAME"
             done
-            # Update pubspec.yaml if assets not already present
             if ! grep -q "assets/" pubspec.yaml; then
               sed -i '/flutter:/a \  assets:\n    - assets/images/' pubspec.yaml
             fi
@@ -163,22 +156,23 @@ jobs:
           else
             sed -i "/android {/a \    namespace \"$PKG\"" "$GRADLE"
           fi
-          # applicationId
+          # Set applicationId
           sed -i 's/applicationId .*/applicationId "'"$PKG"'"/' "$GRADLE"
-          # NDK version required for permission_handler
+          # Set NDK version
           if grep -q "ndkVersion" "$GRADLE"; then
             sed -i 's/ndkVersion .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
           else
             sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE"
           fi
-          # minSdk and targetSdk
+          # Set minSdk and targetSdk
           sed -i 's/minSdk .*/minSdk '"${{ env.MIN_SDK }}"'/' "$GRADLE"
           sed -i 's/targetSdk .*/targetSdk '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
-          # ProGuard if enabled
+          # ProGuard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
             sed -i 's/minifyEnabled .*/minifyEnabled true/' "$GRADLE"
             sed -i 's/shrinkResources .*/shrinkResources true/' "$GRADLE"
           fi
+          echo "✅ Gradle fixed"
 
       - name: Ensure cleartext traffic for HTTP
         run: |
