@@ -1,30 +1,26 @@
-name: Build Dynamic APK
+name: Dynamic APK Builder
 
 on:
   workflow_dispatch:
     inputs:
       package_name:
-        description: 'New Package Name (e.g., com.systempro.ultra3)'
+        description: 'New Package Name'
         required: true
         default: 'com.systempro.ultra3'
-        type: string
       app_name:
         description: 'App Display Name'
         required: true
         default: 'System Pro Ultra'
-        type: string
       icon_base64:
-        description: 'Base64 encoded PNG icon (optional)'
+        description: 'Base64 Icon (optional)'
         required: false
         default: ''
-        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -32,20 +28,17 @@ jobs:
           flutter-version: '3.29.2'
           channel: 'stable'
 
-      - name: Clean and prepare
-        run: flutter clean
-
-      - name: Generate fresh project with correct package name
+      - name: Clean and create fresh project with correct package
         run: |
-          TARGET_PACKAGE="${{ github.event.inputs.package_name }}"
-          ORG=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f1 | rev)
-          echo "Package: $TARGET_PACKAGE | Org: $ORG | Project: $PROJ"
+          PKG="${{ github.event.inputs.package_name }}"
+          ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
+          echo "Using package: $PKG"
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "PACKAGE_NAME=$TARGET_PACKAGE" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=$PKG" >> $GITHUB_ENV
 
-      - name: Restore custom code (pubspec, lib, assets)
+      - name: Restore original pubspec and lib
         run: |
           git checkout HEAD -- pubspec.yaml lib/ 2>/dev/null || true
           git checkout HEAD -- assets/ 2>/dev/null || true
@@ -55,7 +48,7 @@ jobs:
           flutter pub add webview_flutter permission_handler
           flutter pub get
 
-      - name: Add Android permissions
+      - name: Add all necessary permissions to AndroidManifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           PERMS=(
@@ -63,20 +56,21 @@ jobs:
             '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />'
             '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
             '<uses-permission android:name="android.permission.VIBRATE" />'
+            '<uses-permission android:name="android.permission.CAMERA" />'
           )
           for perm in "${PERMS[@]}"; do
             if ! grep -qF "$perm" "$MANIFEST"; then
-              sed -i "/<manifest>/a \    $perm" "$MANIFEST"
+              sed -i "/<manifest/a \    $perm" "$MANIFEST"
             fi
           done
 
-      - name: Set app name
+      - name: Set app name and icon
         run: |
+          # App name
           APP_NAME="${{ github.event.inputs.app_name }}"
           sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
-
-      - name: Set app icon (if provided)
-        run: |
+          
+          # Icon if provided
           ICON_B64="${{ github.event.inputs.icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
@@ -85,22 +79,26 @@ jobs:
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
             rm icon.png
-            echo "Custom icon applied"
           fi
 
-      - name: Fix namespace and applicationId
+      - name: Fix Gradle (namespace, applicationId, NDK)
         run: |
           GRADLE="android/app/build.gradle.kts"
-          PACKAGE="${{ env.PACKAGE_NAME }}"
-          # Remove any existing namespace line
+          PKG="${{ env.PACKAGE_NAME }}"
+          # Remove old namespace and add correct one
           sed -i '/namespace(/d' "$GRADLE"
-          # Add correct namespace
-          sed -i "/android {/a \    namespace(\"$PACKAGE\")" "$GRADLE"
-          # Ensure applicationId is set
-          if ! grep -q "applicationId" "$GRADLE"; then
-            sed -i "/defaultConfig {/a \        applicationId = \"$PACKAGE\"" "$GRADLE"
+          sed -i "/android {/a \    namespace(\"$PKG\")" "$GRADLE"
+          # Set applicationId
+          if grep -q "applicationId" "$GRADLE"; then
+            sed -i 's/applicationId = "[^"]*"/applicationId = "'"$PKG"'"/' "$GRADLE"
           else
-            sed -i 's/applicationId = "[^"]*"/applicationId = "'"$PACKAGE"'"/' "$GRADLE"
+            sed -i "/defaultConfig {/a \        applicationId = \"$PKG\"" "$GRADLE"
+          fi
+          # Set NDK version to 27 (required by permission_handler_android)
+          if grep -q "ndkVersion" "$GRADLE"; then
+            sed -i 's/ndkVersion = "[^"]*"/ndkVersion = "27.0.12077973"/' "$GRADLE"
+          else
+            sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE"
           fi
 
       - name: Build release APK
@@ -109,5 +107,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ github.event.inputs.package_name }}-${{ github.run_number }}
+          name: SystemPro-Dynamic-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
