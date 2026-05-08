@@ -1,4 +1,4 @@
-name: Dynamic APK Builder from UI
+name: Dynamic APK Builder (Safe V2)
 
 on:
   repository_dispatch:
@@ -26,65 +26,59 @@ jobs:
         run: |
           PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
           APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
-          BUILD_TYPE=$(jq -r '.build_config.build_type' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
 
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "BUILD_TYPE=$BUILD_TYPE" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project with correct package name
+      - name: Create fresh Flutter v2 project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
-          # Delete old android/ios if any
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "✅ Fresh project created with package: $PKG"
+          echo "✅ Fresh v2 project created"
 
-      - name: Write source files from payload (overwrite generated ones)
+      - name: Write main.dart from payload (overwrite generated)
         run: |
-          # Decode and write main.dart
-          jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
-          # Decode and write AndroidManifest.xml
-          jq -r '.source_files.android_manifest' payload.json | base64 -d > android/app/src/main/AndroidManifest.xml
-          # Decode and write build.gradle (Groovy) – remove .kts first
-          rm -f android/app/build.gradle.kts android/build.gradle.kts
-          jq -r '.source_files.build_gradle' payload.json | base64 -d > android/app/build.gradle
-          # Decode and write pubspec.yaml
-          jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
-          echo "✅ Source files written"
+          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
+          echo "✅ main.dart written"
 
-      - name: Extract permissions and icon
+      - name: Write pubspec.yaml from payload (overwrite generated)
         run: |
-          jq '.permissions' payload.json > perms.json
-          jq '.assets.additional_assets' payload.json > assets_list.json
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
-          echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
+          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
+          echo "✅ pubspec.yaml written"
 
       - name: Add dependencies
         run: |
           flutter pub get
-          flutter pub add webview_flutter permission_handler path_provider
+          flutter pub add webview_flutter permission_handler path_provider 2>/dev/null || true
           flutter pub get
 
-      - name: Apply permissions to AndroidManifest.xml
+      - name: Extract permissions and icon
+        run: |
+          jq '.permissions' payload.json > perms.json
+          jq '.assets.additional_assets // []' payload.json > assets_list.json
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
+          echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
+
+      - name: Apply permissions to existing AndroidManifest.xml (v2 safe)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Always add internet and POST_NOTIFICATIONS
+          # Ensure internet and notifications
           if ! grep -q "INTERNET" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
           if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
-          # Helper function
+          # Function to add permission
           add_perm() {
             if ! grep -q "$2" "$MANIFEST"; then
               sed -i "/<manifest/a \    $1" "$MANIFEST"
@@ -113,10 +107,10 @@ jobs:
 
       - name: Set app display name
         run: |
-          APP_NAME="${{ env.APP_NAME }}"
-          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
 
-      - name: Apply custom icon if provided
+      - name: Apply app icon if provided
         run: |
           if [ -n "${{ env.ICON_B64 }}" ] && [ "${{ env.ICON_B64 }}" != "null" ]; then
             echo "${{ env.ICON_B64 }}" | base64 -d > icon.png
@@ -146,35 +140,45 @@ jobs:
             echo "✅ Additional assets added"
           fi
 
-      - name: Fix Gradle (namespace, applicationId, NDK, minSdk, targetSdk)
+      - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk)
         run: |
-          GRADLE="android/app/build.gradle"
+          # Use build.gradle.kts (created by flutter create)
+          GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
+
           # Ensure namespace
           if grep -q "namespace" "$GRADLE"; then
-            sed -i 's/namespace .*/namespace "'"$PKG"'"/' "$GRADLE"
+            sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$GRADLE"
           else
-            sed -i "/android {/a \    namespace \"$PKG\"" "$GRADLE"
+            sed -i '/android {/a \    namespace("'"$PKG"'")' "$GRADLE"
           fi
-          # Set applicationId
-          sed -i 's/applicationId .*/applicationId "'"$PKG"'"/' "$GRADLE"
-          # Set NDK version
+
+          # Ensure applicationId
+          if grep -q "applicationId" "$GRADLE"; then
+            sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$GRADLE"
+          else
+            sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$GRADLE"
+          fi
+
+          # Set NDK version (required for permission_handler_android)
           if grep -q "ndkVersion" "$GRADLE"; then
-            sed -i 's/ndkVersion .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
+            sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
           else
-            sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE"
+            sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
           fi
+
           # Set minSdk and targetSdk
-          sed -i 's/minSdk .*/minSdk '"${{ env.MIN_SDK }}"'/' "$GRADLE"
-          sed -i 's/targetSdk .*/targetSdk '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
+          sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$GRADLE"
+          sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
+
           # ProGuard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
-            sed -i 's/minifyEnabled .*/minifyEnabled true/' "$GRADLE"
-            sed -i 's/shrinkResources .*/shrinkResources true/' "$GRADLE"
+            sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$GRADLE"
+            sed -i 's/shrinkResources = .*/shrinkResources = true/' "$GRADLE"
           fi
-          echo "✅ Gradle fixed"
+          echo "✅ Gradle configured"
 
-      - name: Ensure cleartext traffic for HTTP
+      - name: Enable cleartext traffic for HTTP
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
@@ -190,5 +194,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
+          name: SystemPro-${{ env.PACKACE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
