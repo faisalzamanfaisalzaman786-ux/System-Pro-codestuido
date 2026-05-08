@@ -3,7 +3,7 @@ name: 🔥 Universal App Builder
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [build_apk]
+    types: [system_pro_build]   # یہ UI کے event_type سے match کرے گا
 
 env:
   FLUTTER_VERSION: '3.29.2'
