@@ -71,32 +71,26 @@ jobs:
       - name: Apply permissions to existing AndroidManifest.xml (v2 safe)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Ensure internet and notifications
           if ! grep -q "INTERNET" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
           if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
-          # Function to add permission
           add_perm() {
             if ! grep -q "$2" "$MANIFEST"; then
               sed -i "/<manifest/a \    $1" "$MANIFEST"
             fi
           }
-          # Camera
           if jq -e '.camera == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
           fi
-          # Microphone
           if jq -e '.microphone == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
           fi
-          # Vibrate
           if jq -e '.vibrate == true' perms.json > /dev/null; then
             add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
           fi
-          # Location
           LOC=$(jq -r '.location_granularity // "none"' perms.json)
           if [ "$LOC" = "fine" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
@@ -127,9 +121,7 @@ jobs:
           if jq -e 'length > 0' assets_list.json > /dev/null; then
             mkdir -p assets/images
             for row in $(jq -r '.[] | @base64' assets_list.json); do
-              _jq() {
-                echo ${row} | base64 --decode | jq -r ${1}
-              }
+              _jq() { echo ${row} | base64 --decode | jq -r ${1}; }
               NAME=$(_jq '.name')
               B64=$(_jq '.base64')
               echo "$B64" | base64 -d > "assets/images/$NAME"
@@ -142,36 +134,25 @@ jobs:
 
       - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk)
         run: |
-          # Use build.gradle.kts (created by flutter create)
           GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
-
-          # Ensure namespace
           if grep -q "namespace" "$GRADLE"; then
             sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$GRADLE"
           else
             sed -i '/android {/a \    namespace("'"$PKG"'")' "$GRADLE"
           fi
-
-          # Ensure applicationId
           if grep -q "applicationId" "$GRADLE"; then
             sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$GRADLE"
           else
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$GRADLE"
           fi
-
-          # Set NDK version (required for permission_handler_android)
           if grep -q "ndkVersion" "$GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
           else
             sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
           fi
-
-          # Set minSdk and targetSdk
           sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$GRADLE"
           sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
-
-          # ProGuard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$GRADLE"
@@ -185,6 +166,17 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
+      # ✅ FIX: Kotlin version mismatch (required for package_info_plus and others)
+      - name: Fix Kotlin version mismatch
+        run: |
+          SETTINGS="android/settings.gradle.kts"
+          if [ -f "$SETTINGS" ]; then
+            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "2.2.0"/' "$SETTINGS"
+            echo "✅ Kotlin plugin updated to 2.2.0 in settings.gradle.kts"
+          else
+            echo "⚠️ settings.gradle.kts not found; skipping"
+          fi
+
       - name: Build release APK
         run: |
           flutter clean
@@ -194,5 +186,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ env.PACKACE_NAME }}-${{ github.run_number }}
+          name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
