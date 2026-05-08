@@ -161,70 +161,42 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      # 🔥 PERMANENT KOTLIN FIX - FORCES COMPILER VERSION 2.2.0
-      - name: 🚀 Force Kotlin 2.2.0 Compiler
+      - name: 🚀 Force Kotlin Compatibility
         run: |
-          # 1. Update settings.gradle.kts (already done but ensure)
+          # 1. Update settings.gradle.kts with a stable Kotlin version
           SETTINGS="android/settings.gradle.kts"
-          REQUIRED_VERSION="2.2.10"
-          sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$REQUIRED_VERSION"'"/' "$SETTINGS"
-          echo "✅ Kotlin plugin version set to $REQUIRED_VERSION"
+          REQUIRED_VERSION="1.9.24"
+          if [ -f "$SETTINGS" ]; then
+            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$REQUIRED_VERSION"'"/' "$SETTINGS"
+            echo "✅ Kotlin plugin version set to $REQUIRED_VERSION"
+          else
+            echo "ℹ️ settings.gradle.kts not found, skipping plugin version update"
+          fi
 
-          # 2. Create/android/gradle.properties with memory and Kotlin version
-          cat > android/gradle.properties << 'EOF'
+          # 2. Create android/gradle.properties with memory settings
+          cat > android/gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
-          kotlin.version=$REQUIRED_VERSION
-          kotlin.compiler.jvmTarget=17
           EOF
           echo "✅ gradle.properties updated"
 
-          # 3. Update root build.gradle.kts (if exists) to enforce Kotlin compiler version
-          ROOT_GRADLE="android/build.gradle.kts"
-          if [ -f "$ROOT_GRADLE" ]; then
-            # Add buildscript with Kotlin version
-            cat > "$ROOT_GRADLE" << 'EOF'
-            buildscript {
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-                dependencies {
-                    classpath("com.android.tools.build:gradle:8.6.0")
-                    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin.version")
-                }
-            }
-            allprojects {
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-                tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-                    kotlinOptions {
-                        jvmTarget = "17"
-                        freeCompilerArgs += listOf("-Xskip-metadata-version-check")
-                    }
-                }
-            }
-            EOF
-            echo "✅ root build.gradle.kts updated with compiler override"
+          # 3. Update app/build.gradle.kts to set jvmTarget and ensure Kotlin compatibility
+          APP_GRADLE="android/app/build.gradle.kts"
+          if [ -f "$APP_GRADLE" ]; then
+            # Remove any rogue kotlin blocks
+            sed -i '/^kotlin {/,/^}/d' "$APP_GRADLE"
+            # Ensure kotlinOptions inside android block
+            if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
+              sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
+            else
+              sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
+            fi
+            echo "✅ app Gradle fixed"
           fi
 
-          # 4. Fix app/build.gradle.kts: remove rogue kotlin blocks, set kotlinOptions
-          APP_GRADLE="android/app/build.gradle.kts"
-          sed -i '/^kotlin {/,/^}/d' "$APP_GRADLE"
-          sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
-          # Ensure kotlinOptions inside android block
-          if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
-          else
-            sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
-          fi
-          # Add correct kotlin-stdlib dependency
-          sed -i '/dependencies {/a \    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.10")' "$APP_GRADLE"
-          echo "✅ app Gradle fixed"
+          echo "✅ Kotlin compatibility steps completed"
 
       - name: Build release APK
         run: |
