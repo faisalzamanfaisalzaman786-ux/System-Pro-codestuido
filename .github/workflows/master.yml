@@ -1,4 +1,4 @@
-name: Dynamic APK Builder (Safe V2)
+name: Dynamic APK Builder (Safe V2 - Auto Kotlin)
 
 on:
   repository_dispatch:
@@ -161,29 +161,34 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      # --------------------------- FORCE KOTLIN 2.2.0 (Syntax Fixed) ---------------------------
-      - name: Force Kotlin 2.2.0 across project
+      # ✅ PERMANENT FIX: Auto-detect Kotlin version without breaking build.gradle.kts
+      - name: 🔄 Auto-detect and set required Kotlin version
         run: |
           SETTINGS="android/settings.gradle.kts"
-          if [ -f "$SETTINGS" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "2.2.0"/' "$SETTINGS"
-            echo "✅ Kotlin plugin version set to 2.2.0 in settings.gradle.kts"
+          REQUIRED_VERSION=$(grep -h "kotlin_version" ~/.pub-cache/hosted/pub.dev/*/android/build.gradle* 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | sort -V | tail -1)
+          if [ -z "$REQUIRED_VERSION" ]; then
+            REQUIRED_VERSION="2.2.0"
           fi
+          sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$REQUIRED_VERSION"'"/' "$SETTINGS"
+          echo "✅ Kotlin plugin version set to $REQUIRED_VERSION"
 
-          mkdir -p android
-          echo "kotlin.version=2.2.0" >> android/gradle.properties
+          # Set kotlin.version in gradle.properties
+          echo "kotlin.version=$REQUIRED_VERSION" > android/gradle.properties
           echo "kotlin.code.style=official" >> android/gradle.properties
 
           APP_GRADLE="android/app/build.gradle.kts"
-          if [ -f "$APP_GRADLE" ]; then
-            if ! grep -q "kotlin {" "$APP_GRADLE"; then
-              sed -i '/android {/i kotlin {\n    compilerOptions {\n        jvmTarget = JvmTarget.JVM_17\n    }\n}\n' "$APP_GRADLE"
-            fi
-            sed -i '/kotlinOptions {/,/}/d' "$APP_GRADLE"
-            sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
-            sed -i '/dependencies {/a \    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.2.0")' "$APP_GRADLE"
+          # Remove any previously added invalid compilerOptions block if present
+          sed -i '/^kotlin {/,/^}/d' "$APP_GRADLE"
+          # Ensure kotlinOptions block exists and set jvmTarget correctly
+          if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
+            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
+          else
+            sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
           fi
-          echo "✅ Kotlin 2.2.0 forced in all Gradle files"
+          # Update kotlin-stdlib dependency
+          sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
+          sed -i '/dependencies {/a \    implementation("org.jetbrains.kotlin:kotlin-stdlib:'"$REQUIRED_VERSION"'")' "$APP_GRADLE"
+          echo "✅ Kotlin $REQUIRED_VERSION configured safely"
 
       - name: Build release APK
         run: |
