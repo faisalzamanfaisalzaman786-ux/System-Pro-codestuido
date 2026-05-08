@@ -1,10 +1,9 @@
-# .github/workflows/master.yml
-name: 🔥 System Pro Universal Builder
+name: 🔥 Dynamic Package Name Fix
 
 on:
-  workflow_dispatch:
   repository_dispatch:
-    types: [system_pro_build]          # آپ کے UI کا event_type
+    types: [system_pro_build]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,112 +15,132 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 💾 Save client payload
-        run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
+      - name: 🧹 Clean (preserve pubspec.yaml)
+        run: |
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.github' ! -name 'pubspec.yaml' -exec rm -rf {} +
+          rm -rf .dart_tool .packages pubspec.lock build android/.gradle ios/.symlinks
+          rm -rf android/app/build android/build .gradle
+          echo "✅ Clean done"
 
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: ⚙️ Setup Flutter 3.29.2
+      - name: ⚙️ Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.2'
-          channel: 'stable'
-
-      - name: 📦 Get initial dependencies
-        run: flutter pub get
+          channel: stable
 
       # ============================================================
-      # NDK FIX: force NDK 27.0.12077973 in app/build.gradle.kts
+      # ✅ FIX: Dynamic package name from payload
       # ============================================================
-      - name: 🛠️ Force NDK 27.0.12077973
+      - name: 📱 Create Flutter project with dynamic package name
         run: |
-          APP_GRADLE="android/app/build.gradle.kts"
-          if [ -f "$APP_GRADLE" ]; then
-            if ! grep -q "ndkVersion" "$APP_GRADLE"; then
-              sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
-            else
-              sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*"[^"]*"/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
-            fi
-            echo "✅ NDK version set to 27.0.12077973"
+          # Backup original pubspec.yaml if exists
+          [ -f pubspec.yaml ] && cp pubspec.yaml pubspec.yaml.backup || true
+
+          # Get package name from payload, fallback to default
+          NEW_PACKAGE="${{ github.event.client_payload.build_config.package_name }}"
+          if [ -z "$NEW_PACKAGE" ] || [ "$NEW_PACKAGE" = "null" ]; then
+            NEW_PACKAGE="com.systempro.ultra"
           fi
+          echo "👉 Using package name: $NEW_PACKAGE"
+
+          # Extract org and project
+          ORG=$(echo "$NEW_PACKAGE" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$NEW_PACKAGE" | rev | cut -d. -f1 | rev)
+          echo "ORG=$ORG, PROJ=$PROJ"
+
+          # Create Flutter project with the dynamic package name
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
+
+          # Restore original pubspec.yaml (preserve our dependencies)
+          [ -f pubspec.yaml.backup ] && mv pubspec.yaml.backup pubspec.yaml
+
+          echo "PACKAGE_NAME=$NEW_PACKAGE" >> $GITHUB_ENV
+          echo "✅ Project created with package: $NEW_PACKAGE"
 
       # ============================================================
-      # FIX AndroidManifest.xml to avoid "Missing name key attribute"
+      # Inject stable build.gradle (after project creation)
       # ============================================================
-      - name: 📱 Fix AndroidManifest.xml (remove broken meta-data)
+      - name: 🏗️ Inject Stable build.gradle
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          
-          # اگر فائل موجود نہیں تو بنائیں
-          if [ ! -f "$MANIFEST" ]; then
-            mkdir -p android/app/src/main
-            cat > "$MANIFEST" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application android:label="System Pro" android:icon="@mipmap/ic_launcher">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.22'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.1'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register("clean", Delete) {
+              delete rootProject.buildDir
+          }
           EOF
-          fi
-          
-          # سب سے پہلے: کسی بھی ایسی meta-data لائن کو ہٹائیں جس میں name attribute نہ ہو
-          # یہ وہی error پیدا کر رہی تھی
-          sed -i '/<meta-data[^>]*>/d' "$MANIFEST"
-          
-          # اب ضروری پرمیشنز اور V2 Embedding شامل کریں (اگر پہلے سے موجود نہ ہوں)
-          if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          fi
-          if ! grep -q "android.permission.READ_EXTERNAL_STORAGE" "$MANIFEST"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "$MANIFEST"
-          fi
-          if ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" "$MANIFEST"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "$MANIFEST"
-          fi
-          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-            sed -i '/<application/a\        <meta-data android:name="flutterEmbedding" android:value="2" />' "$MANIFEST"
-          fi
-          
-          echo "✅ AndroidManifest.xml fixed"
+          echo "✅ build.gradle replaced"
 
       # ============================================================
-      # Apply main.dart from UI payload (if exists)
+      # Apply pubspec.yaml from UI or create minimal default
       # ============================================================
-      - name: 🎨 Apply main.dart
+      - name: 📄 Apply pubspec.yaml from UI payload or create default
         run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // empty' payload.json)
+          PUBSPEC_B64='${{ github.event.client_payload.source_files.pubspec }}'
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml.new
+            if grep -q "^name:" pubspec.yaml.new; then
+              mv pubspec.yaml.new pubspec.yaml
+              echo "✅ pubspec.yaml from UI payload"
+            else
+              rm -f pubspec.yaml.new
+            fi
+          fi
+
+          if [ ! -f pubspec.yaml ]; then
+            echo "name: system_pro_ultra" > pubspec.yaml
+            echo "description: Dynamic app" >> pubspec.yaml
+            echo "version: 1.0.0+1" >> pubspec.yaml
+            echo "environment:" >> pubspec.yaml
+            echo "  sdk: \">=3.4.0 <4.0.0\"" >> pubspec.yaml
+            echo "dependencies:" >> pubspec.yaml
+            echo "  flutter:" >> pubspec.yaml
+            echo "    sdk: flutter" >> pubspec.yaml
+            echo "  permission_handler: ^12.0.1" >> pubspec.yaml
+            echo "  path_provider: ^2.1.5" >> pubspec.yaml
+            echo "  webview_flutter: ^4.13.0" >> pubspec.yaml
+            echo "dev_dependencies:" >> pubspec.yaml
+            echo "  flutter_test:" >> pubspec.yaml
+            echo "    sdk: flutter" >> pubspec.yaml
+            echo "  flutter_lints: ^5.0.0" >> pubspec.yaml
+            echo "flutter:" >> pubspec.yaml
+            echo "  uses-material-design: true" >> pubspec.yaml
+            echo "✅ Default pubspec.yaml created"
+          fi
+
+      - name: 🎨 Override main.dart from UI payload
+        run: |
+          MAIN_B64='${{ github.event.client_payload.source_files.main_dart }}'
           if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
             echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart applied from UI"
+            echo "✅ main.dart from UI"
           fi
 
-      # ============================================================
-      # Apply pubspec.yaml from UI (if exists)
-      # ============================================================
-      - name: 📄 Apply pubspec.yaml
+      - name: 🖼️ Override app icon from UI payload
         run: |
-          PUBSPEC_B64=$(jq -r '.source_files.pubspec // empty' payload.json)
-          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
-            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
-            echo "✅ pubspec.yaml applied from UI"
-          fi
-
-      # ============================================================
-      # Apply app icon
-      # ============================================================
-      - name: 🖼️ Apply app icon
-        run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // empty' payload.json)
+          ICON_B64="${{ github.event.client_payload.assets.app_icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             mkdir -p android/app/src/main/res/mipmap-hdpi
             echo "$ICON_B64" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
@@ -129,63 +148,145 @@ jobs:
               mkdir -p android/app/src/main/res/mipmap-$density
               cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/ 2>/dev/null || true
             done
-            echo "✅ App icon applied"
+            echo "✅ App icon set"
           fi
 
       # ============================================================
-      # Auto-detect and add dependencies from main.dart imports
+      # Auto-detect dependencies from main.dart
       # ============================================================
       - name: 📦 Auto-add dependencies
         run: |
-          if grep -q "import 'package:" lib/main.dart; then
-            grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u | while read pkg; do
-              if [[ "$pkg" != "flutter" ]]; then
-                echo "📦 Adding $pkg"
-                flutter pub add "$pkg" || echo "⚠️ Failed to add $pkg"
-              fi
-            done
-            flutter pub get
+          IMPORTS=$(grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u || true)
+          for pkg in $IMPORTS; do
+            if [ "$pkg" != "flutter" ]; then
+              echo "➕ Adding $pkg"
+              dart pub add "$pkg" || true
+            fi
+          done
+          flutter pub upgrade || true
+          echo "✅ Dependencies handled"
+
+      # ============================================================
+      # Apply app name, SDK versions, permissions from payload
+      # ============================================================
+      - name: ⚙️ Apply config from payload
+        run: |
+          APP_NAME="${{ github.event.client_payload.build_config.app_display_name }}"
+          MIN_SDK="${{ github.event.client_payload.build_config.min_sdk }}"
+          TARGET_SDK="${{ github.event.client_payload.build_config.target_sdk }}"
+          PROGUARD="${{ github.event.client_payload.build_config.use_proguard }}"
+          : "${APP_NAME:=System Pro Ultra}"
+          : "${MIN_SDK:=21}"
+          : "${TARGET_SDK:=34}"
+          : "${PROGUARD:=false}"
+
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+          else
+            GRADLE_FILE="android/app/build.gradle.kts"
           fi
 
-      # ============================================================
-      # Apply build config (app name, minSdk, targetSdk)
-      # ============================================================
-      - name: ⚙️ Apply build config from payload
-        run: |
-          APP_NAME=$(jq -r '.build_config.app_display_name // "System Pro"' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
-          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.systempro.app"' payload.json)
+          sed -i "s/android:label=\".*\"/android:label=\"${APP_NAME}\"/" "$MANIFEST"
+          sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
+          sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
+          sed -i "s/minSdk[[:space:]]\+[0-9]\+/minSdk = ${MIN_SDK}/" "$GRADLE_FILE"
+          sed -i "s/targetSdk[[:space:]]\+[0-9]\+/targetSdk = ${TARGET_SDK}/" "$GRADLE_FILE"
+          if [ "$PROGUARD" = "true" ]; then
+            sed -i "s/minifyEnabled[[:space:]]*=[[:space:]]*false/minifyEnabled = true/" "$GRADLE_FILE"
+          fi
 
-          # Update app label in manifest
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/" "$MANIFEST"
-
-          # Update minSdk/targetSdk in app/build.gradle.kts
-          APP_GRADLE="android/app/build.gradle.kts"
-          if [ -f "$APP_GRADLE" ]; then
-            sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = $MIN_SDK/" "$APP_GRADLE"
-            sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = $TARGET_SDK/" "$APP_GRADLE"
-            if ! grep -q "namespace" "$APP_GRADLE"; then
-              sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$APP_GRADLE"
+          PERMS_JSON='${{ toJson(github.event.client_payload.permissions) }}'
+          if command -v jq &> /dev/null || sudo apt-get update && sudo apt-get install -y jq; then
+            if [ -n "$PERMS_JSON" ] && [ "$PERMS_JSON" != "null" ]; then
+              add_perm() {
+                if ! grep -q "$2" "$MANIFEST"; then
+                  sed -i "/<manifest>/a \    $1" "$MANIFEST"
+                fi
+              }
+              add_perm '<uses-permission android:name="android.permission.INTERNET" />' "INTERNET"
+              echo "$PERMS_JSON" | jq -r 'to_entries[] | select(.value==true) | .key' | while read perm; do
+                case $perm in
+                  storage)
+                    add_perm '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "READ_EXTERNAL_STORAGE"
+                    add_perm '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "WRITE_EXTERNAL_STORAGE" ;;
+                  camera) add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA" ;;
+                  bluetooth)
+                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH" />' "BLUETOOTH"
+                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />' "BLUETOOTH_ADMIN"
+                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />' "BLUETOOTH_SCAN"
+                    add_perm '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />' "BLUETOOTH_CONNECT" ;;
+                  microphone) add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO" ;;
+                  contacts) add_perm '<uses-permission android:name="android.permission.READ_CONTACTS" />' "READ_CONTACTS"
+                            add_perm '<uses-permission android:name="android.permission.WRITE_CONTACTS" />' "WRITE_CONTACTS" ;;
+                  notif) add_perm '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "POST_NOTIFICATIONS" ;;
+                  foreground) add_perm '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "FOREGROUND_SERVICE" ;;
+                  sms) add_perm '<uses-permission android:name="android.permission.SEND_SMS" />' "SEND_SMS"
+                       add_perm '<uses-permission android:name="android.permission.READ_SMS" />' "READ_SMS" ;;
+                  vibrate) add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE" ;;
+                esac
+              done
+              LOC=$(echo "$PERMS_JSON" | jq -r '.location_granularity // ""')
+              if [ "$LOC" = "fine" ]; then
+                add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
+              elif [ "$LOC" = "coarse" ]; then
+                add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
+              fi
             fi
           fi
-          echo "✅ Build config applied"
 
       # ============================================================
-      # 🔨 Build APK
+      # Fix AndroidManifest and NDK version
       # ============================================================
-      - name: 🔨 Build release APK
+      - name: 🛠️ Fix AndroidManifest and NDK
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/package="[^"]*" //' "$MANIFEST"
+          sed -i 's/package="[^"]*"//' "$MANIFEST"
+
+          if [ -f "android/app/build.gradle" ]; then
+            GRADLE_FILE="android/app/build.gradle"
+          else
+            GRADLE_FILE="android/app/build.gradle.kts"
+          fi
+
+          PACKAGE_NAME="com.systempro.ultra"
+          if ! grep -q "namespace" "$GRADLE_FILE"; then
+            sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$GRADLE_FILE"
+          fi
+          if ! grep -q "ndkVersion" "$GRADLE_FILE"; then
+            sed -i "/android {/a \    ndkVersion = \"27.0.12077973\"" "$GRADLE_FILE"
+          else
+            sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*".*"/ndkVersion = "27.0.12077973"/' "$GRADLE_FILE"
+          fi
+
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/styles.xml << 'STY'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+              </style>
+          </resources>
+          STY
+          echo "✅ Android manifest fixed, NDK set"
+
+      - name: 🏗️ Build APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
 
-      # ============================================================
-      # 📤 Upload APK
-      # ============================================================
-      - name: 📤 Upload APK artifact
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build-${{ github.run_id }}
+          name: SystemPro-DynamicPkg-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
+
+      - name: 💾 Commit lock file (optional)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.lock pubspec.yaml 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "Auto-update dependencies"
+          git push || true
