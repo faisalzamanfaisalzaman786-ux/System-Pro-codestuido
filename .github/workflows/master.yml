@@ -1,198 +1,113 @@
-name: Dynamic APK Builder (Full Sequence)
+name: Build Dynamic APK
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [system_pro_build]   # یہ UI کے event_type سے match کرے گا
+    inputs:
+      package_name:
         description: 'New Package Name (e.g., com.systempro.ultra3)'
         required: true
         default: 'com.systempro.ultra3'
+        type: string
       app_name:
-        description: 'Display App Name'
+        description: 'App Display Name'
         required: true
         default: 'System Pro Ultra'
-      app_icon_base64:
-        description: 'Base64 encoded PNG icon (leave empty to use default)'
+        type: string
+      icon_base64:
+        description: 'Base64 encoded PNG icon (optional)'
         required: false
         default: ''
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # ========== 1. CHECKOUT CODE ==========
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # ========== 2. SETUP FLUTTER ==========
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.2'
           channel: 'stable'
 
-      # ========== 3. CLEAN AND PREPARE ==========
-      - name: Clean existing build artifacts
+      - name: Clean and prepare
         run: flutter clean
 
-      # ========== 4. RECEIVE PACKAGE NAME & GENERATE FRESH PROJECT ==========
-      - name: 🔄 Step 1 - Generate new project with correct package name
+      - name: Generate fresh project with correct package name
         run: |
           TARGET_PACKAGE="${{ github.event.inputs.package_name }}"
-          ORG_NAME=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f2- | rev)
-          PROJECT_NAME=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f1 | rev)
-          
-          echo "📦 Received package: $TARGET_PACKAGE"
-          echo "🧩 Org: $ORG_NAME, Project: $PROJECT_NAME"
-          
-          # Delete old android/ios folders completely (avoid half-migration)
+          ORG=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$TARGET_PACKAGE" | rev | cut -d. -f1 | rev)
+          echo "Package: $TARGET_PACKAGE | Org: $ORG | Project: $PROJ"
           rm -rf android ios .dart_tool build
-          
-          # Create brand new Flutter project with exact package name
-          flutter create --org "$ORG_NAME" --project-name "$PROJECT_NAME" \
-                         --platforms=android,ios .
-          
-          # Save package name for later steps
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "PACKAGE_NAME=$TARGET_PACKAGE" >> $GITHUB_ENV
-          
-          # Also save org and project name separately
-          echo "ORG_NAME=$ORG_NAME" >> $GITHUB_ENV
-          echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_ENV
-          
-          echo "✅ Fresh project created with package: $TARGET_PACKAGE"
 
-      # ========== 5. RESTORE ORIGINAL PUBSPEC.YAML AND MAIN.DART ==========
-      - name: 📝 Step 2 - Restore custom app code (pubspec.yaml, main.dart, assets)
+      - name: Restore custom code (pubspec, lib, assets)
         run: |
-          # Backup current generated files (we will overwrite with user's version)
-          # But user's code is already in repo, so we just need to copy back the custom files
-          # Since we deleted everything, we need to restore from git checkout except the newly created android/ios?
-          # Actually we should keep the new android/ios and only overwrite pubspec.yaml and lib/ if they exist in repo.
-          # For safety, we bring back user's pubspec.yaml and lib/main.dart from the original checkout.
-          # But the original checkout is still there? No, we deleted android/ios but the repo root files (pubspec.yaml, lib/) are still present from checkout.
-          # Wait: after checkout, we have the repo's files. Then we ran `flutter create` which overwrote pubspec.yaml and lib/main.dart with default ones.
-          # So we need to restore user's versions from git.
-          
-          git checkout HEAD -- pubspec.yaml lib/ 2>/dev/null || echo "No custom pubspec or lib found, using defaults"
-          
-          # Restore any assets (images, fonts) if present
-          git checkout HEAD -- assets/ 2>/dev/null || echo "No assets folder found"
-          
-          echo "✅ Custom code restored"
+          git checkout HEAD -- pubspec.yaml lib/ 2>/dev/null || true
+          git checkout HEAD -- assets/ 2>/dev/null || true
 
-      # ========== 6. ADD DEPENDENCIES (webview_flutter, permission_handler, etc.) ==========
-      - name: 📦 Step 3 - Add required dependencies
+      - name: Add dependencies
         run: |
-          # Ensure dependencies are in pubspec.yaml
-          if ! grep -q "webview_flutter" pubspec.yaml; then
-            echo "  webview_flutter: ^4.13.0" >> pubspec.yaml
-          fi
-          if ! grep -q "permission_handler" pubspec.yaml; then
-            echo "  permission_handler: ^12.0.1" >> pubspec.yaml
-          fi
-          
-          # Run pub get to fetch them
+          flutter pub add webview_flutter permission_handler
           flutter pub get
-          
-          echo "✅ Dependencies added"
 
-      # ========== 7. APPLY PERMISSIONS IN ANDROIDMANIFEST.XML ==========
-      - name: 🔒 Step 4 - Configure Android permissions
+      - name: Add Android permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          
-          # List of required permissions (INTERNET is normal, others are dangerous but we add anyway)
           PERMS=(
             '<uses-permission android:name="android.permission.INTERNET" />'
             '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />'
             '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
             '<uses-permission android:name="android.permission.VIBRATE" />'
-            '<uses-permission android:name="android.permission.CAMERA" />'
-            '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
           )
-          
           for perm in "${PERMS[@]}"; do
             if ! grep -qF "$perm" "$MANIFEST"; then
-              sed -i "/<manifest/a \    $perm" "$MANIFEST"
+              sed -i "/<manifest>/a \    $perm" "$MANIFEST"
             fi
           done
-          
-          echo "✅ All permissions added to manifest"
 
-      # ========== 8. APPLY DYNAMIC APP NAME ==========
-      - name: 🏷️ Step 5 - Set dynamic app name
+      - name: Set app name
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           APP_NAME="${{ github.event.inputs.app_name }}"
-          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
-          echo "✅ App name set to: $APP_NAME"
+          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' android/app/src/main/AndroidManifest.xml
 
-      # ========== 9. APPLY DYNAMIC APP ICON (IF PROVIDED) ==========
-      - name: 🎨 Step 6 - Set dynamic app icon
+      - name: Set app icon (if provided)
         run: |
-          ICON_B64="${{ github.event.inputs.app_icon_base64 }}"
+          ICON_B64="${{ github.event.inputs.icon_base64 }}"
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            # Create temporary file
-            echo "$ICON_B64" | base64 -d > temp_icon.png
-            # Install Android asset studio tool or use simple copy to all densities
-            # For simplicity, we replace all mipmap icons with this one
+            echo "$ICON_B64" | base64 -d > icon.png
             for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android/app/src/main/res/mipmap-$density
-              cp temp_icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
-            rm temp_icon.png
-            echo "✅ Dynamic icon applied"
-          else
-            echo "ℹ️ No custom icon provided, using default Flutter icon"
+            rm icon.png
+            echo "Custom icon applied"
           fi
 
-      # ========== 10. VERIFY PACKAGE NAME CONSISTENCY ==========
-      - name: 🔍 Step 7 - Verify package name everywhere
+      - name: Fix namespace and applicationId
         run: |
-          echo "🔎 Checking package name consistency..."
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           GRADLE="android/app/build.gradle.kts"
-          
-          # Check manifest does NOT have 'package' attribute
-          if grep -q 'package="' "$MANIFEST"; then
-            echo "⚠️ Manifest still has package attribute! Removing it..."
-            sed -i 's/package="[^"]*" //g' "$MANIFEST"
-            sed -i 's/package="[^"]*"//g' "$MANIFEST"
-          fi
-          
-          # Check gradle namespace matches
-          if ! grep -q "namespace(\"${{ env.PACKAGE_NAME }}\")" "$GRADLE"; then
-            echo "❌ Gradle namespace mismatch! Fixing..."
-            sed -i '/namespace(/d' "$GRADLE"
-            sed -i "/android {/a \    namespace(\"${{ env.PACKAGE_NAME }}\")" "$GRADLE"
-          fi
-          
-          # Check applicationId in defaultConfig
-          if ! grep -q "applicationId = \"${{ env.PACKAGE_NAME }}\"" "$GRADLE"; then
-            echo "⚠️ applicationId missing or incorrect. Adding..."
-            sed -i "/defaultConfig {/a \        applicationId = \"${{ env.PACKAGE_NAME }}\"" "$GRADLE"
-          fi
-          
-          echo "✅ Package name consistency verified"
-
-      # ========== 11. BUILD RELEASE APK ==========
-      - name: 🛠️ Step 8 - Build release APK
-        run: |
-          flutter build apk --release
-          
-          # Get the generated APK path
-          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
-          if [ -f "$APK_PATH" ]; then
-            echo "✅ APK built successfully at $APK_PATH"
+          PACKAGE="${{ env.PACKAGE_NAME }}"
+          # Remove any existing namespace line
+          sed -i '/namespace(/d' "$GRADLE"
+          # Add correct namespace
+          sed -i "/android {/a \    namespace(\"$PACKAGE\")" "$GRADLE"
+          # Ensure applicationId is set
+          if ! grep -q "applicationId" "$GRADLE"; then
+            sed -i "/defaultConfig {/a \        applicationId = \"$PACKAGE\"" "$GRADLE"
           else
-            echo "❌ APK build failed!"
-            exit 1
+            sed -i 's/applicationId = "[^"]*"/applicationId = "'"$PACKAGE"'"/' "$GRADLE"
           fi
 
-      # ========== 12. UPLOAD APK AS ARTIFACT ==========
-      - name: 📤 Step 9 - Upload APK artifact
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Dynamic-${{ github.run_number }}
+          name: SystemPro-${{ github.event.inputs.package_name }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
-          if-no-files-found: error
