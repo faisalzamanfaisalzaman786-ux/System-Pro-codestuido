@@ -1,15 +1,10 @@
-name: 🔥 Universal App Builder
+# .github/workflows/master.yml
+name: 🔥 System Pro Universal Builder
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [system_pro_build]   # یہ UI کے event_type سے match کرے گا
-
-env:
-  FLUTTER_VERSION: '3.29.2'
-  NDK_VERSION: '26.3.11579264'
-  KOTLIN_VERSION: '2.0.20'
-  JAVA_VERSION: '17'
+    types: [system_pro_build]          # آپ کے UI کا event_type
 
 jobs:
   build:
@@ -18,106 +13,179 @@ jobs:
       contents: write
 
     steps:
-      - name: 📥 Checkout Repository
+      - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 💾 Save Client Payload
+      - name: 💾 Save client payload
         run: echo '${{ toJSON(github.event.client_payload) }}' > payload.json
 
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: '17'
 
-      - name: ⚙️ Setup Flutter
+      - name: ⚙️ Setup Flutter 3.29.2
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.29.2'
           channel: 'stable'
 
-      - name: 📦 Get Flutter Dependencies
+      - name: 📦 Get initial dependencies
         run: flutter pub get
 
-      - name: 📱 Configure Android Project Core (Permissions + V2 Embedding)
+      # ============================================================
+      # NDK FIX: force NDK 27.0.12077973 in app/build.gradle.kts
+      # ============================================================
+      - name: 🛠️ Force NDK 27.0.12077973
         run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-
-          # ---- فکس 1: انٹرنیٹ اور سٹوریج کی اجازتیں شامل کریں ----
-          # پہلے چیک کریں کہ یہ پرمیشن پہلے سے موجود تو نہیں
-          if ! grep -q "android.permission.INTERNET" "$MANIFEST_PATH"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST_PATH"
-            echo "✅ Internet permission added."
-          fi
-          if ! grep -q "android.permission.READ_EXTERNAL_STORAGE" "$MANIFEST_PATH"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "$MANIFEST_PATH"
-            echo "✅ Read External Storage permission added."
-          fi
-          if ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" "$MANIFEST_PATH"; then
-            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "$MANIFEST_PATH"
-            echo "✅ Write External Storage permission added."
-          fi
-
-          # ---- فکس 2: Flutter V2 Embedding کو فعال کریں ----
-          # یہ پرانے اور نئے ورژن کے درمیان فرق کو ختم کرتا ہے
-          if ! grep -q "flutterEmbedding" "$MANIFEST_PATH"; then
-            sed -i '/<application/a\        <meta-data android:name="flutterEmbedding" android:value="2" />' "$MANIFEST_PATH"
-            echo "✅ Flutter V2 Embedding enabled."
-          fi
-
-          # ---- آئیکن کے لیے فکس: پہلے سے موجود کسی بھی پرانی کنفیگریشن کو ہٹائیں ----
-          # (اگر آپ نے flutter_launcher_icons استعمال کیا ہے تو یہ قدم اہم ہے)
-          if grep -q "io.flutter.embedding.android.NormalTheme" "$MANIFEST_PATH"; then
-            sed -i '/io.flutter.embedding.android.NormalTheme/d' "$MANIFEST_PATH"
-            echo "✅ Removed old theme meta-data that was causing icon issues."
-          fi
-
-          # ---- Kotlin اور NDK ورژن کی ترتیبات درست کریں ----
-          SETTINGS_GRADLE="android/settings.gradle.kts"
-          if [ -f "$SETTINGS_GRADLE" ]; then
-            sed -i 's/kotlin = "[^"]*"/kotlin = "${{ env.KOTLIN_VERSION }}"/' "$SETTINGS_GRADLE"
-            echo "✅ Kotlin version updated."
-          fi
-
           APP_GRADLE="android/app/build.gradle.kts"
           if [ -f "$APP_GRADLE" ]; then
             if ! grep -q "ndkVersion" "$APP_GRADLE"; then
-              sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
+              sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
             else
-              sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*"[^"]*"/ndkVersion = "${{ env.NDK_VERSION }}"/' "$APP_GRADLE"
+              sed -i 's/ndkVersion[[:space:]]*=[[:space:]]*"[^"]*"/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
             fi
-            echo "✅ NDK version set."
+            echo "✅ NDK version set to 27.0.12077973"
           fi
 
-      - name: 🎨 Override main.dart (if in payload)
+      # ============================================================
+      # FIX AndroidManifest.xml to avoid "Missing name key attribute"
+      # ============================================================
+      - name: 📱 Fix AndroidManifest.xml (remove broken meta-data)
         run: |
-          MAIN_B64=$(jq -r '.client_payload.source_files.main_dart // empty' payload.json)
-          if [[ -n "$MAIN_B64" && "$MAIN_B64" != "null" ]]; then
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          
+          # اگر فائل موجود نہیں تو بنائیں
+          if [ ! -f "$MANIFEST" ]; then
+            mkdir -p android/app/src/main
+            cat > "$MANIFEST" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="System Pro" android:icon="@mipmap/ic_launcher">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          fi
+          
+          # سب سے پہلے: کسی بھی ایسی meta-data لائن کو ہٹائیں جس میں name attribute نہ ہو
+          # یہ وہی error پیدا کر رہی تھی
+          sed -i '/<meta-data[^>]*>/d' "$MANIFEST"
+          
+          # اب ضروری پرمیشنز اور V2 Embedding شامل کریں (اگر پہلے سے موجود نہ ہوں)
+          if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
+            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
+          if ! grep -q "android.permission.READ_EXTERNAL_STORAGE" "$MANIFEST"; then
+            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />' "$MANIFEST"
+          fi
+          if ! grep -q "android.permission.WRITE_EXTERNAL_STORAGE" "$MANIFEST"; then
+            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />' "$MANIFEST"
+          fi
+          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+            sed -i '/<application/a\        <meta-data android:name="flutterEmbedding" android:value="2" />' "$MANIFEST"
+          fi
+          
+          echo "✅ AndroidManifest.xml fixed"
+
+      # ============================================================
+      # Apply main.dart from UI payload (if exists)
+      # ============================================================
+      - name: 🎨 Apply main.dart
+        run: |
+          MAIN_B64=$(jq -r '.source_files.main_dart // empty' payload.json)
+          if [ -n "$MAIN_B64" ] && [ "$MAIN_B64" != "null" ]; then
             echo "$MAIN_B64" | base64 -d > lib/main.dart
-            echo "✅ main.dart replaced from payload."
-          else
-            echo "ℹ️ No main.dart in payload, keeping existing."
+            echo "✅ main.dart applied from UI"
           fi
 
-      - name: 🛠️ Auto-add Dependencies
+      # ============================================================
+      # Apply pubspec.yaml from UI (if exists)
+      # ============================================================
+      - name: 📄 Apply pubspec.yaml
+        run: |
+          PUBSPEC_B64=$(jq -r '.source_files.pubspec // empty' payload.json)
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
+            echo "✅ pubspec.yaml applied from UI"
+          fi
+
+      # ============================================================
+      # Apply app icon
+      # ============================================================
+      - name: 🖼️ Apply app icon
+        run: |
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // empty' payload.json)
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            mkdir -p android/app/src/main/res/mipmap-hdpi
+            echo "$ICON_B64" | base64 -d > android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            for density in mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$density
+              cp android/app/src/main/res/mipmap-hdpi/ic_launcher.png android/app/src/main/res/mipmap-$density/ 2>/dev/null || true
+            done
+            echo "✅ App icon applied"
+          fi
+
+      # ============================================================
+      # Auto-detect and add dependencies from main.dart imports
+      # ============================================================
+      - name: 📦 Auto-add dependencies
         run: |
           if grep -q "import 'package:" lib/main.dart; then
             grep -oE "import 'package:([^/']+)" lib/main.dart | sed "s/import 'package://" | sort -u | while read pkg; do
               if [[ "$pkg" != "flutter" ]]; then
-                echo "📦 Adding package: $pkg"
+                echo "📦 Adding $pkg"
                 flutter pub add "$pkg" || echo "⚠️ Failed to add $pkg"
               fi
             done
             flutter pub get
-          else
-            echo "ℹ️ No external packages found in main.dart"
           fi
 
-      - name: 🔨 Build Release APK
-        run: flutter build apk --release
+      # ============================================================
+      # Apply build config (app name, minSdk, targetSdk)
+      # ============================================================
+      - name: ⚙️ Apply build config from payload
+        run: |
+          APP_NAME=$(jq -r '.build_config.app_display_name // "System Pro"' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
+          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.systempro.app"' payload.json)
 
-      - name: 📤 Upload APK Artifact
+          # Update app label in manifest
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i "s/android:label=\".*\"/android:label=\"$APP_NAME\"/" "$MANIFEST"
+
+          # Update minSdk/targetSdk in app/build.gradle.kts
+          APP_GRADLE="android/app/build.gradle.kts"
+          if [ -f "$APP_GRADLE" ]; then
+            sed -i "s/minSdk[[:space:]]*=[[:space:]]*[0-9]\+/minSdk = $MIN_SDK/" "$APP_GRADLE"
+            sed -i "s/targetSdk[[:space:]]*=[[:space:]]*[0-9]\+/targetSdk = $TARGET_SDK/" "$APP_GRADLE"
+            if ! grep -q "namespace" "$APP_GRADLE"; then
+              sed -i "/android {/a \    namespace(\"$PACKAGE_NAME\")" "$APP_GRADLE"
+            fi
+          fi
+          echo "✅ Build config applied"
+
+      # ============================================================
+      # 🔨 Build APK
+      # ============================================================
+      - name: 🔨 Build release APK
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+
+      # ============================================================
+      # 📤 Upload APK
+      # ============================================================
+      - name: 📤 Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-APK-${{ github.run_id }}
+          name: SystemPro-Build-${{ github.run_id }}
           path: build/app/outputs/flutter-apk/*.apk
