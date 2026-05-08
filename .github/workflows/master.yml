@@ -1,5 +1,5 @@
 name: Dynamic APK Builder (Safe V2 - Auto Kotlin)
-faisal
+
 on:
   workflow_dispatch:
     inputs:
@@ -44,12 +44,10 @@ jobs:
             --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
             --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
             '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
-
       - name: Save payload to file (from dispatch)
         if: github.event_name == 'repository_dispatch'
         run: |
           echo '${{ toJson(github.event.client_payload) }}' > payload.json
-
       - name: Extract build config
         run: |
           PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
@@ -57,13 +55,11 @@ jobs:
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
-
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
-
       - name: Create fresh Flutter v2 project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
@@ -72,26 +68,22 @@ jobs:
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh v2 project created"
-
       - name: Write main.dart and pubspec.yaml
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
           echo "✅ main.dart and pubspec.yaml written"
-
       - name: Add dependencies with fixed versions
         run: |
           flutter pub get
           flutter pub add webview_flutter permission_handler path_provider package_info_plus:^8.0.0 2>/dev/null || true
           flutter pub get
-
       - name: Extract permissions and icon
         run: |
           jq '.permissions' payload.json > perms.json
           jq '.assets.additional_assets // []' payload.json > assets_list.json
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
-
       - name: Apply permissions and labels
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -122,12 +114,10 @@ jobs:
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
           fi
           echo "✅ Permissions added"
-
       - name: Set app display name
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
-
       - name: Apply app icon
         run: |
           if [ -n "${{ env.ICON_B64 }}" ] && [ "${{ env.ICON_B64 }}" != "null" ]; then
@@ -139,7 +129,6 @@ jobs:
             rm icon.png
             echo "✅ Icon applied"
           fi
-
       - name: Apply additional assets
         run: |
           if jq -e 'length > 0' assets_list.json > /dev/null; then
@@ -155,12 +144,10 @@ jobs:
             fi
             echo "✅ Additional assets added"
           fi
-
       - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk, Java 17)
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
-
           # Add compileOptions for Java 17 (align with Kotlin 17)
           if ! grep -q "compileOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }' "$APP_GRADLE"
@@ -168,47 +155,39 @@ jobs:
             sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
             sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
           fi
-
           # Namespace
           if grep -q "namespace" "$APP_GRADLE"; then
             sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    namespace("'"$PKG"'")' "$APP_GRADLE"
           fi
-
           # applicationId
           if grep -q "applicationId" "$APP_GRADLE"; then
             sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$APP_GRADLE"
           else
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
           fi
-
           # NDK version
           if grep -q "ndkVersion" "$APP_GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
           fi
-
           # minSdk / targetSdk
           sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
           sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
-
           # Proguard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
-
           echo "✅ Gradle configured with Java 17 compatibility"
-
       - name: Enable cleartext traffic
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
-
       - name: 🔧 Fix Kotlin version (2.0.20) with jvmTarget=17
         run: |
           KOTLIN_VERSION="2.0.20"
@@ -216,35 +195,29 @@ jobs:
           if [ -f "$SETTINGS" ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$KOTLIN_VERSION"'"/' "$SETTINGS"
           fi
-
           cat > android/gradle.properties <<EOF
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.code.style=official
           EOF
-
           APP_GRADLE="android/app/build.gradle.kts"
           # Remove any existing kotlin-stdlib dependency
           sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
           # Add correct version
           sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION\")" "$APP_GRADLE"
-
           # Ensure kotlinOptions jvmTarget = 17 (already matches Java 17)
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
           else
             sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
           fi
-
           echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=17"
-
       - name: Build release APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
