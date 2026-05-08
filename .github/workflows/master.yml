@@ -204,8 +204,7 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-          # Use --no-daemon to avoid daemon crashes due to memory thrashing
-          flutter build apk --release --no-daemon
+          flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
