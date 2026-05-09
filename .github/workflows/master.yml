@@ -36,7 +36,7 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter v2 project
+      - name: Create fresh Flutter project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
@@ -45,36 +45,43 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
           echo "✅ Fresh project created"
 
-      - name: Write files from payload
+      - name: Write main.dart from payload
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
-          echo "✅ Source files written"
+          echo "✅ main.dart written"
 
-      - name: Add dependencies (Fixed Versions)
+      - name: Add Dependencies and Resolve
         run: |
-          flutter pub get
-          # Version solve error کو روکنے کے لیے مستحکم ورژن
+          # پے لوڈ سے ڈیپینڈنسز نکالنے کے بجائے براہ راست ایڈ کریں تاکہ ایرر نہ آئے
           flutter pub add webview_flutter:^4.10.1
           flutter pub add permission_handler:^11.3.1
           flutter pub add path_provider:^2.1.3
           flutter pub get
 
-      - name: Apply permissions and icon
+      - name: Apply Android Configurations
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          jq '.permissions' payload.json > perms.json
+          GRADLE="android/app/build.gradle.kts"
           
-          # Basic Settings
+          # App Name & Internet Permission
           sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           
-          # Hardware Permissions from payload
+          # Hardware Permissions (Payload logic)
+          jq '.permissions' payload.json > perms.json
           if jq -e '.camera == true' perms.json > /dev/null; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' "$MANIFEST"
           fi
-          
-          # Icon apply
+
+          # Gradle 8.5 Force Settings
+          sed -i 's/namespace = .*/namespace = "${{ env.PACKAGE_NAME }}"/' "$GRADLE" || sed -i '/android {/a \    namespace = "${{ env.PACKAGE_NAME }}"' "$GRADLE"
+          sed -i 's/applicationId = .*/applicationId = "${{ env.PACKAGE_NAME }}"/' "$GRADLE"
+          sed -i 's/minSdk = .*/minSdk = ${{ env.MIN_SDK }}/' "$GRADLE"
+          sed -i 's/targetSdk = .*/targetSdk = ${{ env.TARGET_SDK }}/' "$GRADLE"
+          sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
+
+      - name: Apply App Icon
+        run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
@@ -84,23 +91,9 @@ jobs:
             done
           fi
 
-      - name: Configure Gradle 8.5
-        run: |
-          GRADLE="android/app/build.gradle.kts"
-          PKG="${{ env.PACKAGE_NAME }}"
-          
-          # Namespace & ID
-          sed -i 's/namespace = .*/namespace = "'"$PKG"'"/' "$GRADLE" || sed -i '/android {/a \    namespace = "'"$PKG"'"' "$GRADLE"
-          sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$GRADLE"
-          
-          # SDK & NDK
-          sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$GRADLE"
-          sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
-          sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
-
       - name: Build release APK
         run: |
-          flutter build apk --release
+          flutter build apk --release --no-pub
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
