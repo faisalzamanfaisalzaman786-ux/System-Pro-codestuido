@@ -27,7 +27,8 @@ env:
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  WEBVIEW_FLUTTER_VER: '4.10.1'
+  # یہاں درست ورژن سیٹ کیے گئے ہیں
+  WEBVIEW_FLUTTER_VER: '4.13.0'
   WEBVIEW_FLUTTER_ANDROID_VER: '4.10.1'
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
@@ -46,23 +47,14 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      # ============================================================
-      # مرحلہ 1: مکمل صفائی – کوئی پرانی فائل باقی نہ رہے
-      # ============================================================
-      - name: Delete all existing project files (if any)
+      # مکمل صفائی
+      - name: Delete all existing project files and caches
         run: |
           rm -rf android ios .dart_tool build
           rm -f pubspec.yaml pubspec.lock
-          echo "✅ Old files removed"
-
-      - name: Clean Flutter global cache (to avoid stale packages)
-        run: |
           rm -rf ~/.pub-cache
-          echo "✅ Global pub cache cleared"
+          echo "✅ All old files and caches removed"
 
-      # ============================================================
-      # مرحلہ 2: نیا Flutter پروجیکٹ بنائیں
-      # ============================================================
       - name: Prepare payload (if not exists)
         run: |
           if [ ! -f payload.json ]; then
@@ -86,7 +78,7 @@ jobs:
           PROJ=$(echo "$PACKAGE_NAME" | rev | cut -d. -f1 | rev)
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "✅ Fresh project created with package: $PACKAGE_NAME"
+          echo "✅ Fresh project created"
 
       - name: Extract other config from payload
         run: |
@@ -100,18 +92,12 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      # ============================================================
-      # مرحلہ 3: main.dart لکھیں (صارف کی بھیجی ہوئی)
-      # ============================================================
-      - name: Write main.dart
+      - name: Write main.dart (user provided)
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      # ============================================================
-      # مرحلہ 4: pubspec.yaml – سخت کوڈڈ، صارف کی pubspec کو نظر انداز کریں
-      # ============================================================
-      - name: Write clean pubspec.yaml (only 4.10.1 versions)
+      - name: Write pubspec.yaml with correct versions (4.13.0 and 4.10.1)
         run: |
           cat > pubspec.yaml <<EOF
           name: system_pro_app
@@ -134,7 +120,7 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
-          echo "✅ pubspec.yaml written with versions ${{ env.WEBVIEW_FLUTTER_VER }} and ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}"
+          echo "✅ pubspec.yaml written with webview_flutter ${{ env.WEBVIEW_FLUTTER_VER }} and webview_flutter_android ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}"
 
       - name: Force dependencies (exact versions)
         run: |
@@ -148,9 +134,6 @@ jobs:
           flutter pub get
           echo "✅ Dependencies locked"
 
-      # ============================================================
-      # مرحلہ 5: پرمیشنز اور آئیکن
-      # ============================================================
       - name: Permissions and icon
         run: |
           jq '.permissions // {}' payload.json > perms.json
@@ -159,7 +142,6 @@ jobs:
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Base permissions
           for perm in INTERNET POST_NOTIFICATIONS; do
             if ! grep -q "android.permission.$perm" "$MANIFEST"; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" "$MANIFEST"
@@ -173,10 +155,8 @@ jobs:
           if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' 'ACCESS_FINE_LOCATION'; fi
           if [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' 'ACCESS_COARSE_LOCATION'; fi
 
-          # App display name
           sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
 
-          # Icon
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
             for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
@@ -186,7 +166,6 @@ jobs:
             rm icon.png
           fi
 
-          # Assets
           if jq -e 'length > 0' assets_list.json > /dev/null; then
             mkdir -p assets/images
             for row in $(jq -r '.[] | @base64' assets_list.json); do
@@ -200,42 +179,33 @@ jobs:
             fi
           fi
 
-      # ============================================================
-      # مرحلہ 6: Gradle اور Kotlin کنفیگریشن
-      # ============================================================
       - name: Configure Gradle (NDK, Java, minSdk, targetSdk)
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
-          # Java compatibility
           if ! grep -q "compileOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n        targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n    }' "$APP_GRADLE"
           else
             sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
             sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
           fi
-          # Namespace
           if grep -q "namespace" "$APP_GRADLE"; then
             sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    namespace("'"$PKG"'")' "$APP_GRADLE"
           fi
-          # applicationId
           if grep -q "applicationId" "$APP_GRADLE"; then
             sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$APP_GRADLE"
           else
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
           fi
-          # NDK
           if grep -q "ndkVersion" "$APP_GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "${{ env.NDK_VERSION }}"/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
           fi
-          # minSdk / targetSdk
           sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
           sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
-          # Proguard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
@@ -271,9 +241,6 @@ jobs:
           fi
           echo "✅ Kotlin fixed"
 
-      # ============================================================
-      # مرحلہ 7: APK بنائیں
-      # ============================================================
       - name: Build release APK
         run: |
           flutter clean
