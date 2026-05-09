@@ -31,7 +31,6 @@ env:
   WEBVIEW_FLUTTER_ANDROID_VER: '4.13.0'
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
-  PACKAGE_INFO_PLUS_VER: '8.3.1'
   DEVICE_INFO_PLUS_VER: '10.1.0'
 
 jobs:
@@ -76,6 +75,7 @@ jobs:
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+          echo "Normalized: package=$PACKAGE_NAME, app=$APP_NAME"
 
       - name: Create fresh Flutter v2 project
         run: |
@@ -86,12 +86,12 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "Fresh v2 project created"
 
-      - name: Write main.dart (user provided)
+      - name: Write main.dart from user payload
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "main.dart written"
 
-      - name: Write valid pubspec.yaml (ignore user input)
+      - name: Write valid pubspec.yaml (ignore user input completely)
         run: |
           printf "name: system_pro_app\n" > pubspec.yaml
           printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
@@ -122,7 +122,6 @@ jobs:
             webview_flutter_android:${{ env.WEBVIEW_FLUTTER_ANDROID_VER }} \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
             path_provider:${{ env.PATH_PROVIDER_VER }} \
-            package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
           echo "Core dependencies enforced."
