@@ -69,9 +69,7 @@ jobs:
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
-          # Convert package name to lowercase (Android standard)
           PACKAGE_NAME=$(echo "$PACKAGE_NAME_RAW" | tr '[:upper:]' '[:lower:]')
-          # Convert app display name to lowercase for consistency
           APP_NAME=$(echo "$APP_NAME_RAW" | tr '[:upper:]' '[:lower:]')
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
