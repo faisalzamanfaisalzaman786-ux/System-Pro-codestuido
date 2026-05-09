@@ -23,15 +23,10 @@ on:
     types: [system_pro_build]
 
 env:
-  # Aapka original stable environment
   FLUTTER_VERSION: '3.29.2'
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  
-  # Locked versions jo Dart 3.7.2 ke sath 100% compatible hain
-  WEBVIEW_FLUTTER_VER: '4.13.0'
-  PERMISSION_HANDLER_VER: '12.0.1'
 
 jobs:
   build:
@@ -52,7 +47,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Build payload
+      - name: Prepare Payload
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             jq -n \
@@ -65,61 +60,58 @@ jobs:
             echo '${{ toJson(github.event.client_payload) }}' > payload.json
           fi
 
-      - name: Create fresh project
+      - name: Create Project
         run: |
-          PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
-          ORG=$(echo "$PACKAGE_NAME" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$PACKAGE_NAME" | rev | cut -d. -f1 | rev)
+          PKG=$(jq -r '.build_config.package_name' payload.json)
+          ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
 
-      - name: Write Source Files
+      - name: Inject Source & Fix Pubspec
         run: |
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
+          
+          # CRITICAL: Pubspec Override - Yeh line version ka masla khatam karegi
+          cat >> pubspec.yaml <<EOF
 
-      - name: Resolve Dependencies
+          dependency_overrides:
+            webview_flutter_android: 4.10.1
+          EOF
+
+      - name: Dependencies
         run: |
           flutter pub get
-          # WebView ko update karne ke bajaye compatible version force karna
-          flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }}
-          # Force the Android driver to 4.10.1 which supports Dart 3.7.2
-          flutter pub add webview_flutter_android:4.10.1
-          flutter pub add permission_handler:${{ env.PERMISSION_HANDLER_VER }}
-          flutter pub get
 
-      - name: Android Manifest & Label Fix
+      - name: Android Config
         run: |
           APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
+          PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
+          
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
           if ! grep -q "INTERNET" "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
 
-      - name: Gradle Compatibility Fix
-        run: |
-          APP_GRADLE="android/app/build.gradle.kts"
-          PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
-          
-          sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
-          sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
-          sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$APP_GRADLE"
-          sed -i "s/targetSdk = .*/targetSdk = $TARGET_SDK/" "$APP_GRADLE"
-          
-          # Force Java 17 Compatibility
-          sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
-          sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
+          GRADLE="android/app/build.gradle.kts"
+          sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$GRADLE"
+          sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$GRADLE"
+          sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$GRADLE"
+          sed -i "s/targetSdk = .*/targetSdk = $TARGET_SDK/" "$GRADLE"
 
-      - name: Final Build
+      - name: Final Build APK
         run: |
+          # Clean lazmi hai purani files hatane ke liye
           flutter clean
+          flutter pub get
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Final-Build
+          name: SystemPro-Build
           path: build/app/outputs/flutter-apk/*.apk
