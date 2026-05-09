@@ -46,12 +46,12 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Clean everything (delete old files and caches)
+      - name: Clean everything
         run: |
           rm -rf android ios .dart_tool build
           rm -f pubspec.yaml pubspec.lock
           rm -rf ~/.pub-cache
-          echo "✅ All old files and caches removed"
+          echo "✅ Cleaned"
 
       - name: Prepare payload
         run: |
@@ -76,7 +76,6 @@ jobs:
           PROJ=$(echo "$PACKAGE_NAME" | rev | cut -d. -f1 | rev)
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "✅ Fresh project created"
 
       - name: Extract other config
         run: |
@@ -113,251 +112,51 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
-          echo "✅ pubspec.yaml written with correct versions"
 
       - name: Write main.dart (with validation and fallback)
         run: |
           USER_MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
           if [ -n "$USER_MAIN_B64" ]; then
             echo "$USER_MAIN_B64" | base64 -d > lib/main_tmp.dart
-            # Check if it looks like a valid Dart file
             if grep -q "void main" lib/main_tmp.dart && grep -q "import" lib/main_tmp.dart; then
               mv lib/main_tmp.dart lib/main.dart
-              echo "✅ Valid main.dart provided by user"
+              echo "✅ Valid main.dart provided"
             else
-              echo "⚠️ User main.dart is invalid (contains YAML?). Using default browser app."
               rm -f lib/main_tmp.dart
-              cat > lib/main.dart <<'DEFAULT_MAIN'
-      import 'package:flutter/material.dart';
-      import 'package:webview_flutter/webview_flutter.dart';
-      import 'package:permission_handler/permission_handler.dart';
-      import 'package:webview_flutter_android/webview_flutter_android.dart';
-
-      void main() async {
-        WidgetsFlutterBinding.ensureInitialized();
-        await _requestPermissions();
-        runApp(const MyApp());
-      }
-
-      Future<void> _requestPermissions() async {
-        await [
-          Permission.camera,
-          Permission.microphone,
-          Permission.storage,
-          Permission.location,
-          Permission.notification,
-        ].request();
-      }
-
-      class MyApp extends StatelessWidget {
-        const MyApp({super.key});
-        @override
-        Widget build(BuildContext context) => const MaterialApp(
-          title: 'System Pro Browser',
-          theme: ThemeData.dark(),
-          home: BrowserScreen(),
-          debugShowCheckedModeBanner: false,
-        );
-      }
-
-      class BrowserScreen extends StatefulWidget {
-        const BrowserScreen({super.key});
-        @override
-        State<BrowserScreen> createState() => _BrowserScreenState();
-      }
-
-      class _BrowserScreenState extends State<BrowserScreen> {
-        late final WebViewController _controller;
-        String _currentUrl = 'https://www.google.com';
-        String _status = 'Loading...';
-
-        @override
-        void initState() {
-          super.initState();
-          _initWebView();
-        }
-
-        void _initWebView() {
-          final controller = WebViewController()
-            ..setJavaScriptMode(JavaScriptMode.unrestricted)
-            ..setNavigationDelegate(NavigationDelegate(
-              onPageStarted: (url) => setState(() {
-                _currentUrl = url;
-                _status = 'Loading $url';
-              }),
-              onPageFinished: (url) => setState(() => _status = 'Page loaded'),
-              onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),
-            ))
-            ..setBackgroundColor(Colors.black)
-            ..enableZoom(true);
-
-          if (controller.platform is AndroidWebViewController) {
-            (controller.platform as AndroidWebViewController)
-                .setMediaCapturePermissionRequestHandler((url) async {
-              return MediaCapturePermissionRequestResult.grant();
-            });
-          }
-
-          controller.loadRequest(Uri.parse(_currentUrl));
-          _controller = controller;
-        }
-
-        void _goToUrl(String url) {
-          if (!url.startsWith('http')) url = 'https://$url';
-          _controller.loadRequest(Uri.parse(url));
-          setState(() => _currentUrl = url);
-        }
-
-        @override
-        Widget build(BuildContext context) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('System Pro Browser'),
-              actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],
-            ),
-            body: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),
-                          onSubmitted: _goToUrl,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),
-                    ],
-                  ),
-                ),
-                Expanded(child: WebViewWidget(controller: _controller)),
-                Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),
-              ],
-            ),
-          );
-        }
-      }
-      DEFAULT_MAIN
-              echo "✅ Default main.dart used"
+              printf "import 'package:flutter/material.dart';\n" > lib/main.dart
+              printf "import 'package:webview_flutter/webview_flutter.dart';\n" >> lib/main.dart
+              printf "import 'package:permission_handler/permission_handler.dart';\n" >> lib/main.dart
+              printf "import 'package:webview_flutter_android/webview_flutter_android.dart';\n\n" >> lib/main.dart
+              printf "void main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await _requestPermissions();\n  runApp(const MyApp());\n}\n\n" >> lib/main.dart
+              printf "Future<void> _requestPermissions() async {\n  await [\n    Permission.camera,\n    Permission.microphone,\n    Permission.storage,\n    Permission.location,\n    Permission.notification,\n  ].request();\n}\n\n" >> lib/main.dart
+              printf "class MyApp extends StatelessWidget {\n  const MyApp({super.key});\n  @override\n  Widget build(BuildContext context) => const MaterialApp(\n    title: 'System Pro Browser',\n    theme: ThemeData.dark(),\n    home: BrowserScreen(),\n    debugShowCheckedModeBanner: false,\n  );\n}\n\n" >> lib/main.dart
+              printf "class BrowserScreen extends StatefulWidget {\n  const BrowserScreen({super.key});\n  @override\n  State<BrowserScreen> createState() => _BrowserScreenState();\n}\n\n" >> lib/main.dart
+              printf "class _BrowserScreenState extends State<BrowserScreen> {\n  late final WebViewController _controller;\n  String _currentUrl = 'https://www.google.com';\n  String _status = 'Loading...';\n\n" >> lib/main.dart
+              printf "  @override\n  void initState() {\n    super.initState();\n    _initWebView();\n  }\n\n" >> lib/main.dart
+              printf "  void _initWebView() {\n    final controller = WebViewController()\n      ..setJavaScriptMode(JavaScriptMode.unrestricted)\n      ..setNavigationDelegate(NavigationDelegate(\n        onPageStarted: (url) => setState(() {\n          _currentUrl = url;\n          _status = 'Loading $url';\n        }),\n        onPageFinished: (url) => setState(() => _status = 'Page loaded'),\n        onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),\n      ))\n      ..setBackgroundColor(Colors.black)\n      ..enableZoom(true);\n\n" >> lib/main.dart
+              printf "    if (controller.platform is AndroidWebViewController) {\n      (controller.platform as AndroidWebViewController)\n          .setMediaCapturePermissionRequestHandler((url) async {\n        return MediaCapturePermissionRequestResult.grant();\n      });\n    }\n\n" >> lib/main.dart
+              printf "    controller.loadRequest(Uri.parse(_currentUrl));\n    _controller = controller;\n  }\n\n" >> lib/main.dart
+              printf "  void _goToUrl(String url) {\n    if (!url.startsWith('http')) url = 'https://$url';\n    _controller.loadRequest(Uri.parse(url));\n    setState(() => _currentUrl = url);\n  }\n\n" >> lib/main.dart
+              printf "  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(\n        title: const Text('System Pro Browser'),\n        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],\n      ),\n      body: Column(\n        children: [\n          Padding(\n            padding: const EdgeInsets.all(8.0),\n            child: Row(\n              children: [\n                Expanded(\n                  child: TextField(\n                    decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),\n                    onSubmitted: _goToUrl,\n                  ),\n                ),\n                const SizedBox(width: 8),\n                ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),\n              ],\n            ),\n          ),\n          Expanded(child: WebViewWidget(controller: _controller)),\n          Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),\n        ],\n      ),\n    );\n  }\n}\n" >> lib/main.dart
+              echo "✅ Default main.dart used (user input invalid)"
             fi
           else
-            echo "ℹ️ No main.dart provided. Using default."
-            cat > lib/main.dart <<'DEFAULT_MAIN'
-      import 'package:flutter/material.dart';
-      import 'package:webview_flutter/webview_flutter.dart';
-      import 'package:permission_handler/permission_handler.dart';
-      import 'package:webview_flutter_android/webview_flutter_android.dart';
-
-      void main() async {
-        WidgetsFlutterBinding.ensureInitialized();
-        await _requestPermissions();
-        runApp(const MyApp());
-      }
-
-      Future<void> _requestPermissions() async {
-        await [
-          Permission.camera,
-          Permission.microphone,
-          Permission.storage,
-          Permission.location,
-          Permission.notification,
-        ].request();
-      }
-
-      class MyApp extends StatelessWidget {
-        const MyApp({super.key});
-        @override
-        Widget build(BuildContext context) => const MaterialApp(
-          title: 'System Pro Browser',
-          theme: ThemeData.dark(),
-          home: BrowserScreen(),
-          debugShowCheckedModeBanner: false,
-        );
-      }
-
-      class BrowserScreen extends StatefulWidget {
-        const BrowserScreen({super.key});
-        @override
-        State<BrowserScreen> createState() => _BrowserScreenState();
-      }
-
-      class _BrowserScreenState extends State<BrowserScreen> {
-        late final WebViewController _controller;
-        String _currentUrl = 'https://www.google.com';
-        String _status = 'Loading...';
-
-        @override
-        void initState() {
-          super.initState();
-          _initWebView();
-        }
-
-        void _initWebView() {
-          final controller = WebViewController()
-            ..setJavaScriptMode(JavaScriptMode.unrestricted)
-            ..setNavigationDelegate(NavigationDelegate(
-              onPageStarted: (url) => setState(() {
-                _currentUrl = url;
-                _status = 'Loading $url';
-              }),
-              onPageFinished: (url) => setState(() => _status = 'Page loaded'),
-              onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),
-            ))
-            ..setBackgroundColor(Colors.black)
-            ..enableZoom(true);
-
-          if (controller.platform is AndroidWebViewController) {
-            (controller.platform as AndroidWebViewController)
-                .setMediaCapturePermissionRequestHandler((url) async {
-              return MediaCapturePermissionRequestResult.grant();
-            });
-          }
-
-          controller.loadRequest(Uri.parse(_currentUrl));
-          _controller = controller;
-        }
-
-        void _goToUrl(String url) {
-          if (!url.startsWith('http')) url = 'https://$url';
-          _controller.loadRequest(Uri.parse(url));
-          setState(() => _currentUrl = url);
-        }
-
-        @override
-        Widget build(BuildContext context) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('System Pro Browser'),
-              actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],
-            ),
-            body: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),
-                          onSubmitted: _goToUrl,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),
-                    ],
-                  ),
-                ),
-                Expanded(child: WebViewWidget(controller: _controller)),
-                Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),
-              ],
-            ),
-          );
-        }
-      }
-      DEFAULT_MAIN
-            echo "✅ Default main.dart written"
+            printf "import 'package:flutter/material.dart';\n" > lib/main.dart
+            printf "import 'package:webview_flutter/webview_flutter.dart';\n" >> lib/main.dart
+            printf "import 'package:permission_handler/permission_handler.dart';\n" >> lib/main.dart
+            printf "import 'package:webview_flutter_android/webview_flutter_android.dart';\n\n" >> lib/main.dart
+            printf "void main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await _requestPermissions();\n  runApp(const MyApp());\n}\n\n" >> lib/main.dart
+            printf "Future<void> _requestPermissions() async {\n  await [\n    Permission.camera,\n    Permission.microphone,\n    Permission.storage,\n    Permission.location,\n    Permission.notification,\n  ].request();\n}\n\n" >> lib/main.dart
+            printf "class MyApp extends StatelessWidget {\n  const MyApp({super.key});\n  @override\n  Widget build(BuildContext context) => const MaterialApp(\n    title: 'System Pro Browser',\n    theme: ThemeData.dark(),\n    home: BrowserScreen(),\n    debugShowCheckedModeBanner: false,\n  );\n}\n\n" >> lib/main.dart
+            printf "class BrowserScreen extends StatefulWidget {\n  const BrowserScreen({super.key});\n  @override\n  State<BrowserScreen> createState() => _BrowserScreenState();\n}\n\n" >> lib/main.dart
+            printf "class _BrowserScreenState extends State<BrowserScreen> {\n  late final WebViewController _controller;\n  String _currentUrl = 'https://www.google.com';\n  String _status = 'Loading...';\n\n" >> lib/main.dart
+            printf "  @override\n  void initState() {\n    super.initState();\n    _initWebView();\n  }\n\n" >> lib/main.dart
+            printf "  void _initWebView() {\n    final controller = WebViewController()\n      ..setJavaScriptMode(JavaScriptMode.unrestricted)\n      ..setNavigationDelegate(NavigationDelegate(\n        onPageStarted: (url) => setState(() {\n          _currentUrl = url;\n          _status = 'Loading $url';\n        }),\n        onPageFinished: (url) => setState(() => _status = 'Page loaded'),\n        onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),\n      ))\n      ..setBackgroundColor(Colors.black)\n      ..enableZoom(true);\n\n" >> lib/main.dart
+            printf "    if (controller.platform is AndroidWebViewController) {\n      (controller.platform as AndroidWebViewController)\n          .setMediaCapturePermissionRequestHandler((url) async {\n        return MediaCapturePermissionRequestResult.grant();\n      });\n    }\n\n" >> lib/main.dart
+            printf "    controller.loadRequest(Uri.parse(_currentUrl));\n    _controller = controller;\n  }\n\n" >> lib/main.dart
+            printf "  void _goToUrl(String url) {\n    if (!url.startsWith('http')) url = 'https://$url';\n    _controller.loadRequest(Uri.parse(url));\n    setState(() => _currentUrl = url);\n  }\n\n" >> lib/main.dart
+            printf "  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(\n        title: const Text('System Pro Browser'),\n        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],\n      ),\n      body: Column(\n        children: [\n          Padding(\n            padding: const EdgeInsets.all(8.0),\n            child: Row(\n              children: [\n                Expanded(\n                  child: TextField(\n                    decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),\n                    onSubmitted: _goToUrl,\n                  ),\n                ),\n                const SizedBox(width: 8),\n                ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),\n              ],\n            ),\n          ),\n          Expanded(child: WebViewWidget(controller: _controller)),\n          Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),\n        ],\n      ),\n    );\n  }\n}\n" >> lib/main.dart
+            echo "✅ Default main.dart written (no user input)"
           fi
 
       - name: Enforce exact dependencies
@@ -370,7 +169,6 @@ jobs:
             path_provider:${{ env.PATH_PROVIDER_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "✅ Dependencies locked"
 
       - name: Permissions and icon
         run: |
@@ -448,7 +246,6 @@ jobs:
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
-          echo "✅ Gradle configured"
 
       - name: Enable cleartext traffic
         run: |
@@ -477,7 +274,6 @@ jobs:
           else
             sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
-          echo "✅ Kotlin fixed"
 
       - name: Build release APK
         run: |
