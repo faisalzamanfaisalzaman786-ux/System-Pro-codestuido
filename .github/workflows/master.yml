@@ -1,4 +1,4 @@
-name: Dynamic APK Builder (Safe V2) - Ultimate Clean
+name: Dynamic APK Builder (Safe V2) - Final Fix
 
 on:
   workflow_dispatch:
@@ -27,7 +27,6 @@ env:
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  # یہاں درست ورژن سیٹ کیے گئے ہیں
   WEBVIEW_FLUTTER_VER: '4.13.0'
   WEBVIEW_FLUTTER_ANDROID_VER: '4.10.1'
   PERMISSION_HANDLER_VER: '12.0.1'
@@ -47,15 +46,14 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      # مکمل صفائی
-      - name: Delete all existing project files and caches
+      - name: Clean everything (delete old files and caches)
         run: |
           rm -rf android ios .dart_tool build
           rm -f pubspec.yaml pubspec.lock
           rm -rf ~/.pub-cache
           echo "✅ All old files and caches removed"
 
-      - name: Prepare payload (if not exists)
+      - name: Prepare payload
         run: |
           if [ ! -f payload.json ]; then
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -80,7 +78,7 @@ jobs:
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "✅ Fresh project created"
 
-      - name: Extract other config from payload
+      - name: Extract other config
         run: |
           RAW_NAME=$(jq -r '.build_config.app_display_name // "System Pro"' payload.json)
           APP_NAME=$(echo "$RAW_NAME" | tr '[:upper:]' '[:lower:]')
@@ -92,12 +90,7 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Write main.dart (user provided)
-        run: |
-          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          echo "✅ main.dart written"
-
-      - name: Write pubspec.yaml with correct versions (4.13.0 and 4.10.1)
+      - name: Write pubspec.yaml (hardcoded correct versions)
         run: |
           cat > pubspec.yaml <<EOF
           name: system_pro_app
@@ -120,9 +113,254 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
-          echo "✅ pubspec.yaml written with webview_flutter ${{ env.WEBVIEW_FLUTTER_VER }} and webview_flutter_android ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}"
+          echo "✅ pubspec.yaml written with correct versions"
 
-      - name: Force dependencies (exact versions)
+      - name: Write main.dart (with validation and fallback)
+        run: |
+          USER_MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
+          if [ -n "$USER_MAIN_B64" ]; then
+            echo "$USER_MAIN_B64" | base64 -d > lib/main_tmp.dart
+            # Check if it looks like a valid Dart file
+            if grep -q "void main" lib/main_tmp.dart && grep -q "import" lib/main_tmp.dart; then
+              mv lib/main_tmp.dart lib/main.dart
+              echo "✅ Valid main.dart provided by user"
+            else
+              echo "⚠️ User main.dart is invalid (contains YAML?). Using default browser app."
+              rm -f lib/main_tmp.dart
+              cat > lib/main.dart <<'DEFAULT_MAIN'
+      import 'package:flutter/material.dart';
+      import 'package:webview_flutter/webview_flutter.dart';
+      import 'package:permission_handler/permission_handler.dart';
+      import 'package:webview_flutter_android/webview_flutter_android.dart';
+
+      void main() async {
+        WidgetsFlutterBinding.ensureInitialized();
+        await _requestPermissions();
+        runApp(const MyApp());
+      }
+
+      Future<void> _requestPermissions() async {
+        await [
+          Permission.camera,
+          Permission.microphone,
+          Permission.storage,
+          Permission.location,
+          Permission.notification,
+        ].request();
+      }
+
+      class MyApp extends StatelessWidget {
+        const MyApp({super.key});
+        @override
+        Widget build(BuildContext context) => const MaterialApp(
+          title: 'System Pro Browser',
+          theme: ThemeData.dark(),
+          home: BrowserScreen(),
+          debugShowCheckedModeBanner: false,
+        );
+      }
+
+      class BrowserScreen extends StatefulWidget {
+        const BrowserScreen({super.key});
+        @override
+        State<BrowserScreen> createState() => _BrowserScreenState();
+      }
+
+      class _BrowserScreenState extends State<BrowserScreen> {
+        late final WebViewController _controller;
+        String _currentUrl = 'https://www.google.com';
+        String _status = 'Loading...';
+
+        @override
+        void initState() {
+          super.initState();
+          _initWebView();
+        }
+
+        void _initWebView() {
+          final controller = WebViewController()
+            ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setNavigationDelegate(NavigationDelegate(
+              onPageStarted: (url) => setState(() {
+                _currentUrl = url;
+                _status = 'Loading $url';
+              }),
+              onPageFinished: (url) => setState(() => _status = 'Page loaded'),
+              onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),
+            ))
+            ..setBackgroundColor(Colors.black)
+            ..enableZoom(true);
+
+          if (controller.platform is AndroidWebViewController) {
+            (controller.platform as AndroidWebViewController)
+                .setMediaCapturePermissionRequestHandler((url) async {
+              return MediaCapturePermissionRequestResult.grant();
+            });
+          }
+
+          controller.loadRequest(Uri.parse(_currentUrl));
+          _controller = controller;
+        }
+
+        void _goToUrl(String url) {
+          if (!url.startsWith('http')) url = 'https://$url';
+          _controller.loadRequest(Uri.parse(url));
+          setState(() => _currentUrl = url);
+        }
+
+        @override
+        Widget build(BuildContext context) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('System Pro Browser'),
+              actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],
+            ),
+            body: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),
+                          onSubmitted: _goToUrl,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),
+                    ],
+                  ),
+                ),
+                Expanded(child: WebViewWidget(controller: _controller)),
+                Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),
+              ],
+            ),
+          );
+        }
+      }
+      DEFAULT_MAIN
+              echo "✅ Default main.dart used"
+            fi
+          else
+            echo "ℹ️ No main.dart provided. Using default."
+            cat > lib/main.dart <<'DEFAULT_MAIN'
+      import 'package:flutter/material.dart';
+      import 'package:webview_flutter/webview_flutter.dart';
+      import 'package:permission_handler/permission_handler.dart';
+      import 'package:webview_flutter_android/webview_flutter_android.dart';
+
+      void main() async {
+        WidgetsFlutterBinding.ensureInitialized();
+        await _requestPermissions();
+        runApp(const MyApp());
+      }
+
+      Future<void> _requestPermissions() async {
+        await [
+          Permission.camera,
+          Permission.microphone,
+          Permission.storage,
+          Permission.location,
+          Permission.notification,
+        ].request();
+      }
+
+      class MyApp extends StatelessWidget {
+        const MyApp({super.key});
+        @override
+        Widget build(BuildContext context) => const MaterialApp(
+          title: 'System Pro Browser',
+          theme: ThemeData.dark(),
+          home: BrowserScreen(),
+          debugShowCheckedModeBanner: false,
+        );
+      }
+
+      class BrowserScreen extends StatefulWidget {
+        const BrowserScreen({super.key});
+        @override
+        State<BrowserScreen> createState() => _BrowserScreenState();
+      }
+
+      class _BrowserScreenState extends State<BrowserScreen> {
+        late final WebViewController _controller;
+        String _currentUrl = 'https://www.google.com';
+        String _status = 'Loading...';
+
+        @override
+        void initState() {
+          super.initState();
+          _initWebView();
+        }
+
+        void _initWebView() {
+          final controller = WebViewController()
+            ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setNavigationDelegate(NavigationDelegate(
+              onPageStarted: (url) => setState(() {
+                _currentUrl = url;
+                _status = 'Loading $url';
+              }),
+              onPageFinished: (url) => setState(() => _status = 'Page loaded'),
+              onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),
+            ))
+            ..setBackgroundColor(Colors.black)
+            ..enableZoom(true);
+
+          if (controller.platform is AndroidWebViewController) {
+            (controller.platform as AndroidWebViewController)
+                .setMediaCapturePermissionRequestHandler((url) async {
+              return MediaCapturePermissionRequestResult.grant();
+            });
+          }
+
+          controller.loadRequest(Uri.parse(_currentUrl));
+          _controller = controller;
+        }
+
+        void _goToUrl(String url) {
+          if (!url.startsWith('http')) url = 'https://$url';
+          _controller.loadRequest(Uri.parse(url));
+          setState(() => _currentUrl = url);
+        }
+
+        @override
+        Widget build(BuildContext context) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('System Pro Browser'),
+              actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],
+            ),
+            body: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),
+                          onSubmitted: _goToUrl,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),
+                    ],
+                  ),
+                ),
+                Expanded(child: WebViewWidget(controller: _controller)),
+                Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),
+              ],
+            ),
+          );
+        }
+      }
+      DEFAULT_MAIN
+            echo "✅ Default main.dart written"
+          fi
+
+      - name: Enforce exact dependencies
         run: |
           rm -f pubspec.lock
           flutter pub get
@@ -179,7 +417,7 @@ jobs:
             fi
           fi
 
-      - name: Configure Gradle (NDK, Java, minSdk, targetSdk)
+      - name: Configure Gradle
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
@@ -219,7 +457,7 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      - name: Fix Kotlin version and jvmTarget
+      - name: Fix Kotlin
         run: |
           SETTINGS="android/settings.gradle.kts"
           if [ -f "$SETTINGS" ]; then
