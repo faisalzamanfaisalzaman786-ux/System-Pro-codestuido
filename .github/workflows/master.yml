@@ -23,17 +23,15 @@ on:
     types: [system_pro_build]
 
 env:
-  # Flutter version updated to ensure newer Dart SDK
-  FLUTTER_VERSION: '3.30.0' # یا 'stable' لکھ دیں مکمل لیٹسٹ کے لیے
+  # Aapka original stable environment
+  FLUTTER_VERSION: '3.29.2'
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  # Versions adjusted for Dart 3.7.2 compatibility
-  WEBVIEW_FLUTTER_VER: '4.10.0' 
-  WEBVIEW_ANDROID_VER: '4.10.1' # یہ ورژن ڈارٹ 3.7 کے ساتھ چل جائے گا
+  
+  # Locked versions jo Dart 3.7.2 ke sath 100% compatible hain
+  WEBVIEW_FLUTTER_VER: '4.13.0'
   PERMISSION_HANDLER_VER: '12.0.1'
-  PATH_PROVIDER_VER: '2.1.5'
-  PACKAGE_INFO_PLUS_VER: '8.3.1'
 
 jobs:
   build:
@@ -69,47 +67,59 @@ jobs:
 
       - name: Create fresh project
         run: |
-          PKG=$(jq -r '.build_config.package_name' payload.json)
-          ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
+          PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
+          ORG=$(echo "$PACKAGE_NAME" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$PACKAGE_NAME" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
 
-      - name: Write Files
+      - name: Write Source Files
         run: |
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
 
-      - name: Force Compatible Dependencies
+      - name: Resolve Dependencies
         run: |
           flutter pub get
-          # ہم نے ورژن کو ڈارٹ ایس ڈی کے کے مطابق لاک کر دیا ہے
+          # WebView ko update karne ke bajaye compatible version force karna
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }}
-          flutter pub add webview_flutter_android:${{ env.WEBVIEW_ANDROID_VER }}
+          # Force the Android driver to 4.10.1 which supports Dart 3.7.2
+          flutter pub add webview_flutter_android:4.10.1
           flutter pub add permission_handler:${{ env.PERMISSION_HANDLER_VER }}
           flutter pub get
 
-      - name: Configure Android
+      - name: Android Manifest & Label Fix
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
-          PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
-          
-          # Basic permissions
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
-          
-          # Gradle fixes
+          if ! grep -q "INTERNET" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
+
+      - name: Gradle Compatibility Fix
+        run: |
           APP_GRADLE="android/app/build.gradle.kts"
+          PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
+          
           sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
           sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
+          sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$APP_GRADLE"
+          sed -i "s/targetSdk = .*/targetSdk = $TARGET_SDK/" "$APP_GRADLE"
+          
+          # Force Java 17 Compatibility
+          sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
+          sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
 
-      - name: Build APK
+      - name: Final Build
         run: |
+          flutter clean
           flutter build apk --release
 
-      - name: Upload
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-App
+          name: SystemPro-Final-Build
           path: build/app/outputs/flutter-apk/*.apk
