@@ -25,7 +25,8 @@ on:
 env:
   FLUTTER_VERSION: '3.41.9' 
   KOTLIN_VERSION: '1.9.22'
-  GRADLE_VERSION: '8.5'
+  # ایرر کے مطابق گریڈل ورژن 8.13 پر اپ ڈیٹ کر دیا گیا ہے
+  GRADLE_VERSION: '8.13'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
 
@@ -79,12 +80,12 @@ jobs:
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
 
-      - name: Force Gradle 8.5 and Tooling
+      - name: Force Gradle and Tooling
         run: |
-          # Gradle Wrapper کو اپ ڈیٹ کریں
+          # گریڈل ورژن کو 8.13 پر سیٹ کریں جیسا کہ لاگ میں تجویز کیا گیا ہے
           sed -i 's/gradle-.*-all.zip/gradle-${{ env.GRADLE_VERSION }}-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
           
-          # Kotlin ورژن کو فائل کی قسم کے مطابق سیٹ کریں (.gradle یا .kts)
+          # Kotlin ورژن کو فائل کی قسم کے مطابق سیٹ کریں
           if [ -f "android/build.gradle.kts" ]; then
             sed -i 's/kotlin("android") version "[^"]*"/kotlin("android") version "${{ env.KOTLIN_VERSION }}"/' android/build.gradle.kts
           elif [ -f "android/build.gradle" ]; then
@@ -93,7 +94,6 @@ jobs:
           
       - name: Fix NDK & SDK Config
         run: |
-          # درست فائل کا انتخاب کریں
           APP_GRADLE="android/app/build.gradle"
           if [ -f "android/app/build.gradle.kts" ]; then
             APP_GRADLE="android/app/build.gradle.kts"
@@ -103,7 +103,7 @@ jobs:
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           
-          # NDK اور SDK کی ترتیبات داخل کریں
+          # NDK ورژن اور نیم اسپیس (Namespace) کی درستگی
           sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
           sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
           sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
