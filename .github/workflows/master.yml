@@ -23,9 +23,9 @@ on:
     types: [system_pro_build]
 
 env:
-  # Flutter stable channel istemal karein taake Dart 3.7+ ka masla na ho
-  FLUTTER_VERSION: 'any' 
-  KOTLIN_VERSION: '2.0.20'
+  FLUTTER_VERSION: '3.41.9' 
+  KOTLIN_VERSION: '1.9.22'
+  GRADLE_VERSION: '8.5'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
 
@@ -45,17 +45,22 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable' # Yeh hamesha latest stable SDK uthayega
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
           cache: true
 
       - name: Build payload
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo '${{ github.event.inputs.build_config }}' > build_config.json
+            echo '${{ github.event.inputs.source_files }}' > source_files.json
+            echo '${{ github.event.inputs.permissions }}' > permissions.json
+            echo '${{ github.event.inputs.assets }}' > assets.json
             jq -n \
-              --argjson bc '${{ toJson(github.event.inputs.build_config) }}' \
-              --argjson sf '${{ toJson(github.event.inputs.source_files) }}' \
-              --argjson pm '${{ toJson(github.event.inputs.permissions) }}' \
-              --argjson as '${{ toJson(github.event.inputs.assets) }}' \
+              --argjson bc "$(<build_config.json)" \
+              --argjson sf "$(<source_files.json)" \
+              --argjson pm "$(<permissions.json)" \
+              --argjson as "$(<assets.json)" \
               '{build_config: $bc, source_files: $sf, permissions: $pm, assets: $as}' > payload.json
           else
             echo '${{ toJson(github.event.client_payload) }}' > payload.json
@@ -74,17 +79,25 @@ jobs:
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
 
-      - name: Fix NDK & Gradle Versions
+      - name: Force Gradle 8.5 and Tooling
         run: |
-          APP_GRADLE="android/app/build.gradle.kts"
+          # Wrapper fix
+          sed -i 's/gradle-.*-all.zip/gradle-${{ env.GRADLE_VERSION }}-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
+          
+          # Kotlin version alignment
+          sed -i 's/kotlin_version = .*/kotlin_version = "${{ env.KOTLIN_VERSION }}"/' android/build.gradle
+          
+      - name: Fix NDK & SDK Config
+        run: |
+          APP_GRADLE="android/app/build.gradle"
+          [ -f "android/app/build.gradle.kts" ] && APP_GRADLE="android/app/build.gradle.kts"
+          
           PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           
-          # NDK version ko script ke zariye force karein (as per error log)
+          # NDK and Namespace injection
           sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
-          
-          # SDK and Namespace fixes
           sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
           sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
           sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$APP_GRADLE"
@@ -92,7 +105,6 @@ jobs:
 
       - name: Final Dependency Resolve
         run: |
-          # Sab kuch clear karke latest packages download karein
           flutter pub upgrade
           flutter pub get
 
