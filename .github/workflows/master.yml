@@ -22,23 +22,18 @@ on:
   repository_dispatch:
     types: [system_pro_build]
 
-# ============================================================
-# 🔒 CENTRAL VERSION CONTROL - CHANGE ONLY THESE VALUES
-# ============================================================
 env:
-  # Flutter SDK (stable channel)
   FLUTTER_VERSION: '3.29.2'
-  # Kotlin version (must be compatible with Gradle and AGP)
   KOTLIN_VERSION: '2.0.20'
-  # NDK version (side by side)
   NDK_VERSION: '27.0.12077973'
-  # Java version
   JAVA_VERSION: '17'
-  # Exact versions for Flutter packages (avoid unexpected upgrades)
+  # تمام پکیجز کے exact ورژن (اب webview_flutter_android بھی شامل)
   WEBVIEW_FLUTTER_VER: '4.13.0'
+  WEBVIEW_FLUTTER_ANDROID_VER: '4.13.0'
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
   PACKAGE_INFO_PLUS_VER: '8.3.1'
+  DEVICE_INFO_PLUS_VER: '10.1.0'
 
 jobs:
   build:
@@ -82,7 +77,6 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      # ------------------- CREATE FRESH PROJECT -------------------
       - name: Create fresh Flutter v2 project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
@@ -92,25 +86,25 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh v2 project created"
 
-      # ------------------- WRITE SOURCE FILES -------------------
       - name: Write main.dart and pubspec.yaml
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
           echo "✅ main.dart and pubspec.yaml written"
 
-      # ------------------- ADD DEPENDENCIES WITH EXACT VERSIONS -------------------
-      - name: Add dependencies with exact versions
+      - name: Add dependencies with exact versions (including webview_flutter_android)
         run: |
+          rm -f pubspec.lock
           flutter pub get
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
+            webview_flutter_android:${{ env.WEBVIEW_FLUTTER_ANDROID_VER }} \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
             path_provider:${{ env.PATH_PROVIDER_VER }} \
-            package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} 2>/dev/null || true
+            package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} \
+            device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "✅ Dependencies locked to exact versions"
+          echo "✅ All dependencies locked to exact versions"
 
-      # ------------------- PERMISSIONS & ICON -------------------
       - name: Extract permissions and icon
         run: |
           jq '.permissions' payload.json > perms.json
@@ -182,40 +176,33 @@ jobs:
             echo "✅ Additional assets added"
           fi
 
-      # ------------------- GRADLE CONFIGURATION (ALL VERSIONS FROM ENV) -------------------
-      - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk, Java)
+      - name: Configure Gradle
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
-          # Java compatibility
           if ! grep -q "compileOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n        targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n    }' "$APP_GRADLE"
           else
             sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
             sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
           fi
-          # Namespace
           if grep -q "namespace" "$APP_GRADLE"; then
             sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    namespace("'"$PKG"'")' "$APP_GRADLE"
           fi
-          # applicationId
           if grep -q "applicationId" "$APP_GRADLE"; then
             sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$APP_GRADLE"
           else
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
           fi
-          # NDK version from env
           if grep -q "ndkVersion" "$APP_GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "${{ env.NDK_VERSION }}"/' "$APP_GRADLE"
           else
             sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
           fi
-          # minSdk / targetSdk
           sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
           sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
-          # Proguard
           if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
@@ -229,8 +216,7 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      # ------------------- KOTLIN CONFIGURATION -------------------
-      - name: 🔧 Fix Kotlin version with jvmTarget from env
+      - name: Fix Kotlin version with jvmTarget
         run: |
           KOTLIN_VERSION="${{ env.KOTLIN_VERSION }}"
           SETTINGS="android/settings.gradle.kts"
@@ -244,11 +230,8 @@ jobs:
           kotlin.code.style=official
           EOF
           APP_GRADLE="android/app/build.gradle.kts"
-          # Remove any existing kotlin-stdlib dependency
           sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
-          # Add correct version
           sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION\")" "$APP_GRADLE"
-          # Ensure kotlinOptions jvmTarget matches Java version
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
             sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "${{ env.JAVA_VERSION }}"\n    }' "$APP_GRADLE"
           else
@@ -256,14 +239,12 @@ jobs:
           fi
           echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=${{ env.JAVA_VERSION }}"
 
-      # ------------------- BUILD APK -------------------
       - name: Build release APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
 
-      # ------------------- UPLOAD ARTIFACT -------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
