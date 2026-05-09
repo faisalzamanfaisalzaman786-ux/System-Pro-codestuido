@@ -22,6 +22,24 @@ on:
   repository_dispatch:
     types: [system_pro_build]
 
+# ============================================================
+# 🔒 CENTRAL VERSION CONTROL - CHANGE ONLY THESE VALUES
+# ============================================================
+env:
+  # Flutter SDK (stable channel)
+  FLUTTER_VERSION: '3.29.2'
+  # Kotlin version (must be compatible with Gradle and AGP)
+  KOTLIN_VERSION: '2.0.20'
+  # NDK version (side by side)
+  NDK_VERSION: '27.0.12077973'
+  # Java version
+  JAVA_VERSION: '17'
+  # Exact versions for Flutter packages (avoid unexpected upgrades)
+  WEBVIEW_FLUTTER_VER: '4.13.0'
+  PERMISSION_HANDLER_VER: '12.0.1'
+  PATH_PROVIDER_VER: '2.1.5'
+  PACKAGE_INFO_PLUS_VER: '8.3.1'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,9 +50,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.2'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
+      # ------------------- PAYLOAD PREPARATION -------------------
       - name: Build payload from inputs (if manual run)
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -44,10 +63,12 @@ jobs:
             --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
             --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
             '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
+
       - name: Save payload to file (from dispatch)
         if: github.event_name == 'repository_dispatch'
         run: |
           echo '${{ toJson(github.event.client_payload) }}' > payload.json
+
       - name: Extract build config
         run: |
           PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
@@ -60,6 +81,8 @@ jobs:
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+
+      # ------------------- CREATE FRESH PROJECT -------------------
       - name: Create fresh Flutter v2 project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
@@ -68,22 +91,33 @@ jobs:
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh v2 project created"
+
+      # ------------------- WRITE SOURCE FILES -------------------
       - name: Write main.dart and pubspec.yaml
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
           echo "✅ main.dart and pubspec.yaml written"
-      - name: Add dependencies with fixed versions
+
+      # ------------------- ADD DEPENDENCIES WITH EXACT VERSIONS -------------------
+      - name: Add dependencies with exact versions
         run: |
           flutter pub get
-          flutter pub add webview_flutter permission_handler path_provider package_info_plus:^8.0.0 2>/dev/null || true
+          flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
+            permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
+            path_provider:${{ env.PATH_PROVIDER_VER }} \
+            package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
+          echo "✅ Dependencies locked to exact versions"
+
+      # ------------------- PERMISSIONS & ICON -------------------
       - name: Extract permissions and icon
         run: |
           jq '.permissions' payload.json > perms.json
           jq '.assets.additional_assets // []' payload.json > assets_list.json
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
+
       - name: Apply permissions and labels
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -114,10 +148,12 @@ jobs:
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
           fi
           echo "✅ Permissions added"
+
       - name: Set app display name
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
+
       - name: Apply app icon
         run: |
           if [ -n "${{ env.ICON_B64 }}" ] && [ "${{ env.ICON_B64 }}" != "null" ]; then
@@ -129,6 +165,7 @@ jobs:
             rm icon.png
             echo "✅ Icon applied"
           fi
+
       - name: Apply additional assets
         run: |
           if jq -e 'length > 0' assets_list.json > /dev/null; then
@@ -144,16 +181,18 @@ jobs:
             fi
             echo "✅ Additional assets added"
           fi
-      - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk, Java 17)
+
+      # ------------------- GRADLE CONFIGURATION (ALL VERSIONS FROM ENV) -------------------
+      - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk, Java)
         run: |
           APP_GRADLE="android/app/build.gradle.kts"
           PKG="${{ env.PACKAGE_NAME }}"
-          # Add compileOptions for Java 17 (align with Kotlin 17)
+          # Java compatibility
           if ! grep -q "compileOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }' "$APP_GRADLE"
+            sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n        targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n    }' "$APP_GRADLE"
           else
-            sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
-            sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_17/' "$APP_GRADLE"
+            sed -i 's/sourceCompatibility = .*/sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
+            sed -i 's/targetCompatibility = .*/targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}/' "$APP_GRADLE"
           fi
           # Namespace
           if grep -q "namespace" "$APP_GRADLE"; then
@@ -167,11 +206,11 @@ jobs:
           else
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
           fi
-          # NDK version
+          # NDK version from env
           if grep -q "ndkVersion" "$APP_GRADLE"; then
-            sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$APP_GRADLE"
+            sed -i 's/ndkVersion = .*/ndkVersion = "${{ env.NDK_VERSION }}"/' "$APP_GRADLE"
           else
-            sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$APP_GRADLE"
+            sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
           fi
           # minSdk / targetSdk
           sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
@@ -181,16 +220,19 @@ jobs:
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
-          echo "✅ Gradle configured with Java 17 compatibility"
+          echo "✅ Gradle configured with Java ${{ env.JAVA_VERSION }}"
+
       - name: Enable cleartext traffic
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
-      - name: 🔧 Fix Kotlin version (2.0.20) with jvmTarget=17
+
+      # ------------------- KOTLIN CONFIGURATION -------------------
+      - name: 🔧 Fix Kotlin version with jvmTarget from env
         run: |
-          KOTLIN_VERSION="2.0.20"
+          KOTLIN_VERSION="${{ env.KOTLIN_VERSION }}"
           SETTINGS="android/settings.gradle.kts"
           if [ -f "$SETTINGS" ]; then
             sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "'"$KOTLIN_VERSION"'"/' "$SETTINGS"
@@ -206,18 +248,22 @@ jobs:
           sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
           # Add correct version
           sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:$KOTLIN_VERSION\")" "$APP_GRADLE"
-          # Ensure kotlinOptions jvmTarget = 17 (already matches Java 17)
+          # Ensure kotlinOptions jvmTarget matches Java version
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
+            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "${{ env.JAVA_VERSION }}"\n    }' "$APP_GRADLE"
           else
-            sed -i 's/jvmTarget = .*/jvmTarget = "17"/' "$APP_GRADLE"
+            sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
-          echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=17"
+          echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=${{ env.JAVA_VERSION }}"
+
+      # ------------------- BUILD APK -------------------
       - name: Build release APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
+
+      # ------------------- UPLOAD ARTIFACT -------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
