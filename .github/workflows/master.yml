@@ -1,4 +1,4 @@
-name: Dynamic APK Builder (Safe V2)
+name: Dynamic APK Builder (Safe V2) - Clean Edition
 
 on:
   workflow_dispatch:
@@ -28,7 +28,6 @@ env:
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
   WEBVIEW_FLUTTER_VER: '4.13.0'
-  # webview_flutter_android کو ہارڈ کوڈڈ کیا جا رہا ہے، ورژن متغیر سے نہیں لیا جا رہا
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
   DEVICE_INFO_PLUS_VER: '10.1.0'
@@ -46,51 +45,35 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Save payload to file
+      # ============================================================
+      # CLEANING STEPS - Remove all cached and build artifacts
+      # ============================================================
+      - name: Clean everything (local cache, build, locks, etc.)
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            jq -n \
-              --argjson build_config '${{ toJson(github.event.inputs.build_config) }}' \
-              --argjson source_files '${{ toJson(github.event.inputs.source_files) }}' \
-              --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
-              --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
-              '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
-          else
-            echo '${{ toJson(github.event.client_payload) }}' > payload.json
-          fi
-
-      - name: Extract build config (normalize case)
-        run: |
-          RAW_PKG=$(jq -r '.build_config.package_name' payload.json)
-          RAW_NAME=$(jq -r '.build_config.app_display_name' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
-          USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
-
-          PACKAGE_NAME=$(echo "$RAW_PKG" | tr '[:upper:]' '[:lower:]')
-          APP_NAME=$(echo "$RAW_NAME" | tr '[:upper:]' '[:lower:]')
-
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
-          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
-          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+          echo "🧹 Cleaning Flutter project caches..."
+          rm -rf ~/.pub-cache
+          rm -rf .dart_tool
+          rm -rf build
+          rm -rf android/.gradle
+          rm -rf ios/.symlinks
+          rm -f pubspec.lock
+          echo "✅ Cleaned all caches. Next step will re-download dependencies."
 
       - name: Create fresh Flutter v2 project
         run: |
-          PKG="${{ env.PACKAGE_NAME }}"
+          PKG=$(jq -r '.build_config.package_name' payload.json 2>/dev/null || echo "com.example.app")
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "Fresh project created"
+          echo "✅ Fresh project created"
 
-      - name: Write main.dart from payload
+      - name: Write main.dart from user payload
         run: |
-          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          echo "main.dart written"
+          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart 2>/dev/null || echo "// fallback main" > lib/main.dart
+          echo "✅ main.dart written"
 
-      - name: Write pubspec.yaml (HARDCODED with 4.10.1)
+      - name: Write pubspec.yaml (HARDCODED with 4.10.1, ignores user input)
         run: |
           cat > pubspec.yaml <<EOF
           name: system_pro_app
@@ -113,31 +96,61 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
-          # Extra safety: replace any stray 4.13.0 with 4.10.1
+          # Double safety
           sed -i 's/4.13.0/4.10.1/g' pubspec.yaml
-          echo "pubspec.yaml written with 4.10.1 (hardcoded)"
+          echo "✅ pubspec.yaml written with 4.10.1"
 
-      - name: Enforce exact dependencies
+      - name: Force re-download dependencies with exact versions
         run: |
           rm -f pubspec.lock
-          flutter pub get
+          flutter pub get --no-example
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
             webview_flutter_android:4.10.1 \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
             path_provider:${{ env.PATH_PROVIDER_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "Dependencies enforced with 4.10.1"
+          echo "✅ Dependencies enforced"
 
-      - name: Extract permissions and icon
+      - name: Rest of the build (permissions, assets, gradle, kotlin, APK)
         run: |
-          jq '.permissions' payload.json > perms.json
+          # Payload extraction (required for permissions and assets)
+          if [ ! -f payload.json ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              jq -n \
+                --argjson build_config '${{ toJson(github.event.inputs.build_config) }}' \
+                --argjson source_files '${{ toJson(github.event.inputs.source_files) }}' \
+                --argjson permissions '${{ toJson(github.event.inputs.permissions) }}' \
+                --argjson assets '${{ toJson(github.event.inputs.assets) }}' \
+                '{build_config: $build_config, source_files: $source_files, permissions: $permissions, assets: $assets}' > payload.json
+            else
+              echo '${{ toJson(github.event.client_payload) }}' > payload.json
+            fi
+          fi
+
+          # Normalize package name and app name
+          RAW_PKG=$(jq -r '.build_config.package_name // "com.example.app"' payload.json)
+          RAW_NAME=$(jq -r '.build_config.app_display_name // "System Pro"' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
+          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
+
+          PACKAGE_NAME=$(echo "$RAW_PKG" | tr '[:upper:]' '[:lower:]')
+          APP_NAME=$(echo "$RAW_NAME" | tr '[:upper:]' '[:lower:]')
+
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
+          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
+          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+
+          # Permissions and icon extraction
+          jq '.permissions // {}' payload.json > perms.json
           jq '.assets.additional_assets // []' payload.json > assets_list.json
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
-      - name: Apply permissions (no duplicates)
-        run: |
+          # Apply permissions
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           for perm in INTERNET POST_NOTIFICATIONS; do
             if ! grep -q "android.permission.$perm" "$MANIFEST"; then
@@ -152,23 +165,20 @@ jobs:
           if [ "$LOC" = "fine" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' 'ACCESS_FINE_LOCATION'; fi
           if [ "$LOC" = "coarse" ]; then add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' 'ACCESS_COARSE_LOCATION'; fi
 
-      - name: Set app display name
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
+          # Set app display name
+          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
 
-      - name: Apply app icon
-        if: env.ICON_B64 != '' && env.ICON_B64 != 'null'
-        run: |
-          echo "${{ env.ICON_B64 }}" | base64 -d > icon.png
-          for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p android/app/src/main/res/mipmap-$d
-            cp icon.png android/app/src/main/res/mipmap-$d/ic_launcher.png
-          done
-          rm icon.png
+          # Apply icon
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            echo "$ICON_B64" | base64 -d > icon.png
+            for d in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$d
+              cp icon.png android/app/src/main/res/mipmap-$d/ic_launcher.png
+            done
+            rm icon.png
+          fi
 
-      - name: Apply additional assets
-        run: |
+          # Assets
           if jq -e 'length > 0' assets_list.json > /dev/null; then
             mkdir -p assets/images
             for row in $(jq -r '.[] | @base64' assets_list.json); do
@@ -182,30 +192,25 @@ jobs:
             fi
           fi
 
-      - name: Configure Gradle
-        run: |
+          # Configure Gradle
           APP_GRADLE="android/app/build.gradle.kts"
-          PKG="${{ env.PACKAGE_NAME }}"
           sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n        targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n    }' "$APP_GRADLE"
-          sed -i '/android {/a \    namespace("'"$PKG"'")' "$APP_GRADLE"
-          sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$APP_GRADLE"
+          sed -i '/android {/a \    namespace("'"$PACKAGE_NAME"'")' "$APP_GRADLE"
+          sed -i '/defaultConfig {/a \        applicationId = "'"$PACKAGE_NAME"'"' "$APP_GRADLE"
           sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
-          sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$APP_GRADLE"
-          sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$APP_GRADLE"
-          if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
+          sed -i 's/minSdk = .*/minSdk = '"$MIN_SDK"'/' "$APP_GRADLE"
+          sed -i 's/targetSdk = .*/targetSdk = '"$TARGET_SDK"'/' "$APP_GRADLE"
+          if [ "$USE_PROGUARD" = "true" ]; then
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
 
-      - name: Enable cleartext traffic
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Enable cleartext traffic
           if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      - name: Fix Kotlin
-        run: |
+          # Fix Kotlin
           SETTINGS="android/settings.gradle.kts"
           sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "${{ env.KOTLIN_VERSION }}"/' "$SETTINGS"
           cat > android/gradle.properties <<EOF
@@ -214,7 +219,6 @@ jobs:
           android.enableJetifier=true
           kotlin.code.style=official
           EOF
-          APP_GRADLE="android/app/build.gradle.kts"
           sed -i '/kotlin-stdlib/d' "$APP_GRADLE"
           sed -i "/dependencies {/a \    implementation(\"org.jetbrains.kotlin:kotlin-stdlib:${{ env.KOTLIN_VERSION }}\")" "$APP_GRADLE"
           if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
@@ -223,13 +227,13 @@ jobs:
             sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
 
-      - name: Build APK
+      - name: Build release APK
         run: |
           flutter clean
           flutter pub get
           flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
