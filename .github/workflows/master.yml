@@ -75,7 +75,6 @@ jobs:
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
-          echo "Normalized: package=$PACKAGE_NAME, app=$APP_NAME"
 
       - name: Create fresh Flutter v2 project
         run: |
@@ -91,7 +90,7 @@ jobs:
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "main.dart written"
 
-      - name: Write valid pubspec.yaml (ignore user input completely)
+      - name: Write valid pubspec.yaml (ignore user input entirely)
         run: |
           printf "name: system_pro_app\n" > pubspec.yaml
           printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
