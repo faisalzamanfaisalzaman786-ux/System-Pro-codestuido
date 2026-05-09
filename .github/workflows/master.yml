@@ -76,7 +76,6 @@ jobs:
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
-          echo "✅ Normalized: package=$PACKAGE_NAME, app=$APP_NAME"
 
       - name: Create fresh Flutter v2 project
         run: |
@@ -85,68 +84,67 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
-          echo "✅ Fresh v2 project created"
+          echo "Fresh v2 project created"
 
-      - name: Write main.dart and pubspec.yaml (with auto-correction)
+      - name: Write main.dart
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          echo "✅ main.dart written"
+          echo "main.dart written"
 
+      - name: Write pubspec.yaml with auto-correction
+        run: |
           USER_PUBSPEC_B64=$(jq -r '.source_files.pubspec // ""' payload.json)
           if [ -n "$USER_PUBSPEC_B64" ]; then
             echo "$USER_PUBSPEC_B64" | base64 -d > pubspec_tmp.yaml
             if grep -q "^name:" pubspec_tmp.yaml && ! grep -q "title:" pubspec_tmp.yaml && ! grep -q "Scaffold" pubspec_tmp.yaml; then
               mv pubspec_tmp.yaml pubspec.yaml
-              echo "✅ User pubspec.yaml is valid."
+              echo "User pubspec.yaml is valid."
             else
-              echo "⚠️ Invalid pubspec.yaml detected. Using default template."
-              cat > pubspec.yaml <<EOF
-name: system_pro_app
-description: A powerful browser app with camera support.
-version: 1.0.0+1
-environment:
-  sdk: '>=3.4.0 <4.0.0'
-dependencies:
-  flutter:
-    sdk: flutter
-  webview_flutter: 4.13.0
-  webview_flutter_android: 4.13.0
-  permission_handler: 12.0.1
-  path_provider: 2.1.5
-  device_info_plus: 10.1.0
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
-flutter:
-  uses-material-design: true
-EOF
+              echo "Invalid pubspec.yaml. Using default template."
+              rm -f pubspec_tmp.yaml
+              printf "name: system_pro_app\n" > pubspec.yaml
+              printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
+              printf "version: 1.0.0+1\n\n" >> pubspec.yaml
+              printf "environment:\n" >> pubspec.yaml
+              printf "  sdk: '>=3.4.0 <4.0.0'\n\n" >> pubspec.yaml
+              printf "dependencies:\n" >> pubspec.yaml
+              printf "  flutter:\n" >> pubspec.yaml
+              printf "    sdk: flutter\n" >> pubspec.yaml
+              printf "  webview_flutter: 4.13.0\n" >> pubspec.yaml
+              printf "  webview_flutter_android: 4.13.0\n" >> pubspec.yaml
+              printf "  permission_handler: 12.0.1\n" >> pubspec.yaml
+              printf "  path_provider: 2.1.5\n" >> pubspec.yaml
+              printf "  device_info_plus: 10.1.0\n\n" >> pubspec.yaml
+              printf "dev_dependencies:\n" >> pubspec.yaml
+              printf "  flutter_test:\n" >> pubspec.yaml
+              printf "    sdk: flutter\n" >> pubspec.yaml
+              printf "  flutter_lints: ^5.0.0\n\n" >> pubspec.yaml
+              printf "flutter:\n" >> pubspec.yaml
+              printf "  uses-material-design: true\n" >> pubspec.yaml
             fi
-            rm -f pubspec_tmp.yaml
           else
-            echo "ℹ️ No pubspec.yaml provided. Using default template."
-            cat > pubspec.yaml <<EOF
-name: system_pro_app
-description: A powerful browser app with camera support.
-version: 1.0.0+1
-environment:
-  sdk: '>=3.4.0 <4.0.0'
-dependencies:
-  flutter:
-    sdk: flutter
-  webview_flutter: 4.13.0
-  webview_flutter_android: 4.13.0
-  permission_handler: 12.0.1
-  path_provider: 2.1.5
-  device_info_plus: 10.1.0
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
-flutter:
-  uses-material-design: true
-EOF
+            echo "No pubspec.yaml provided. Using default template."
+            printf "name: system_pro_app\n" > pubspec.yaml
+            printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
+            printf "version: 1.0.0+1\n\n" >> pubspec.yaml
+            printf "environment:\n" >> pubspec.yaml
+            printf "  sdk: '>=3.4.0 <4.0.0'\n\n" >> pubspec.yaml
+            printf "dependencies:\n" >> pubspec.yaml
+            printf "  flutter:\n" >> pubspec.yaml
+            printf "    sdk: flutter\n" >> pubspec.yaml
+            printf "  webview_flutter: 4.13.0\n" >> pubspec.yaml
+            printf "  webview_flutter_android: 4.13.0\n" >> pubspec.yaml
+            printf "  permission_handler: 12.0.1\n" >> pubspec.yaml
+            printf "  path_provider: 2.1.5\n" >> pubspec.yaml
+            printf "  device_info_plus: 10.1.0\n\n" >> pubspec.yaml
+            printf "dev_dependencies:\n" >> pubspec.yaml
+            printf "  flutter_test:\n" >> pubspec.yaml
+            printf "    sdk: flutter\n" >> pubspec.yaml
+            printf "  flutter_lints: ^5.0.0\n\n" >> pubspec.yaml
+            printf "flutter:\n" >> pubspec.yaml
+            printf "  uses-material-design: true\n" >> pubspec.yaml
           fi
+          rm -f pubspec_tmp.yaml
 
       - name: Enforce exact dependency versions
         run: |
@@ -159,7 +157,7 @@ EOF
             package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "✅ Core dependencies enforced."
+          echo "Core dependencies enforced."
 
       - name: Extract permissions and icon
         run: |
@@ -199,7 +197,7 @@ EOF
           elif [ "$LOC" = "coarse" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' 'android.permission.ACCESS_COARSE_LOCATION'
           fi
-          echo "✅ Permissions added"
+          echo "Permissions added"
 
       - name: Set app display name
         run: |
@@ -215,7 +213,7 @@ EOF
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
             rm icon.png
-            echo "✅ Icon applied"
+            echo "Icon applied"
           fi
 
       - name: Apply additional assets
@@ -231,7 +229,7 @@ EOF
             if ! grep -q "assets/" pubspec.yaml; then
               sed -i '/flutter:/a \  assets:\n    - assets/images/' pubspec.yaml
             fi
-            echo "✅ Additional assets added"
+            echo "Additional assets added"
           fi
 
       - name: Configure Gradle
@@ -265,7 +263,7 @@ EOF
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
-          echo "✅ Gradle configured"
+          echo "Gradle configured"
 
       - name: Enable cleartext traffic
         run: |
@@ -295,7 +293,7 @@ EOF
           else
             sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
-          echo "✅ Kotlin forced"
+          echo "Kotlin forced"
 
       - name: Build release APK
         run: |
