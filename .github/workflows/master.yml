@@ -76,11 +76,11 @@ jobs:
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
 
-      - name: Write main.dart
+      - name: Write main.dart (from user)
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
 
-      - name: Write pubspec.yaml (hardcoded but correct)
+      - name: Write clean pubspec.yaml (强制覆盖任何用户输入)
         run: |
           cat > pubspec.yaml <<-EOF
           name: system_pro_app
@@ -103,8 +103,11 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
+          # اضافی حفاظت: pubspec.yaml میں کہیں بھی 4.13.0 ہو تو اسے 4.10.1 سے بدل دو
+          sed -i 's/webview_flutter_android: 4.13.0/webview_flutter_android: ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}/g' pubspec.yaml
+          echo "pubspec.yaml enforced with correct version"
 
-      - name: Enforce dependencies
+      - name: Enforce dependencies (with exact versions)
         run: |
           rm -f pubspec.lock
           flutter pub get
