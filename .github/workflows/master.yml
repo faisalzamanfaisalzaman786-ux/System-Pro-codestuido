@@ -23,13 +23,14 @@ on:
     types: [system_pro_build]
 
 env:
-  FLUTTER_VERSION: '3.29.2'
+  # Flutter version updated to ensure newer Dart SDK
+  FLUTTER_VERSION: '3.30.0' # یا 'stable' لکھ دیں مکمل لیٹسٹ کے لیے
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  # Versions Updated for Stability
-  WEBVIEW_FLUTTER_VER: '4.13.0'
-  WEBVIEW_ANDROID_VER: '4.12.0' # Yeh lazmi hai ایرر ختم کرنے کے لیے
+  # Versions adjusted for Dart 3.7.2 compatibility
+  WEBVIEW_FLUTTER_VER: '4.10.0' 
+  WEBVIEW_ANDROID_VER: '4.10.1' # یہ ورژن ڈارٹ 3.7 کے ساتھ چل جائے گا
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
   PACKAGE_INFO_PLUS_VER: '8.3.1'
@@ -53,7 +54,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Build payload from inputs
+      - name: Build payload
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             jq -n \
@@ -66,17 +67,9 @@ jobs:
             echo '${{ toJson(github.event.client_payload) }}' > payload.json
           fi
 
-      - name: Extract Config
-        run: |
-          echo "PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)" >> $GITHUB_ENV
-          echo "APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)" >> $GITHUB_ENV
-          echo "MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)" >> $GITHUB_ENV
-          echo "TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)" >> $GITHUB_ENV
-          echo "USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)" >> $GITHUB_ENV
-
       - name: Create fresh project
         run: |
-          PKG="${{ env.PACKAGE_NAME }}"
+          PKG=$(jq -r '.build_config.package_name' payload.json)
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
@@ -87,30 +80,29 @@ jobs:
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
 
-      - name: Fix and Force Dependencies
+      - name: Force Compatible Dependencies
         run: |
           flutter pub get
-          # Force adding the specific Android implementation
+          # ہم نے ورژن کو ڈارٹ ایس ڈی کے کے مطابق لاک کر دیا ہے
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }}
           flutter pub add webview_flutter_android:${{ env.WEBVIEW_ANDROID_VER }}
           flutter pub add permission_handler:${{ env.PERMISSION_HANDLER_VER }}
-          flutter pub add path_provider:${{ env.PATH_PROVIDER_VER }}
           flutter pub get
 
-      - name: Android Configurations
+      - name: Configure Android
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Add default permissions
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          # Apply Label
-          sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
+          APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
+          PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
           
-          # Handle Gradle Kotlin DSL
+          # Basic permissions
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
+          
+          # Gradle fixes
           APP_GRADLE="android/app/build.gradle.kts"
-          sed -i 's/minSdk = .*/minSdk = ${{ env.MIN_SDK }}/' "$APP_GRADLE"
-          sed -i 's/targetSdk = .*/targetSdk = ${{ env.TARGET_SDK }}/' "$APP_GRADLE"
-          sed -i 's/namespace = .*/namespace = "${{ env.PACKAGE_NAME }}"/' "$APP_GRADLE"
-          sed -i 's/applicationId = .*/applicationId = "${{ env.PACKAGE_NAME }}"/' "$APP_GRADLE"
+          sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
+          sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
 
       - name: Build APK
         run: |
@@ -119,5 +111,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build
+          name: SystemPro-App
           path: build/app/outputs/flutter-apk/*.apk
