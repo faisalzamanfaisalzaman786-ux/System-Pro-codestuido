@@ -27,7 +27,6 @@ env:
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  # Core dependencies exact versions (always enforced)
   WEBVIEW_FLUTTER_VER: '4.13.0'
   WEBVIEW_FLUTTER_ANDROID_VER: '4.13.0'
   PERMISSION_HANDLER_VER: '12.0.1'
@@ -63,18 +62,23 @@ jobs:
         run: |
           echo '${{ toJson(github.event.client_payload) }}' > payload.json
 
-      - name: Extract build config
+      - name: Extract build config and normalize case
         run: |
-          PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
-          APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
+          PACKAGE_NAME_RAW=$(jq -r '.build_config.package_name' payload.json)
+          APP_NAME_RAW=$(jq -r '.build_config.app_display_name' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
+          # Convert package name to lowercase (Android standard)
+          PACKAGE_NAME=$(echo "$PACKAGE_NAME_RAW" | tr '[:upper:]' '[:lower:]')
+          # Convert app display name to lowercase for consistency
+          APP_NAME=$(echo "$APP_NAME_RAW" | tr '[:upper:]' '[:lower:]')
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+          echo "✅ Normalized: package=$PACKAGE_NAME, app=$APP_NAME"
 
       - name: Create fresh Flutter v2 project
         run: |
@@ -85,24 +89,71 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh v2 project created"
 
-      - name: Write main.dart and pubspec.yaml (user provided)
+      - name: Write main.dart and pubspec.yaml (with auto-correction)
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          USER_PUBSPEC=$(jq -r '.source_files.pubspec // ""' payload.json)
-          if [ -n "$USER_PUBSPEC" ]; then
-            echo "$USER_PUBSPEC" | base64 -d > pubspec.yaml
-          else
-            echo "# User did not provide pubspec.yaml, using default from flutter create" > /dev/null
-          fi
-          echo "✅ main.dart and pubspec.yaml (if any) written"
+          echo "✅ main.dart written"
 
-      - name: Enforce exact dependency versions (merge, never remove user deps)
+          USER_PUBSPEC_B64=$(jq -r '.source_files.pubspec // ""' payload.json)
+          if [ -n "$USER_PUBSPEC_B64" ]; then
+            echo "$USER_PUBSPEC_B64" | base64 -d > pubspec_tmp.yaml
+            if grep -q "^name:" pubspec_tmp.yaml && ! grep -q "title:" pubspec_tmp.yaml && ! grep -q "Scaffold" pubspec_tmp.yaml; then
+              mv pubspec_tmp.yaml pubspec.yaml
+              echo "✅ User pubspec.yaml is valid."
+            else
+              echo "⚠️ Invalid pubspec.yaml detected. Using default template."
+              cat > pubspec.yaml <<EOF
+name: system_pro_app
+description: A powerful browser app with camera support.
+version: 1.0.0+1
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: 4.13.0
+  webview_flutter_android: 4.13.0
+  permission_handler: 12.0.1
+  path_provider: 2.1.5
+  device_info_plus: 10.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
+EOF
+            fi
+            rm -f pubspec_tmp.yaml
+          else
+            echo "ℹ️ No pubspec.yaml provided. Using default template."
+            cat > pubspec.yaml <<EOF
+name: system_pro_app
+description: A powerful browser app with camera support.
+version: 1.0.0+1
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: 4.13.0
+  webview_flutter_android: 4.13.0
+  permission_handler: 12.0.1
+  path_provider: 2.1.5
+  device_info_plus: 10.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
+EOF
+          fi
+
+      - name: Enforce exact dependency versions
         run: |
           rm -f pubspec.lock
           flutter pub get
-          # Add all required packages with exact versions
-          # This will add missing packages or update to exact version if already present.
-          # It never removes any existing dependency.
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
             webview_flutter_android:${{ env.WEBVIEW_FLUTTER_ANDROID_VER }} \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
@@ -110,7 +161,7 @@ jobs:
             package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "✅ Core dependencies enforced. User dependencies preserved."
+          echo "✅ Core dependencies enforced."
 
       - name: Extract permissions and icon
         run: |
@@ -119,10 +170,9 @@ jobs:
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
-      - name: Apply permissions (with duplicate prevention)
+      - name: Apply permissions (no duplicates)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Ensure base permissions
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
@@ -151,7 +201,7 @@ jobs:
           elif [ "$LOC" = "coarse" ]; then
             add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' 'android.permission.ACCESS_COARSE_LOCATION'
           fi
-          echo "✅ Permissions added (no duplicates)"
+          echo "✅ Permissions added"
 
       - name: Set app display name
         run: |
@@ -217,7 +267,7 @@ jobs:
             sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$APP_GRADLE"
             sed -i 's/shrinkResources = .*/shrinkResources = true/' "$APP_GRADLE"
           fi
-          echo "✅ Gradle configured with Java ${{ env.JAVA_VERSION }}"
+          echo "✅ Gradle configured"
 
       - name: Enable cleartext traffic
         run: |
@@ -247,7 +297,7 @@ jobs:
           else
             sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
-          echo "✅ Kotlin forced to $KOTLIN_VERSION with jvmTarget=${{ env.JAVA_VERSION }}"
+          echo "✅ Kotlin forced"
 
       - name: Build release APK
         run: |
