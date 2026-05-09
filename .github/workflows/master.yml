@@ -23,7 +23,8 @@ on:
     types: [system_pro_build]
 
 env:
-  FLUTTER_VERSION: '3.29.2'
+  # Flutter stable channel istemal karein taake Dart 3.7+ ka masla na ho
+  FLUTTER_VERSION: 'any' 
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
@@ -44,10 +45,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
+          channel: 'stable' # Yeh hamesha latest stable SDK uthayega
+          cache: true
 
-      - name: Prepare Payload
+      - name: Build payload
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             jq -n \
@@ -60,7 +61,7 @@ jobs:
             echo '${{ toJson(github.event.client_payload) }}' > payload.json
           fi
 
-      - name: Create Project
+      - name: Create fresh project
         run: |
           PKG=$(jq -r '.build_config.package_name' payload.json)
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
@@ -68,50 +69,39 @@ jobs:
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
 
-      - name: Inject Source & Fix Pubspec
+      - name: Write Source Files
         run: |
           jq -r '.source_files.main_dart' payload.json | base64 -d > lib/main.dart
           jq -r '.source_files.pubspec' payload.json | base64 -d > pubspec.yaml
-          
-          # CRITICAL: Pubspec Override - Yeh line version ka masla khatam karegi
-          cat >> pubspec.yaml <<EOF
 
-          dependency_overrides:
-            webview_flutter_android: 4.10.1
-          EOF
-
-      - name: Dependencies
+      - name: Fix NDK & Gradle Versions
         run: |
-          flutter pub get
-
-      - name: Android Config
-        run: |
-          APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
+          APP_GRADLE="android/app/build.gradle.kts"
           PKG_NAME=$(jq -r '.build_config.package_name' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's/android:label="[^"]*"/android:label="'"$APP_NAME"'"/' "$MANIFEST"
-          if ! grep -q "INTERNET" "$MANIFEST"; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          fi
+          # NDK version ko script ke zariye force karein (as per error log)
+          sed -i '/android {/a \    ndkVersion = "${{ env.NDK_VERSION }}"' "$APP_GRADLE"
+          
+          # SDK and Namespace fixes
+          sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$APP_GRADLE"
+          sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$APP_GRADLE"
+          sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$APP_GRADLE"
+          sed -i "s/targetSdk = .*/targetSdk = $TARGET_SDK/" "$APP_GRADLE"
 
-          GRADLE="android/app/build.gradle.kts"
-          sed -i 's/namespace = .*/namespace = "'"$PKG_NAME"'"/' "$GRADLE"
-          sed -i 's/applicationId = .*/applicationId = "'"$PKG_NAME"'"/' "$GRADLE"
-          sed -i "s/minSdk = .*/minSdk = $MIN_SDK/" "$GRADLE"
-          sed -i "s/targetSdk = .*/targetSdk = $TARGET_SDK/" "$GRADLE"
-
-      - name: Final Build APK
+      - name: Final Dependency Resolve
         run: |
-          # Clean lazmi hai purani files hatane ke liye
-          flutter clean
+          # Sab kuch clear karke latest packages download karein
+          flutter pub upgrade
           flutter pub get
+
+      - name: Build APK
+        run: |
           flutter build apk --release
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-Build
+          name: SystemPro-Success-Build
           path: build/app/outputs/flutter-apk/*.apk
