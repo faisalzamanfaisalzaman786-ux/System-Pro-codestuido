@@ -1,24 +1,6 @@
 name: Dynamic APK Builder (Safe V2)
 
 on:
-  workflow_dispatch:
-    inputs:
-      build_config:
-        description: 'Build config (JSON)'
-        required: true
-        default: '{"package_name":"com.example.app","app_display_name":"MyApp","min_sdk":21,"target_sdk":34,"use_proguard":false}'
-      source_files:
-        description: 'Source files (JSON with base64)'
-        required: true
-        default: '{"main_dart":"","pubspec":""}'
-      permissions:
-        description: 'Permissions JSON'
-        required: true
-        default: '{"camera":false,"microphone":false,"vibrate":false,"location_granularity":"none"}'
-      assets:
-        description: 'Assets JSON (icon and additional)'
-        required: true
-        default: '{"app_icon_base64":"","additional_assets":[]}'
   repository_dispatch:
     types: [system_pro_build]
 
@@ -68,37 +50,16 @@ jobs:
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Write pubspec.yaml (IGNORE user input, use correct versions)
+      - name: Write pubspec.yaml from payload (overwrite generated)
         run: |
-          cat > pubspec.yaml <<EOF
-          name: system_pro_app
-          description: A powerful browser app with camera support.
-          version: 1.0.0+1
-          environment:
-            sdk: '>=3.4.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            webview_flutter: 4.13.0
-            webview_flutter_android: 4.10.1
-            permission_handler: 12.0.1
-            path_provider: 2.1.5
-            device_info_plus: 10.1.0
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^5.0.0
-          flutter:
-            uses-material-design: true
-          EOF
-          echo "✅ pubspec.yaml written with correct versions (user input ignored)"
+          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
+          echo "✅ pubspec.yaml written"
 
-      - name: Add dependencies with exact versions
+      - name: Add dependencies
         run: |
           flutter pub get
-          flutter pub add webview_flutter:4.13.0 webview_flutter_android:4.10.1 permission_handler:12.0.1 path_provider:2.1.5 device_info_plus:10.1.0 2>/dev/null || true
+          flutter pub add webview_flutter permission_handler path_provider 2>/dev/null || true
           flutter pub get
-          echo "✅ Dependencies locked"
 
       - name: Extract permissions and icon
         run: |
@@ -199,7 +160,7 @@ jobs:
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$GRADLE"
           fi
 
-          # Set NDK version
+          # Set NDK version (required for permission_handler_android)
           if grep -q "ndkVersion" "$GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
           else
@@ -224,34 +185,6 @@ jobs:
             sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
-      - name: Fix Kotlin version and Java compatibility
-        run: |
-          # Kotlin version in settings.gradle.kts
-          SETTINGS="android/settings.gradle.kts"
-          if [ -f "$SETTINGS" ]; then
-            sed -i 's/id "org.jetbrains.kotlin.android" version ".*"/id "org.jetbrains.kotlin.android" version "2.0.20"/' "$SETTINGS"
-          fi
-          # Gradle properties
-          cat > android/gradle.properties <<EOF
-          org.gradle.jvmargs=-Xmx2048m
-          android.useAndroidX=true
-          android.enableJetifier=true
-          kotlin.code.style=official
-          EOF
-          # app/build.gradle.kts: add compileOptions and kotlinOptions
-          APP_GRADLE="android/app/build.gradle.kts"
-          if ! grep -q "compileOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }' "$APP_GRADLE"
-          fi
-          if ! grep -q "kotlinOptions" "$APP_GRADLE"; then
-            sed -i '/android {/a \    kotlinOptions {\n        jvmTarget = "17"\n    }' "$APP_GRADLE"
-          fi
-          # Ensure kotlin-stdlib dependency
-          if ! grep -q "kotlin-stdlib" "$APP_GRADLE"; then
-            sed -i '/dependencies {/a \    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")' "$APP_GRADLE"
-          fi
-          echo "✅ Kotlin and Java compatibility fixed"
-
       - name: Build release APK
         run: |
           flutter clean
@@ -261,5 +194,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
+          name: SystemPro-${{ env.PACKACE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
