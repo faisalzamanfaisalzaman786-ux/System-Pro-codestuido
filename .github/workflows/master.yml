@@ -86,65 +86,33 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "Fresh v2 project created"
 
-      - name: Write main.dart
+      - name: Write main.dart (user provided)
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "main.dart written"
 
-      - name: Write pubspec.yaml with auto-correction
+      - name: Write valid pubspec.yaml (ignore user input)
         run: |
-          USER_PUBSPEC_B64=$(jq -r '.source_files.pubspec // ""' payload.json)
-          if [ -n "$USER_PUBSPEC_B64" ]; then
-            echo "$USER_PUBSPEC_B64" | base64 -d > pubspec_tmp.yaml
-            if grep -q "^name:" pubspec_tmp.yaml && ! grep -q "title:" pubspec_tmp.yaml && ! grep -q "Scaffold" pubspec_tmp.yaml; then
-              mv pubspec_tmp.yaml pubspec.yaml
-              echo "User pubspec.yaml is valid."
-            else
-              echo "Invalid pubspec.yaml. Using default template."
-              rm -f pubspec_tmp.yaml
-              printf "name: system_pro_app\n" > pubspec.yaml
-              printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
-              printf "version: 1.0.0+1\n\n" >> pubspec.yaml
-              printf "environment:\n" >> pubspec.yaml
-              printf "  sdk: '>=3.4.0 <4.0.0'\n\n" >> pubspec.yaml
-              printf "dependencies:\n" >> pubspec.yaml
-              printf "  flutter:\n" >> pubspec.yaml
-              printf "    sdk: flutter\n" >> pubspec.yaml
-              printf "  webview_flutter: 4.13.0\n" >> pubspec.yaml
-              printf "  webview_flutter_android: 4.13.0\n" >> pubspec.yaml
-              printf "  permission_handler: 12.0.1\n" >> pubspec.yaml
-              printf "  path_provider: 2.1.5\n" >> pubspec.yaml
-              printf "  device_info_plus: 10.1.0\n\n" >> pubspec.yaml
-              printf "dev_dependencies:\n" >> pubspec.yaml
-              printf "  flutter_test:\n" >> pubspec.yaml
-              printf "    sdk: flutter\n" >> pubspec.yaml
-              printf "  flutter_lints: ^5.0.0\n\n" >> pubspec.yaml
-              printf "flutter:\n" >> pubspec.yaml
-              printf "  uses-material-design: true\n" >> pubspec.yaml
-            fi
-          else
-            echo "No pubspec.yaml provided. Using default template."
-            printf "name: system_pro_app\n" > pubspec.yaml
-            printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
-            printf "version: 1.0.0+1\n\n" >> pubspec.yaml
-            printf "environment:\n" >> pubspec.yaml
-            printf "  sdk: '>=3.4.0 <4.0.0'\n\n" >> pubspec.yaml
-            printf "dependencies:\n" >> pubspec.yaml
-            printf "  flutter:\n" >> pubspec.yaml
-            printf "    sdk: flutter\n" >> pubspec.yaml
-            printf "  webview_flutter: 4.13.0\n" >> pubspec.yaml
-            printf "  webview_flutter_android: 4.13.0\n" >> pubspec.yaml
-            printf "  permission_handler: 12.0.1\n" >> pubspec.yaml
-            printf "  path_provider: 2.1.5\n" >> pubspec.yaml
-            printf "  device_info_plus: 10.1.0\n\n" >> pubspec.yaml
-            printf "dev_dependencies:\n" >> pubspec.yaml
-            printf "  flutter_test:\n" >> pubspec.yaml
-            printf "    sdk: flutter\n" >> pubspec.yaml
-            printf "  flutter_lints: ^5.0.0\n\n" >> pubspec.yaml
-            printf "flutter:\n" >> pubspec.yaml
-            printf "  uses-material-design: true\n" >> pubspec.yaml
-          fi
-          rm -f pubspec_tmp.yaml
+          printf "name: system_pro_app\n" > pubspec.yaml
+          printf "description: A powerful browser app with camera support.\n" >> pubspec.yaml
+          printf "version: 1.0.0+1\n\n" >> pubspec.yaml
+          printf "environment:\n" >> pubspec.yaml
+          printf "  sdk: '>=3.4.0 <4.0.0'\n\n" >> pubspec.yaml
+          printf "dependencies:\n" >> pubspec.yaml
+          printf "  flutter:\n" >> pubspec.yaml
+          printf "    sdk: flutter\n" >> pubspec.yaml
+          printf "  webview_flutter: ${{ env.WEBVIEW_FLUTTER_VER }}\n" >> pubspec.yaml
+          printf "  webview_flutter_android: ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}\n" >> pubspec.yaml
+          printf "  permission_handler: ${{ env.PERMISSION_HANDLER_VER }}\n" >> pubspec.yaml
+          printf "  path_provider: ${{ env.PATH_PROVIDER_VER }}\n" >> pubspec.yaml
+          printf "  device_info_plus: ${{ env.DEVICE_INFO_PLUS_VER }}\n\n" >> pubspec.yaml
+          printf "dev_dependencies:\n" >> pubspec.yaml
+          printf "  flutter_test:\n" >> pubspec.yaml
+          printf "    sdk: flutter\n" >> pubspec.yaml
+          printf "  flutter_lints: ^5.0.0\n\n" >> pubspec.yaml
+          printf "flutter:\n" >> pubspec.yaml
+          printf "  uses-material-design: true\n" >> pubspec.yaml
+          echo "Default pubspec.yaml written (user input ignored)"
 
       - name: Enforce exact dependency versions
         run: |
