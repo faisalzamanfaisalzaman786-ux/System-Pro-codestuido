@@ -1,111 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
+name: system_pro_app
+description: A powerful browser app with camera support.
+version: 1.0.0+1
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await _requestPermissions();
-  runApp(const MyApp());
-}
+environment:
+  sdk: '>=3.4.0 <4.0.0'
 
-Future<void> _requestPermissions() async {
-  await [
-    Permission.camera,
-    Permission.microphone,
-    Permission.storage,
-    Permission.location,
-    Permission.notification,
-  ].request();
-}
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: 4.13.0
+  webview_flutter_android: 4.13.0
+  permission_handler: 12.0.1
+  path_provider: 2.1.5
+  device_info_plus: 10.1.0
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  @override
-  Widget build(BuildContext context) => const MaterialApp(
-    title: 'System Pro',
-    theme: ThemeData.dark(),
-    home: BrowserScreen(),
-    debugShowCheckedModeBanner: false,
-  );
-}
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
 
-class BrowserScreen extends StatefulWidget {
-  const BrowserScreen({super.key});
-  @override
-  State<BrowserScreen> createState() => _BrowserScreenState();
-}
-
-class _BrowserScreenState extends State<BrowserScreen> {
-  late final WebViewController _controller;
-  String _currentUrl = 'https://www.google.com';
-  String _status = 'Loading...';
-
-  @override
-  void initState() {
-    super.initState();
-    _initWebView();
-  }
-
-  void _initWebView() {
-    final controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (url) => setState(() {
-          _currentUrl = url;
-          _status = 'Loading $url';
-        }),
-        onPageFinished: (url) => setState(() => _status = 'Page loaded'),
-        onWebResourceError: (error) => setState(() => _status = 'Error: ${error.description}'),
-      ))
-      ..setBackgroundColor(Colors.black)
-      ..enableZoom(true);
-
-    if (controller.platform is AndroidWebViewController) {
-      (controller.platform as AndroidWebViewController)
-          .setMediaCapturePermissionRequestHandler((url) async {
-        return MediaCapturePermissionRequestResult.grant();
-      });
-    }
-
-    controller.loadRequest(Uri.parse(_currentUrl));
-    _controller = controller;
-  }
-
-  void _goToUrl(String url) {
-    if (!url.startsWith('http')) url = 'https://$url';
-    _controller.loadRequest(Uri.parse(url));
-    setState(() => _currentUrl = url);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('System Pro Browser'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => _controller.reload())],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: const InputDecoration(hintText: 'Enter URL', border: OutlineInputBorder()),
-                    onSubmitted: _goToUrl,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(onPressed: () => _goToUrl(_currentUrl), child: const Text('Go')),
-              ],
-            ),
-          ),
-          Expanded(child: WebViewWidget(controller: _controller)),
-          Container(padding: const EdgeInsets.all(8.0), color: Colors.black54, child: Text(_status)),
-        ],
-      ),
-    );
-  }
-}
+flutter:
+  uses-material-design: true
