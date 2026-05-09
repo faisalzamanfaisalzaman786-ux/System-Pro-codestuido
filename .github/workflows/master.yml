@@ -27,7 +27,9 @@ env:
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  WEBVIEW_FLUTTER_VER: '4.13.0'
+  # درست ورژن - اب دونوں ایک جیسے ہیں اور موجود ہیں
+  WEBVIEW_FLUTTER_VER: '4.10.1'
+  WEBVIEW_FLUTTER_ANDROID_VER: '4.10.1'
   PERMISSION_HANDLER_VER: '12.0.1'
   PATH_PROVIDER_VER: '2.1.5'
   DEVICE_INFO_PLUS_VER: '10.1.0'
@@ -45,9 +47,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      # ============================================================
-      # CLEANING STEPS - Remove all cached and build artifacts
-      # ============================================================
+      # صاف کریں سب کچھ
       - name: Clean everything (local cache, build, locks, etc.)
         run: |
           echo "🧹 Cleaning Flutter project caches..."
@@ -57,7 +57,7 @@ jobs:
           rm -rf android/.gradle
           rm -rf ios/.symlinks
           rm -f pubspec.lock
-          echo "✅ Cleaned all caches. Next step will re-download dependencies."
+          echo "✅ Cleaned all caches"
 
       - name: Create fresh Flutter v2 project
         run: |
@@ -68,12 +68,12 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh project created"
 
-      - name: Write main.dart from user payload
+      - name: Write main.dart from user
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart 2>/dev/null || echo "// fallback main" > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Write pubspec.yaml (HARDCODED with 4.10.1, ignores user input)
+      - name: Write pubspec.yaml with compatible versions (4.10.1)
         run: |
           cat > pubspec.yaml <<EOF
           name: system_pro_app
@@ -85,7 +85,7 @@ jobs:
             flutter:
               sdk: flutter
             webview_flutter: ${{ env.WEBVIEW_FLUTTER_VER }}
-            webview_flutter_android: 4.10.1
+            webview_flutter_android: ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}
             permission_handler: ${{ env.PERMISSION_HANDLER_VER }}
             path_provider: ${{ env.PATH_PROVIDER_VER }}
             device_info_plus: ${{ env.DEVICE_INFO_PLUS_VER }}
@@ -96,25 +96,24 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
-          # Double safety
-          sed -i 's/4.13.0/4.10.1/g' pubspec.yaml
-          echo "✅ pubspec.yaml written with 4.10.1"
+          echo "✅ pubspec.yaml written with versions ${{ env.WEBVIEW_FLUTTER_VER }} and ${{ env.WEBVIEW_FLUTTER_ANDROID_VER }}"
 
-      - name: Force re-download dependencies with exact versions
+      - name: Force re-download dependencies
         run: |
           rm -f pubspec.lock
           flutter pub get --no-example
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
-            webview_flutter_android:4.10.1 \
+            webview_flutter_android:${{ env.WEBVIEW_FLUTTER_ANDROID_VER }} \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
             path_provider:${{ env.PATH_PROVIDER_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
           echo "✅ Dependencies enforced"
 
-      - name: Rest of the build (permissions, assets, gradle, kotlin, APK)
+      # باقی تمام مراحل (permissions, assets, gradle, kotlin, APK)
+      - name: Configure permissions, assets, gradle, kotlin and build APK
         run: |
-          # Payload extraction (required for permissions and assets)
+          # اگر payload.json موجود نہ ہو تو بنا لیں
           if [ ! -f payload.json ]; then
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               jq -n \
@@ -128,7 +127,7 @@ jobs:
             fi
           fi
 
-          # Normalize package name and app name
+          # Extract config
           RAW_PKG=$(jq -r '.build_config.package_name // "com.example.app"' payload.json)
           RAW_NAME=$(jq -r '.build_config.app_display_name // "System Pro"' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
@@ -144,13 +143,13 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-          # Permissions and icon extraction
+          # Permissions and icon
           jq '.permissions // {}' payload.json > perms.json
           jq '.assets.additional_assets // []' payload.json > assets_list.json
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
-          # Apply permissions
+          # AndroidManifest.xml permissions
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           for perm in INTERNET POST_NOTIFICATIONS; do
             if ! grep -q "android.permission.$perm" "$MANIFEST"; then
@@ -178,7 +177,7 @@ jobs:
             rm icon.png
           fi
 
-          # Assets
+          # Additional assets
           if jq -e 'length > 0' assets_list.json > /dev/null; then
             mkdir -p assets/images
             for row in $(jq -r '.[] | @base64' assets_list.json); do
@@ -192,7 +191,7 @@ jobs:
             fi
           fi
 
-          # Configure Gradle
+          # Gradle configuration
           APP_GRADLE="android/app/build.gradle.kts"
           sed -i '/android {/a \    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n        targetCompatibility = JavaVersion.VERSION_${{ env.JAVA_VERSION }}\n    }' "$APP_GRADLE"
           sed -i '/android {/a \    namespace("'"$PACKAGE_NAME"'")' "$APP_GRADLE"
@@ -227,8 +226,7 @@ jobs:
             sed -i 's/jvmTarget = .*/jvmTarget = "${{ env.JAVA_VERSION }}"/' "$APP_GRADLE"
           fi
 
-      - name: Build release APK
-        run: |
+          # Build APK
           flutter clean
           flutter pub get
           flutter build apk --release
