@@ -68,18 +68,37 @@ jobs:
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Write pubspec.yaml from payload (overwrite generated)
+      - name: Write pubspec.yaml (IGNORE user input, use correct versions)
         run: |
-          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
-          echo "✅ pubspec.yaml written"
+          cat > pubspec.yaml <<EOF
+          name: system_pro_app
+          description: A powerful browser app with camera support.
+          version: 1.0.0+1
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+            webview_flutter: 4.13.0
+            webview_flutter_android: 4.10.1
+            permission_handler: 12.0.1
+            path_provider: 2.1.5
+            device_info_plus: 10.1.0
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^5.0.0
+          flutter:
+            uses-material-design: true
+          EOF
+          echo "✅ pubspec.yaml written with correct versions (user input ignored)"
 
-      - name: Add dependencies with exact versions (fix for webview_flutter_android)
+      - name: Add dependencies with exact versions
         run: |
           flutter pub get
-          # Ensure correct versions (webview_flutter 4.13.0, webview_flutter_android 4.10.1)
           flutter pub add webview_flutter:4.13.0 webview_flutter_android:4.10.1 permission_handler:12.0.1 path_provider:2.1.5 device_info_plus:10.1.0 2>/dev/null || true
           flutter pub get
-          echo "✅ Dependencies fixed to compatible versions"
+          echo "✅ Dependencies locked"
 
       - name: Extract permissions and icon
         run: |
@@ -180,7 +199,7 @@ jobs:
             sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$GRADLE"
           fi
 
-          # Set NDK version (permission_handler needs NDK)
+          # Set NDK version
           if grep -q "ndkVersion" "$GRADLE"; then
             sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
           else
