@@ -27,7 +27,7 @@ env:
   KOTLIN_VERSION: '2.0.20'
   NDK_VERSION: '27.0.12077973'
   JAVA_VERSION: '17'
-  # تمام پکیجز کے exact ورژن (اب webview_flutter_android بھی شامل)
+  # Core dependencies exact versions (always enforced)
   WEBVIEW_FLUTTER_VER: '4.13.0'
   WEBVIEW_FLUTTER_ANDROID_VER: '4.13.0'
   PERMISSION_HANDLER_VER: '12.0.1'
@@ -48,7 +48,6 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      # ------------------- PAYLOAD PREPARATION -------------------
       - name: Build payload from inputs (if manual run)
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -86,16 +85,24 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android,ios .
           echo "✅ Fresh v2 project created"
 
-      - name: Write main.dart and pubspec.yaml
+      - name: Write main.dart and pubspec.yaml (user provided)
         run: |
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
-          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
-          echo "✅ main.dart and pubspec.yaml written"
+          USER_PUBSPEC=$(jq -r '.source_files.pubspec // ""' payload.json)
+          if [ -n "$USER_PUBSPEC" ]; then
+            echo "$USER_PUBSPEC" | base64 -d > pubspec.yaml
+          else
+            echo "# User did not provide pubspec.yaml, using default from flutter create" > /dev/null
+          fi
+          echo "✅ main.dart and pubspec.yaml (if any) written"
 
-      - name: Add dependencies with exact versions (including webview_flutter_android)
+      - name: Enforce exact dependency versions (merge, never remove user deps)
         run: |
           rm -f pubspec.lock
           flutter pub get
+          # Add all required packages with exact versions
+          # This will add missing packages or update to exact version if already present.
+          # It never removes any existing dependency.
           flutter pub add webview_flutter:${{ env.WEBVIEW_FLUTTER_VER }} \
             webview_flutter_android:${{ env.WEBVIEW_FLUTTER_ANDROID_VER }} \
             permission_handler:${{ env.PERMISSION_HANDLER_VER }} \
@@ -103,7 +110,7 @@ jobs:
             package_info_plus:${{ env.PACKAGE_INFO_PLUS_VER }} \
             device_info_plus:${{ env.DEVICE_INFO_PLUS_VER }} 2>/dev/null || true
           flutter pub get
-          echo "✅ All dependencies locked to exact versions"
+          echo "✅ Core dependencies enforced. User dependencies preserved."
 
       - name: Extract permissions and icon
         run: |
@@ -112,36 +119,39 @@ jobs:
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
 
-      - name: Apply permissions and labels
+      - name: Apply permissions (with duplicate prevention)
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q "INTERNET" "$MANIFEST"; then
+          # Ensure base permissions
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
           fi
-          if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
+          if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
           add_perm() {
-            if ! grep -q "$2" "$MANIFEST"; then
-              sed -i "/<manifest/a \    $1" "$MANIFEST"
+            local perm_line="$1"
+            local perm_name="$2"
+            if ! grep -q "android:name=\"$perm_name\"" "$MANIFEST"; then
+              sed -i "/<manifest/a \    $perm_line" "$MANIFEST"
             fi
           }
           if jq -e '.camera == true' perms.json > /dev/null; then
-            add_perm '<uses-permission android:name="android.permission.CAMERA" />' "CAMERA"
+            add_perm '<uses-permission android:name="android.permission.CAMERA" />' 'android.permission.CAMERA'
           fi
           if jq -e '.microphone == true' perms.json > /dev/null; then
-            add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' "RECORD_AUDIO"
+            add_perm '<uses-permission android:name="android.permission.RECORD_AUDIO" />' 'android.permission.RECORD_AUDIO'
           fi
           if jq -e '.vibrate == true' perms.json > /dev/null; then
-            add_perm '<uses-permission android:name="android.permission.VIBRATE" />' "VIBRATE"
+            add_perm '<uses-permission android:name="android.permission.VIBRATE" />' 'android.permission.VIBRATE'
           fi
           LOC=$(jq -r '.location_granularity // "none"' perms.json)
           if [ "$LOC" = "fine" ]; then
-            add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "ACCESS_FINE_LOCATION"
+            add_perm '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' 'android.permission.ACCESS_FINE_LOCATION'
           elif [ "$LOC" = "coarse" ]; then
-            add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "ACCESS_COARSE_LOCATION"
+            add_perm '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' 'android.permission.ACCESS_COARSE_LOCATION'
           fi
-          echo "✅ Permissions added"
+          echo "✅ Permissions added (no duplicates)"
 
       - name: Set app display name
         run: |
