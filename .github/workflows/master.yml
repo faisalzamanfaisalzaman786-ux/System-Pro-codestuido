@@ -1,4 +1,4 @@
-name: Universal Filter App Builder (Production Stable)
+name: Dynamic Filter App Builder (Stable)
 
 on:
   repository_dispatch:
@@ -8,24 +8,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Java for Gradle
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.2'
           channel: 'stable'
-          cache: true
 
       - name: Save payload to file
-        run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
+        run: |
+          echo '${{ toJson(github.event.client_payload) }}' > payload.json
 
       - name: Extract build config
         id: config
@@ -34,79 +28,170 @@ jobs:
           APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
+          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
+          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project (with Java)
+      - name: Create fresh Flutter project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android --android-language java .
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
           echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
         run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
-          if [ -z "$MAIN_B64" ] || [ "$MAIN_B64" = "null" ]; then
-            echo "❌ No main.dart provided"
-            exit 1
-          fi
-          echo "$MAIN_B64" | base64 -d > lib/main.dart
+          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Use repository pubspec.yaml (if exists)
+      - name: Write pubspec.yaml from payload (if provided)
         run: |
-          if [ -f "pubspec.yaml" ]; then
-            echo "✅ Using existing pubspec.yaml from repository"
-            cp pubspec.yaml .
+          PUBSPEC_B64=$(jq -r '.source_files.pubspec // ""' payload.json)
+          if [ -n "$PUBSPEC_B64" ] && [ "$PUBSPEC_B64" != "null" ]; then
+            echo "$PUBSPEC_B64" | base64 -d > pubspec.yaml
+            echo "✅ pubspec.yaml written from payload"
           else
-            echo "ℹ️ No pubspec.yaml in repo, keeping default from flutter create"
+            echo "ℹ️ No pubspec.yaml in payload, using repository default"
           fi
+
+      - name: Get dependencies
+        run: |
           flutter pub get
 
-      - name: Update AndroidManifest.xml with app name and permissions
+      - name: Extract permissions and icon
+        run: |
+          jq '.permissions // {}' payload.json > perms.json
+          jq '.assets.additional_assets // []' payload.json > assets_list.json
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
+          echo "ICON_B64=$ICON_B64" >> $GITHUB_ENV
+
+      - name: Apply permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
-          for perm in "${PERMS[@]}"; do
-            if ! grep -q "android.permission.$perm" $MANIFEST; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
+          # Internet
+          if ! grep -q "INTERNET" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
+          # Notifications
+          if ! grep -q "POST_NOTIFICATIONS" "$MANIFEST"; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
+          fi
+          # Camera
+          if jq -e '.camera == true' perms.json > /dev/null; then
+            if ! grep -q "CAMERA" "$MANIFEST"; then
+              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' "$MANIFEST"
             fi
-          done
-          echo "✅ AndroidManifest.xml updated"
+          fi
+          # Microphone
+          if jq -e '.microphone == true' perms.json > /dev/null; then
+            if ! grep -q "RECORD_AUDIO" "$MANIFEST"; then
+              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' "$MANIFEST"
+            fi
+          fi
+          # Vibrate
+          if jq -e '.vibrate == true' perms.json > /dev/null; then
+            if ! grep -q "VIBRATE" "$MANIFEST"; then
+              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.VIBRATE" />' "$MANIFEST"
+            fi
+          fi
+          # Location
+          LOC=$(jq -r '.location_granularity // "none"' perms.json)
+          if [ "$LOC" = "fine" ]; then
+            if ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
+              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "$MANIFEST"
+            fi
+          elif [ "$LOC" = "coarse" ]; then
+            if ! grep -q "ACCESS_COARSE_LOCATION" "$MANIFEST"; then
+              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
+            fi
+          fi
+          echo "✅ Permissions added"
 
-      - name: Update build.gradle with package name and SDK versions
+      - name: Set app display name
         run: |
-          GRADLE_FILE="android/app/build.gradle"
-          sed -i "s/namespace .*/namespace \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
-          sed -i "s/applicationId .*/applicationId \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
-          sed -i "s/minSdk .*/minSdk ${{ env.MIN_SDK }}/" $GRADLE_FILE
-          sed -i "s/targetSdk .*/targetSdk ${{ env.TARGET_SDK }}/" $GRADLE_FILE
-          echo "✅ build.gradle updated"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
 
-      - name: Apply custom app icon (if provided)
+      - name: Apply app icon if provided
         run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
             echo "$ICON_B64" | base64 -d > icon.png
             for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android/app/src/main/res/mipmap-$density
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
-            echo "✅ Custom app icon applied"
+            rm icon.png
+            echo "✅ App icon applied"
+          fi
+
+      - name: Apply additional assets (if any)
+        run: |
+          if jq -e 'length > 0' assets_list.json > /dev/null; then
+            mkdir -p assets/images
+            for row in $(jq -r '.[] | @base64' assets_list.json); do
+              _jq() { echo ${row} | base64 --decode | jq -r ${1}; }
+              NAME=$(_jq '.name')
+              B64=$(_jq '.base64')
+              echo "$B64" | base64 -d > "assets/images/$NAME"
+            done
+            if ! grep -q "assets/" pubspec.yaml; then
+              sed -i '/flutter:/a \  assets:\n    - assets/images/' pubspec.yaml
+            fi
+            echo "✅ Additional assets added"
+          fi
+
+      - name: Configure Gradle (namespace, applicationId, NDK, minSdk, targetSdk)
+        run: |
+          GRADLE="android/app/build.gradle.kts"
+          PKG="${{ env.PACKAGE_NAME }}"
+          # Namespace
+          if grep -q "namespace" "$GRADLE"; then
+            sed -i 's/namespace(.*/namespace("'"$PKG"'")/' "$GRADLE"
+          else
+            sed -i '/android {/a \    namespace("'"$PKG"'")' "$GRADLE"
+          fi
+          # ApplicationId
+          if grep -q "applicationId" "$GRADLE"; then
+            sed -i 's/applicationId = .*/applicationId = "'"$PKG"'"/' "$GRADLE"
+          else
+            sed -i '/defaultConfig {/a \        applicationId = "'"$PKG"'"' "$GRADLE"
+          fi
+          # NDK version (required by permission_handler_android)
+          if grep -q "ndkVersion" "$GRADLE"; then
+            sed -i 's/ndkVersion = .*/ndkVersion = "27.0.12077973"/' "$GRADLE"
+          else
+            sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
+          fi
+          # MinSdk & TargetSdk
+          sed -i 's/minSdk = .*/minSdk = '"${{ env.MIN_SDK }}"'/' "$GRADLE"
+          sed -i 's/targetSdk = .*/targetSdk = '"${{ env.TARGET_SDK }}"'/' "$GRADLE"
+          # ProGuard
+          if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
+            sed -i 's/isMinifyEnabled = .*/isMinifyEnabled = true/' "$GRADLE"
+            sed -i 's/shrinkResources = .*/shrinkResources = true/' "$GRADLE"
+          fi
+          echo "✅ Gradle configured"
+
+      - name: Enable cleartext traffic for HTTP
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
+            sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           fi
 
       - name: Build release APK
         run: |
+          flutter clean
+          flutter pub get
           flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
