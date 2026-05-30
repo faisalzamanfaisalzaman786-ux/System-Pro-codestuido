@@ -1,4 +1,4 @@
-name: Filter App Builder (Auto Manifest + Gradle)
+name: Universal Filter App Builder (Repo Pubspec)
 
 on:
   repository_dispatch:
@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -24,11 +24,11 @@ jobs:
       - name: Extract build config
         id: config
         run: |
-          PACKAGE_NAME=$(jq -r '.build_config.package_name' payload.json)
-          APP_NAME=$(jq -r '.build_config.app_display_name' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
-          USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
+          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.filter.app"' payload.json)
+          APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
+          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
@@ -42,42 +42,56 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh project created"
+          echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
         run: |
-          jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
+          MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
+          if [ -z "$MAIN_B64" ] || [ "$MAIN_B64" = "null" ]; then
+            echo "❌ No main.dart provided in payload"
+            exit 1
+          fi
+          echo "$MAIN_B64" | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Write pubspec.yaml from payload and add dependencies
+      - name: Use repository pubspec.yaml (no overwrite)
         run: |
-          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "❌ pubspec.yaml not found in repository root!"
+            exit 1
+          fi
+          echo "✅ Using existing pubspec.yaml from repository"
           flutter pub get
-          # Ensure essential filter app dependencies (if not already in pubspec)
-          flutter pub add camera:^0.10.5 image_picker:^1.1.0 image_filters:^0.2.0 permission_handler:^11.3.1
-          echo "✅ pubspec.yaml and dependencies ready"
+          echo "✅ Dependencies resolved"
 
-      - name: Generate AndroidManifest.xml with all permissions
+      - name: Generate AndroidManifest.xml with all required permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           cat > $MANIFEST <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${{ env.PACKAGE_NAME }}">
-              <!-- Permissions required for camera, gallery, internet, etc. -->
+              <!-- Internet -->
               <uses-permission android:name="android.permission.INTERNET" />
+              <!-- Camera and Gallery -->
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.VIBRATE" />
+              <!-- Location (optional but included) -->
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <!-- Foreground service for long-running tasks -->
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <!-- Optional: Bluetooth if needed -->
+              <!-- Bluetooth -->
               <uses-permission android:name="android.permission.BLUETOOTH" />
               <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <!-- Notifications & Foreground Service -->
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <!-- Vibrate -->
+              <uses-permission android:name="android.permission.VIBRATE" />
+
               <application
                   android:label="${{ env.APP_NAME }}"
                   android:icon="@mipmap/ic_launcher"
@@ -154,7 +168,7 @@ jobs:
           EOF
           echo "✅ build.gradle generated"
 
-      - name: Apply App Icon (if provided)
+      - name: Apply custom app icon (if provided)
         run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
