@@ -16,7 +16,7 @@ dependencies:
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
   image_filter_plus: ^0.0.1
-  image_gallery_saver: ^2.0.3   # ← یہی ایک تبدیلی ہے
+  gallery_saver: ^2.3.2          # ← واپس رکھ دیا
 
   # Image Processing
   image: ^4.3.0
@@ -61,6 +61,10 @@ dependencies:
 
   # Audio
   audioplayers: ^6.1.0
+
+# ← یہ نئی لائنز ہیں، http کے تنازع کو حل کرتی ہیں
+dependency_overrides:
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
