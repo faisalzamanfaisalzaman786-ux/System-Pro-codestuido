@@ -69,6 +69,27 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
+      - name: Fix missing namespace in gallery_saver plugin
+        run: |
+          # Find gallery_saver plugin directory in pub cache
+          GALLERY_SAVER_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
+          if [ -n "$GALLERY_SAVER_DIR" ]; then
+            BUILD_GRADLE="$GALLERY_SAVER_DIR/android/build.gradle"
+            if [ -f "$BUILD_GRADLE" ]; then
+              # Add namespace if not already present
+              if ! grep -q "namespace" "$BUILD_GRADLE"; then
+                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
+                echo "✅ Added namespace to gallery_saver plugin"
+              else
+                echo "ℹ️ namespace already present in gallery_saver"
+              fi
+            else
+              echo "⚠️ build.gradle not found in gallery_saver"
+            fi
+          else
+            echo "⚠️ gallery_saver plugin directory not found"
+          fi
+
       - name: Fix Kotlin directory structure (if needed)
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
