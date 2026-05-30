@@ -1,4 +1,4 @@
-name: Filter App Builder (Kotlin)
+name: Filter App Builder (Kotlin - Fixed)
 
 on:
   repository_dispatch:
@@ -60,36 +60,75 @@ jobs:
           echo "$MAIN_B64" | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Use repository pubspec.yaml
+      - name: Use repository pubspec.yaml (ignore payload)
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found"
+            echo "❌ pubspec.yaml not found in repository root!"
             exit 1
           fi
+          echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Generate build.gradle (Groovy) and keep Kotlin for app code
+      - name: Fix Kotlin directory structure (if needed)
         run: |
-          rm -f android/build.gradle.kts android/app/build.gradle.kts
+          # Ensure kotlin directory exists with correct package path
+          PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
+          mkdir -p android/app/src/main/kotlin/$PKG_PATH
+          # Move MainActivity.kt if it's in the wrong place (from default com.example)
+          if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
+            mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
+            rm -rf android/app/src/main/kotlin/com
+          fi
+          echo "✅ Kotlin directory structure fixed"
+
+      - name: Generate build.gradle (Groovy) with Kotlin support
+        run: |
+          # Remove any Kotlin DSL files
+          rm -f android/build.gradle.kts
+          rm -f android/app/build.gradle.kts
+
+          # Top-level build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
-              repositories { google(); mavenCentral() }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-          allprojects { repositories { google(); mavenCentral() } }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
           EOF
 
+          # App-level build.gradle (Groovy DSL)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
+
           android {
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 35
@@ -97,7 +136,9 @@ jobs:
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
-              kotlinOptions { jvmTarget = "17" }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = ${{ env.MIN_SDK }}
@@ -110,13 +151,19 @@ jobs:
                       signingConfig = signingConfigs.debug
                       minifyEnabled = ${{ env.USE_PROGUARD }}
                       shrinkResources = ${{ env.USE_PROGUARD }}
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
-                  debug { minifyEnabled = false }
+                  debug {
+                      minifyEnabled = false
+                  }
               }
           }
-          flutter { source = "../.." }
+
+          flutter {
+              source = "../.."
+          }
           EOF
-          echo "✅ build.gradle generated (Groovy) with Kotlin support"
+          echo "✅ build.gradle files generated for Kotlin"
 
       - name: Update AndroidManifest.xml
         run: |
@@ -130,7 +177,7 @@ jobs:
           done
           echo "✅ AndroidManifest.xml updated"
 
-      - name: Apply app icon
+      - name: Apply custom app icon
         run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -143,7 +190,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
