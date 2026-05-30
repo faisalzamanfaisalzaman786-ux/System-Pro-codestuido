@@ -1,4 +1,4 @@
-name: Filter App Builder (Kotlin - Fixed)
+name: Filter App Builder (Kotlin - Full Permissions)
 
 on:
   repository_dispatch:
@@ -71,23 +71,17 @@ jobs:
 
       - name: Fix Kotlin directory structure (if needed)
         run: |
-          # Ensure kotlin directory exists with correct package path
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
-          # Move MainActivity.kt if it's in the wrong place (from default com.example)
           if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
           echo "✅ Kotlin directory structure fixed"
 
-      - name: Generate build.gradle (Groovy) with Kotlin support
+      - name: Generate build.gradle (Groovy) with Kotlin support and compileSdk 35
         run: |
-          # Remove any Kotlin DSL files
-          rm -f android/build.gradle.kts
-          rm -f android/app/build.gradle.kts
-
-          # Top-level build.gradle
+          rm -f android/build.gradle.kts android/app/build.gradle.kts
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
@@ -100,14 +94,12 @@ jobs:
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-
           allprojects {
               repositories {
                   google()
                   mavenCentral()
               }
           }
-
           rootProject.buildDir = '../build'
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
@@ -115,20 +107,17 @@ jobs:
           subprojects {
               project.evaluationDependsOn(':app')
           }
-
           tasks.register('clean', Delete) {
               delete rootProject.buildDir
           }
           EOF
 
-          # App-level build.gradle (Groovy DSL)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-
           android {
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 35
@@ -158,24 +147,45 @@ jobs:
                   }
               }
           }
-
           flutter {
               source = "../.."
           }
           EOF
-          echo "✅ build.gradle files generated for Kotlin"
+          echo "✅ build.gradle files generated (compileSdk=35)"
 
-      - name: Update AndroidManifest.xml
+      - name: Update AndroidManifest.xml with ALL permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
+          PERMS=(
+            "INTERNET"
+            "CAMERA"
+            "READ_EXTERNAL_STORAGE"
+            "WRITE_EXTERNAL_STORAGE"
+            "RECORD_AUDIO"
+            "ACCESS_FINE_LOCATION"
+            "ACCESS_COARSE_LOCATION"
+            "BLUETOOTH"
+            "BLUETOOTH_ADMIN"
+            "BLUETOOTH_SCAN"
+            "BLUETOOTH_CONNECT"
+            "POST_NOTIFICATIONS"
+            "FOREGROUND_SERVICE"
+            "VIBRATE"
+            "ACCESS_BACKGROUND_LOCATION"
+            "BODY_SENSORS"
+            "ACTIVITY_RECOGNITION"
+            "READ_CONTACTS"
+            "WRITE_CONTACTS"
+            "READ_CALENDAR"
+            "WRITE_CALENDAR"
+          )
           for perm in "${PERMS[@]}"; do
             if ! grep -q "android.permission.$perm" $MANIFEST; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
             fi
           done
-          echo "✅ AndroidManifest.xml updated"
+          echo "✅ AndroidManifest.xml updated with all permissions"
 
       - name: Apply custom app icon
         run: |
@@ -190,7 +200,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release --verbose
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
