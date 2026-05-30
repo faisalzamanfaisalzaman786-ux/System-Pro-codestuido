@@ -1,4 +1,4 @@
-name: Filter App Builder (Repo Pubspec)
+name: Filter App Builder (Fixed Gradle Groovy)
 
 on:
   repository_dispatch:
@@ -81,21 +81,61 @@ jobs:
           done
           echo "✅ AndroidManifest.xml updated"
 
-      - name: Update build.gradle (support both .gradle and .gradle.kts)
+      - name: Generate custom build.gradle (Groovy) and remove .kts
         run: |
-          GRADLE_FILE="android/app/build.gradle"
-          if [ ! -f "$GRADLE_FILE" ]; then
-            GRADLE_FILE="android/app/build.gradle.kts"
-          fi
-          if [ ! -f "$GRADLE_FILE" ]; then
-            echo "❌ No build.gradle or build.gradle.kts found!"
-            exit 1
-          fi
-          sed -i "s/namespace .*/namespace \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
-          sed -i "s/applicationId .*/applicationId \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
-          sed -i "s/minSdk .*/minSdk ${{ env.MIN_SDK }}/" $GRADLE_FILE
-          sed -i "s/targetSdk .*/targetSdk ${{ env.TARGET_SDK }}/" $GRADLE_FILE
-          echo "✅ build.gradle updated"
+          # Remove Kotlin DSL file if exists
+          rm -f android/app/build.gradle.kts
+          # Create Groovy build.gradle
+          cat > android/app/build.gradle <<EOF
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withInputStream { localProperties.load(it) }
+          }
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found.")
+          }
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          android {
+              namespace "${{ env.PACKAGE_NAME }}"
+              compileSdk ${{ env.TARGET_SDK }}
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              defaultConfig {
+                  applicationId "${{ env.PACKAGE_NAME }}"
+                  minSdk ${{ env.MIN_SDK }}
+                  targetSdk ${{ env.TARGET_SDK }}
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled ${{ env.USE_PROGUARD }}
+                      shrinkResources ${{ env.USE_PROGUARD }}
+                  }
+                  debug {
+                      minifyEnabled false
+                  }
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
+              implementation 'androidx.core:core-ktx:1.12.0'
+          }
+          EOF
+          echo "✅ build.gradle (Groovy) generated"
 
       - name: Apply custom app icon (if provided)
         run: |
