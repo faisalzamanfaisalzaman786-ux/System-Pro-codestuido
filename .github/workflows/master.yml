@@ -1,8 +1,8 @@
-name: Dynamic APK Builder (Safe V2)
+name: Filter App Builder (Auto Manifest + Gradle)
 
 on:
   repository_dispatch:
-    types: [system_pro_build]
+    types: [filter_app_build]
 
 jobs:
   build:
@@ -29,7 +29,6 @@ jobs:
           MIN_SDK=$(jq -r '.build_config.min_sdk' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard' payload.json)
-
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
@@ -50,37 +49,112 @@ jobs:
           jq -r '.source_files.main_dart // ""' payload.json | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Add Dependencies and Resolve
+      - name: Write pubspec.yaml from payload and add dependencies
         run: |
-          # پے لوڈ سے ڈیپینڈنسز نکالنے کے بجائے براہ راست ایڈ کریں تاکہ ایرر نہ آئے
-          flutter pub add webview_flutter:^4.10.1
-          flutter pub add permission_handler:^11.3.1
-          flutter pub add path_provider:^2.1.3
+          jq -r '.source_files.pubspec // ""' payload.json | base64 -d > pubspec.yaml
           flutter pub get
+          # Ensure essential filter app dependencies (if not already in pubspec)
+          flutter pub add camera:^0.10.5 image_picker:^1.1.0 image_filters:^0.2.0 permission_handler:^11.3.1
+          echo "✅ pubspec.yaml and dependencies ready"
 
-      - name: Apply Android Configurations
+      - name: Generate AndroidManifest.xml with all permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          GRADLE="android/app/build.gradle.kts"
-          
-          # App Name & Internet Permission
-          sed -i 's/android:label="[^"]*"/android:label="${{ env.APP_NAME }}"/' "$MANIFEST"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          
-          # Hardware Permissions (Payload logic)
-          jq '.permissions' payload.json > perms.json
-          if jq -e '.camera == true' perms.json > /dev/null; then
-            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA" />' "$MANIFEST"
-          fi
+          cat > $MANIFEST <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="${{ env.PACKAGE_NAME }}">
+              <!-- Permissions required for camera, gallery, internet, etc. -->
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <!-- Foreground service for long-running tasks -->
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <!-- Optional: Bluetooth if needed -->
+              <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+              <application
+                  android:label="${{ env.APP_NAME }}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true"
+                  android:requestLegacyExternalStorage="true"
+                  android:theme="@style/LaunchTheme">
+                  <meta-data android:name="flutterEmbedding" android:value="2" />
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          echo "✅ AndroidManifest.xml generated with all permissions"
 
-          # Gradle 8.5 Force Settings
-          sed -i 's/namespace = .*/namespace = "${{ env.PACKAGE_NAME }}"/' "$GRADLE" || sed -i '/android {/a \    namespace = "${{ env.PACKAGE_NAME }}"' "$GRADLE"
-          sed -i 's/applicationId = .*/applicationId = "${{ env.PACKAGE_NAME }}"/' "$GRADLE"
-          sed -i 's/minSdk = .*/minSdk = ${{ env.MIN_SDK }}/' "$GRADLE"
-          sed -i 's/targetSdk = .*/targetSdk = ${{ env.TARGET_SDK }}/' "$GRADLE"
-          sed -i '/android {/a \    ndkVersion = "27.0.12077973"' "$GRADLE"
+      - name: Generate build.gradle
+        run: |
+          GRADLE_FILE="android/app/build.gradle"
+          cat > $GRADLE_FILE <<EOF
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withInputStream { localProperties.load(it) }
+          }
+          def flutterRoot = localProperties.getProperty('flutter.sdk')
+          if (flutterRoot == null) {
+              throw new GradleException("Flutter SDK not found.")
+          }
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          android {
+              namespace "${{ env.PACKAGE_NAME }}"
+              compileSdk ${{ env.TARGET_SDK }}
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              defaultConfig {
+                  applicationId "${{ env.PACKAGE_NAME }}"
+                  minSdk ${{ env.MIN_SDK }}
+                  targetSdk ${{ env.TARGET_SDK }}
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled ${{ env.USE_PROGUARD }}
+                      shrinkResources ${{ env.USE_PROGUARD }}
+                  }
+                  debug {
+                      minifyEnabled false
+                  }
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
+              implementation 'androidx.core:core-ktx:1.12.0'
+          }
+          EOF
+          echo "✅ build.gradle generated"
 
-      - name: Apply App Icon
+      - name: Apply App Icon (if provided)
         run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -89,6 +163,9 @@ jobs:
               mkdir -p android/app/src/main/res/mipmap-$density
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
+            echo "✅ Custom app icon applied"
+          else
+            echo "ℹ️ No custom icon provided, using default Flutter icon"
           fi
 
       - name: Build release APK
@@ -98,5 +175,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
+          name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
