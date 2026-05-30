@@ -1,4 +1,4 @@
-name: Universal Filter App Builder (Fixed Kotlin)
+name: Universal Filter App Builder (Production Stable)
 
 on:
   repository_dispatch:
@@ -11,11 +11,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Java for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.2'
           channel: 'stable'
+          cache: true
 
       - name: Save payload to file
         run: |
@@ -28,12 +35,10 @@ jobs:
           APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
           MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
-          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
-          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
       - name: Create fresh Flutter project
         run: |
@@ -41,7 +46,7 @@ jobs:
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android --android-language java .
           echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
@@ -57,101 +62,33 @@ jobs:
       - name: Use repository pubspec.yaml (no overwrite)
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
-            exit 1
+            echo "ℹ️ No pubspec.yaml in repo, using default from flutter create"
+          else
+            echo "✅ Using existing pubspec.yaml from repository"
+            cp pubspec.yaml .
           fi
-          echo "✅ Using existing pubspec.yaml from repository"
           flutter pub get
-          echo "✅ Dependencies resolved"
 
-      - name: Generate AndroidManifest.xml with all required permissions
+      - name: Update AndroidManifest.xml with app name and permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          cat > $MANIFEST <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="${{ env.PACKAGE_NAME }}">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <uses-permission android:name="android.permission.BLUETOOTH" />
-              <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.VIBRATE" />
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
+          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
+          for perm in "${PERMS[@]}"; do
+            if ! grep -q "android.permission.$perm" $MANIFEST; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
+            fi
+          done
+          echo "✅ AndroidManifest.xml updated"
 
-              <application
-                  android:label="${{ env.APP_NAME }}"
-                  android:icon="@mipmap/ic_launcher"
-                  android:usesCleartextTraffic="true"
-                  android:requestLegacyExternalStorage="true"
-                  android:theme="@style/LaunchTheme">
-                  <meta-data android:name="flutterEmbedding" android:value="2" />
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          echo "✅ AndroidManifest.xml generated"
-
-      - name: Generate build.gradle with proper plugins
+      - name: Update build.gradle with package name and SDK versions
         run: |
           GRADLE_FILE="android/app/build.gradle"
-          cat > $GRADLE_FILE <<EOF
-          plugins {
-              id("com.android.application")
-              id("dev.flutter.flutter-gradle-plugin")
-              id("org.jetbrains.kotlin.android")
-          }
-
-          android {
-              namespace = "${{ env.PACKAGE_NAME }}"
-              compileSdk = ${{ env.TARGET_SDK }}
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-              defaultConfig {
-                  applicationId = "${{ env.PACKAGE_NAME }}"
-                  minSdk = ${{ env.MIN_SDK }}
-                  targetSdk = ${{ env.TARGET_SDK }}
-                  versionCode = 1
-                  versionName = "1.0"
-              }
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.getByName("debug")
-                      isMinifyEnabled = ${{ env.USE_PROGUARD }}
-                      isShrinkResources = ${{ env.USE_PROGUARD }}
-                  }
-                  debug {
-                      isMinifyEnabled = false
-                  }
-              }
-          }
-
-          flutter {
-              source = "../.."
-          }
-          EOF
-          echo "✅ build.gradle generated with Kotlin plugin"
+          sed -i "s/namespace .*/namespace \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
+          sed -i "s/applicationId .*/applicationId \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
+          sed -i "s/minSdk .*/minSdk ${{ env.MIN_SDK }}/" $GRADLE_FILE
+          sed -i "s/targetSdk .*/targetSdk ${{ env.TARGET_SDK }}/" $GRADLE_FILE
+          echo "✅ build.gradle updated"
 
       - name: Apply custom app icon (if provided)
         run: |
@@ -163,13 +100,11 @@ jobs:
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
             echo "✅ Custom app icon applied"
-          else
-            echo "ℹ️ No custom icon provided, using default Flutter icon"
           fi
 
       - name: Build release APK
         run: |
-          flutter build apk --release --no-pub
+          flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
