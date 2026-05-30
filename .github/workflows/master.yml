@@ -1,4 +1,4 @@
-name: Filter App Builder (Final Fix)
+name: Filter App Builder (Final Working)
 
 on:
   repository_dispatch:
@@ -69,13 +69,13 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Generate modern build.gradle files with correct syntax
+      - name: Generate modern build.gradle files (compileSdk=35)
         run: |
-          # Remove any existing Kotlin DSL files
+          # Remove Kotlin DSL files
           rm -f android/build.gradle.kts
           rm -f android/app/build.gradle.kts
 
-          # Create top-level build.gradle
+          # Top-level build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
@@ -109,7 +109,7 @@ jobs:
           }
           EOF
 
-          # Create app-level build.gradle with correct minifyEnabled (not isMinifyEnabled)
+          # App-level build.gradle with compileSdk=35 (required by plugins)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
@@ -119,7 +119,7 @@ jobs:
 
           android {
               namespace "${{ env.PACKAGE_NAME }}"
-              compileSdk = ${{ env.TARGET_SDK }}
+              compileSdk = 35
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
@@ -150,7 +150,7 @@ jobs:
               source = "../.."
           }
           EOF
-          echo "✅ build.gradle files generated with correct minifyEnabled"
+          echo "✅ build.gradle files generated with compileSdk=35"
 
       - name: Update AndroidManifest.xml with app name and permissions
         run: |
