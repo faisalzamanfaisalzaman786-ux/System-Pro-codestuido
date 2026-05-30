@@ -1,4 +1,4 @@
-name: Filter App Builder (Fixed Gradle Groovy)
+name: Filter App Builder (Modern Gradle Plugins)
 
 on:
   repository_dispatch:
@@ -41,13 +41,13 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project (Java language)
+      - name: Create fresh Flutter project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android --android-language java .
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
           echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
@@ -69,6 +69,89 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
+      - name: Remove Kotlin DSL files and generate modern Groovy build scripts
+        run: |
+          # Remove Kotlin DSL files
+          rm -f android/build.gradle.kts
+          rm -f android/app/build.gradle.kts
+
+          # Generate top-level build.gradle
+          cat > android/build.gradle <<EOF
+          buildscript {
+              ext.kotlin_version = '1.9.0'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+              }
+          }
+
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          # Generate app-level build.gradle with modern plugins block
+          cat > android/app/build.gradle <<EOF
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+
+          android {
+              namespace "${{ env.PACKAGE_NAME }}"
+              compileSdk = ${{ env.TARGET_SDK }}
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+              defaultConfig {
+                  applicationId "${{ env.PACKAGE_NAME }}"
+                  minSdk = ${{ env.MIN_SDK }}
+                  targetSdk = ${{ env.TARGET_SDK }}
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.debug
+                      isMinifyEnabled = ${{ env.USE_PROGUARD }}
+                      isShrinkResources = ${{ env.USE_PROGUARD }}
+                  }
+                  debug {
+                      isMinifyEnabled = false
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
+          echo "✅ Modern build.gradle files generated"
+
       - name: Update AndroidManifest.xml with app name and permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -80,62 +163,6 @@ jobs:
             fi
           done
           echo "✅ AndroidManifest.xml updated"
-
-      - name: Generate custom build.gradle (Groovy) and remove .kts
-        run: |
-          # Remove Kotlin DSL file if exists
-          rm -f android/app/build.gradle.kts
-          # Create Groovy build.gradle
-          cat > android/app/build.gradle <<EOF
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withInputStream { localProperties.load(it) }
-          }
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found.")
-          }
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-          android {
-              namespace "${{ env.PACKAGE_NAME }}"
-              compileSdk ${{ env.TARGET_SDK }}
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-              defaultConfig {
-                  applicationId "${{ env.PACKAGE_NAME }}"
-                  minSdk ${{ env.MIN_SDK }}
-                  targetSdk ${{ env.TARGET_SDK }}
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled ${{ env.USE_PROGUARD }}
-                      shrinkResources ${{ env.USE_PROGUARD }}
-                  }
-                  debug {
-                      minifyEnabled false
-                  }
-              }
-          }
-          flutter {
-              source '../..'
-          }
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
-              implementation 'androidx.core:core-ktx:1.12.0'
-          }
-          EOF
-          echo "✅ build.gradle (Groovy) generated"
 
       - name: Apply custom app icon (if provided)
         run: |
