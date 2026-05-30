@@ -81,9 +81,16 @@ jobs:
           done
           echo "✅ AndroidManifest.xml updated"
 
-      - name: Update build.gradle with package name and SDK versions
+      - name: Update build.gradle (support both .gradle and .gradle.kts)
         run: |
           GRADLE_FILE="android/app/build.gradle"
+          if [ ! -f "$GRADLE_FILE" ]; then
+            GRADLE_FILE="android/app/build.gradle.kts"
+          fi
+          if [ ! -f "$GRADLE_FILE" ]; then
+            echo "❌ No build.gradle or build.gradle.kts found!"
+            exit 1
+          fi
           sed -i "s/namespace .*/namespace \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
           sed -i "s/applicationId .*/applicationId \"${{ env.PACKAGE_NAME }}\"/" $GRADLE_FILE
           sed -i "s/minSdk .*/minSdk ${{ env.MIN_SDK }}/" $GRADLE_FILE
