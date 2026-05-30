@@ -1,5 +1,5 @@
 name: filter_app
-description: A professional filter application with camera, gallery, editing, and full permissions.
+description: A professional filter application with camera, gallery, and full permissions.
 version: 1.0.0+1
 publish_to: none
 
@@ -16,9 +16,9 @@ dependencies:
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
   image_filter_plus: ^0.0.1
-  gallery_saver: ^2.3.2          # تصاویر کو گیلری میں محفوظ کرنے کے لیے
+  gallery_saver: ^2.3.2
 
-  # Image & Video Processing
+  # Image Processing
   image: ^4.3.0
   video_player: ^2.9.3
   file_picker: ^8.1.4
@@ -37,7 +37,6 @@ dependencies:
   flutter_svg: ^2.0.10+1
   lottie: ^3.1.2
   shimmer: ^3.0.0
-  cached_network_image: ^3.4.1
 
   # State Management
   provider: ^6.1.2
