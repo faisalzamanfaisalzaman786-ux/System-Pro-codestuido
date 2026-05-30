@@ -1,4 +1,4 @@
-name: Universal Filter App Builder (Fixed Gradle)
+name: Universal Filter App Builder (Fixed Kotlin)
 
 on:
   repository_dispatch:
@@ -71,25 +71,19 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="${{ env.PACKAGE_NAME }}">
-              <!-- Internet -->
               <uses-permission android:name="android.permission.INTERNET" />
-              <!-- Camera and Gallery -->
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <!-- Location -->
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-              <!-- Bluetooth -->
               <uses-permission android:name="android.permission.BLUETOOTH" />
               <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
               <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
               <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-              <!-- Notifications & Foreground Service -->
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <!-- Vibrate -->
               <uses-permission android:name="android.permission.VIBRATE" />
 
               <application
@@ -112,15 +106,16 @@ jobs:
               </application>
           </manifest>
           EOF
-          echo "✅ AndroidManifest.xml generated with all permissions"
+          echo "✅ AndroidManifest.xml generated"
 
-      - name: Generate build.gradle with Plugin DSL
+      - name: Generate build.gradle with proper plugins
         run: |
           GRADLE_FILE="android/app/build.gradle"
           cat > $GRADLE_FILE <<EOF
           plugins {
               id("com.android.application")
               id("dev.flutter.flutter-gradle-plugin")
+              id("org.jetbrains.kotlin.android")
           }
 
           android {
@@ -156,7 +151,7 @@ jobs:
               source = "../.."
           }
           EOF
-          echo "✅ build.gradle generated with modern Plugin DSL"
+          echo "✅ build.gradle generated with Kotlin plugin"
 
       - name: Apply custom app icon (if provided)
         run: |
