@@ -1,4 +1,4 @@
-name: Filter App Builder (Final Working)
+name: Filter App Builder (Kotlin)
 
 on:
   repository_dispatch:
@@ -41,14 +41,14 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project
+      - name: Create fresh Flutter project (Kotlin default)
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created"
+          echo "✅ Fresh Flutter project created (Kotlin)"
 
       - name: Write main.dart from payload
         run: |
@@ -60,63 +60,36 @@ jobs:
           echo "$MAIN_B64" | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Use repository pubspec.yaml (ignore payload)
+      - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
+            echo "❌ pubspec.yaml not found"
             exit 1
           fi
-          echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Generate modern build.gradle files (compileSdk=35)
+      - name: Generate build.gradle (Groovy) and keep Kotlin for app code
         run: |
-          # Remove Kotlin DSL files
-          rm -f android/build.gradle.kts
-          rm -f android/app/build.gradle.kts
-
-          # Top-level build.gradle
+          rm -f android/build.gradle.kts android/app/build.gradle.kts
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          allprojects { repositories { google(); mavenCentral() } }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
-          # App-level build.gradle with compileSdk=35 (required by plugins)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-
           android {
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 35
@@ -124,9 +97,7 @@ jobs:
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
+              kotlinOptions { jvmTarget = "17" }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = ${{ env.MIN_SDK }}
@@ -140,19 +111,14 @@ jobs:
                       minifyEnabled = ${{ env.USE_PROGUARD }}
                       shrinkResources = ${{ env.USE_PROGUARD }}
                   }
-                  debug {
-                      minifyEnabled = false
-                  }
+                  debug { minifyEnabled = false }
               }
           }
-
-          flutter {
-              source = "../.."
-          }
+          flutter { source = "../.." }
           EOF
-          echo "✅ build.gradle files generated with compileSdk=35"
+          echo "✅ build.gradle generated (Groovy) with Kotlin support"
 
-      - name: Update AndroidManifest.xml with app name and permissions
+      - name: Update AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
@@ -164,7 +130,7 @@ jobs:
           done
           echo "✅ AndroidManifest.xml updated"
 
-      - name: Apply custom app icon (if provided)
+      - name: Apply app icon
         run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
@@ -173,7 +139,7 @@ jobs:
               mkdir -p android/app/src/main/res/mipmap-$density
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
-            echo "✅ Custom app icon applied"
+            echo "✅ Custom icon applied"
           fi
 
       - name: Build release APK
