@@ -1,5 +1,5 @@
 name: filter_app
-description: A professional filter application with camera, gallery, and webview support.
+description: A professional filter application with camera, gallery, and webview.
 version: 1.0.0+1
 publish_to: none
 
@@ -21,7 +21,7 @@ dependencies:
   image: ^4.3.0
   flutter_image_filters: ^0.6.0
 
-  # UI and utilities
+  # UI
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.10+1
@@ -29,12 +29,11 @@ dependencies:
   lottie: ^3.1.2
   shimmer: ^3.0.0
 
-  # State management (optional but recommended)
+  # State management
   provider: ^6.1.2
 
-  # Storage
+  # Storage & preferences
   shared_preferences: ^2.3.5
-  gallery_saver: ^2.3.3
 
 dev_dependencies:
   flutter_test:
@@ -45,18 +44,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Assets for filter app (if any)
+  # Assets (optional directories)
   assets:
     - assets/images/
     - assets/icons/
     - assets/filters/
     - assets/animations/
-
-  # Custom fonts if needed (optional)
-  # fonts:
-  #   - family: CustomFont
-  #     fonts:
-  #       - asset: assets/fonts/CustomFont-Regular.ttf
 
 flutter_launcher_icons:
   android: true
