@@ -16,7 +16,7 @@ dependencies:
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
   image_filter_plus: ^0.0.1
-  gallery_saver: ^2.3.2
+  image_gallery_saver: ^2.0.3   # ← یہی ایک تبدیلی ہے
 
   # Image Processing
   image: ^4.3.0
