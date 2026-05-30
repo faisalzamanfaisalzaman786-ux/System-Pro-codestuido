@@ -25,8 +25,7 @@ jobs:
           cache: true
 
       - name: Save payload to file
-        run: |
-          echo '${{ toJson(github.event.client_payload) }}' > payload.json
+        run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
 
       - name: Extract build config
         id: config
@@ -42,7 +41,7 @@ jobs:
           echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-      - name: Create fresh Flutter project (with Java)
+      - name: Create fresh Flutter project (Java language)
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
           ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
@@ -104,8 +103,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: |
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
