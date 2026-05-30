@@ -1,5 +1,5 @@
 name: filter_app
-description: A professional filter application.
+description: A powerful filter application.
 version: 1.0.0+1
 publish_to: none
 
@@ -9,17 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # Core functionality
   camera: ^0.11.1
   image_picker: ^1.1.2
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
-
-  # Image Processing
-  flutter_image_filters: ^0.0.27
-
-  # Utilities
+  image_filters: ^0.2.0   # یہ ضروری ہے
   path_provider: ^2.1.5
   share_plus: ^10.1.0
   image: ^4.3.0
