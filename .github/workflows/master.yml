@@ -1,4 +1,4 @@
-name: Filter App Builder (Modern Gradle Plugins)
+name: Filter App Builder (Final Fix)
 
 on:
   repository_dispatch:
@@ -69,14 +69,14 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Remove Kotlin DSL files and generate modern Groovy build scripts
+      - name: Generate modern build.gradle files with correct syntax
         run: |
-          # Remove Kotlin DSL files
+          # Remove any existing Kotlin DSL files
           rm -f android/build.gradle.kts
           rm -f android/app/build.gradle.kts
 
-          # Generate top-level build.gradle
-          cat > android/build.gradle <<EOF
+          # Create top-level build.gradle
+          cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
               repositories {
@@ -85,7 +85,7 @@ jobs:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
 
@@ -98,7 +98,7 @@ jobs:
 
           rootProject.buildDir = '../build'
           subprojects {
-              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
           }
           subprojects {
               project.evaluationDependsOn(':app')
@@ -109,7 +109,7 @@ jobs:
           }
           EOF
 
-          # Generate app-level build.gradle with modern plugins block
+          # Create app-level build.gradle with correct minifyEnabled (not isMinifyEnabled)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
@@ -121,14 +121,14 @@ jobs:
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = ${{ env.TARGET_SDK }}
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
               }
               kotlinOptions {
-                  jvmTarget = '17'
+                  jvmTarget = "17"
               }
               defaultConfig {
-                  applicationId "${{ env.PACKAGE_NAME }}"
+                  applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = ${{ env.MIN_SDK }}
                   targetSdk = ${{ env.TARGET_SDK }}
                   versionCode = 1
@@ -137,11 +137,11 @@ jobs:
               buildTypes {
                   release {
                       signingConfig = signingConfigs.debug
-                      isMinifyEnabled = ${{ env.USE_PROGUARD }}
-                      isShrinkResources = ${{ env.USE_PROGUARD }}
+                      minifyEnabled = ${{ env.USE_PROGUARD }}
+                      shrinkResources = ${{ env.USE_PROGUARD }}
                   }
                   debug {
-                      isMinifyEnabled = false
+                      minifyEnabled = false
                   }
               }
           }
@@ -150,7 +150,7 @@ jobs:
               source = "../.."
           }
           EOF
-          echo "✅ Modern build.gradle files generated"
+          echo "✅ build.gradle files generated with correct minifyEnabled"
 
       - name: Update AndroidManifest.xml with app name and permissions
         run: |
