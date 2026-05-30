@@ -1,4 +1,4 @@
-name: Universal Filter App Builder (Repo Pubspec)
+name: Universal Filter App Builder (Fixed Gradle)
 
 on:
   repository_dispatch:
@@ -114,59 +114,49 @@ jobs:
           EOF
           echo "✅ AndroidManifest.xml generated with all permissions"
 
-      - name: Generate build.gradle
+      - name: Generate build.gradle with Plugin DSL
         run: |
           GRADLE_FILE="android/app/build.gradle"
           cat > $GRADLE_FILE <<EOF
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withInputStream { localProperties.load(it) }
+          plugins {
+              id("com.android.application")
+              id("dev.flutter.flutter-gradle-plugin")
           }
-          def flutterRoot = localProperties.getProperty('flutter.sdk')
-          if (flutterRoot == null) {
-              throw new GradleException("Flutter SDK not found.")
-          }
-          apply plugin: 'com.android.application'
-          apply plugin: 'kotlin-android'
-          apply from: "\$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
           android {
-              namespace "${{ env.PACKAGE_NAME }}"
-              compileSdk ${{ env.TARGET_SDK }}
+              namespace = "${{ env.PACKAGE_NAME }}"
+              compileSdk = ${{ env.TARGET_SDK }}
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
               }
               kotlinOptions {
-                  jvmTarget = '17'
+                  jvmTarget = "17"
               }
               defaultConfig {
-                  applicationId "${{ env.PACKAGE_NAME }}"
-                  minSdk ${{ env.MIN_SDK }}
-                  targetSdk ${{ env.TARGET_SDK }}
-                  versionCode 1
-                  versionName "1.0"
+                  applicationId = "${{ env.PACKAGE_NAME }}"
+                  minSdk = ${{ env.MIN_SDK }}
+                  targetSdk = ${{ env.TARGET_SDK }}
+                  versionCode = 1
+                  versionName = "1.0"
               }
               buildTypes {
                   release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled ${{ env.USE_PROGUARD }}
-                      shrinkResources ${{ env.USE_PROGUARD }}
+                      signingConfig = signingConfigs.getByName("debug")
+                      isMinifyEnabled = ${{ env.USE_PROGUARD }}
+                      isShrinkResources = ${{ env.USE_PROGUARD }}
                   }
                   debug {
-                      minifyEnabled false
+                      isMinifyEnabled = false
                   }
               }
           }
+
           flutter {
-              source '../..'
-          }
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:\$kotlin_version"
-              implementation 'androidx.core:core-ktx:1.12.0'
+              source = "../.."
           }
           EOF
-          echo "✅ build.gradle generated"
+          echo "✅ build.gradle generated with modern Plugin DSL"
 
       - name: Apply custom app icon (if provided)
         run: |
