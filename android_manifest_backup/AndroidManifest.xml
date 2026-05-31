@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- ========== MODERN STORAGE (Android 13+) ========== -->
+    <!-- یہی وہ پرمیشن ہے جو گیلری کے لیے درکار ہے -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
