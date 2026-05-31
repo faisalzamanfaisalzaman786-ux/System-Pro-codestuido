@@ -1,191 +1,35 @@
-name: Filter App Builder (Stable with Gallery)
+name: filter_app
+description: A powerful filter application.
+version: 1.0.0+1
+publish_to: none
 
-on:
-  repository_dispatch:
-    types: [filter_app_build]
+environment:
+  sdk: ">=3.4.0 <4.0.0"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.1
+  image_picker: ^1.1.2
+  permission_handler: ^12.0.1
+  webview_flutter: ^4.13.0
+  image_filter_plus: ^0.0.1
+  path_provider: ^2.1.5
+  share_plus: ^10.1.0
+  image: ^4.3.0
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  provider: ^6.1.2
+  shared_preferences: ^2.3.5
+  gallery_saver: ^2.3.2
 
-      - name: Setup Java for Gradle
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+dependency_overrides:
+  http: ^1.2.2
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.2'
-          channel: 'stable'
-          cache: true
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
 
-      - name: Save payload to file
-        run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
-
-      - name: Extract build config
-        id: config
-        run: |
-          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.filter.app"' payload.json)
-          APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
-          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
-          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
-          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
-
-      - name: Create fresh Flutter project (Kotlin default)
-        run: |
-          PKG="${{ env.PACKAGE_NAME }}"
-          ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
-          PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
-          rm -rf android ios .dart_tool build
-          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created (Kotlin)"
-
-      - name: Write main.dart from payload
-        run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
-          if [ -z "$MAIN_B64" ] || [ "$MAIN_B64" = "null" ]; then
-            echo "❌ No main.dart provided"
-            exit 1
-          fi
-          echo "$MAIN_B64" | base64 -d > lib/main.dart
-          echo "✅ main.dart written"
-
-      - name: Use repository pubspec.yaml (ignore payload)
-        run: |
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
-            exit 1
-          fi
-          echo "✅ Using pubspec.yaml from repository (payload ignored)"
-          flutter pub get
-
-      - name: Fix gallery_saver plugin (add namespace AND remove package from manifest)
-        run: |
-          PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
-          if [ -n "$PLUGIN_DIR" ]; then
-            # Fix build.gradle: add namespace if missing
-            BUILD_GRADLE="$PLUGIN_DIR/android/build.gradle"
-            if [ -f "$BUILD_GRADLE" ]; then
-              if ! grep -q "namespace" "$BUILD_GRADLE"; then
-                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
-                echo "✅ Added namespace to gallery_saver build.gradle"
-              fi
-            fi
-            # Fix AndroidManifest.xml: remove package attribute
-            MANIFEST="$PLUGIN_DIR/android/src/main/AndroidManifest.xml"
-            if [ -f "$MANIFEST" ]; then
-              if grep -q 'package="' "$MANIFEST"; then
-                sed -i 's/package="[^"]*"//' "$MANIFEST"
-                echo "✅ Removed package attribute from gallery_saver AndroidManifest.xml"
-              fi
-            fi
-          else
-            echo "⚠️ gallery_saver plugin directory not found"
-          fi
-
-      - name: Fix Kotlin directory structure
-        run: |
-          PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
-          mkdir -p android/app/src/main/kotlin/$PKG_PATH
-          if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
-            mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
-            rm -rf android/app/src/main/kotlin/com
-          fi
-          echo "✅ Kotlin directory structure fixed"
-
-      - name: Generate build.gradle (Groovy)
-        run: |
-          rm -f android/build.gradle.kts android/app/build.gradle.kts
-          cat > android/build.gradle <<'EOF'
-          buildscript {
-              ext.kotlin_version = '1.9.0'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          rootProject.buildDir = '../build'
-          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
-          subprojects { project.evaluationDependsOn(':app') }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
-          EOF
-
-          cat > android/app/build.gradle <<EOF
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          android {
-              namespace "${{ env.PACKAGE_NAME }}"
-              compileSdk = 35
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-              kotlinOptions { jvmTarget = "17" }
-              defaultConfig {
-                  applicationId = "${{ env.PACKAGE_NAME }}"
-                  minSdk = ${{ env.MIN_SDK }}
-                  targetSdk = ${{ env.TARGET_SDK }}
-                  versionCode = 1
-                  versionName = "1.0"
-              }
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.debug
-                      minifyEnabled = ${{ env.USE_PROGUARD }}
-                      shrinkResources = ${{ env.USE_PROGUARD }}
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-                  debug { minifyEnabled = false }
-              }
-          }
-          flutter { source = "../.." }
-          EOF
-          echo "✅ build.gradle generated"
-
-      - name: Update AndroidManifest.xml
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
-          for perm in "${PERMS[@]}"; do
-            if ! grep -q "android.permission.$perm" $MANIFEST; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
-            fi
-          done
-          echo "✅ AndroidManifest.xml updated"
-
-      - name: Apply custom app icon
-        run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
-            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-            done
-            echo "✅ Custom icon applied"
-          fi
-
-      - name: Build release APK
-        run: flutter build apk --release
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+flutter:
+  uses-material-design: true
