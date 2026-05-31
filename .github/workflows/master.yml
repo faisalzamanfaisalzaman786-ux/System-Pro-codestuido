@@ -132,17 +132,26 @@ jobs:
           EOF
           echo "✅ build.gradle generated"
 
-      - name: Update AndroidManifest.xml
+      - name: Update AndroidManifest.xml with all permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
+          PERMS=(
+            "INTERNET"
+            "CAMERA"
+            "READ_EXTERNAL_STORAGE"
+            "WRITE_EXTERNAL_STORAGE"
+            "RECORD_AUDIO"
+            "READ_MEDIA_IMAGES"
+            "READ_MEDIA_VIDEO"
+            "READ_MEDIA_AUDIO"
+          )
           for perm in "${PERMS[@]}"; do
             if ! grep -q "android.permission.$perm" $MANIFEST; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
             fi
           done
-          echo "✅ AndroidManifest.xml updated"
+          echo "✅ AndroidManifest.xml updated with modern permissions"
 
       - name: Apply custom app icon
         run: |
