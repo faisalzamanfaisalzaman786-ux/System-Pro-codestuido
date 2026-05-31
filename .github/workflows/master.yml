@@ -1,4 +1,4 @@
-name: Filter App Builder (Kotlin - Full Permissions)
+name: Filter App Builder (Kotlin - Fixed)
 
 on:
   repository_dispatch:
@@ -69,25 +69,18 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Fix missing namespace in gallery_saver plugin
+      # 🔧 نیا قدم: image_gallery_saver کے namespace کو درست کریں
+      - name: Fix namespace in image_gallery_saver plugin
         run: |
-          # Find gallery_saver plugin directory in pub cache
-          GALLERY_SAVER_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
-          if [ -n "$GALLERY_SAVER_DIR" ]; then
-            BUILD_GRADLE="$GALLERY_SAVER_DIR/android/build.gradle"
+          PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "image_gallery_saver-*" -type d | head -1)
+          if [ -n "$PLUGIN_DIR" ]; then
+            BUILD_GRADLE="$PLUGIN_DIR/android/build.gradle"
             if [ -f "$BUILD_GRADLE" ]; then
-              # Add namespace if not already present
               if ! grep -q "namespace" "$BUILD_GRADLE"; then
-                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
-                echo "✅ Added namespace to gallery_saver plugin"
-              else
-                echo "ℹ️ namespace already present in gallery_saver"
+                sed -i '/android {/a \    namespace "com.example.image_gallery_saver"' "$BUILD_GRADLE"
+                echo "✅ Added namespace to image_gallery_saver plugin"
               fi
-            else
-              echo "⚠️ build.gradle not found in gallery_saver"
             fi
-          else
-            echo "⚠️ gallery_saver plugin directory not found"
           fi
 
       - name: Fix Kotlin directory structure (if needed)
@@ -100,7 +93,7 @@ jobs:
           fi
           echo "✅ Kotlin directory structure fixed"
 
-      - name: Generate build.gradle (Groovy) with Kotlin support and compileSdk 35
+      - name: Generate build.gradle (Groovy) with Kotlin support
         run: |
           rm -f android/build.gradle.kts android/app/build.gradle.kts
           cat > android/build.gradle <<'EOF'
@@ -172,41 +165,19 @@ jobs:
               source = "../.."
           }
           EOF
-          echo "✅ build.gradle files generated (compileSdk=35)"
+          echo "✅ build.gradle files generated for Kotlin"
 
-      - name: Update AndroidManifest.xml with ALL permissions
+      - name: Update AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=(
-            "INTERNET"
-            "CAMERA"
-            "READ_EXTERNAL_STORAGE"
-            "WRITE_EXTERNAL_STORAGE"
-            "RECORD_AUDIO"
-            "ACCESS_FINE_LOCATION"
-            "ACCESS_COARSE_LOCATION"
-            "BLUETOOTH"
-            "BLUETOOTH_ADMIN"
-            "BLUETOOTH_SCAN"
-            "BLUETOOTH_CONNECT"
-            "POST_NOTIFICATIONS"
-            "FOREGROUND_SERVICE"
-            "VIBRATE"
-            "ACCESS_BACKGROUND_LOCATION"
-            "BODY_SENSORS"
-            "ACTIVITY_RECOGNITION"
-            "READ_CONTACTS"
-            "WRITE_CONTACTS"
-            "READ_CALENDAR"
-            "WRITE_CALENDAR"
-          )
+          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
           for perm in "${PERMS[@]}"; do
             if ! grep -q "android.permission.$perm" $MANIFEST; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
             fi
           done
-          echo "✅ AndroidManifest.xml updated with all permissions"
+          echo "✅ AndroidManifest.xml updated"
 
       - name: Apply custom app icon
         run: |
@@ -221,7 +192,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
