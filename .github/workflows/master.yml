@@ -1,265 +1,230 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:gallery_saver/gallery_saver.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
+name: Filter App Builder (Kotlin - Full Permissions)
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
-  runApp(FilterApp(cameras: cameras));
-}
+on:
+  repository_dispatch:
+    types: [filter_app_build]
 
-class FilterApp extends StatelessWidget {
-  final List<CameraDescription> cameras;
-  const FilterApp({super.key, required this.cameras});
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Pro Camera',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
-      home: CameraScreen(cameras: cameras),
-    );
-  }
-}
+      - name: Setup Java for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-class CameraScreen extends StatefulWidget {
-  final List<CameraDescription> cameras;
-  const CameraScreen({super.key, required this.cameras});
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.2'
+          channel: 'stable'
+          cache: true
 
-  @override
-  State<CameraScreen> createState() => _CameraScreenState();
-}
+      - name: Save payload to file
+        run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
 
-class _CameraScreenState extends State<CameraScreen> {
-  CameraController? _controller;
-  bool _isCameraReady = false;
-  int _currentCameraIndex = 0;
-  bool _nightVisionEnabled = false;
-  bool _isSaving = false;
+      - name: Extract build config
+        id: config
+        run: |
+          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.filter.app"' payload.json)
+          APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
+          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
+          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
+          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
+          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
 
-  @override
-  void initState() {
-    super.initState();
-    _initCamera();
-  }
+      - name: Create fresh Flutter project (Kotlin default)
+        run: |
+          PKG="${{ env.PACKAGE_NAME }}"
+          ORG=$(echo "$PKG" | rev | cut -d. -f2- | rev)
+          PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
+          rm -rf android ios .dart_tool build
+          flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
+          echo "✅ Fresh Flutter project created (Kotlin)"
 
-  Future<void> _initCamera() async {
-    final status = await Permission.camera.request();
-    if (!status.isGranted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Camera permission required')),
-        );
-      }
-      return;
-    }
-    if (widget.cameras.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No camera found')),
-        );
-      }
-      return;
-    }
-    int index = _currentCameraIndex;
-    if (index >= widget.cameras.length) index = 0;
-    final camera = widget.cameras[index];
-    _controller = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
-    try {
-      await _controller!.initialize();
-      if (mounted) {
-        setState(() {
-          _isCameraReady = true;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e')),
-        );
-      }
-    }
-  }
+      - name: Write main.dart from payload
+        run: |
+          MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
+          if [ -z "$MAIN_B64" ] || [ "$MAIN_B64" = "null" ]; then
+            echo "❌ No main.dart provided"
+            exit 1
+          fi
+          echo "$MAIN_B64" | base64 -d > lib/main.dart
+          echo "✅ main.dart written"
 
-  Future<void> _toggleCamera() async {
-    if (widget.cameras.length < 2) return;
-    await _controller?.dispose();
-    _isCameraReady = false;
-    setState(() {});
-    _currentCameraIndex = _currentCameraIndex == 0 ? 1 : 0;
-    await _initCamera();
-  }
+      - name: Use repository pubspec.yaml (ignore payload)
+        run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "❌ pubspec.yaml not found in repository root!"
+            exit 1
+          fi
+          echo "✅ Using pubspec.yaml from repository (payload ignored)"
+          flutter pub get
 
-  Future<void> _takePictureAndSave() async {
-    if (!_isCameraReady || _controller == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera not ready')),
-      );
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      final XFile rawImage = await _controller!.takePicture();
-      final bytes = await rawImage.readAsBytes();
+      - name: Fix missing namespace in gallery_saver plugin
+        run: |
+          # Find gallery_saver plugin directory in pub cache
+          GALLERY_SAVER_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
+          if [ -n "$GALLERY_SAVER_DIR" ]; then
+            BUILD_GRADLE="$GALLERY_SAVER_DIR/android/build.gradle"
+            if [ -f "$BUILD_GRADLE" ]; then
+              # Add namespace if not already present
+              if ! grep -q "namespace" "$BUILD_GRADLE"; then
+                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
+                echo "✅ Added namespace to gallery_saver plugin"
+              else
+                echo "ℹ️ namespace already present in gallery_saver"
+              fi
+            else
+              echo "⚠️ build.gradle not found in gallery_saver"
+            fi
+          else
+            echo "⚠️ gallery_saver plugin directory not found"
+          fi
 
-      Uint8List finalBytes;
-      if (_nightVisionEnabled) {
-        finalBytes = await _applyGreenFilter(bytes);
-      } else {
-        finalBytes = bytes;
-      }
+      - name: Fix Kotlin directory structure (if needed)
+        run: |
+          PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
+          mkdir -p android/app/src/main/kotlin/$PKG_PATH
+          if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
+            mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
+            rm -rf android/app/src/main/kotlin/com
+          fi
+          echo "✅ Kotlin directory structure fixed"
 
-      // gallery_saver requires a file path, not bytes
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/temp_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(finalBytes);
+      - name: Generate build.gradle (Groovy) with Kotlin support and compileSdk 35
+        run: |
+          rm -f android/build.gradle.kts android/app/build.gradle.kts
+          cat > android/build.gradle <<'EOF'
+          buildscript {
+              ext.kotlin_version = '1.9.0'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
 
-      final result = await GallerySaver.saveImage(tempFile.path);
-      if (result == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Image saved to gallery!')),
-          );
-        }
-        // cleanup temp file
-        await tempFile.delete();
-      } else {
-        throw Exception('Failed to save image');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
+          cat > android/app/build.gradle <<EOF
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          android {
+              namespace "${{ env.PACKAGE_NAME }}"
+              compileSdk = 35
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              defaultConfig {
+                  applicationId = "${{ env.PACKAGE_NAME }}"
+                  minSdk = ${{ env.MIN_SDK }}
+                  targetSdk = ${{ env.TARGET_SDK }}
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.debug
+                      minifyEnabled = ${{ env.USE_PROGUARD }}
+                      shrinkResources = ${{ env.USE_PROGUARD }}
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  debug {
+                      minifyEnabled = false
+                  }
+              }
+          }
+          flutter {
+              source = "../.."
+          }
+          EOF
+          echo "✅ build.gradle files generated (compileSdk=35)"
 
-  Future<Uint8List> _applyGreenFilter(Uint8List imageBytes) async {
-    final List<int> modified = List.from(imageBytes);
-    for (int i = 0; i < modified.length; i += 4) {
-      if (i + 3 < modified.length) {
-        modified[i] = (modified[i] * 0.3).toInt().clamp(0, 255);     // R
-        modified[i+1] = (modified[i+1] * 1.5).toInt().clamp(0, 255); // G
-        modified[i+2] = (modified[i+2] * 0.3).toInt().clamp(0, 255); // B
-      }
-    }
-    return Uint8List.fromList(modified);
-  }
+      - name: Update AndroidManifest.xml with ALL permissions
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
+          PERMS=(
+            "INTERNET"
+            "CAMERA"
+            "READ_EXTERNAL_STORAGE"
+            "WRITE_EXTERNAL_STORAGE"
+            "RECORD_AUDIO"
+            "ACCESS_FINE_LOCATION"
+            "ACCESS_COARSE_LOCATION"
+            "BLUETOOTH"
+            "BLUETOOTH_ADMIN"
+            "BLUETOOTH_SCAN"
+            "BLUETOOTH_CONNECT"
+            "POST_NOTIFICATIONS"
+            "FOREGROUND_SERVICE"
+            "VIBRATE"
+            "ACCESS_BACKGROUND_LOCATION"
+            "BODY_SENSORS"
+            "ACTIVITY_RECOGNITION"
+            "READ_CONTACTS"
+            "WRITE_CONTACTS"
+            "READ_CALENDAR"
+            "WRITE_CALENDAR"
+          )
+          for perm in "${PERMS[@]}"; do
+            if ! grep -q "android.permission.$perm" $MANIFEST; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
+            fi
+          done
+          echo "✅ AndroidManifest.xml updated with all permissions"
 
-  Future<void> _pickFromGallery() async {
-    final status = await Permission.photos.request();
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage permission required')),
-      );
-      return;
-    }
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      final bytes = await picked.readAsBytes();
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/gallery_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(bytes);
-      final saved = await GallerySaver.saveImage(tempFile.path);
-      if (saved == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image saved to gallery!')),
-        );
-      }
-      await tempFile.delete();
-    }
-  }
+      - name: Apply custom app icon
+        run: |
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            echo "$ICON_B64" | base64 -d > icon.png
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$density
+              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+            done
+            echo "✅ Custom icon applied"
+          fi
 
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
+      - name: Build release APK
+        run: flutter build apk --release
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pro Camera'),
-        actions: [
-          if (widget.cameras.length > 1)
-            IconButton(
-              icon: const Icon(Icons.flip_camera_android),
-              onPressed: _toggleCamera,
-              tooltip: 'Switch Camera',
-            ),
-          IconButton(
-            icon: Icon(_nightVisionEnabled ? Icons.brightness_3 : Icons.brightness_4),
-            onPressed: () => setState(() => _nightVisionEnabled = !_nightVisionEnabled),
-            tooltip: 'Night Vision',
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Expanded(
-                child: _isCameraReady && _controller != null
-                    ? _buildCameraPreview()
-                    : const Center(child: CircularProgressIndicator()),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 30),
-              child: FloatingActionButton.extended(
-                onPressed: _isSaving ? null : _takePictureAndSave,
-                icon: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.camera_alt),
-                label: Text(_isSaving ? 'Saving...' : 'Capture'),
-                backgroundColor: Colors.blueAccent,
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 20, bottom: 40),
-              child: FloatingActionButton.small(
-                onPressed: _pickFromGallery,
-                child: const Icon(Icons.photo_library),
-                tooltip: 'Pick from Gallery',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCameraPreview() {
-    Widget preview = CameraPreview(_controller!);
-    if (_nightVisionEnabled) {
-      preview = ColorFiltered(
-        colorFilter: const ColorFilter.matrix([
-          0.3, 0.0, 0.0, 0.0, 0.0,
-          0.0, 1.5, 0.0, 0.0, 0.0,
-          0.0, 0.0, 0.3, 0.0, 0.0,
-          0.0, 0.0, 0.0, 1.0, 0.0,
-        ]),
-        child: preview,
-      );
-    }
-    return preview;
-  }
-}
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-release.apk
