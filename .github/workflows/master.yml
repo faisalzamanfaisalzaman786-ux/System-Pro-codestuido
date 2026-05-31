@@ -69,7 +69,7 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Fix namespace in gallery_saver plugin
+      - name: Fix gallery_saver plugin (add namespace AND remove package from manifest)
         run: |
           PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
           if [ -n "$PLUGIN_DIR" ]; then
@@ -77,9 +77,18 @@ jobs:
             if [ -f "$BUILD_GRADLE" ]; then
               if ! grep -q "namespace" "$BUILD_GRADLE"; then
                 sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
-                echo "✅ Added namespace to gallery_saver"
+                echo "✅ Added namespace to gallery_saver build.gradle"
               fi
             fi
+            MANIFEST="$PLUGIN_DIR/android/src/main/AndroidManifest.xml"
+            if [ -f "$MANIFEST" ]; then
+              if grep -q 'package="' "$MANIFEST"; then
+                sed -i 's/package="[^"]*"//' "$MANIFEST"
+                echo "✅ Removed package attribute from gallery_saver AndroidManifest.xml"
+              fi
+            fi
+          else
+            echo "⚠️ gallery_saver plugin directory not found"
           fi
 
       - name: Fix Kotlin directory structure
@@ -171,9 +180,20 @@ jobs:
           fi
 
       - name: Build release APK
+        id: build_apk
         run: flutter build apk --release
+        continue-on-error: true
 
-      - name: Upload APK artifact
+      - name: Upload full log on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: /home/runner/work/System-Pro-codestuido/System-Pro-codestuido/build.log
+        continue-on-error: true
+
+      - name: Upload APK artifact (if exists)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
