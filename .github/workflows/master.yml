@@ -1,4 +1,4 @@
-name: Filter App Builder (Kotlin - Fixed)
+name: Stable Base (Use Repo AndroidManifest)
 
 on:
   repository_dispatch:
@@ -48,7 +48,7 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created (Kotlin)"
+          echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
         run: |
@@ -60,75 +60,68 @@ jobs:
           echo "$MAIN_B64" | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Use repository pubspec.yaml (ignore payload)
+      - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             echo "❌ pubspec.yaml not found in repository root!"
             exit 1
           fi
-          echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      - name: Fix Kotlin directory structure (if needed)
+      # ✅ یہاں ہم ریپوزٹری سے AndroidManifest.xml کاپی کرتے ہیں
+      - name: Copy AndroidManifest.xml from repository
         run: |
-          # Ensure kotlin directory exists with correct package path
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            # Ensure target directory exists (already exists after flutter create)
+            cp android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            echo "✅ Using AndroidManifest.xml from repository"
+          else
+            echo "❌ AndroidManifest.xml not found at android/app/src/main/AndroidManifest.xml in repository"
+            exit 1
+          fi
+
+      # صرف ایپ کا نام تبدیل کریں (باقی پرمیشنز ویسے کی ویسی رہیں)
+      - name: Update app name in AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
+          echo "✅ App name updated"
+
+      - name: Fix Kotlin directory structure
+        run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
-          # Move MainActivity.kt if it's in the wrong place (from default com.example)
           if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
-          echo "✅ Kotlin directory structure fixed"
+          echo "✅ Kotlin structure fixed"
 
-      - name: Generate build.gradle (Groovy) with Kotlin support
+      - name: Generate build.gradle (Groovy)
         run: |
-          # Remove any Kotlin DSL files
-          rm -f android/build.gradle.kts
-          rm -f android/app/build.gradle.kts
-
-          # Top-level build.gradle
+          rm -f android/build.gradle.kts android/app/build.gradle.kts
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
+          allprojects { repositories { google(); mavenCentral() } }
           rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
+          subprojects { project.evaluationDependsOn(':app') }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
-          # App-level build.gradle (Groovy DSL)
           cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-
           android {
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 35
@@ -136,9 +129,7 @@ jobs:
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
+              kotlinOptions { jvmTarget = "17" }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = ${{ env.MIN_SDK }}
@@ -153,29 +144,12 @@ jobs:
                       shrinkResources = ${{ env.USE_PROGUARD }}
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
-                  debug {
-                      minifyEnabled = false
-                  }
+                  debug { minifyEnabled = false }
               }
           }
-
-          flutter {
-              source = "../.."
-          }
+          flutter { source = "../.." }
           EOF
-          echo "✅ build.gradle files generated for Kotlin"
-
-      - name: Update AndroidManifest.xml
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          PERMS=( "INTERNET" "CAMERA" "READ_EXTERNAL_STORAGE" "WRITE_EXTERNAL_STORAGE" "RECORD_AUDIO" )
-          for perm in "${PERMS[@]}"; do
-            if ! grep -q "android.permission.$perm" $MANIFEST; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$perm\" />" $MANIFEST
-            fi
-          done
-          echo "✅ AndroidManifest.xml updated"
+          echo "✅ build.gradle generated"
 
       - name: Apply custom app icon
         run: |
@@ -190,7 +164,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release --verbose
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
