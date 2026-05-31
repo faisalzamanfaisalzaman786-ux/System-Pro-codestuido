@@ -1,4 +1,4 @@
-name: Stable Base (Use Repo AndroidManifest)
+name: Stable Base (Use Repo AndroidManifest from Backup)
 
 on:
   repository_dispatch:
@@ -68,19 +68,18 @@ jobs:
           fi
           flutter pub get
 
-      # ✅ یہاں ہم ریپوزٹری سے AndroidManifest.xml کاپی کرتے ہیں
-      - name: Copy AndroidManifest.xml from repository
+      # ✅ کاپی کسٹم AndroidManifest.xml from backup folder
+      - name: Copy custom AndroidManifest.xml from repository backup
         run: |
-          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            # Ensure target directory exists (already exists after flutter create)
-            cp android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ Using AndroidManifest.xml from repository"
+          if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
+            cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            echo "✅ Custom AndroidManifest.xml copied from repository backup"
           else
-            echo "❌ AndroidManifest.xml not found at android/app/src/main/AndroidManifest.xml in repository"
+            echo "❌ android_manifest_backup/AndroidManifest.xml not found in repository"
             exit 1
           fi
 
-      # صرف ایپ کا نام تبدیل کریں (باقی پرمیشنز ویسے کی ویسی رہیں)
+      # صرف ایپ کا نام تبدیل کریں
       - name: Update app name in AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
