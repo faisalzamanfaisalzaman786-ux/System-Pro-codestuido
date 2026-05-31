@@ -68,7 +68,6 @@ jobs:
           fi
           flutter pub get
 
-      # ✅ کاپی کسٹم AndroidManifest.xml from backup folder
       - name: Copy custom AndroidManifest.xml from repository backup
         run: |
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
@@ -79,7 +78,14 @@ jobs:
             exit 1
           fi
 
-      # صرف ایپ کا نام تبدیل کریں
+      - name: Remove deprecated package attribute from AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if grep -q 'package="' "$MANIFEST"; then
+            sed -i 's/package="[^"]*"//' "$MANIFEST"
+            echo "✅ Removed package attribute"
+          fi
+
       - name: Update app name in AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
