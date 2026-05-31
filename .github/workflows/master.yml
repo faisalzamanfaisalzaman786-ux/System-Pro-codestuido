@@ -1,4 +1,4 @@
-name: Filter App Builder (Stable with Gallery)
+name: Stable Base (No Gallery Save)
 
 on:
   repository_dispatch:
@@ -48,7 +48,7 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created (Kotlin)"
+          echo "✅ Fresh Flutter project created"
 
       - name: Write main.dart from payload
         run: |
@@ -60,36 +60,13 @@ jobs:
           echo "$MAIN_B64" | base64 -d > lib/main.dart
           echo "✅ main.dart written"
 
-      - name: Use repository pubspec.yaml (ignore payload)
+      - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
             echo "❌ pubspec.yaml not found in repository root!"
             exit 1
           fi
-          echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
-
-      - name: Fix gallery_saver plugin (add namespace AND remove package from manifest)
-        run: |
-          PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
-          if [ -n "$PLUGIN_DIR" ]; then
-            BUILD_GRADLE="$PLUGIN_DIR/android/build.gradle"
-            if [ -f "$BUILD_GRADLE" ]; then
-              if ! grep -q "namespace" "$BUILD_GRADLE"; then
-                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
-                echo "✅ Added namespace to gallery_saver build.gradle"
-              fi
-            fi
-            MANIFEST="$PLUGIN_DIR/android/src/main/AndroidManifest.xml"
-            if [ -f "$MANIFEST" ]; then
-              if grep -q 'package="' "$MANIFEST"; then
-                sed -i 's/package="[^"]*"//' "$MANIFEST"
-                echo "✅ Removed package attribute from gallery_saver AndroidManifest.xml"
-              fi
-            fi
-          else
-            echo "⚠️ gallery_saver plugin directory not found"
-          fi
 
       - name: Fix Kotlin directory structure
         run: |
@@ -99,7 +76,7 @@ jobs:
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
-          echo "✅ Kotlin directory structure fixed"
+          echo "✅ Kotlin structure fixed"
 
       - name: Generate build.gradle (Groovy)
         run: |
@@ -180,20 +157,9 @@ jobs:
           fi
 
       - name: Build release APK
-        id: build_apk
         run: flutter build apk --release
-        continue-on-error: true
 
-      - name: Upload full log on failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-${{ github.run_number }}
-          path: /home/runner/work/System-Pro-codestuido/System-Pro-codestuido/build.log
-        continue-on-error: true
-
-      - name: Upload APK artifact (if exists)
-        if: success()
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
