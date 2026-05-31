@@ -21,7 +21,10 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
-  image_gallery_saver: ^2.0.3   # ← یہ شامل کریں
+  gallery_saver: ^2.3.2
+
+dependency_overrides:
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
