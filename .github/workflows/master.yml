@@ -1,4 +1,4 @@
-name: Filter App Builder (Kotlin - Fixed)
+name: Filter App Builder (Stable with Gallery)
 
 on:
   repository_dispatch:
@@ -69,21 +69,20 @@ jobs:
           echo "✅ Using pubspec.yaml from repository (payload ignored)"
           flutter pub get
 
-      # 🔧 نیا قدم: image_gallery_saver کے namespace کو درست کریں
-      - name: Fix namespace in image_gallery_saver plugin
+      - name: Fix namespace in gallery_saver plugin
         run: |
-          PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "image_gallery_saver-*" -type d | head -1)
+          PLUGIN_DIR=$(find ~/.pub-cache/hosted -name "gallery_saver-*" -type d | head -1)
           if [ -n "$PLUGIN_DIR" ]; then
             BUILD_GRADLE="$PLUGIN_DIR/android/build.gradle"
             if [ -f "$BUILD_GRADLE" ]; then
               if ! grep -q "namespace" "$BUILD_GRADLE"; then
-                sed -i '/android {/a \    namespace "com.example.image_gallery_saver"' "$BUILD_GRADLE"
-                echo "✅ Added namespace to image_gallery_saver plugin"
+                sed -i '/android {/a \    namespace "com.kevinhong.gallerysaver"' "$BUILD_GRADLE"
+                echo "✅ Added namespace to gallery_saver"
               fi
             fi
           fi
 
-      - name: Fix Kotlin directory structure (if needed)
+      - name: Fix Kotlin directory structure
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
@@ -93,37 +92,23 @@ jobs:
           fi
           echo "✅ Kotlin directory structure fixed"
 
-      - name: Generate build.gradle (Groovy) with Kotlin support
+      - name: Generate build.gradle (Groovy)
         run: |
           rm -f android/build.gradle.kts android/app/build.gradle.kts
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.0'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
+          allprojects { repositories { google(); mavenCentral() } }
           rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
+          subprojects { project.evaluationDependsOn(':app') }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
           cat > android/app/build.gradle <<EOF
@@ -139,9 +124,7 @@ jobs:
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
+              kotlinOptions { jvmTarget = "17" }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = ${{ env.MIN_SDK }}
@@ -156,16 +139,12 @@ jobs:
                       shrinkResources = ${{ env.USE_PROGUARD }}
                       proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
-                  debug {
-                      minifyEnabled = false
-                  }
+                  debug { minifyEnabled = false }
               }
           }
-          flutter {
-              source = "../.."
-          }
+          flutter { source = "../.." }
           EOF
-          echo "✅ build.gradle files generated for Kotlin"
+          echo "✅ build.gradle generated"
 
       - name: Update AndroidManifest.xml
         run: |
@@ -192,7 +171,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: flutter build apk --release --verbose
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
