@@ -1,204 +1,131 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart'; // ✅ صحیح درآمد
-import 'package:permission_handler/permission_handler.dart';
-import 'package:image/image.dart' as img;
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.filter.app">
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
-  runApp(FilterApp(cameras: cameras));
-}
+    <!-- ========== NETWORK ========== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-class FilterApp extends StatelessWidget {
-  final List<CameraDescription> cameras;
-  const FilterApp({super.key, required this.cameras});
+    <!-- ========== CAMERA ========== -->
+    <uses-permission android:name="android.permission.CAMERA" />
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Pro Camera',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
-      home: CameraScreen(cameras: cameras),
-    );
-  }
-}
+    <!-- ========== STORAGE ========== -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-class CameraScreen extends StatefulWidget {
-  final List<CameraDescription> cameras;
-  const CameraScreen({super.key, required this.cameras});
+    <!-- ========== MICROPHONE ========== -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-  @override
-  State<CameraScreen> createState() => _CameraScreenState();
-}
+    <!-- ========== LOCATION ========== -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
-class _CameraScreenState extends State<CameraScreen> {
-  CameraController? _controller;
-  bool _isCameraReady = false;
-  int _currentCameraIndex = 0;
-  double _zoomLevel = 0.0;
-  bool _nightVisionEnabled = false;
-  bool _isSaving = false;
-  double _maxZoom = 1.0; // ✅ متغیر محفوظ کرنے کے لیے
+    <!-- ========== BLUETOOTH ========== -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
-  @override
-  void initState() {
-    super.initState();
-    _initCamera();
-  }
+    <!-- ========== NOTIFICATIONS & FOREGROUND SERVICE ========== -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
-  Future<void> _initCamera() async {
-    // ... کیمرے کی اجازت اور دستیابی کے لیے وہی کوڈ ...
-    final status = await Permission.camera.request();
-    if (!status.isGranted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Camera permission required')),
-        );
-      }
-      return;
-    }
-    if (widget.cameras.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No camera found')),
-        );
-      }
-      return;
-    }
-    int index = _currentCameraIndex;
-    if (index >= widget.cameras.length) index = 0;
-    final camera = widget.cameras[index];
-    _controller = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
-    try {
-      await _controller!.initialize();
-      // ✅ maxZoomLevel کو محفوظ کرنے کا درست طریقہ
-      _maxZoom = _controller!.value.maxZoomLevel;
-      if (_maxZoom > 1.0) {
-        await _controller!.setZoomLevel(_zoomLevel);
-      }
-      if (mounted) {
-        setState(() {
-          _isCameraReady = true;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e')),
-        );
-      }
-    }
-  }
+    <!-- ========== VIBRATE ========== -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
-  // ... _toggleCamera, _takePictureAndSave, _applyGreenFilter (تبدیل کے بغیر) ...
+    <!-- ========== CONTACTS ========== -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
 
-  // ✅ تبدیل شدہ _applyGreenFilter (مطابقت پذیر)
-  Future<Uint8List> _applyGreenFilter(Uint8List imageBytes) async {
-    img.Image? image = img.decodeImage(imageBytes);
-    if (image == null) return imageBytes;
+    <!-- ========== CALENDAR ========== -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
-    // ✅ نئے `image` پیکیج کے مطابق پکسلز پر iterate کرنے کا درست طریقہ
-    for (int i = 0; i < image.width; i++) {
-      for (int j = 0; j < image.height; j++) {
-        final pixel = image.getPixel(i, j);
-        final r = pixel.r;
-        final g = pixel.g;
-        final b = pixel.b;
-        int newR = (r * 0.3).toInt();
-        int newG = (g * 1.5).toInt();
-        int newB = (b * 0.3).toInt();
-        image.setPixel(i, j, img.ColorRgb8(newR.clamp(0, 255), newG.clamp(0, 255), newB.clamp(0, 255)));
-      }
-    }
-    return Uint8List.fromList(img.encodePng(image));
-  }
+    <!-- ========== SENSORS ========== -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
-  // ✅ تبدیل شدہ _pickFromGallery (اس میں اب GallerySaver استعمال نہیں ہوگا)
-  Future<void> _pickFromGallery() async {
-    final status = await Permission.photos.request();
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Storage permission required')),
-      );
-      return;
-    }
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      final bytes = await picked.readAsBytes();
-      // ✅ ڈائریکٹ save کرنے کی بجائے صارف کو "Save to Gallery" کا آپشن دیں
-      bool? shouldSave = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Save to Gallery?'),
-          content: const Text('Do you want to save this image from the gallery?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
-            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
-          ],
-        ),
-      );
+    <!-- ========== SMS ========== -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
 
-      if (shouldSave == true) {
-        final result = await ImageGallerySaverPlus.saveImage(bytes);
-        if (result['isSuccess'] == true) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Image saved to gallery!')),
-            );
-          }
-        } else {
-          throw Exception('Failed to save image');
-        }
-      }
-    }
-  }
+    <!-- ========== PHONE ========== -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
 
-  // ✅ تبدیل شدہ _takePictureAndSave (مکمل طور پر نئے سرے سے لکھا گیا)
-  Future<void> _takePictureAndSave() async {
-    if (!_isCameraReady || _controller == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera not ready')),
-      );
-      return;
-    }
-    setState(() => _isSaving = true);
-    try {
-      final XFile rawImage = await _controller!.takePicture();
-      final bytes = await rawImage.readAsBytes();
-      Uint8List finalBytes;
-      if (_nightVisionEnabled) {
-        finalBytes = await _applyGreenFilter(bytes);
-      } else {
-        finalBytes = bytes;
-      }
-      final result = await ImageGallerySaverPlus.saveImage(finalBytes);
-      if (result['isSuccess'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Image saved to gallery!')),
-          );
-        }
-      } else {
-        throw Exception('Failed to save image');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
+    <!-- ========== ALARMS ========== -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
-  // ... dispose اور build method (جن میں Slider وغیرہ کے لیے _maxZoom استعمال ہوگا) ...
-}
+    <!-- ========== WAKE LOCK ========== -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- ========== QUERIES (Android 11+ for image picker) ========== -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="Filter App"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true"
+        android:theme="@style/LaunchTheme"
+        android:allowBackup="true"
+        android:supportsRtl="true">
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- یہ سروسز اگر آپ کے پاس کوڈ میں نہیں ہیں تو انہیں ہٹا سکتے ہیں، لیکن آپ نے کہا تھا کچھ نہ ہٹائیں → ویسے ہی رکھ دی ہیں -->
+        <service
+            android:name="com.workmanager.WorkManagerService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+        <service
+            android:name="com.workmanager.ForegroundService"
+            android:foregroundServiceType="dataSync|camera|microphone"
+            android:exported="false" />
+        <service
+            android:name=".MyForegroundService"
+            android:foregroundServiceType="camera|microphone|dataSync"
+            android:exported="false" />
+
+    </application>
+</manifest>
