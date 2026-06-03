@@ -25,7 +25,7 @@ dependencies:
   shared_preferences: ^2.3.5
   image_gallery_saver_plus: ^4.0.1
   
-  # Test & Debug Features (For Permission Testing)
+  # Test Features
   device_info_plus: ^11.0.0
   connectivity_plus: ^6.0.0
   sensors_plus: ^6.0.0
