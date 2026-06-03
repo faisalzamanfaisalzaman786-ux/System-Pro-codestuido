@@ -21,7 +21,7 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
-  image_gallery_saver_plus: ^4.0.1   # ✅ صحیح ورژن
+  image_gallery_saver_plus: ^4.0.1   # ✅ یہ لائن درست کریں
 
 dev_dependencies:
   flutter_test:
