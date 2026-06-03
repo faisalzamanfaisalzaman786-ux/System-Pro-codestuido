@@ -1,10 +1,8 @@
 name: Stable Base (Use Repo AndroidManifest from Backup)
 
-
 on:
   repository_dispatch:
     types: [filter_app_build]
-
 
 jobs:
   build:
@@ -13,13 +11,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
       - name: Setup Java for Gradle
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -28,10 +24,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-
       - name: Save payload to file
         run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
-
 
       - name: Extract build config
         id: config
@@ -162,26 +156,11 @@ jobs:
           EOF
           echo "✅ build.gradle generated"
 
-      - name: Apply custom app icon
-        run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
-            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-            done
-            echo "✅ Custom icon applied"
-          fi
-
       - name: Build release APK
         run: flutter build apk --release
-
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
-
-
