@@ -10,28 +10,21 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Core
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
 
-  # Camera & Gallery
   camera: ^0.11.2
   image_picker: ^1.1.2
-  image_gallery_saver_plus: ^2.0.3   # ✅ یہ وہ فعال اور درست پیکیج ہے
+  image_gallery_saver_plus: ^4.0.1       # ✅ درست ورژن
 
-  # Permissions
   permission_handler: ^12.0.1
 
-  # Image Processing
   image: ^4.3.0
   image_filter_plus: ^0.0.1
 
-  # WebView
   webview_flutter: ^4.13.0
-
-  # File & Sharing
   path_provider: ^2.1.5
   share_plus: ^10.1.0
 
