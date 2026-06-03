@@ -10,14 +10,14 @@
     <!-- ========== CAMERA ========== -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- ========== STORAGE ========== -->
+    <!-- ========== STORAGE (Legacy & Modern) ========== -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- ========== MICROPHONE ========== -->
+    <!-- ========== MICROPHONE / AUDIO ========== -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -52,7 +52,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
-    <!-- ========== SENSORS ========== -->
+    <!-- ========== SENSORS (Body & Activity) ========== -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
@@ -72,7 +72,7 @@
     <!-- ========== WAKE LOCK ========== -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- ========== QUERIES (Android 11+ for image picker) ========== -->
+    <!-- ========== QUERIES (Android 11+ کے لیے ضروری - image_picker اور گیلری کے لیے) ========== -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
@@ -113,7 +113,7 @@
             </intent-filter>
         </activity>
 
-        <!-- یہ سروسز اگر آپ کے پاس کوڈ میں نہیں ہیں تو انہیں ہٹا سکتے ہیں، لیکن آپ نے کہا تھا کچھ نہ ہٹائیں → ویسے ہی رکھ دی ہیں -->
+        <!-- آپ کی سروسز (اگر کوڈ میں نہیں ہیں تو کوئی حرج نہیں، بس رہنے دیں) -->
         <service
             android:name="com.workmanager.WorkManagerService"
             android:permission="android.permission.BIND_JOB_SERVICE"
