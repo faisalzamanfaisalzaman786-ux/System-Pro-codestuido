@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.11.2          # ✅ بدلی گئی (0.11.2+1 بھی چلے گا)
+  camera: ^0.11.2
   image_picker: ^1.1.2
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
@@ -21,6 +21,7 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
+  image_gallery_saver_plus: ^2.0.3   # ✅ Missing dependency added
 
 dev_dependencies:
   flutter_test:
