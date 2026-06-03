@@ -165,6 +165,39 @@ jobs:
           EOF
           echo "✅ build.gradle generated"
 
+      - name: Apply custom app icon (192x192 PNG)
+        run: |
+          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
+          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
+            # Decode base64 to temp file
+            echo "$ICON_B64" | base64 -d > temp_icon.png
+            
+            # Verify it's a valid PNG and convert/resize to 192x192 if needed
+            if file temp_icon.png | grep -q PNG; then
+              # Use convert if available, otherwise use the file as-is
+              if command -v convert &> /dev/null; then
+                convert temp_icon.png -resize 192x192 -background black -gravity center -extent 192x192 icon.png
+                echo "✅ Icon resized to 192x192 using ImageMagick"
+              else
+                # Fallback: use as-is (already should be correct from UI)
+                cp temp_icon.png icon.png
+                echo "✅ Icon copied as-is"
+              fi
+              
+              # Copy to all mipmap densities
+              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+                mkdir -p android/app/src/main/res/mipmap-$density
+                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+              done
+              echo "✅ Custom icon applied to all densities"
+            else
+              echo "⚠️ Invalid PNG file, skipping custom icon"
+            fi
+            rm -f temp_icon.png
+          else
+            echo "ℹ️ No custom icon provided, using default Flutter icon"
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
