@@ -1,5 +1,5 @@
 name: filter_app
-description: A powerful filter application.
+description: A powerful filter application for all purposes.
 version: 1.0.0+1
 publish_to: none
 
@@ -9,19 +9,31 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.11.2
-  image_picker: ^1.1.2
-  permission_handler: ^12.0.1
-  webview_flutter: ^4.13.0
-  image_filter_plus: ^0.0.1
-  path_provider: ^2.1.5
-  share_plus: ^10.1.0
-  image: ^4.3.0
+
+  # Core
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
-  image_gallery_saver2_fixed: ^2.0.9   # ✅ نیا فعال پیکیج
+
+  # Camera & Gallery
+  camera: ^0.11.2
+  image_picker: ^1.1.2
+  image_gallery_saver2_fixed: ^2.0.9   # ✅ جدید ترین اور مستحکم
+
+  # Permissions
+  permission_handler: ^12.0.1
+
+  # Image Processing
+  image: ^4.3.0
+  image_filter_plus: ^1.0.0             # ✅ جدید ورژن (0.0.1 نہیں)
+
+  # WebView
+  webview_flutter: ^4.13.0
+
+  # File & Sharing
+  path_provider: ^2.1.5
+  share_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:
