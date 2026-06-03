@@ -78,6 +78,15 @@ jobs:
             exit 1
           fi
 
+      - name: Fix manifest merger conflicts
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Add tools namespace if not present
+          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+            sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
+          fi
+          echo "✅ Manifest merger fixes applied"
+
       - name: Remove deprecated package attribute from AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
