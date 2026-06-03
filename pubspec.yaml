@@ -18,10 +18,10 @@ dependencies:
   share_plus: ^10.1.0
   image: ^4.3.0
   cupertino_icons: ^1.0.8
-  google_fonts: ^4.0.4          # ⭐ ورژن 4.0.4 میں تبدیل کیا گیا
+  google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
-  gallery_saver: ^2.3.2
+  image_gallery_saver2_fixed: ^2.0.9   # ✅ نیا فعال پیکیج
 
 dev_dependencies:
   flutter_test:
