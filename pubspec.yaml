@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.11.2                 # ⬅️ اپ گریڈ کیا (maxZoomLevel کے لیے)
+  camera: ^0.11.2
   image_picker: ^1.1.2
   permission_handler: ^12.0.1
   webview_flutter: ^4.13.0
@@ -21,7 +21,7 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.2
   shared_preferences: ^2.3.5
-  gallery_saver: ^0.2.0            # ⬅️ نیا شامل کیا (گلری میں سیو کرنے کے لیے)
+  gallery_saver: ^0.1.0   # ✅ درست ورژن (0.2.0 موجود نہیں تھا)
 
 dev_dependencies:
   flutter_test:
