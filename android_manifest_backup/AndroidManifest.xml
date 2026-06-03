@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.filter.app">
 
     <!-- ========== NETWORK ========== -->
@@ -11,8 +10,9 @@
     <!-- ========== CAMERA ========== -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- ========== MODERN STORAGE (Android 13+) ========== -->
-    <!-- یہی وہ پرمیشن ہے جو گیلری کے لیے درکار ہے -->
+    <!-- ========== STORAGE ========== -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -65,10 +65,26 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
 
-    <!-- ========== ALARMS / WAKE LOCK ========== -->
+    <!-- ========== ALARMS ========== -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- ========== WAKE LOCK ========== -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- ========== QUERIES (Android 11+ for image picker) ========== -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
 
     <application
         android:label="Filter App"
@@ -97,7 +113,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Foreground service (for workmanager etc.) -->
+        <!-- یہ سروسز اگر آپ کے پاس کوڈ میں نہیں ہیں تو انہیں ہٹا سکتے ہیں، لیکن آپ نے کہا تھا کچھ نہ ہٹائیں → ویسے ہی رکھ دی ہیں -->
         <service
             android:name="com.workmanager.WorkManagerService"
             android:permission="android.permission.BIND_JOB_SERVICE"
@@ -105,6 +121,10 @@
         <service
             android:name="com.workmanager.ForegroundService"
             android:foregroundServiceType="dataSync|camera|microphone"
+            android:exported="false" />
+        <service
+            android:name=".MyForegroundService"
+            android:foregroundServiceType="camera|microphone|dataSync"
             android:exported="false" />
 
     </application>
