@@ -10,7 +10,7 @@
     <!-- ========== CAMERA ========== -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- ========== STORAGE (Legacy & Modern) ========== -->
+    <!-- ========== STORAGE ========== -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -72,7 +72,7 @@
     <!-- ========== WAKE LOCK ========== -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- ========== QUERIES (Android 11+ کے لیے ضروری – گیلری/کیمرہ انٹنٹ) ========== -->
+    <!-- ========== QUERIES (Android 11+ for image picker) ========== -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
@@ -113,7 +113,7 @@
             </intent-filter>
         </activity>
 
-        <!-- یہ سروسز اگر آپ کے پاس کوڈ میں نہیں ہیں تو انہیں ہٹا سکتے ہیں، لیکن آپ نے کہا تھا کچھ نہ ہٹائیں → میں نے ویسے ہی رکھ دی ہیں -->
+        <!-- یہ سروسز اگر آپ کے پاس کوڈ میں نہیں ہیں تو انہیں ہٹا سکتے ہیں، لیکن آپ نے کہا تھا کچھ نہ ہٹائیں → ویسے ہی رکھ دی ہیں -->
         <service
             android:name="com.workmanager.WorkManagerService"
             android:permission="android.permission.BIND_JOB_SERVICE"
