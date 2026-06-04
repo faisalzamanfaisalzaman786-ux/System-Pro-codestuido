@@ -10,92 +10,92 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # ========== UI & DESIGN ==========
+  # UI & DESIGN
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   provider: ^6.1.2
   flutter_svg: ^2.0.10+1
   lottie: ^3.1.2
   
-  # ========== CAMERA & MEDIA ==========
+  # CAMERA & MEDIA
   camera: ^0.11.2
   image_picker: ^1.1.2
   image_gallery_saver_plus: ^4.0.1
   image: ^4.3.0
   image_filter_plus: ^0.0.1
   video_player: ^2.9.2
-  record: ^5.1.2
+  # record: ^5.1.2  # REMOVED - causing Linux issues
   
-  # ========== PERMISSIONS & LOCATION ==========
+  # PERMISSIONS & LOCATION
   permission_handler: ^12.0.1
   geolocator: ^13.0.0
   location: ^7.0.1
   
-  # ========== BLUETOOTH ==========
+  # BLUETOOTH
   flutter_blue_plus: ^1.32.0
   
-  # ========== SENSORS ==========
+  # SENSORS
   sensors_plus: ^6.0.0
   
-  # ========== NETWORK & CONNECTIVITY ==========
+  # NETWORK & CONNECTIVITY
   webview_flutter: ^4.13.0
   connectivity_plus: ^6.0.0
   dio: ^5.5.0+1
   http: ^1.2.2
   socket_io_client: ^2.0.3+1
   
-  # ========== STORAGE & FILES ==========
+  # STORAGE & FILES
   path_provider: ^2.1.5
   file_picker: ^8.1.4
   open_file: ^3.4.0
   flutter_downloader: ^1.11.8
-  share_plus: ^10.1.0  # ← Only once now
+  share_plus: ^10.1.0
   
-  # ========== DATABASE ==========
+  # DATABASE
   shared_preferences: ^2.3.5
   sqflite: ^2.4.0
   hive_flutter: ^1.1.0
   floor: ^1.5.0
   
-  # ========== FIREBASE (Ready to use) ==========
+  # FIREBASE (Ready to use)
   firebase_core: ^3.8.0
   firebase_auth: ^5.3.3
   cloud_firestore: ^5.5.0
   firebase_storage: ^12.3.6
   firebase_messaging: ^15.1.6
   
-  # ========== NOTIFICATIONS ==========
+  # NOTIFICATIONS
   flutter_local_notifications: ^18.0.1
   workmanager: ^0.5.2
   
-  # ========== AUTHENTICATION ==========
+  # AUTHENTICATION
   local_auth: ^2.2.0
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^6.1.2
   
-  # ========== PAYMENTS ==========
+  # PAYMENTS
   in_app_purchase: ^3.2.0
   
-  # ========== SOCIAL & SHARING ==========
+  # SOCIAL & SHARING
   url_launcher: ^6.3.0
   
-  # ========== DEVICE INFO ==========
+  # DEVICE INFO
   device_info_plus: ^11.1.0
   
-  # ========== BACKGROUND TASKS ==========
-  background_fetch: ^1.3.0
+  # BACKGROUND TASKS
+  background_fetch: ^1.3.0  # Will work, just warning about SDK 36
   
-  # ========== QR & BARCODE ==========
-  mobile_scanner: ^6.0.2
+  # QR & BARCODE
+  mobile_scanner: ^6.0.2  # Will work, just warning about SDK 36
   
-  # ========== PDF & DOCUMENTS ==========
+  # PDF & DOCUMENTS
   flutter_pdfview: ^1.3.4
   
-  # ========== ANIMATIONS ==========
+  # ANIMATIONS
   animate_do: ^3.3.4
   shimmer: ^3.0.0
   
-  # ========== UTILITIES ==========
+  # UTILITIES
   intl: ^0.19.0
   uuid: ^4.5.1
   equatable: ^2.0.5
