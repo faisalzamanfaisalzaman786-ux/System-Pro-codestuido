@@ -3,6 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.universal.app">
 
+    <!-- ========== FORCE MIN SDK 23 ========== -->
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" 
+        tools:overrideLibrary="androidx.camera.video, com.google.firebase.auth, androidx.camera.core" />
+
     <!-- =================================================================== -->
     <!--                         ALL PERMISSIONS                            -->
     <!-- =================================================================== -->
@@ -233,7 +237,7 @@
             android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
             android:exported="false" />
 
-        <!-- ========== FOREGROUND SERVICE (Qibla/Location) ========== -->
+        <!-- ========== FOREGROUND SERVICE ========== -->
         <service
             android:name="com.workmanager.WorkManagerService"
             android:permission="android.permission.BIND_JOB_SERVICE"
