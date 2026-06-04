@@ -32,7 +32,7 @@ jobs:
         run: |
           PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.filter.app"' payload.json)
           APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk // 21' payload.json)
+          MIN_SDK=$(jq -r '.build_config.min_sdk // 23' payload.json)
           TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
           USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
@@ -81,7 +81,6 @@ jobs:
       - name: Fix manifest merger conflicts
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Add tools namespace if not present
           if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
             sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
           fi
@@ -171,7 +170,7 @@ jobs:
           EOF
           echo "✅ build.gradle generated with desugaring support"
 
-      - name: Apply custom app icon (192x192 PNG)
+      - name: Apply custom app icon
         run: |
           ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
           if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
