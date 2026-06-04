@@ -11,9 +11,7 @@
     <!-- CAMERA -->
     <uses-permission android:name="android.permission.CAMERA" />
     
-    <!-- STORAGE (یہ دو نئے ہیں) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion" />
+    <!-- STORAGE (یہ دو پرمیشنز نہیں تھے) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     
