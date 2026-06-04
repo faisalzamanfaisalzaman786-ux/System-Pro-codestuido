@@ -4,67 +4,88 @@
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
 
-    <!-- NETWORK -->
+    <!-- ==================== NETWORK ==================== -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     
-    <!-- CAMERA -->
+    <!-- ==================== CAMERA ==================== -->
     <uses-permission android:name="android.permission.CAMERA" />
     
-    <!-- STORAGE -->
+    <!-- ==================== STORAGE (COMPLETE) ==================== -->
+    <!-- For Android 12 and below (API 32 and lower) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion" />
+    
+    <!-- For Android 13 (API 33) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     
-    <!-- MICROPHONE -->
+    <!-- For Android 14 (API 34) - Partial storage access -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    
+    <!-- For managing all files (requires special declaration) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" 
+        tools:ignore="ScopedStorage" />
+    
+    <!-- ==================== MICROPHONE ==================== -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     
-    <!-- LOCATION -->
+    <!-- ==================== LOCATION ==================== -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     
-    <!-- BLUETOOTH -->
+    <!-- ==================== BLUETOOTH ==================== -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     
-    <!-- NOTIFICATIONS -->
+    <!-- ==================== NOTIFICATIONS ==================== -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
-    <!-- FOREGROUND SERVICES -->
+    <!-- ==================== FOREGROUND SERVICES ==================== -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     
-    <!-- ========== یہ نیچے والے شامل کیے ہیں (MISSING) ========== -->
-    
-    <!-- CONTACTS -->
+    <!-- ==================== CONTACTS ==================== -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     
-    <!-- CALENDAR -->
+    <!-- ==================== CALENDAR ==================== -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     
-    <!-- SMS -->
+    <!-- ==================== SMS ==================== -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
     
-    <!-- PHONE -->
+    <!-- ==================== PHONE ==================== -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     
-    <!-- SENSORS -->
+    <!-- ==================== SENSORS ==================== -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     
-    <!-- OTHERS -->
+    <!-- ==================== SYSTEM ==================== -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    
+    <!-- ==================== APPLICATION ==================== -->
     <application
         android:label="Filter App"
         android:icon="@mipmap/ic_launcher"
@@ -72,7 +93,13 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/LaunchTheme"
         android:allowBackup="true"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- For MANAGE_EXTERNAL_STORAGE permission -->
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
 
         <meta-data
             android:name="flutterEmbedding"
