@@ -25,7 +25,7 @@ jobs:
           cache: true
 
       # ============================================================
-      # IMPROVED: Corruption-free download from Gist
+      # IMPROVED: Corruption-free download from Gist with ICON support
       # ============================================================
       - name: Download source from Gist (Corruption-free)
         run: |
@@ -41,59 +41,100 @@ jobs:
           # Create lib directory
           mkdir -p lib
           
-          # Method 1: Use raw.githubusercontent.com (best for text files, no corruption)
-          echo "Trying raw URL method..."
+          # ========================================
+          # Download main.dart
+          # ========================================
+          echo "📄 Downloading main.dart..."
+          
+          # Try raw URL first
           curl -s -L --retry 3 \
             "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" \
             -o lib/main.dart 2>/dev/null
           
-          # Method 2: If raw URL fails, use API with proper decoding
+          # If raw URL fails, use API
           if [ ! -s lib/main.dart ]; then
-            echo "Raw URL failed, using GitHub API with proper decoding..."
+            echo "Raw URL failed, using GitHub API..."
             curl -s -L --retry 3 \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/gists/$GIST_ID" \
               -o gist_response.json
             
-            # Extract content and fix any line ending issues
             jq -r '.files["main.dart"].content' gist_response.json | \
               tr -d '\r' > lib/main.dart
           fi
           
-          # Verify main.dart is not empty
+          # ========================================
+          # Download ICON - Always try regardless of method
+          # ========================================
+          echo "🖼️ Downloading icon..."
+          
+          # Try raw URL for icon first
+          curl -s -L --retry 3 \
+            "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" \
+            -o icon.png 2>/dev/null
+          
+          # If raw URL failed, try API (either existing or new request)
+          if [ ! -s icon.png ]; then
+            echo "Raw URL for icon failed, trying API..."
+            
+            # If we already have gist_response.json from above, use it
+            if [ -f "gist_response.json" ]; then
+              ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
+              if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
+                echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
+              fi
+            fi
+            
+            # If still no icon, make a fresh API call
+            if [ ! -s icon.png ]; then
+              curl -s -L --retry 3 \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/gists/$GIST_ID" \
+                -o gist_icon.json
+              
+              ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
+              if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
+                echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
+              fi
+              rm -f gist_icon.json
+            fi
+          fi
+          
+          # Verify icon
+          if [ -s icon.png ]; then
+            echo "✅ Icon downloaded successfully ($(wc -c < icon.png) bytes)"
+            file icon.png
+          else
+            echo "ℹ️ No custom icon provided, will use default Flutter icon"
+          fi
+          
+          # ========================================
+          # Verify and clean main.dart
+          # ========================================
           if [ ! -s lib/main.dart ]; then
             echo "❌ main.dart is empty or not found"
-            cat gist_response.json 2>/dev/null || echo "No response file"
             exit 1
           fi
           
-          # Remove UTF-8 BOM if present (causes issues in Dart)
+          # Remove UTF-8 BOM if present
           sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
           
           # Remove any null bytes
           tr -d '\0' < lib/main.dart > lib/main_clean.dart
           mv lib/main_clean.dart lib/main.dart
           
-          # Download icon if exists
-          if [ -f "gist_response.json" ]; then
-            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
-            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-              echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
-              if [ -s icon.png ]; then
-                echo "✅ Icon downloaded successfully"
-              fi
-            fi
-          fi
-          
-          # Validate main.dart syntax
+          # Validate
           echo "✅ main.dart downloaded successfully"
           echo "File size: $(wc -c < lib/main.dart) bytes"
           echo "Line count: $(wc -l < lib/main.dart)"
           echo "First 3 lines:"
           head -3 lib/main.dart
           
-          # Verify checksum if provided (optional but recommended)
+          # ========================================
+          # Verify checksum
+          # ========================================
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
           if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
             ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
@@ -137,14 +178,12 @@ jobs:
             exit 1
           fi
           
-          # Check if it starts with valid Dart syntax
           FIRST_LINE=$(head -1 lib/main.dart | xargs)
           if [[ ! "$FIRST_LINE" =~ ^(import|//|/\*|library|part|export|void|class|abstract|final|const|typedef|extension) ]]; then
             echo "⚠️ Warning: main.dart may be corrupted. First line: $FIRST_LINE"
             echo "First 200 characters:"
             head -c 200 lib/main.dart
             echo ""
-            echo "Attempting to fix..."
           fi
           
           echo "✅ main.dart verified"
@@ -263,11 +302,17 @@ jobs:
       - name: Apply custom app icon (from downloaded file)
         run: |
           if [ -f "icon.png" ] && [ -s "icon.png" ]; then
+            # Create all required mipmap directories
             for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android/app/src/main/res/mipmap-$density
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
             done
-            echo "✅ Custom icon applied"
+            # Also copy as ic_launcher_round for better compatibility
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+            echo "✅ Custom icon applied successfully"
+            echo "Icon size: $(wc -c < icon.png) bytes"
           else
             echo "ℹ️ No custom icon provided, using default Flutter icon"
           fi
