@@ -25,7 +25,7 @@ jobs:
           cache: true
 
       # ============================================================
-      # DOWNLOAD SOURCE FROM GIST (WITH ADVANCED ICON HANDLING)
+      # DOWNLOAD SOURCE FROM GIST (CLEAN BASE64 DECODING)
       # ============================================================
       - name: Download source from Gist
         run: |
@@ -62,63 +62,45 @@ jobs:
           fi
           
           # ========================================
-          # Download icon with ADVANCED FIXING
+          # Download icon with CLEAN base64 decoding
           # ========================================
           echo "🖼️ Downloading icon..."
           
-          # Attempt 1: Raw URL
+          # Try raw URL first
           curl -s -L --retry 3 \
             "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" \
             -o icon.png 2>/dev/null
           
-          # Attempt 2: From existing API response
-          if [ ! -s icon.png ] && [ -f "gist_response.json" ]; then
-            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
-            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-              echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
-              echo "✅ Icon decoded from API response"
-            fi
-          fi
-          
-          # Attempt 3: Fresh API call
-          if [ ! -s icon.png ]; then
+          # If raw URL fails or file is not PNG, try API with clean decoding
+          if [ ! -s icon.png ] || ( [ -s icon.png ] && ! file icon.png | grep -q "PNG" ); then
+            echo "Fetching icon from API with clean base64 decoding..."
+            
+            # Get fresh API response
             curl -s -L --retry 3 \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/gists/$GIST_ID" \
-              -o gist_fresh.json
+              -o gist_icon.json
             
-            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_fresh.json)
+            # Extract icon content and CLEAN whitespace BEFORE decoding
+            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
+            
             if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-              echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
-              echo "✅ Icon decoded from fresh API call"
+              # CRITICAL: Remove ALL whitespace, newlines, carriage returns before decoding
+              echo "$ICON_CONTENT" | tr -d '\n\r\t ' | base64 -d > icon.png 2>/dev/null
               
-              # Debug: Show first 50 chars of content
-              echo "Content preview: ${ICON_CONTENT:0:50}"
+              if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
+                echo "✅ Icon decoded successfully with clean base64"
+              else
+                # Try one more time with different approach
+                echo "$ICON_CONTENT" | tr -d '[:space:]' | base64 -d > icon.png 2>/dev/null
+              fi
             fi
-            rm -f gist_fresh.json
+            rm -f gist_icon.json
           fi
           
-          # Attempt 4: Handle double-encoded base64
-          if [ -s icon.png ] && file icon.png | grep -q "ASCII"; then
-            echo "⚠️ Icon appears to be ASCII, trying double decode..."
-            cat icon.png | base64 -d > icon_decoded.png 2>/dev/null
-            if [ -s icon_decoded.png ] && file icon_decoded.png | grep -q "PNG"; then
-              mv icon_decoded.png icon.png
-              echo "✅ Double decode successful!"
-            fi
-          fi
-          
-          # Attempt 5: Try to fix PNG header if corrupted
-          if [ -s icon.png ] && ! file icon.png | grep -q "PNG"; then
-            echo "⚠️ Attempting to fix PNG header..."
-            if [ -f icon.png ]; then
-              # Create a new PNG with proper header
-              printf "\x89PNG\r\n\x1a\n" > icon_header.png
-              cat icon.png >> icon_header.png
-              mv icon_header.png icon.png
-            fi
-          fi
+          # Clean up temp files
+          rm -f gist_response.json
           
           # ========================================
           # Verify and clean main.dart
@@ -139,16 +121,13 @@ jobs:
           # ========================================
           # Final icon verification
           # ========================================
-          if [ -s icon.png ]; then
-            if file icon.png | grep -q "PNG"; then
-              echo "✅ ICON OK: $(wc -c < icon.png) bytes, $(file icon.png | cut -d',' -f2)"
-            else
-              echo "⚠️ ICON ISSUE: $(file icon.png)"
-              echo "Will use default icon"
-              rm -f icon.png
-            fi
+          if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
+            echo "✅ ICON OK: $(wc -c < icon.png) bytes, PNG image"
+            # Save icon for later use
+            cp icon.png icon_original.png
           else
-            echo "ℹ️ No valid icon provided"
+            echo "⚠️ No valid icon provided, will use default"
+            rm -f icon.png
           fi
           
           # ========================================
@@ -163,8 +142,6 @@ jobs:
             fi
             echo "✅ Checksum verified"
           fi
-          
-          rm -f gist_response.json
 
       - name: Extract build config from payload
         run: |
@@ -304,73 +281,48 @@ jobs:
           echo "✅ build.gradle generated"
 
       # ============================================================
-      # APPLY CUSTOM ICON (WITH ADVANCED FIXING)
+      # APPLY CUSTOM ICON USING FLUTTER_LAUNCHER_ICONS (BEST METHOD)
       # ============================================================
-      - name: Apply custom app icon
+      - name: Generate launcher icons with flutter_launcher_icons
         run: |
-          ICON_APPLIED=false
-          
-          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
-            echo "📷 Processing custom icon..."
+          if [ -f "icon.png" ] && [ -s "icon.png" ] && file icon.png | grep -q "PNG"; then
+            echo "📷 Generating launcher icons with flutter_launcher_icons..."
             
-            # Method 1: Check if already valid PNG
-            if file icon.png | grep -q "PNG"; then
-              echo "✅ Valid PNG detected"
-              ICON_APPLIED=true
-            fi
+            # Add flutter_launcher_icons to pubspec.yaml
+            cat >> pubspec.yaml <<'EOF'
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.0
+
+flutter_launcher_icons:
+  image_path: "icon.png"
+  android: true
+  min_sdk_android: 23
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "icon.png"
+  remove_alpha_ios: true
+EOF
             
-            # Method 2: Try to fix with ImageMagick
-            if [ "$ICON_APPLIED" = "false" ]; then
-              echo "Attempting to fix with ImageMagick..."
-              sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick 2>/dev/null || true
-              convert icon.png -resize 512x512 -background white -flatten -alpha off icon_fixed.png 2>/dev/null
-              if [ -s icon_fixed.png ] && file icon_fixed.png | grep -q "PNG"; then
-                mv icon_fixed.png icon.png
-                echo "✅ Fixed with ImageMagick"
-                ICON_APPLIED=true
-              fi
-            fi
+            # Get the package
+            flutter pub get
             
-            # Method 3: Manual base64 decode of content
-            if [ "$ICON_APPLIED" = "false" ]; then
-              echo "Attempting base64 decode..."
-              if file icon.png | grep -q "ASCII"; then
-                CONTENT=$(cat icon.png | tr -d '\n\r')
-                echo "$CONTENT" | base64 -d > icon_test.png 2>/dev/null
-                if [ -s icon_test.png ] && file icon_test.png | grep -q "PNG"; then
-                  mv icon_test.png icon.png
-                  echo "✅ Fixed by base64 decoding"
-                  ICON_APPLIED=true
-                fi
-              fi
-            fi
+            # Run the icon generator
+            flutter pub run flutter_launcher_icons:main
             
-            # Method 4: Try to create a simple PNG from scratch if all else fails
-            if [ "$ICON_APPLIED" = "false" ]; then
-              echo "Creating fallback icon..."
-              # Create a simple blue square as fallback
-              convert -size 512x512 xc:blue -background white -flatten icon_fallback.png 2>/dev/null
-              if [ -s icon_fallback.png ]; then
-                mv icon_fallback.png icon.png
-                echo "✅ Created fallback icon"
-                ICON_APPLIED=true
-              fi
-            fi
-            
-            # Final apply if valid
-            if [ "$ICON_APPLIED" = "true" ] && [ -s icon.png ]; then
+            if [ $? -eq 0 ]; then
+              echo "✅ Custom icons generated successfully with flutter_launcher_icons"
+            else
+              echo "⚠️ flutter_launcher_icons failed, falling back to manual method"
+              # Fallback: manual copy
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
-              echo "✅ Custom icon applied to all densities"
-            else
-              echo "⚠️ Could not fix icon, using default Flutter icon"
-              echo "Final file type: $(file icon.png 2>/dev/null || echo 'missing')"
+              echo "✅ Custom icon applied manually"
             fi
           else
-            echo "ℹ️ No custom icon provided, using default Flutter icon"
+            echo "ℹ️ No valid custom icon provided, using default Flutter icon"
           fi
 
       - name: Build release APK
