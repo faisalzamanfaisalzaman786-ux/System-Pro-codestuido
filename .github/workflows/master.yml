@@ -27,28 +27,20 @@ jobs:
       - name: Download source from Gist
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
-          
           if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
             echo "❌ No gist_id provided"
             exit 1
           fi
-          
           echo "📦 Downloading from Gist: $GIST_ID"
           mkdir -p lib
-          
-          # Download main.dart
           echo "📄 Downloading main.dart..."
           curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" -o lib/main.dart 2>/dev/null
-          
           if [ ! -s lib/main.dart ]; then
             curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_response.json
             jq -r '.files["main.dart"].content' gist_response.json | tr -d '\r' > lib/main.dart
           fi
-          
-          # Download icon with clean base64 decoding
           echo "🖼️ Downloading icon..."
           curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" -o icon.png 2>/dev/null
-          
           if [ ! -s icon.png ] || ( [ -s icon.png ] && ! file icon.png | grep -q "PNG" ); then
             curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_icon.json
             ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
@@ -57,30 +49,21 @@ jobs:
             fi
             rm -f gist_icon.json
           fi
-          
           rm -f gist_response.json
-          
-          # Verify main.dart
           if [ ! -s lib/main.dart ]; then
             echo "❌ main.dart is empty"
             exit 1
           fi
-          
           sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
           tr -d '\0' < lib/main.dart > lib/main_clean.dart
           mv lib/main_clean.dart lib/main.dart
-          
           echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
-          
-          # Verify icon
           if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
             echo "✅ Icon OK: $(wc -c < icon.png) bytes"
           else
             echo "ℹ️ No valid icon provided"
             rm -f icon.png
           fi
-          
-          # Verify checksum
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
           if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
             ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
@@ -206,9 +189,7 @@ jobs:
         run: |
           if [ -f "icon.png" ] && [ -s "icon.png" ] && file icon.png | grep -q "PNG"; then
             echo "📷 Generating launcher icons..."
-            
-            # Add flutter_launcher_icons to pubspec.yaml
-            cat >> pubspec.yaml <<'EOF'
+            cat >> pubspec.yaml <<'EOF2'
           
           dev_dependencies:
             flutter_launcher_icons: ^0.14.0
@@ -220,11 +201,9 @@ jobs:
             adaptive_icon_background: "#FFFFFF"
             adaptive_icon_foreground: "icon.png"
             remove_alpha_ios: true
-          EOF
-            
+          EOF2
             flutter pub get
             flutter pub run flutter_launcher_icons:main
-            
             if [ $? -eq 0 ]; then
               echo "✅ Custom icons generated"
             else
