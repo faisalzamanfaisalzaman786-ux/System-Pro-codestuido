@@ -67,12 +67,11 @@ jobs:
             -o icon.png 2>/dev/null
           
           # If raw URL fails, try API
-          if [ ! -s icon.png ]; then
-            if [ -f "gist_response.json" ]; then
-              ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
-              if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-                echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
-              fi
+          if [ ! -s icon.png ] && [ -f "gist_response.json" ]; then
+            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
+            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
+              echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
+              echo "✅ Icon decoded from API response"
             fi
           fi
           
@@ -87,6 +86,7 @@ jobs:
             ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
             if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
               echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
+              echo "✅ Icon decoded from fresh API call"
             fi
             rm -f gist_icon.json
           fi
@@ -108,6 +108,7 @@ jobs:
           # Icon status
           if [ -s icon.png ]; then
             echo "✅ Icon downloaded: $(wc -c < icon.png) bytes"
+            file icon.png
           else
             echo "ℹ️ No icon provided"
           fi
@@ -265,43 +266,29 @@ jobs:
           echo "✅ build.gradle generated"
 
       # ============================================================
-      # APPLY CUSTOM ICON WITH VALIDATION AND FIXING
+      # APPLY CUSTOM ICON (WITHOUT IMAGEMAGICK FOR SIMPLICITY)
       # ============================================================
-      - name: Install ImageMagick for icon processing
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq imagemagick
-          echo "✅ ImageMagick installed"
-
-      - name: Apply custom app icon (with validation)
+      - name: Apply custom app icon
         run: |
           if [ -f "icon.png" ] && [ -s "icon.png" ]; then
-            echo "📷 Custom icon found, processing..."
+            echo "📷 Custom icon found, applying..."
             
-            # Check file type
-            echo "Original file type:"
-            file icon.png
-            
-            # Fix PNG if needed using ImageMagick
-            # Convert to proper PNG format, resize to 512x512, ensure valid
-            convert icon.png -resize 512x512 -background transparent -flatten -alpha off icon_fixed.png
-            
-            # Verify fixed icon
-            if [ ! -s icon_fixed.png ]; then
-              echo "⚠️ Failed to fix icon, using default"
-              rm -f icon_fixed.png
-            else
-              echo "✅ Icon fixed successfully"
-              file icon_fixed.png
+            # Check if it's a valid PNG
+            if file icon.png | grep -q "PNG"; then
+              echo "✅ Valid PNG icon detected"
               
               # Apply to all mipmap densities
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
-                cp icon_fixed.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-                cp icon_fixed.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
               
               echo "✅ Custom icon applied to all densities"
+            else
+              echo "⚠️ Downloaded file is not a valid PNG!"
+              echo "File type: $(file icon.png)"
+              echo "ℹ️ Using default Flutter icon"
             fi
           else
             echo "ℹ️ No custom icon provided, using default Flutter icon"
