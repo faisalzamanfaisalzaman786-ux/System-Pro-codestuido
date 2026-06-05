@@ -24,115 +24,63 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # ============================================================
-      # DOWNLOAD SOURCE FROM GIST (CLEAN BASE64 DECODING)
-      # ============================================================
       - name: Download source from Gist
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
           
           if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
-            echo "❌ No gist_id provided in payload"
+            echo "❌ No gist_id provided"
             exit 1
           fi
           
           echo "📦 Downloading from Gist: $GIST_ID"
-          
-          # Create lib directory
           mkdir -p lib
           
-          # ========================================
           # Download main.dart
-          # ========================================
           echo "📄 Downloading main.dart..."
-          curl -s -L --retry 3 \
-            "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" \
-            -o lib/main.dart 2>/dev/null
+          curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" -o lib/main.dart 2>/dev/null
           
           if [ ! -s lib/main.dart ]; then
-            echo "Raw URL failed, using GitHub API..."
-            curl -s -L --retry 3 \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/gists/$GIST_ID" \
-              -o gist_response.json
-            
-            jq -r '.files["main.dart"].content' gist_response.json | \
-              tr -d '\r' > lib/main.dart
+            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_response.json
+            jq -r '.files["main.dart"].content' gist_response.json | tr -d '\r' > lib/main.dart
           fi
           
-          # ========================================
-          # Download icon with CLEAN base64 decoding
-          # ========================================
+          # Download icon with clean base64 decoding
           echo "🖼️ Downloading icon..."
+          curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" -o icon.png 2>/dev/null
           
-          # Try raw URL first
-          curl -s -L --retry 3 \
-            "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" \
-            -o icon.png 2>/dev/null
-          
-          # If raw URL fails or file is not PNG, try API with clean decoding
           if [ ! -s icon.png ] || ( [ -s icon.png ] && ! file icon.png | grep -q "PNG" ); then
-            echo "Fetching icon from API with clean base64 decoding..."
-            
-            # Get fresh API response
-            curl -s -L --retry 3 \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/gists/$GIST_ID" \
-              -o gist_icon.json
-            
-            # Extract icon content and CLEAN whitespace BEFORE decoding
+            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_icon.json
             ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
-            
-            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-              # CRITICAL: Remove ALL whitespace, newlines, carriage returns before decoding
+            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ]; then
               echo "$ICON_CONTENT" | tr -d '\n\r\t ' | base64 -d > icon.png 2>/dev/null
-              
-              if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
-                echo "✅ Icon decoded successfully with clean base64"
-              else
-                # Try one more time with different approach
-                echo "$ICON_CONTENT" | tr -d '[:space:]' | base64 -d > icon.png 2>/dev/null
-              fi
             fi
             rm -f gist_icon.json
           fi
           
-          # Clean up temp files
           rm -f gist_response.json
           
-          # ========================================
-          # Verify and clean main.dart
-          # ========================================
+          # Verify main.dart
           if [ ! -s lib/main.dart ]; then
-            echo "❌ main.dart is empty or not found"
+            echo "❌ main.dart is empty"
             exit 1
           fi
           
-          # Remove BOM and null bytes
           sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
           tr -d '\0' < lib/main.dart > lib/main_clean.dart
           mv lib/main_clean.dart lib/main.dart
           
           echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
-          echo "First line: $(head -1 lib/main.dart)"
           
-          # ========================================
-          # Final icon verification
-          # ========================================
+          # Verify icon
           if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
-            echo "✅ ICON OK: $(wc -c < icon.png) bytes, PNG image"
-            # Save icon for later use
-            cp icon.png icon_original.png
+            echo "✅ Icon OK: $(wc -c < icon.png) bytes"
           else
-            echo "⚠️ No valid icon provided, will use default"
+            echo "ℹ️ No valid icon provided"
             rm -f icon.png
           fi
           
-          # ========================================
           # Verify checksum
-          # ========================================
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
           if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
             ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
@@ -143,15 +91,13 @@ jobs:
             echo "✅ Checksum verified"
           fi
 
-      - name: Extract build config from payload
+      - name: Extract build config
         run: |
           echo "PACKAGE_NAME=${{ github.event.client_payload.build_config.package_name }}" >> $GITHUB_ENV
           echo "APP_NAME=${{ github.event.client_payload.build_config.app_display_name }}" >> $GITHUB_ENV
           echo "MIN_SDK=${{ github.event.client_payload.build_config.min_sdk }}" >> $GITHUB_ENV
           echo "TARGET_SDK=${{ github.event.client_payload.build_config.target_sdk }}" >> $GITHUB_ENV
           echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
-          
-          echo "✅ Build config extracted"
 
       - name: Create fresh Flutter project
         run: |
@@ -160,57 +106,36 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created"
-
-      - name: Verify main.dart
-        run: |
-          if [ ! -f "lib/main.dart" ]; then
-            echo "❌ main.dart not found"
-            exit 1
-          fi
-          echo "✅ main.dart verified"
+          echo "✅ Flutter project created"
 
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
+            echo "❌ pubspec.yaml not found"
             exit 1
           fi
           flutter pub get
-          echo "✅ flutter pub get completed"
 
-      - name: Copy custom AndroidManifest.xml from repository backup
+      - name: Copy AndroidManifest from backup
         run: |
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ Custom AndroidManifest.xml copied"
+            echo "✅ AndroidManifest copied"
           else
-            echo "❌ android_manifest_backup/AndroidManifest.xml not found"
+            echo "❌ AndroidManifest not found"
             exit 1
           fi
 
-      - name: Fix manifest merger conflicts
+      - name: Fix manifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
             sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
           fi
-          echo "✅ Manifest fixes applied"
+          sed -i 's/package="[^"]*"//' "$MANIFEST"
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
 
-      - name: Remove deprecated package attribute
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if grep -q 'package="' "$MANIFEST"; then
-            sed -i 's/package="[^"]*"//' "$MANIFEST"
-          fi
-
-      - name: Update app name in AndroidManifest.xml
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          echo "✅ App name updated"
-
-      - name: Fix Kotlin directory structure
+      - name: Fix Kotlin structure
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
@@ -218,7 +143,6 @@ jobs:
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
-          echo "✅ Kotlin structure fixed"
 
       - name: Generate build.gradle
         run: |
@@ -273,56 +197,47 @@ jobs:
               }
           }
           flutter { source = "../.." }
-          
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
-          echo "✅ build.gradle generated"
 
-      # ============================================================
-      # APPLY CUSTOM ICON USING FLUTTER_LAUNCHER_ICONS (BEST METHOD)
-      # ============================================================
-      - name: Generate launcher icons with flutter_launcher_icons
+      - name: Generate launcher icons
         run: |
           if [ -f "icon.png" ] && [ -s "icon.png" ] && file icon.png | grep -q "PNG"; then
-            echo "📷 Generating launcher icons with flutter_launcher_icons..."
+            echo "📷 Generating launcher icons..."
             
             # Add flutter_launcher_icons to pubspec.yaml
             cat >> pubspec.yaml <<'EOF'
-
-dev_dependencies:
-  flutter_launcher_icons: ^0.14.0
-
-flutter_launcher_icons:
-  image_path: "icon.png"
-  android: true
-  min_sdk_android: 23
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "icon.png"
-  remove_alpha_ios: true
-EOF
+          
+          dev_dependencies:
+            flutter_launcher_icons: ^0.14.0
+          
+          flutter_launcher_icons:
+            image_path: "icon.png"
+            android: true
+            min_sdk_android: 23
+            adaptive_icon_background: "#FFFFFF"
+            adaptive_icon_foreground: "icon.png"
+            remove_alpha_ios: true
+          EOF
             
-            # Get the package
             flutter pub get
-            
-            # Run the icon generator
             flutter pub run flutter_launcher_icons:main
             
             if [ $? -eq 0 ]; then
-              echo "✅ Custom icons generated successfully with flutter_launcher_icons"
+              echo "✅ Custom icons generated"
             else
-              echo "⚠️ flutter_launcher_icons failed, falling back to manual method"
-              # Fallback: manual copy
+              echo "⚠️ Fallback to manual copy"
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
-              echo "✅ Custom icon applied manually"
+              echo "✅ Manual copy completed"
             fi
           else
-            echo "ℹ️ No valid custom icon provided, using default Flutter icon"
+            echo "ℹ️ No custom icon provided"
           fi
 
       - name: Build release APK
@@ -334,17 +249,11 @@ EOF
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # ============================================================
-      # CLEANUP
-      # ============================================================
       - name: Cleanup temporary Gist
         if: always()
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
           if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
-            curl -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/gists/$GIST_ID" \
-              --fail --silent || echo "⚠️ Gist may already be deleted"
-            echo "✅ Temporary gist deleted: $GIST_ID"
+            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" --fail --silent || true
+            echo "✅ Gist deleted: $GIST_ID"
           fi
