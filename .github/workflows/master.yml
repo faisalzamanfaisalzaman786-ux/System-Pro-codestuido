@@ -25,7 +25,7 @@ jobs:
           cache: true
 
       # ============================================================
-      # DOWNLOAD SOURCE FROM GIST (WITH ICON SUPPORT)
+      # DOWNLOAD SOURCE FROM GIST (ADVANCED ICON HANDLING)
       # ============================================================
       - name: Download source from Gist
         run: |
@@ -41,13 +41,14 @@ jobs:
           # Create lib directory
           mkdir -p lib
           
-          # Download main.dart via raw URL
+          # ========================================
+          # Download main.dart
+          # ========================================
           echo "📄 Downloading main.dart..."
           curl -s -L --retry 3 \
             "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" \
             -o lib/main.dart 2>/dev/null
           
-          # If raw URL fails, use API
           if [ ! -s lib/main.dart ]; then
             echo "Raw URL failed, using GitHub API..."
             curl -s -L --retry 3 \
@@ -60,13 +61,17 @@ jobs:
               tr -d '\r' > lib/main.dart
           fi
           
-          # Download icon via raw URL
+          # ========================================
+          # Download icon with MULTIPLE FIXING ATTEMPTS
+          # ========================================
           echo "🖼️ Downloading icon..."
+          
+          # Attempt 1: Raw URL
           curl -s -L --retry 3 \
             "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" \
             -o icon.png 2>/dev/null
           
-          # If raw URL fails, try API
+          # Attempt 2: From existing API response
           if [ ! -s icon.png ] && [ -f "gist_response.json" ]; then
             ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
             if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
@@ -75,45 +80,77 @@ jobs:
             fi
           fi
           
-          # If still no icon, try fresh API call
+          # Attempt 3: Fresh API call
           if [ ! -s icon.png ]; then
             curl -s -L --retry 3 \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/gists/$GIST_ID" \
-              -o gist_icon.json
+              -o gist_fresh.json
             
-            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
+            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_fresh.json)
             if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
               echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
               echo "✅ Icon decoded from fresh API call"
             fi
-            rm -f gist_icon.json
+            rm -f gist_fresh.json
           fi
           
-          # Verify main.dart
+          # Attempt 4: Handle double-encoded base64
+          if [ -s icon.png ] && file icon.png | grep -q "ASCII"; then
+            echo "⚠️ Icon appears to be ASCII, trying double decode..."
+            cat icon.png | base64 -d > icon_decoded.png 2>/dev/null
+            if [ -s icon_decoded.png ] && file icon_decoded.png | grep -q "PNG"; then
+              mv icon_decoded.png icon.png
+              echo "✅ Double decode successful!"
+            fi
+          fi
+          
+          # Attempt 5: Handle corrupted PNG header
+          if [ -s icon.png ] && ! file icon.png | grep -q "PNG"; then
+            echo "⚠️ Attempting to fix PNG header..."
+            # Check if it starts with valid PNG signature
+            if [ "$(head -c 8 icon.png | xxd -p)" != "89504e470d0a1a0a" ]; then
+              echo "PNG signature missing, trying to repair..."
+              printf "\x89PNG\r\n\x1a\n" | cat - icon.png > icon_fixed.png 2>/dev/null
+              mv icon_fixed.png icon.png
+            fi
+          fi
+          
+          # ========================================
+          # Verify and clean main.dart
+          # ========================================
           if [ ! -s lib/main.dart ]; then
             echo "❌ main.dart is empty or not found"
             exit 1
           fi
           
-          # Clean main.dart
+          # Remove BOM and null bytes
           sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
           tr -d '\0' < lib/main.dart > lib/main_clean.dart
           mv lib/main_clean.dart lib/main.dart
           
-          echo "✅ main.dart downloaded: $(wc -c < lib/main.dart) bytes"
+          echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
           echo "First line: $(head -1 lib/main.dart)"
           
-          # Icon status
+          # ========================================
+          # Final icon verification
+          # ========================================
           if [ -s icon.png ]; then
-            echo "✅ Icon downloaded: $(wc -c < icon.png) bytes"
-            file icon.png
+            if file icon.png | grep -q "PNG"; then
+              echo "✅ ICON OK: $(wc -c < icon.png) bytes, PNG image"
+            else
+              echo "⚠️ ICON ISSUE: $(file icon.png)"
+              echo "Will use default icon"
+              rm -f icon.png
+            fi
           else
-            echo "ℹ️ No icon provided"
+            echo "ℹ️ No valid icon provided"
           fi
           
+          # ========================================
           # Verify checksum
+          # ========================================
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
           if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
             ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
@@ -135,8 +172,6 @@ jobs:
           echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
           
           echo "✅ Build config extracted"
-          echo "Package: ${{ env.PACKAGE_NAME }}"
-          echo "App Name: ${{ env.APP_NAME }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -158,7 +193,7 @@ jobs:
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
+            echo "❌ pubspec.yaml not found!"
             exit 1
           fi
           flutter pub get
@@ -266,32 +301,61 @@ jobs:
           echo "✅ build.gradle generated"
 
       # ============================================================
-      # APPLY CUSTOM ICON (WITHOUT IMAGEMAGICK FOR SIMPLICITY)
+      # APPLY CUSTOM ICON (WITH ADVANCED FIXING)
       # ============================================================
       - name: Apply custom app icon
         run: |
+          ICON_APPLIED=false
+          
           if [ -f "icon.png" ] && [ -s "icon.png" ]; then
-            echo "📷 Custom icon found, applying..."
+            echo "📷 Processing custom icon..."
             
-            # Check if it's a valid PNG
+            # Method 1: Check if already valid PNG
             if file icon.png | grep -q "PNG"; then
-              echo "✅ Valid PNG icon detected"
-              
-              # Apply to all mipmap densities
+              echo "✅ Valid PNG detected"
+              ICON_APPLIED=true
+            fi
+            
+            # Method 2: Try to fix with ImageMagick (if available)
+            if [ "$ICON_APPLIED" = "false" ]; then
+              echo "Attempting to fix with ImageMagick..."
+              sudo apt-get install -y imagemagick 2>/dev/null || true
+              convert icon.png -resize 512x512 -background white -flatten -alpha off icon_fixed.png 2>/dev/null
+              if [ -s icon_fixed.png ] && file icon_fixed.png | grep -q "PNG"; then
+                mv icon_fixed.png icon.png
+                echo "✅ Fixed with ImageMagick"
+                ICON_APPLIED=true
+              fi
+            fi
+            
+            # Method 3: Manual PNG header fixing
+            if [ "$ICON_APPLIED" = "false" ]; then
+              echo "Attempting manual PNG fix..."
+              # Check if content is base64
+              if file icon.png | grep -q "ASCII"; then
+                cat icon.png | base64 -d > icon_test.png 2>/dev/null
+                if [ -s icon_test.png ] && file icon_test.png | grep -q "PNG"; then
+                  mv icon_test.png icon.png
+                  echo "✅ Fixed by base64 decoding"
+                  ICON_APPLIED=true
+                fi
+              fi
+            fi
+            
+            # Final apply if valid
+            if [ "$ICON_APPLIED" = "true" ] && [ -s icon.png ]; then
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
                 cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
-              
               echo "✅ Custom icon applied to all densities"
             else
-              echo "⚠️ Downloaded file is not a valid PNG!"
-              echo "File type: $(file icon.png)"
-              echo "ℹ️ Using default Flutter icon"
+              echo "⚠️ Could not fix icon, using default Flutter icon"
+              echo "Final file type: $(file icon.png 2>/dev/null || echo 'missing')"
             fi
           else
-            echo "ℹ️ No custom icon provided, using default Flutter icon"
+            echo "ℹ️ No custom icon provided"
           fi
 
       - name: Build release APK
