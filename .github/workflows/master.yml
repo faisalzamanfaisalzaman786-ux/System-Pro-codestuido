@@ -28,8 +28,12 @@ jobs:
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
           
+          echo "═══════════════════════════════════════════════════════════"
+          echo "📦 ICON VALIDATION REPORT"
+          echo "═══════════════════════════════════════════════════════════"
+          
           if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
-            echo "❌ No gist_id provided"
+            echo "❌ No gist_id provided in payload"
             exit 1
           fi
           
@@ -41,26 +45,118 @@ jobs:
           curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" -o lib/main.dart 2>/dev/null
           
           if [ ! -s lib/main.dart ]; then
+            echo "Raw URL failed, using GitHub API..."
             curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_response.json
             jq -r '.files["main.dart"].content' gist_response.json | tr -d '\r' > lib/main.dart
           fi
           
-          # Download icon
-          echo "🖼️ Downloading icon..."
+          # ========================================
+          # ICON DOWNLOAD WITH VALIDATION (NO RESIZE)
+          # ========================================
+          echo ""
+          echo "🖼️ ┌─────────────────────────────────────────────────────────┐"
+          echo "🖼️ │                   ICON VALIDATION                       │"
+          echo "🖼️ └─────────────────────────────────────────────────────────┘"
+          
+          ICON_STATUS="NOT_FOUND"
+          ICON_SIZE=0
+          
+          # Try raw URL
+          echo "📥 Attempt 1: Downloading via raw URL..."
           curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/icon.png" -o icon.png 2>/dev/null
           
-          if [ ! -s icon.png ] || ( [ -s icon.png ] && ! file icon.png | grep -q "PNG" ); then
-            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_icon.json
-            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_icon.json)
+          if [ -s icon.png ]; then
+            ICON_STATUS="DOWNLOADED_RAW"
+            ICON_SIZE=$(wc -c < icon.png)
+            echo "   ✅ Downloaded via raw URL: ${ICON_SIZE} bytes"
+          else
+            echo "   ⚠️ Raw URL failed, file empty or not found"
+          fi
+          
+          # Try API if needed
+          if [ ! -s icon.png ]; then
+            echo ""
+            echo "📥 Attempt 2: Downloading via GitHub API..."
+            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/gists/$GIST_ID" -o gist_full.json
+            
+            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_full.json)
             if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ]; then
+              echo "   ✅ Icon content found in API response"
               echo "$ICON_CONTENT" | tr -d '\n\r\t ' | base64 -d > icon.png 2>/dev/null
+              if [ -s icon.png ]; then
+                ICON_STATUS="DOWNLOADED_API"
+                ICON_SIZE=$(wc -c < icon.png)
+                echo "   ✅ Decoded via API: ${ICON_SIZE} bytes"
+              fi
+            else
+              echo "   ⚠️ No icon.png found in Gist"
             fi
-            rm -f gist_icon.json
+            rm -f gist_full.json
           fi
           
           rm -f gist_response.json
           
+          # ========================================
+          # VALIDATE ICON (ONLY CHECK, NO RESIZE)
+          # ========================================
+          echo ""
+          echo "🔍 ┌─────────────────────────────────────────────────────────┐"
+          echo "🔍 │                 ICON VALIDATION RESULT                  │"
+          echo "🔍 └─────────────────────────────────────────────────────────┘"
+          
+          if [ -s icon.png ]; then
+            # Get file type
+            ICON_TYPE=$(file icon.png | cut -d':' -f2)
+            
+            # Check if it's a valid PNG
+            if file icon.png | grep -q "PNG"; then
+              ICON_STATUS="VALID_PNG"
+              
+              echo ""
+              echo "   ╔══════════════════════════════════════════════════════════╗"
+              echo "   ║                    ✅ ICON IS VALID ✅                     ║"
+              echo "   ╚══════════════════════════════════════════════════════════╝"
+              echo ""
+              echo "   📊 Icon Details:"
+              echo "   ┌─────────────────────────────────────────────────────────┐"
+              echo "   │  • Status:      VALID PNG IMAGE                         │"
+              echo "   │  • File size:   ${ICON_SIZE} bytes ($((ICON_SIZE / 1024)) KB)                      │"
+              echo "   │  • Type:        ${ICON_TYPE}                               │"
+              echo "   └─────────────────────────────────────────────────────────┘"
+              
+            else
+              ICON_STATUS="INVALID_FORMAT"
+              echo ""
+              echo "   ╔══════════════════════════════════════════════════════════╗"
+              echo "   ║                  ❌ ICON IS INVALID ❌                    ║"
+              echo "   ╚══════════════════════════════════════════════════════════╝"
+              echo ""
+              echo "   📊 Icon Details:"
+              echo "   ┌─────────────────────────────────────────────────────────┐"
+              echo "   │  • Status:      NOT A VALID PNG                         │"
+              echo "   │  • File size:   ${ICON_SIZE} bytes                              │"
+              echo "   │  • Type:        ${ICON_TYPE}                               │"
+              echo "   │  • Action:      Using default Flutter icon              │"
+              echo "   └─────────────────────────────────────────────────────────┘"
+              rm -f icon.png
+            fi
+          else
+            ICON_STATUS="NOT_FOUND"
+            echo ""
+            echo "   ╔══════════════════════════════════════════════════════════╗"
+            echo "   ║              ℹ️ NO CUSTOM ICON PROVIDED ℹ️                ║"
+            echo "   ╚══════════════════════════════════════════════════════════╝"
+            echo ""
+            echo "   📊 Result:"
+            echo "   ┌─────────────────────────────────────────────────────────┐"
+            echo "   │  • Status:      No icon found in Gist                   │"
+            echo "   │  • Action:      Using default Flutter icon              │"
+            echo "   └─────────────────────────────────────────────────────────┘"
+          fi
+          
+          # ========================================
           # Verify main.dart
+          # ========================================
           if [ ! -s lib/main.dart ]; then
             echo "❌ main.dart is empty"
             exit 1
@@ -70,15 +166,14 @@ jobs:
           tr -d '\0' < lib/main.dart > lib/main_clean.dart
           mv lib/main_clean.dart lib/main.dart
           
+          echo ""
           echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
           
-          if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
-            echo "✅ Icon OK: $(wc -c < icon.png) bytes"
-          else
-            echo "ℹ️ No valid icon"
-            rm -f icon.png
-          fi
+          # Save validation results
+          echo "ICON_STATUS=${ICON_STATUS}" >> $GITHUB_ENV
+          echo "ICON_SIZE=${ICON_SIZE}" >> $GITHUB_ENV
           
+          # Verify checksum
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
           if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
             ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
@@ -88,14 +183,18 @@ jobs:
             fi
             echo "✅ Checksum verified"
           fi
+          
+          echo "═══════════════════════════════════════════════════════════"
 
-      - name: Extract build config
+      - name: Extract build config from payload
         run: |
           echo "PACKAGE_NAME=${{ github.event.client_payload.build_config.package_name }}" >> $GITHUB_ENV
           echo "APP_NAME=${{ github.event.client_payload.build_config.app_display_name }}" >> $GITHUB_ENV
           echo "MIN_SDK=${{ github.event.client_payload.build_config.min_sdk }}" >> $GITHUB_ENV
           echo "TARGET_SDK=${{ github.event.client_payload.build_config.target_sdk }}" >> $GITHUB_ENV
           echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
+          
+          echo "✅ Build config extracted"
 
       - name: Create fresh Flutter project
         run: |
@@ -104,36 +203,57 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Flutter project created"
+          echo "✅ Fresh Flutter project created"
+
+      - name: Verify main.dart
+        run: |
+          if [ ! -f "lib/main.dart" ]; then
+            echo "❌ main.dart not found"
+            exit 1
+          fi
+          echo "✅ main.dart verified"
 
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found"
+            echo "❌ pubspec.yaml not found in repository root!"
             exit 1
           fi
           flutter pub get
+          echo "✅ flutter pub get completed"
 
-      - name: Copy AndroidManifest from backup
+      - name: Copy custom AndroidManifest.xml from repository backup
         run: |
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest copied"
+            echo "✅ Custom AndroidManifest.xml copied"
           else
-            echo "❌ AndroidManifest not found"
+            echo "❌ android_manifest_backup/AndroidManifest.xml not found"
             exit 1
           fi
 
-      - name: Fix manifest
+      - name: Fix manifest merger conflicts
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
             sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
           fi
-          sed -i 's/package="[^"]*"//' "$MANIFEST"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
+          echo "✅ Manifest fixes applied"
 
-      - name: Fix Kotlin structure
+      - name: Remove deprecated package attribute
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if grep -q 'package="' "$MANIFEST"; then
+            sed -i 's/package="[^"]*"//' "$MANIFEST"
+          fi
+
+      - name: Update app name in AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
+          echo "✅ App name updated"
+
+      - name: Fix Kotlin directory structure
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
@@ -141,6 +261,7 @@ jobs:
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
+          echo "✅ Kotlin structure fixed"
 
       - name: Generate build.gradle
         run: |
@@ -195,24 +316,47 @@ jobs:
               }
           }
           flutter { source = "../.." }
+          
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
+          echo "✅ build.gradle generated"
 
       - name: Apply custom app icon
         run: |
-          if [ -f "icon.png" ] && [ -s "icon.png" ] && file icon.png | grep -q "PNG"; then
-            echo "📷 Applying custom icon..."
-            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-              cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
-            done
-            echo "✅ Custom icon applied"
+          echo ""
+          echo "🎨 ┌─────────────────────────────────────────────────────────┐"
+          echo "🎨 │                 ICON APPLICATION RESULT                 │"
+          echo "🎨 └─────────────────────────────────────────────────────────┘"
+          echo ""
+          
+          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
+            if file icon.png | grep -q "PNG"; then
+              echo "   ✅ Applying icon..."
+              
+              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+                mkdir -p android/app/src/main/res/mipmap-$density
+                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+              done
+              
+              echo ""
+              echo "   ╔══════════════════════════════════════════════════════════╗"
+              echo "   ║              ✅ CUSTOM ICON APPLIED ✅                     ║"
+              echo "   ╚══════════════════════════════════════════════════════════╝"
+            else
+              echo "   ⚠️ Icon file exists but is not valid PNG"
+              echo "   ❌ Custom icon NOT applied"
+              echo "   ℹ️ Using default Flutter icon"
+            fi
           else
-            echo "ℹ️ No custom icon, using default"
+            echo "   ℹ️ No custom icon file found"
+            echo "   ℹ️ Using default Flutter icon"
           fi
+          
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
 
       - name: Build release APK
         run: flutter build apk --release
@@ -223,11 +367,29 @@ jobs:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Final Summary
+        if: always()
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🏁                    BUILD SUMMARY                        "
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "📦 Icon Status: ${ICON_STATUS:-UNKNOWN}"
+          if [ "${ICON_STATUS}" = "VALID_PNG" ]; then
+            echo "   ✅ Custom icon was downloaded and applied successfully"
+          elif [ "${ICON_STATUS}" = "NOT_FOUND" ]; then
+            echo "   ℹ️ No custom icon provided - using default"
+          else
+            echo "   ⚠️ Icon had issues - using default"
+          fi
+          echo ""
+
       - name: Cleanup temporary Gist
         if: always()
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
           if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
             curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" --fail --silent || true
-            echo "✅ Gist deleted"
+            echo "✅ Temporary gist deleted: $GIST_ID"
           fi
