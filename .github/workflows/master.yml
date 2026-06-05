@@ -24,22 +24,50 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Save payload to file
-        run: echo '${{ toJson(github.event.client_payload) }}' > payload.json
-
-      - name: Extract build config
-        id: config
+      # ⭐ نیا step: Gist سے files ڈاؤنلوڈ کریں
+      - name: Download source from Gist
         run: |
-          PACKAGE_NAME=$(jq -r '.build_config.package_name // "com.filter.app"' payload.json)
-          APP_NAME=$(jq -r '.build_config.app_display_name // "Filter App"' payload.json)
-          MIN_SDK=$(jq -r '.build_config.min_sdk // 23' payload.json)
-          TARGET_SDK=$(jq -r '.build_config.target_sdk // 34' payload.json)
-          USE_PROGUARD=$(jq -r '.build_config.use_proguard // false' payload.json)
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
-          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
-          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
-          echo "USE_PROGUARD=$USE_PROGUARD" >> $GITHUB_ENV
+          GIST_ID="${{ github.event.client_payload.gist_id }}"
+          
+          if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
+            echo "❌ No gist_id provided in payload"
+            exit 1
+          fi
+          
+          echo "📦 Downloading from Gist: $GIST_ID"
+          
+          # Gist سے metadata لائیں
+          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/gists/$GIST_ID" -o gist.json
+          
+          # main.dart extract کریں
+          cat gist.json | jq -r '.files["main.dart"].content' > lib/main.dart
+          
+          if [ ! -s lib/main.dart ]; then
+            echo "❌ Failed to extract main.dart from gist"
+            exit 1
+          fi
+          
+          echo "✅ main.dart downloaded successfully"
+          
+          # Icon extract کریں (اگر موجود ہو)
+          ICON_CONTENT=$(cat gist.json | jq -r '.files["icon.png"].content // empty')
+          if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
+            echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null || true
+            if [ -s icon.png ]; then
+              echo "✅ Icon downloaded from gist"
+            fi
+          fi
+
+      - name: Extract build config from payload
+        run: |
+          echo "PACKAGE_NAME=${{ github.event.client_payload.build_config.package_name }}" >> $GITHUB_ENV
+          echo "APP_NAME=${{ github.event.client_payload.build_config.app_display_name }}" >> $GITHUB_ENV
+          echo "MIN_SDK=${{ github.event.client_payload.build_config.min_sdk }}" >> $GITHUB_ENV
+          echo "TARGET_SDK=${{ github.event.client_payload.build_config.target_sdk }}" >> $GITHUB_ENV
+          echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
+          
+          echo "✅ Build config extracted"
 
       - name: Create fresh Flutter project (Kotlin default)
         run: |
@@ -50,15 +78,13 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
           echo "✅ Fresh Flutter project created"
 
-      - name: Write main.dart from payload
+      - name: Verify main.dart exists
         run: |
-          MAIN_B64=$(jq -r '.source_files.main_dart // ""' payload.json)
-          if [ -z "$MAIN_B64" ] || [ "$MAIN_B64" = "null" ]; then
-            echo "❌ No main.dart provided"
+          if [ ! -f "lib/main.dart" ]; then
+            echo "❌ main.dart not found in lib/"
             exit 1
           fi
-          echo "$MAIN_B64" | base64 -d > lib/main.dart
-          echo "✅ main.dart written"
+          echo "✅ main.dart verified"
 
       - name: Use repository pubspec.yaml
         run: |
@@ -67,6 +93,7 @@ jobs:
             exit 1
           fi
           flutter pub get
+          echo "✅ flutter pub get completed"
 
       - name: Copy custom AndroidManifest.xml from repository backup
         run: |
@@ -98,7 +125,7 @@ jobs:
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" $MANIFEST
-          echo "✅ App name updated"
+          echo "✅ App name updated to: ${{ env.APP_NAME }}"
 
       - name: Fix Kotlin directory structure
         run: |
@@ -168,13 +195,11 @@ jobs:
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
-          echo "✅ build.gradle generated with Kotlin 2.1.0 and desugaring support"
+          echo "✅ build.gradle generated"
 
-      - name: Apply custom app icon
+      - name: Apply custom app icon (from downloaded file)
         run: |
-          ICON_B64=$(jq -r '.assets.app_icon_base64 // ""' payload.json)
-          if [ -n "$ICON_B64" ] && [ "$ICON_B64" != "null" ]; then
-            echo "$ICON_B64" | base64 -d > icon.png
+          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
             for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p android/app/src/main/res/mipmap-$density
               cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
@@ -192,3 +217,16 @@ jobs:
         with:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # Cleanup: Gist کو delete کریں
+      - name: Cleanup temporary Gist
+        if: always()
+        run: |
+          GIST_ID="${{ github.event.client_payload.gist_id }}"
+          if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
+            curl -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/gists/$GIST_ID" \
+              || echo "⚠️ Failed to delete gist (may already be deleted)"
+            echo "✅ Temporary gist deleted: $GIST_ID"
+          fi
