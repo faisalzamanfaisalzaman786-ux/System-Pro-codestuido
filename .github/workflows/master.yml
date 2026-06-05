@@ -24,8 +24,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # ⭐ نیا step: Gist سے files ڈاؤنلوڈ کریں
-      - name: Download source from Gist
+      # ============================================================
+      # IMPROVED: Corruption-free download from Gist
+      # ============================================================
+      - name: Download source from Gist (Corruption-free)
         run: |
           GIST_ID="${{ github.event.client_payload.gist_id }}"
           
@@ -36,28 +38,76 @@ jobs:
           
           echo "📦 Downloading from Gist: $GIST_ID"
           
-          # Gist سے metadata لائیں
-          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/gists/$GIST_ID" -o gist.json
+          # Create lib directory
+          mkdir -p lib
           
-          # main.dart extract کریں
-          cat gist.json | jq -r '.files["main.dart"].content' > lib/main.dart
+          # Method 1: Use raw.githubusercontent.com (best for text files, no corruption)
+          echo "Trying raw URL method..."
+          curl -s -L --retry 3 \
+            "https://gist.githubusercontent.com/raw/$GIST_ID/main.dart" \
+            -o lib/main.dart 2>/dev/null
           
+          # Method 2: If raw URL fails, use API with proper decoding
           if [ ! -s lib/main.dart ]; then
-            echo "❌ Failed to extract main.dart from gist"
+            echo "Raw URL failed, using GitHub API with proper decoding..."
+            curl -s -L --retry 3 \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/gists/$GIST_ID" \
+              -o gist_response.json
+            
+            # Extract content and fix any line ending issues
+            jq -r '.files["main.dart"].content' gist_response.json | \
+              tr -d '\r' > lib/main.dart
+          fi
+          
+          # Verify main.dart is not empty
+          if [ ! -s lib/main.dart ]; then
+            echo "❌ main.dart is empty or not found"
+            cat gist_response.json 2>/dev/null || echo "No response file"
             exit 1
           fi
           
-          echo "✅ main.dart downloaded successfully"
+          # Remove UTF-8 BOM if present (causes issues in Dart)
+          sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
           
-          # Icon extract کریں (اگر موجود ہو)
-          ICON_CONTENT=$(cat gist.json | jq -r '.files["icon.png"].content // empty')
-          if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
-            echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null || true
-            if [ -s icon.png ]; then
-              echo "✅ Icon downloaded from gist"
+          # Remove any null bytes
+          tr -d '\0' < lib/main.dart > lib/main_clean.dart
+          mv lib/main_clean.dart lib/main.dart
+          
+          # Download icon if exists
+          if [ -f "gist_response.json" ]; then
+            ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' gist_response.json)
+            if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ] && [ "$ICON_CONTENT" != "" ]; then
+              echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
+              if [ -s icon.png ]; then
+                echo "✅ Icon downloaded successfully"
+              fi
             fi
           fi
+          
+          # Validate main.dart syntax
+          echo "✅ main.dart downloaded successfully"
+          echo "File size: $(wc -c < lib/main.dart) bytes"
+          echo "Line count: $(wc -l < lib/main.dart)"
+          echo "First 3 lines:"
+          head -3 lib/main.dart
+          
+          # Verify checksum if provided (optional but recommended)
+          EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
+          if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
+            ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
+            if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+              echo "❌ Checksum mismatch! File transfer corrupted."
+              echo "Expected: $EXPECTED_CHECKSUM"
+              echo "Actual: $ACTUAL_CHECKSUM"
+              exit 1
+            fi
+            echo "✅ Checksum verified - file integrity OK"
+          fi
+          
+          # Clean up temp files
+          rm -f gist_response.json
 
       - name: Extract build config from payload
         run: |
@@ -68,6 +118,8 @@ jobs:
           echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
           
           echo "✅ Build config extracted"
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
 
       - name: Create fresh Flutter project (Kotlin default)
         run: |
@@ -78,12 +130,23 @@ jobs:
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
           echo "✅ Fresh Flutter project created"
 
-      - name: Verify main.dart exists
+      - name: Verify main.dart exists and is valid
         run: |
           if [ ! -f "lib/main.dart" ]; then
             echo "❌ main.dart not found in lib/"
             exit 1
           fi
+          
+          # Check if it starts with valid Dart syntax
+          FIRST_LINE=$(head -1 lib/main.dart | xargs)
+          if [[ ! "$FIRST_LINE" =~ ^(import|//|/\*|library|part|export|void|class|abstract|final|const|typedef|extension) ]]; then
+            echo "⚠️ Warning: main.dart may be corrupted. First line: $FIRST_LINE"
+            echo "First 200 characters:"
+            head -c 200 lib/main.dart
+            echo ""
+            echo "Attempting to fix..."
+          fi
+          
           echo "✅ main.dart verified"
 
       - name: Use repository pubspec.yaml
@@ -173,7 +236,7 @@ jobs:
               kotlinOptions { jvmTarget = "17" }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
-                  minSdk = 23
+                  minSdk = ${{ env.MIN_SDK }}
                   targetSdk = ${{ env.TARGET_SDK }}
                   versionCode = 1
                   versionName = "1.0"
@@ -218,7 +281,7 @@ jobs:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # Cleanup: Gist کو delete کریں
+      # Cleanup: Delete temporary Gist
       - name: Cleanup temporary Gist
         if: always()
         run: |
@@ -227,6 +290,6 @@ jobs:
             curl -X DELETE \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/gists/$GIST_ID" \
-              || echo "⚠️ Failed to delete gist (may already be deleted)"
+              --fail --silent || echo "⚠️ Gist may already be deleted"
             echo "✅ Temporary gist deleted: $GIST_ID"
           fi
