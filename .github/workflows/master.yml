@@ -33,6 +33,27 @@ jobs:
           echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
           echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
 
+      - name: Debug - Check variables
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🔍 CHECKING VARIABLES"
+          echo "═══════════════════════════════════════════════════════════"
+          echo "PACKAGE_NAME: ${{ env.PACKAGE_NAME }}"
+          echo "APP_NAME: ${{ env.APP_NAME }}"
+          echo "MIN_SDK: ${{ env.MIN_SDK }}"
+          echo "TARGET_SDK: ${{ env.TARGET_SDK }}"
+          echo "HAS_ICON: ${{ env.HAS_ICON }}"
+          
+          if [ -z "${{ env.PACKAGE_NAME }}" ]; then
+            echo "❌ PACKAGE_NAME is empty! Using default"
+            echo "PACKAGE_NAME=com.filter.app" >> $GITHUB_ENV
+          fi
+          
+          if [ -z "${{ env.APP_NAME }}" ]; then
+            echo "❌ APP_NAME is empty! Using default"
+            echo "APP_NAME=Filter App" >> $GITHUB_ENV
+          fi
+
       - name: Create fresh Flutter project
         run: |
           PKG="${{ env.PACKAGE_NAME }}"
@@ -59,7 +80,7 @@ jobs:
           flutter pub get
           echo "✅ flutter pub get completed"
 
-      - name: Copy AndroidManifest and XML resources from backup
+      - name: Copy AndroidManifest and XML resources
         run: |
           mkdir -p android/app/src/main/res/xml
           
@@ -67,6 +88,7 @@ jobs:
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
           else
+            echo "❌ AndroidManifest.xml not found"
             exit 1
           fi
           
@@ -86,25 +108,36 @@ jobs:
           sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
           echo "✅ AndroidManifest.xml fixed"
 
-      - name: Create MainActivity.kt correctly
+      - name: Create MainActivity.kt
         run: |
-          PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
+          PACKAGE="${{ env.PACKAGE_NAME }}"
+          echo "Creating MainActivity.kt for package: $PACKAGE"
+          
+          PKG_PATH=$(echo "$PACKAGE" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
+          # Write the file
           cat > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt << EOF
-          package ${{ env.PACKAGE_NAME }}
+          package $PACKAGE
           
           import io.flutter.embedding.android.FlutterActivity
           
           class MainActivity : FlutterActivity()
           EOF
           
+          # Remove old directory
           rm -rf android/app/src/main/kotlin/com
           
+          # Verify
           if [ -f "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" ]; then
             echo "✅ MainActivity.kt created successfully"
+            echo "File location: android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt"
+            echo ""
+            echo "Content:"
+            cat android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
           else
             echo "❌ Failed to create MainActivity.kt"
+            echo "Tried to create at: android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt"
             exit 1
           fi
 
