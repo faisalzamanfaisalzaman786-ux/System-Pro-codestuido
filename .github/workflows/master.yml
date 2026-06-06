@@ -66,8 +66,6 @@ jobs:
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
-          else
-            echo "⚠️ Using default AndroidManifest.xml"
           fi
           
           if [ -f "android_manifest_backup/file_paths.xml" ]; then
@@ -88,23 +86,21 @@ jobs:
             echo "✅ AndroidManifest.xml fixed"
           fi
 
-      - name: Create MainActivity.kt (Simple Method)
+      - name: Create MainActivity.kt
         run: |
-          # Create directory
           mkdir -p android/app/src/main/kotlin/com/filter/app1
           
-          # Create file using simple echo commands
-          echo "package com.filter.app1" > android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
-          echo "" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
-          echo "import io.flutter.embedding.android.FlutterActivity" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
-          echo "" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
-          echo "class MainActivity : FlutterActivity()" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
+          cat > android/app/src/main/kotlin/com/filter/app1/MainActivity.kt << 'EOF'
+          package com.filter.app1
           
-          # Remove old directory
+          import io.flutter.embedding.android.FlutterActivity
+          
+          class MainActivity : FlutterActivity()
+          EOF
+          
           rm -rf android/app/src/main/kotlin/com/example
           
           echo "✅ MainActivity.kt created"
-          echo "Content:"
           cat android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
 
       - name: Setup build.gradle
@@ -112,17 +108,34 @@ jobs:
           cat > android/build.gradle << 'EOF'
           buildscript {
               ext.kotlin_version = '2.1.0'
-              repositories { google(); mavenCentral() }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          
           rootProject.buildDir = '../build'
-          subprojects { project.buildDir = "\${rootProject.buildDir}/\${project.name}" }
-          subprojects { project.evaluationDependsOn(':app') }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
           EOF
 
           cat > android/app/build.gradle << EOF
@@ -131,15 +144,21 @@ jobs:
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
+          
           android {
               namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 36
+              
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
                   coreLibraryDesugaringEnabled true
               }
-              kotlinOptions { jvmTarget = "17" }
+              
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = 23
@@ -148,6 +167,7 @@ jobs:
                   versionName = "1.0"
                   multiDexEnabled true
               }
+              
               buildTypes {
                   release {
                       signingConfig = signingConfigs.debug
@@ -156,12 +176,17 @@ jobs:
                   }
               }
           }
-          flutter { source = "../.." }
+          
+          flutter {
+              source = "../.."
+          }
+          
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
-          echo "✅ build.gradle configured"
+          
+          echo "✅ build.gradle files configured"
 
       - name: Apply custom app icon
         if: env.HAS_ICON == 'true'
