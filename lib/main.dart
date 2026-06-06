@@ -53,11 +53,8 @@ class MainTesterScreen extends StatefulWidget {
 class _MainTesterScreenState extends State<MainTesterScreen> {
   List<FeatureCard> features = [];
   Map<String, bool> permissionStatus = {};
-  
-  // Device Info
   String deviceInfo = 'Loading...';
-  String connectivityStatus = 'Checking...';
-  
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +62,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
     loadDeviceInfo();
     checkAllPermissions();
   }
-  
+
   void loadFeatures() {
     features = [
       FeatureCard('📷 Camera', 'Test camera and photo capture', Icons.camera_alt, () => testCamera()),
@@ -84,9 +81,8 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       FeatureCard('📤 Share', 'Share text', Icons.share, () => testShare()),
     ];
   }
-  
+
   Future<void> checkAllPermissions() async {
-    // Only use permissions that exist in current version
     Map<Permission, String> permissionsToCheck = {
       Permission.camera: 'Camera',
       Permission.storage: 'Storage',
@@ -108,7 +104,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
     }
     setState(() {});
   }
-  
+
   Future<void> loadDeviceInfo() async {
     DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
     AndroidDeviceInfo androidInfo = await deviceInfoPlugin.androidInfo;
@@ -119,23 +115,92 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
 🔄 SDK: ${androidInfo.version.sdkInt}
 📀 Android: ${androidInfo.version.release}
 🔧 Flutter: 3.29.2
-📦 Package: com.filter.app
+📦 Package: com.filter.app1
 ''';
     });
   }
-  
-  // CAMERA TEST
+
+  // ==================== STORAGE TEST (FIXED) ====================
+  Future<void> testStorage() async {
+    // For Android 13+ (API 33+)
+    if (await _checkAndRequestStoragePermission()) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('test_key', 'Test value at ${DateTime.now()}');
+        String? value = prefs.getString('test_key');
+        
+        // Also try to write a file to external storage
+        String testContent = 'Storage test successful at ${DateTime.now()}';
+        
+        _showMessage('✅ Storage working!\nSaved and retrieved: $value', isSuccess: true);
+      } catch (e) {
+        _showMessage('Storage error: $e', isSuccess: false);
+      }
+    } else {
+      _showMessage('Storage permission denied. Please grant permission from settings.', isSuccess: false);
+    }
+  }
+
+  Future<bool> _checkAndRequestStoragePermission() async {
+    if (await Permission.storage.isGranted) {
+      return true;
+    }
+    
+    // For Android 13+
+    if (await Permission.photos.isGranted && 
+        await Permission.videos.isGranted && 
+        await Permission.audio.isGranted) {
+      return true;
+    }
+    
+    // Request permissions based on Android version
+    if (await _requestAndroid13Permissions()) {
+      return true;
+    }
+    
+    // Fallback to old storage permission
+    final status = await Permission.storage.request();
+    return status.isGranted;
+  }
+
+  Future<bool> _requestAndroid13Permissions() async {
+    // Android 13+ (API 33+) needs separate permissions for different media types
+    Map<Permission, String> mediaPermissions = {
+      Permission.photos: 'Photos',
+      Permission.videos: 'Videos',
+      Permission.audio: 'Audio',
+    };
+    
+    bool allGranted = true;
+    List<String> deniedPermissions = [];
+    
+    for (var entry in mediaPermissions.entries) {
+      final status = await entry.key.request();
+      if (!status.isGranted) {
+        allGranted = false;
+        deniedPermissions.add(entry.value);
+      }
+    }
+    
+    if (!allGranted) {
+      _showMessage('Please grant ${deniedPermissions.join(", ")} permission to access storage', isSuccess: false);
+    }
+    
+    return allGranted;
+  }
+
+  // ==================== CAMERA TEST ====================
   Future<void> testCamera() async {
     final status = await Permission.camera.request();
     if (!status.isGranted) {
-      _showMessage('Camera permission denied');
+      _showMessage('Camera permission denied', isSuccess: false);
       return;
     }
     
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        _showMessage('No camera available');
+        _showMessage('No camera available', isSuccess: false);
         return;
       }
       
@@ -149,24 +214,24 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
         MaterialPageRoute(builder: (_) => CameraTestScreen(controller: controller)),
       );
     } catch (e) {
-      _showMessage('Error: $e');
+      _showMessage('Error: $e', isSuccess: false);
     }
   }
-  
-  // GALLERY TEST
+
+  // ==================== GALLERY TEST ====================
   Future<void> testGallery() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      _showMessage('Image selected: ${image.name}');
+      _showMessage('Image selected: ${image.name}', isSuccess: true);
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => ImagePreviewScreen(imagePath: image.path)),
       );
     }
   }
-  
-  // LOCATION TEST
+
+  // ==================== LOCATION TEST ====================
   Future<void> testLocation() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -177,22 +242,22 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high
       );
-      _showMessage('📍 Location:\nLat: ${position.latitude}\nLng: ${position.longitude}\nAlt: ${position.altitude}');
+      _showMessage('📍 Location:\nLat: ${position.latitude}\nLng: ${position.longitude}\nAlt: ${position.altitude}', isSuccess: true);
     } else {
-      _showMessage('Location permission denied');
+      _showMessage('Location permission denied', isSuccess: false);
     }
   }
-  
-  // BLUETOOTH TEST
+
+  // ==================== BLUETOOTH TEST ====================
   Future<void> testBluetooth() async {
     if (await FlutterBluePlus.isSupported == false) {
-      _showMessage('Bluetooth not supported on this device');
+      _showMessage('Bluetooth not supported on this device', isSuccess: false);
       return;
     }
     
     final status = await Permission.bluetoothScan.request();
     if (!status.isGranted) {
-      _showMessage('Bluetooth scan permission denied');
+      _showMessage('Bluetooth scan permission denied', isSuccess: false);
       return;
     }
     
@@ -201,16 +266,16 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       MaterialPageRoute(builder: (_) => BluetoothTestScreen()),
     );
   }
-  
-  // SENSORS TEST
+
+  // ==================== SENSORS TEST ====================
   void testSensors() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => SensorsTestScreen()),
     );
   }
-  
-  // CONNECTIVITY TEST
+
+  // ==================== CONNECTIVITY TEST ====================
   Future<void> testConnectivity() async {
     var connectivityResult = await (Connectivity().checkConnectivity());
     String status = '';
@@ -220,35 +285,13 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       status = '📶 WiFi Connected';
     } else if (connectivityResult.contains(ConnectivityResult.ethernet)) {
       status = '🔌 Ethernet Connection';
-    } else if (connectivityResult.contains(ConnectivityResult.vpn)) {
-      status = '🔒 VPN Connection';
-    } else if (connectivityResult.contains(ConnectivityResult.bluetooth)) {
-      status = '🔵 Bluetooth Tethering';
     } else {
       status = '❌ No Internet Connection';
     }
-    _showMessage('Connectivity Status:\n$status');
+    _showMessage('Connectivity Status:\n$status', isSuccess: true);
   }
-  
-  // STORAGE TEST
-  Future<void> testStorage() async {
-    final status = await Permission.storage.request();
-    if (!status.isGranted) {
-      _showMessage('Storage permission denied');
-      return;
-    }
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('test_key', 'Test value at ${DateTime.now()}');
-      String? value = prefs.getString('test_key');
-      _showMessage('✅ Storage working!\nSaved and retrieved: $value');
-    } catch (e) {
-      _showMessage('Storage error: $e');
-    }
-  }
-  
-  // NOTIFICATION TEST
+
+  // ==================== NOTIFICATION TEST ====================
   Future<void> testNotification() async {
     final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
     
@@ -267,57 +310,57 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       'Your device supports notifications! Time: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}',
       details,
     );
-    _showMessage('Notification sent! Check your status bar.');
+    _showMessage('Notification sent! Check your status bar.', isSuccess: true);
   }
-  
-  // PHONE TEST
+
+  // ==================== PHONE TEST ====================
   Future<void> testPhone() async {
     final status = await Permission.phone.request();
     if (!status.isGranted) {
-      _showMessage('Phone permission denied');
+      _showMessage('Phone permission denied', isSuccess: false);
       return;
     }
     
     const url = 'tel:1234567890';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
-      _showMessage('Dialer opened successfully');
+      _showMessage('Dialer opened successfully', isSuccess: true);
     } else {
-      _showMessage('Cannot open dialer on this device');
+      _showMessage('Cannot open dialer on this device', isSuccess: false);
     }
   }
-  
-  // CALENDAR TEST
+
+  // ==================== CALENDAR TEST ====================
   Future<void> testCalendar() async {
     final status = await Permission.calendar.request();
     if (!status.isGranted) {
-      _showMessage('Calendar permission denied');
+      _showMessage('Calendar permission denied', isSuccess: false);
       return;
     }
-    _showMessage('✅ Calendar permission granted!\nYou can now read/write calendar events.');
+    _showMessage('✅ Calendar permission granted!\nYou can now read/write calendar events.', isSuccess: true);
   }
-  
-  // CONTACTS TEST
+
+  // ==================== CONTACTS TEST ====================
   Future<void> testContacts() async {
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
-      _showMessage('Contacts permission denied');
+      _showMessage('Contacts permission denied', isSuccess: false);
       return;
     }
-    _showMessage('✅ Contacts permission granted!\nYou can now access device contacts.');
+    _showMessage('✅ Contacts permission granted!\nYou can now access device contacts.', isSuccess: true);
   }
-  
-  // MICROPHONE TEST
+
+  // ==================== MICROPHONE TEST ====================
   Future<void> testMicrophone() async {
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
-      _showMessage('Microphone permission denied');
+      _showMessage('Microphone permission denied', isSuccess: false);
       return;
     }
-    _showMessage('✅ Microphone permission granted!\nYou can now record audio.');
+    _showMessage('✅ Microphone permission granted!\nYou can now record audio.', isSuccess: true);
   }
-  
-  // SHARE TEST
+
+  // ==================== SHARE TEST ====================
   Future<void> testShare() async {
     await Share.share(
       'Check out this amazing device capability tester app!\n\n'
@@ -325,9 +368,9 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       'Built with Flutter 3.29.2',
       subject: 'Device Capability Tester',
     );
-    _showMessage('Share dialog opened!');
+    _showMessage('Share dialog opened!', isSuccess: true);
   }
-  
+
   void showDeviceInfo() {
     showDialog(
       context: context,
@@ -346,17 +389,18 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       ),
     );
   }
-  
-  void _showMessage(String message) {
+
+  void _showMessage(String message, {bool isSuccess = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, maxLines: 3),
         duration: Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
+        backgroundColor: isSuccess ? Colors.green[800] : Colors.red[800],
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -369,7 +413,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
             onPressed: () {
               checkAllPermissions();
               loadDeviceInfo();
-              _showMessage('Refreshed permissions & device info');
+              _showMessage('Refreshed permissions & device info', isSuccess: true);
             },
             tooltip: 'Refresh',
           ),
@@ -455,7 +499,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
   }
 }
 
-// Camera Test Screen
+// ==================== CAMERA TEST SCREEN ====================
 class CameraTestScreen extends StatefulWidget {
   final CameraController controller;
   CameraTestScreen({required this.controller});
@@ -467,7 +511,6 @@ class CameraTestScreen extends StatefulWidget {
 class _CameraTestScreenState extends State<CameraTestScreen> {
   double _zoom = 1.0;
   double _maxZoom = 1.0;
-  bool _isReady = false;
   
   @override
   void initState() {
@@ -478,12 +521,9 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
   Future<void> _loadZoomLevel() async {
     try {
       double maxZoom = await widget.controller.getMaxZoomLevel();
-      setState(() {
-        _maxZoom = maxZoom;
-        _isReady = true;
-      });
+      setState(() => _maxZoom = maxZoom);
     } catch (e) {
-      setState(() => _isReady = true);
+      // Zoom not available
     }
   }
   
@@ -504,15 +544,8 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
   
   @override
   Widget build(BuildContext context) {
-    if (!_isReady) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Camera Test')),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    
     return Scaffold(
-      appBar: AppBar(title: Text('Camera Test - Zoom Available: ${_maxZoom.toStringAsFixed(1)}x')),
+      appBar: AppBar(title: Text('Camera Test')),
       body: Column(
         children: [
           Expanded(
@@ -523,37 +556,38 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
             color: Colors.black.withOpacity(0.8),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.zoom_out, size: 32, color: Colors.white),
-                      onPressed: _zoom > 1.0 ? () {
-                        setState(() {
-                          _zoom = (_zoom - 0.1).clamp(1.0, _maxZoom);
-                          widget.controller.setZoomLevel(_zoom);
-                        });
-                      } : null,
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[900],
-                        borderRadius: BorderRadius.circular(20),
+                if (_maxZoom > 1.0)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.zoom_out, size: 32, color: Colors.white),
+                        onPressed: _zoom > 1.0 ? () {
+                          setState(() {
+                            _zoom = (_zoom - 0.1).clamp(1.0, _maxZoom);
+                            widget.controller.setZoomLevel(_zoom);
+                          });
+                        } : null,
                       ),
-                      child: Text('${_zoom.toStringAsFixed(1)}x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.zoom_in, size: 32, color: Colors.white),
-                      onPressed: _zoom < _maxZoom ? () {
-                        setState(() {
-                          _zoom = (_zoom + 0.1).clamp(1.0, _maxZoom);
-                          widget.controller.setZoomLevel(_zoom);
-                        });
-                      } : null,
-                    ),
-                  ],
-                ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[900],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('${_zoom.toStringAsFixed(1)}x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.zoom_in, size: 32, color: Colors.white),
+                        onPressed: _zoom < _maxZoom ? () {
+                          setState(() {
+                            _zoom = (_zoom + 0.1).clamp(1.0, _maxZoom);
+                            widget.controller.setZoomLevel(_zoom);
+                          });
+                        } : null,
+                      ),
+                    ],
+                  ),
                 SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _takePicture,
@@ -579,7 +613,7 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
   }
 }
 
-// Image Preview Screen
+// ==================== IMAGE PREVIEW SCREEN ====================
 class ImagePreviewScreen extends StatelessWidget {
   final String imagePath;
   ImagePreviewScreen({required this.imagePath});
@@ -599,7 +633,7 @@ class ImagePreviewScreen extends StatelessWidget {
   }
 }
 
-// Bluetooth Test Screen
+// ==================== BLUETOOTH TEST SCREEN ====================
 class BluetoothTestScreen extends StatefulWidget {
   @override
   _BluetoothTestScreenState createState() => _BluetoothTestScreenState();
@@ -616,17 +650,14 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
       isScanning = true;
     });
     
-    // Start scanning
     await FlutterBluePlus.startScan(timeout: Duration(seconds: 15));
     
-    // Listen to results
     _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
       setState(() {
         scanResults = results;
       });
     });
     
-    // Stop scanning after timeout
     Future.delayed(Duration(seconds: 15), () {
       if (mounted) {
         setState(() => isScanning = false);
@@ -727,7 +758,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
   }
 }
 
-// Sensors Test Screen
+// ==================== SENSORS TEST SCREEN ====================
 class SensorsTestScreen extends StatefulWidget {
   @override
   _SensorsTestScreenState createState() => _SensorsTestScreenState();
@@ -736,14 +767,12 @@ class SensorsTestScreen extends StatefulWidget {
 class _SensorsTestScreenState extends State<SensorsTestScreen> {
   double _accelerometerX = 0, _accelerometerY = 0, _accelerometerZ = 0;
   double _gyroscopeX = 0, _gyroscopeY = 0, _gyroscopeZ = 0;
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
-  StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
   
   @override
   void initState() {
     super.initState();
     
-    _accelerometerSubscription = accelerometerEvents.listen((event) {
+    accelerometerEvents.listen((event) {
       if (mounted) {
         setState(() {
           _accelerometerX = event.x;
@@ -753,7 +782,7 @@ class _SensorsTestScreenState extends State<SensorsTestScreen> {
       }
     });
     
-    _gyroscopeSubscription = gyroscopeEvents.listen((event) {
+    gyroscopeEvents.listen((event) {
       if (mounted) {
         setState(() {
           _gyroscopeX = event.x;
@@ -762,13 +791,6 @@ class _SensorsTestScreenState extends State<SensorsTestScreen> {
         });
       }
     });
-  }
-  
-  @override
-  void dispose() {
-    _accelerometerSubscription?.cancel();
-    _gyroscopeSubscription?.cancel();
-    super.dispose();
   }
   
   @override
@@ -878,7 +900,7 @@ class _SensorsTestScreenState extends State<SensorsTestScreen> {
   }
 }
 
-// Feature Card Model
+// ==================== FEATURE CARD MODEL ====================
 class FeatureCard {
   final String title;
   final String description;
