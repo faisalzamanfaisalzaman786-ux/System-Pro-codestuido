@@ -32,6 +32,9 @@ jobs:
           echo "TARGET_SDK=${{ github.event.client_payload.target_sdk }}" >> $GITHUB_ENV
           echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
           echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
+          
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -40,6 +43,7 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
+          echo "✅ Fresh Flutter project created"
 
       - name: Copy main.dart from repository
         run: |
@@ -49,7 +53,97 @@ jobs:
           fi
           echo "✅ main.dart found"
 
-      - name: Create complete AndroidManifest.xml
+      - name: Use repository pubspec.yaml
+        run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "❌ pubspec.yaml not found"
+            exit 1
+          fi
+          flutter pub get
+          echo "✅ flutter pub get completed"
+
+      - name: Fix build.gradle for v2 embedding
+        run: |
+          # Completely replace android/build.gradle
+          cat > android/build.gradle << 'EOF'
+          buildscript {
+              ext.kotlin_version = '2.1.0'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.3.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+          
+          # Completely replace android/app/build.gradle
+          cat > android/app/build.gradle << EOF
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          
+          android {
+              namespace = "${{ env.PACKAGE_NAME }}"
+              compileSdk = 36
+              
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              
+              defaultConfig {
+                  applicationId = "${{ env.PACKAGE_NAME }}"
+                  minSdk = 23
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.debug
+                      minifyEnabled = false
+                      shrinkResources = false
+                  }
+              }
+          }
+          
+          flutter {
+              source = "../.."
+          }
+          EOF
+          
+          echo "✅ build.gradle files fixed for v2 embedding"
+
+      - name: Create AndroidManifest.xml with all permissions
         run: |
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -68,6 +162,7 @@ jobs:
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
               <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
               
               <!-- Microphone -->
               <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -86,6 +181,12 @@ jobs:
               <!-- Notifications -->
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               
+              <!-- Foreground Services -->
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              
               <!-- Contacts -->
               <uses-permission android:name="android.permission.READ_CONTACTS" />
               <uses-permission android:name="android.permission.WRITE_CONTACTS" />
@@ -100,22 +201,33 @@ jobs:
               
               <!-- Sensors -->
               <uses-permission android:name="android.permission.BODY_SENSORS" />
+              <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
               
               <!-- System -->
               <uses-permission android:name="android.permission.VIBRATE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+              <uses-permission android:name="android.permission.USE_FINGERPRINT" />
               
               <application
                   android:label="${{ env.APP_NAME }}"
                   android:icon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="true"
-                  android:requestLegacyExternalStorage="true">
+                  android:requestLegacyExternalStorage="true"
+                  android:theme="@style/LaunchTheme">
+                  
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
                   
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
                       android:launchMode="singleTop"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -126,111 +238,31 @@ jobs:
           EOF
           echo "✅ AndroidManifest.xml created"
 
-      - name: Create XML resources
-        run: |
-          mkdir -p android/app/src/main/res/xml
-          
-          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <paths xmlns:android="http://schemas.android.com/apk/res/android">
-              <external-path name="external_files" path="." />
-              <files-path name="files" path="." />
-              <cache-path name="cache" path="." />
-          </paths>
-          EOF
-          
-          cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="true" />
-          </network-security-config>
-          EOF
-          echo "✅ XML resources created"
-
-      - name: Use repository pubspec.yaml
-        run: |
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found"
-            exit 1
-          fi
-          flutter pub get
-
-      - name: Fix Kotlin directory structure
+      - name: Fix MainActivity.kt for v2 embedding
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
-          if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
-            mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
-            rm -rf android/app/src/main/kotlin/com
-          fi
-
-      - name: Generate build.gradle
-        run: |
-          cat > android/build.gradle << 'EOF'
-          buildscript {
-              ext.kotlin_version = '2.1.0'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          rootProject.buildDir = '../build'
-          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
-          subprojects { project.evaluationDependsOn(':app') }
-          tasks.register('clean', Delete) { delete rootProject.buildDir }
+          
+          cat > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt << 'EOF'
+          package ${{ env.PACKAGE_NAME }}
+          
+          import io.flutter.embedding.android.FlutterActivity
+          
+          class MainActivity: FlutterActivity()
           EOF
-
-          cat > android/app/build.gradle << EOF
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          android {
-              namespace "${{ env.PACKAGE_NAME }}"
-              compileSdk = 36
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-                  coreLibraryDesugaringEnabled true
-              }
-              kotlinOptions { jvmTarget = "17" }
-              defaultConfig {
-                  applicationId = "${{ env.PACKAGE_NAME }}"
-                  minSdk = ${{ env.MIN_SDK }}
-                  targetSdk = ${{ env.TARGET_SDK }}
-                  versionCode = 1
-                  versionName = "1.0"
-                  multiDexEnabled true
-              }
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.debug
-                      minifyEnabled = ${{ env.USE_PROGUARD }}
-                      shrinkResources = ${{ env.USE_PROGUARD }}
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-                  debug { minifyEnabled = false }
-              }
-          }
-          flutter { source = "../.." }
-          dependencies {
-              coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
-          }
-          EOF
-          echo "✅ build.gradle generated"
+          echo "✅ MainActivity.kt fixed"
 
       - name: Apply custom app icon
         run: |
           if [ "${{ env.HAS_ICON }}" = "true" ] && [ -f "assets/icon.png" ]; then
-            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
-            done
-            echo "✅ Custom icon applied"
+            if file assets/icon.png | grep -q "PNG"; then
+              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+                mkdir -p android/app/src/main/res/mipmap-$density
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+              done
+              echo "✅ Custom icon applied"
+            fi
           fi
 
       - name: Build release APK
