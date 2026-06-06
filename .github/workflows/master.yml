@@ -24,13 +24,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/*.gradle') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
       - name: Extract build config from payload
         run: |
           echo "PACKAGE_NAME=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
@@ -50,55 +43,109 @@ jobs:
 
       - name: Copy main.dart from repository
         run: |
-          if [ -f "lib/main.dart" ]; then
-            echo "✅ main.dart found"
-          else
+          if [ ! -f "lib/main.dart" ]; then
             echo "❌ lib/main.dart not found"
             exit 1
           fi
+          echo "✅ main.dart found"
 
-      - name: Copy custom AndroidManifest.xml from repository backup
+      - name: Create complete AndroidManifest.xml
         run: |
-          if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
-            cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest.xml copied"
-          fi
+          cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              
+              <!-- Network -->
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              
+              <!-- Camera -->
+              <uses-permission android:name="android.permission.CAMERA" />
+              
+              <!-- Storage -->
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              
+              <!-- Microphone -->
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              
+              <!-- Location -->
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+              
+              <!-- Bluetooth -->
+              <uses-permission android:name="android.permission.BLUETOOTH" />
+              <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+              <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+              <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+              
+              <!-- Notifications -->
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              
+              <!-- Contacts -->
+              <uses-permission android:name="android.permission.READ_CONTACTS" />
+              <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+              
+              <!-- Calendar -->
+              <uses-permission android:name="android.permission.READ_CALENDAR" />
+              <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+              
+              <!-- Phone -->
+              <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+              <uses-permission android:name="android.permission.CALL_PHONE" />
+              
+              <!-- Sensors -->
+              <uses-permission android:name="android.permission.BODY_SENSORS" />
+              
+              <!-- System -->
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              
+              <application
+                  android:label="${{ env.APP_NAME }}"
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="true"
+                  android:requestLegacyExternalStorage="true">
+                  
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          echo "✅ AndroidManifest.xml created"
 
-      - name: Setup XML resources
+      - name: Create XML resources
         run: |
           mkdir -p android/app/src/main/res/xml
           
-          # Create file_paths.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/file_paths.xml
-          echo '<paths xmlns:android="http://schemas.android.com/apk/res/android">' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <external-path name="external_files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <files-path name="files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <cache-path name="cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <external-files-path name="external_app_files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <external-cache-path name="external_cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '    <root-path name="root" path="." />' >> android/app/src/main/res/xml/file_paths.xml
-          echo '</paths>' >> android/app/src/main/res/xml/file_paths.xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <external-path name="external_files" path="." />
+              <files-path name="files" path="." />
+              <cache-path name="cache" path="." />
+          </paths>
+          EOF
           
-          # Create network_security_config.xml
-          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/network_security_config.xml
-          echo '<network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    <base-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '        <trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '            <certificates src="system" />' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '        </trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '    </base-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          echo '</network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
-          
+          cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true" />
+          </network-security-config>
+          EOF
           echo "✅ XML resources created"
-
-      - name: Fix manifest compatibility
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
-            sed -i 's/package="[^"]*"//' "$MANIFEST"
-            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
-          fi
 
       - name: Use repository pubspec.yaml
         run: |
@@ -119,8 +166,7 @@ jobs:
 
       - name: Generate build.gradle
         run: |
-          rm -f android/build.gradle.kts android/app/build.gradle.kts
-          cat > android/build.gradle <<'EOF'
+          cat > android/build.gradle << 'EOF'
           buildscript {
               ext.kotlin_version = '2.1.0'
               repositories { google(); mavenCentral() }
@@ -136,7 +182,7 @@ jobs:
           tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
 
-          cat > android/app/build.gradle <<EOF
+          cat > android/app/build.gradle << EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
@@ -170,11 +216,11 @@ jobs:
               }
           }
           flutter { source = "../.." }
-          
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
+          echo "✅ build.gradle generated"
 
       - name: Apply custom app icon
         run: |
@@ -196,24 +242,12 @@ jobs:
           name: FlutterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Create GitHub Release
-        if: success()
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gh
-          TAG_NAME="build-${{ github.run_number }}-$(date +'%Y%m%d-%H%M%S')"
-          RELEASE_NAME="Build ${{ github.run_number }} - ${{ env.APP_NAME }}"
-          gh release create "$TAG_NAME" \
-            --title "$RELEASE_NAME" \
-            --notes "Build from Flutter Build Studio" \
-            --repo "${{ github.repository }}" \
-            build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build Summary
         if: always()
         run: |
-          echo "Build Status: ${{ job.status }}"
+          echo "═══════════════════════════════════════════════════════════"
+          echo "✅ BUILD COMPLETED"
+          echo "═══════════════════════════════════════════════════════════"
+          echo "Status: ${{ job.status }}"
           echo "Package: ${{ env.PACKAGE_NAME }}"
           echo "App Name: ${{ env.APP_NAME }}"
