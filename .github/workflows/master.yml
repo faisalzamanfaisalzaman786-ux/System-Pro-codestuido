@@ -1,8 +1,8 @@
-name: Stable Base (Use Repo AndroidManifest from Backup)
+name: Flutter Build Studio
 
 on:
   repository_dispatch:
-    types: [filter_app_build]
+    types: [flutter_app_build]
 
 jobs:
   build:
@@ -24,99 +24,31 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Download and extract ZIP from Gist
-        run: |
-          GIST_ID="${{ github.event.client_payload.gist_id }}"
-          
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📦 DOWNLOADING AND EXTRACTING ZIP FROM GIST"
-          echo "═══════════════════════════════════════════════════════════"
-          
-          if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
-            echo "❌ No gist_id provided"
-            exit 1
-          fi
-          
-          echo "📦 Downloading from Gist: $GIST_ID"
-          mkdir -p lib
-          
-          # Install unzip if not available
-          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
-          
-          # Download ZIP file from Gist
-          echo "📥 Downloading ZIP file..."
-          curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/source.zip" -o source.zip 2>/dev/null
-          
-          if [ ! -s source.zip ]; then
-            echo "Raw URL failed, using API..."
-            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" -o gist.json
-            ZIP_CONTENT=$(jq -r '.files["source.zip"].content // empty' gist.json)
-            if [ -n "$ZIP_CONTENT" ] && [ "$ZIP_CONTENT" != "null" ]; then
-              echo "$ZIP_CONTENT" | base64 -d > source.zip
-            fi
-            rm -f gist.json
-          fi
-          
-          # Extract ZIP
-          if [ -s source.zip ]; then
-            echo "📦 Extracting ZIP file..."
-            unzip -o source.zip
-            
-            # Move files to correct locations
-            if [ -f "main.dart" ]; then
-              mv main.dart lib/
-              echo "✅ main.dart extracted"
-            else
-              echo "❌ main.dart not found in ZIP"
-              exit 1
-            fi
-            
-            if [ -f "icon.png" ]; then
-              echo "✅ icon.png extracted"
-            else
-              echo "ℹ️ No icon.png in ZIP"
-            fi
-          else
-            echo "❌ Failed to download ZIP"
-            exit 1
-          fi
-          
-          # Clean main.dart
-          sed -i '1s/^\xEF\xBB\xBF//' lib/main.dart
-          tr -d '\0' < lib/main.dart > lib/main_clean.dart
-          mv lib/main_clean.dart lib/main.dart
-          
-          echo ""
-          echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
-          
-          # Validate icon if exists
-          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
-            if file icon.png | grep -q "PNG"; then
-              echo "✅ Icon valid: $(wc -c < icon.png) bytes"
-            else
-              echo "⚠️ Icon file not valid PNG"
-              rm -f icon.png
-            fi
-          fi
-          
-          # Verify checksum
-          EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
-          if [ -n "$EXPECTED_CHECKSUM" ] && [ "$EXPECTED_CHECKSUM" != "null" ]; then
-            ACTUAL_CHECKSUM=$(sha256sum lib/main.dart | cut -d' ' -f1)
-            if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
-              echo "❌ Checksum mismatch!"
-              exit 1
-            fi
-            echo "✅ Checksum verified"
-          fi
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/*.gradle') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
-      - name: Extract build config
+      - name: Extract build config from payload
         run: |
-          echo "PACKAGE_NAME=${{ github.event.client_payload.build_config.package_name }}" >> $GITHUB_ENV
-          echo "APP_NAME=${{ github.event.client_payload.build_config.app_display_name }}" >> $GITHUB_ENV
-          echo "MIN_SDK=${{ github.event.client_payload.build_config.min_sdk }}" >> $GITHUB_ENV
-          echo "TARGET_SDK=${{ github.event.client_payload.build_config.target_sdk }}" >> $GITHUB_ENV
-          echo "USE_PROGUARD=${{ github.event.client_payload.build_config.use_proguard }}" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+          echo "MIN_SDK=${{ github.event.client_payload.min_sdk }}" >> $GITHUB_ENV
+          echo "TARGET_SDK=${{ github.event.client_payload.target_sdk }}" >> $GITHUB_ENV
+          echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
+          echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
+          
+          echo "═══════════════════════════════════════════════════════════"
+          echo "📦 BUILD CONFIGURATION"
+          echo "═══════════════════════════════════════════════════════════"
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
+          echo "Min SDK: ${{ env.MIN_SDK }}"
+          echo "Target SDK: ${{ env.TARGET_SDK }}"
+          echo "ProGuard: ${{ env.USE_PROGUARD }}"
+          echo "Has Icon: ${{ env.HAS_ICON }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -125,36 +57,49 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Flutter project created"
+          echo "✅ Fresh Flutter project created"
+
+      - name: Copy main.dart from repository
+        run: |
+          if [ -f "lib/main.dart" ]; then
+            echo "✅ main.dart found in repository"
+            cat lib/main.dart | head -5
+          else
+            echo "❌ lib/main.dart not found in repository!"
+            exit 1
+          fi
+
+      - name: Copy custom AndroidManifest.xml from repository backup
+        run: |
+          if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
+            cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            echo "✅ Custom AndroidManifest.xml copied"
+          else
+            echo "⚠️ No custom AndroidManifest.xml found, using default"
+          fi
+
+      - name: Fix manifest compatibility
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+              sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
+            fi
+            sed -i 's/package="[^"]*"//' "$MANIFEST"
+            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
+            echo "✅ Manifest fixes applied"
+          fi
 
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found"
+            echo "❌ pubspec.yaml not found in repository root!"
             exit 1
           fi
           flutter pub get
+          echo "✅ flutter pub get completed"
 
-      - name: Copy AndroidManifest from backup
-        run: |
-          if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
-            cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ AndroidManifest copied"
-          else
-            echo "❌ AndroidManifest not found"
-            exit 1
-          fi
-
-      - name: Fix manifest
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
-            sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
-          fi
-          sed -i 's/package="[^"]*"//' "$MANIFEST"
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
-
-      - name: Fix Kotlin structure
+      - name: Fix Kotlin directory structure
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
@@ -162,6 +107,7 @@ jobs:
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
+          echo "✅ Kotlin structure fixed"
 
       - name: Generate build.gradle
         run: |
@@ -216,43 +162,91 @@ jobs:
               }
           }
           flutter { source = "../.." }
+          
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
+          echo "✅ build.gradle generated"
 
-      - name: Apply custom app icon
+      - name: Apply custom app icon (if provided)
         run: |
-          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
-            if file icon.png | grep -q "PNG"; then
-              echo "✅ Applying custom icon..."
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🖼️ ICON APPLICATION"
+          echo "═══════════════════════════════════════════════════════════"
+          
+          if [ "${{ env.HAS_ICON }}" = "true" ] && [ -f "assets/icon.png" ]; then
+            echo "📷 Custom icon found in repository"
+            
+            # Check if it's a valid PNG
+            if file assets/icon.png | grep -q "PNG"; then
+              echo "✅ Valid PNG icon detected"
+              
+              # Apply to all mipmap densities
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
-                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-                cp icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
-              echo "✅ Custom icon applied"
+              
+              echo "✅ Custom icon applied to all densities"
             else
-              echo "⚠️ Icon file not valid PNG"
+              echo "⚠️ Icon file exists but is not valid PNG"
+              echo "File type: $(file assets/icon.png)"
+              echo "ℹ️ Using default Flutter icon"
             fi
           else
-            echo "ℹ️ No custom icon provided"
+            echo "ℹ️ No custom icon provided, using default Flutter icon"
           fi
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🔨 BUILDING APK"
+          echo "═══════════════════════════════════════════════════════════"
+          flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
+          name: FlutterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Cleanup temporary Gist
+      - name: Create GitHub Release
+        if: success()
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "📦 CREATING RELEASE"
+          echo "═══════════════════════════════════════════════════════════"
+          
+          # Install GitHub CLI
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gh
+            
+          # Create release with current timestamp
+          TAG_NAME="build-${{ github.run_number }}-$(date +'%Y%m%d-%H%M%S')"
+          RELEASE_NAME="Build ${{ github.run_number }} - ${{ env.APP_NAME }}"
+          
+          gh release create "$TAG_NAME" \
+            --title "$RELEASE_NAME" \
+            --notes "Build triggered from Flutter Forge UI" \
+            --repo "${{ github.repository }}" \
+            build/app/outputs/flutter-apk/app-release.apk
+          
+          echo "✅ Release created: $TAG_NAME"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Summary
         if: always()
         run: |
-          GIST_ID="${{ github.event.client_payload.gist_id }}"
-          if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
-            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" --fail --silent || true
-            echo "✅ Temporary gist deleted: $GIST_ID"
-          fi
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🏁 BUILD SUMMARY"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "📦 Package: ${{ env.PACKAGE_NAME }}"
+          echo "📱 App Name: ${{ env.APP_NAME }}"
+          echo "🖼️ Custom Icon: ${{ env.HAS_ICON }}"
+          echo "✅ Build Status: ${{ job.status }}"
+          echo ""
