@@ -39,16 +39,6 @@ jobs:
           echo "TARGET_SDK=${{ github.event.client_payload.target_sdk }}" >> $GITHUB_ENV
           echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
           echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
-          
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📦 BUILD CONFIGURATION"
-          echo "═══════════════════════════════════════════════════════════"
-          echo "Package: ${{ env.PACKAGE_NAME }}"
-          echo "App Name: ${{ env.APP_NAME }}"
-          echo "Min SDK: ${{ env.MIN_SDK }}"
-          echo "Target SDK: ${{ env.TARGET_SDK }}"
-          echo "ProGuard: ${{ env.USE_PROGUARD }}"
-          echo "Has Icon: ${{ env.HAS_ICON }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -57,15 +47,13 @@ jobs:
           PROJ=$(echo "$PKG" | rev | cut -d. -f1 | rev)
           rm -rf android ios .dart_tool build
           flutter create --org "$ORG" --project-name "$PROJ" --platforms=android .
-          echo "✅ Fresh Flutter project created"
 
       - name: Copy main.dart from repository
         run: |
           if [ -f "lib/main.dart" ]; then
-            echo "✅ main.dart found in repository"
-            cat lib/main.dart | head -5
+            echo "✅ main.dart found"
           else
-            echo "❌ lib/main.dart not found in repository!"
+            echo "❌ lib/main.dart not found"
             exit 1
           fi
 
@@ -73,88 +61,52 @@ jobs:
         run: |
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-            echo "✅ Custom AndroidManifest.xml copied"
-          else
-            echo "⚠️ No custom AndroidManifest.xml found, using default"
+            echo "✅ AndroidManifest.xml copied"
           fi
 
-      - name: Copy XML resources (file_paths.xml and network_security_config.xml)
+      - name: Setup XML resources
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📁 COPYING XML RESOURCES"
-          echo "═══════════════════════════════════════════════════════════"
-          
-          # Create xml directory
           mkdir -p android/app/src/main/res/xml
           
-          # Copy file_paths.xml from repository backup
-          if [ -f "android_manifest_backup/file_paths.xml" ]; then
-            cp android_manifest_backup/file_paths.xml android/app/src/main/res/xml/
-            echo "✅ file_paths.xml copied from backup"
-          elif [ -f "assets/file_paths.xml" ]; then
-            cp assets/file_paths.xml android/app/src/main/res/xml/
-            echo "✅ file_paths.xml copied from assets"
-          else
-            echo "⚠️ Creating default file_paths.xml"
-            cat > android/app/src/main/res/xml/file_paths.xml <<'EOFX'
-<?xml version="1.0" encoding="utf-8"?>
-<paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="external_files" path="." />
-    <files-path name="files" path="." />
-    <cache-path name="cache" path="." />
-    <external-files-path name="external_app_files" path="." />
-    <external-cache-path name="external_cache" path="." />
-    <root-path name="root" path="." />
-</paths>
-EOFX
-            echo "✅ Default file_paths.xml created"
-          fi
+          # Create file_paths.xml
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/file_paths.xml
+          echo '<paths xmlns:android="http://schemas.android.com/apk/res/android">' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <external-path name="external_files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <files-path name="files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <cache-path name="cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <external-files-path name="external_app_files" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <external-cache-path name="external_cache" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '    <root-path name="root" path="." />' >> android/app/src/main/res/xml/file_paths.xml
+          echo '</paths>' >> android/app/src/main/res/xml/file_paths.xml
           
-          # Copy network_security_config.xml from repository backup
-          if [ -f "android_manifest_backup/network_security_config.xml" ]; then
-            cp android_manifest_backup/network_security_config.xml android/app/src/main/res/xml/
-            echo "✅ network_security_config.xml copied from backup"
-          elif [ -f "assets/network_security_config.xml" ]; then
-            cp assets/network_security_config.xml android/app/src/main/res/xml/
-            echo "✅ network_security_config.xml copied from assets"
-          else
-            echo "⚠️ Creating default network_security_config.xml"
-            cat > android/app/src/main/res/xml/network_security_config.xml <<'EOFX'
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
-</network-security-config>
-EOFX
-            echo "✅ Default network_security_config.xml created"
-          fi
+          # Create network_security_config.xml
+          echo '<?xml version="1.0" encoding="utf-8"?>' > android/app/src/main/res/xml/network_security_config.xml
+          echo '<network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    <base-config cleartextTrafficPermitted="true">' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '        <trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '            <certificates src="system" />' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '        </trust-anchors>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '    </base-config>' >> android/app/src/main/res/xml/network_security_config.xml
+          echo '</network-security-config>' >> android/app/src/main/res/xml/network_security_config.xml
           
-          echo "📁 XML directory contents:"
-          ls -la android/app/src/main/res/xml/
+          echo "✅ XML resources created"
 
       - name: Fix manifest compatibility
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
-              sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
-            fi
+            sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' "$MANIFEST"
             sed -i 's/package="[^"]*"//' "$MANIFEST"
             sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
-            echo "✅ Manifest fixes applied"
           fi
 
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
+            echo "❌ pubspec.yaml not found"
             exit 1
           fi
           flutter pub get
-          echo "✅ flutter pub get completed"
 
       - name: Fix Kotlin directory structure
         run: |
@@ -164,7 +116,6 @@ EOFX
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
             rm -rf android/app/src/main/kotlin/com
           fi
-          echo "✅ Kotlin structure fixed"
 
       - name: Generate build.gradle
         run: |
@@ -224,44 +175,20 @@ EOFX
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
-          echo "✅ build.gradle generated"
 
-      - name: Apply custom app icon (if provided)
+      - name: Apply custom app icon
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🖼️ ICON APPLICATION"
-          echo "═══════════════════════════════════════════════════════════"
-          
           if [ "${{ env.HAS_ICON }}" = "true" ] && [ -f "assets/icon.png" ]; then
-            echo "📷 Custom icon found in repository"
-            
-            # Check if it's a valid PNG
-            if file assets/icon.png | grep -q "PNG"; then
-              echo "✅ Valid PNG icon detected"
-              
-              # Apply to all mipmap densities
-              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-                mkdir -p android/app/src/main/res/mipmap-$density
-                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
-              done
-              
-              echo "✅ Custom icon applied to all densities"
-            else
-              echo "⚠️ Icon file exists but is not valid PNG"
-              echo "File type: $(file assets/icon.png)"
-              echo "ℹ️ Using default Flutter icon"
-            fi
-          else
-            echo "ℹ️ No custom icon provided, using default Flutter icon"
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$density
+              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+            echo "✅ Custom icon applied"
           fi
 
       - name: Build release APK
-        run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🔨 BUILDING APK"
-          echo "═══════════════════════════════════════════════════════════"
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -272,38 +199,21 @@ EOFX
       - name: Create GitHub Release
         if: success()
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📦 CREATING RELEASE"
-          echo "═══════════════════════════════════════════════════════════"
-          
-          # Install GitHub CLI
           sudo apt-get update -qq
           sudo apt-get install -y -qq gh
-            
-          # Create release with current timestamp
           TAG_NAME="build-${{ github.run_number }}-$(date +'%Y%m%d-%H%M%S')"
           RELEASE_NAME="Build ${{ github.run_number }} - ${{ env.APP_NAME }}"
-          
           gh release create "$TAG_NAME" \
             --title "$RELEASE_NAME" \
-            --notes "Build triggered from Flutter Forge UI" \
+            --notes "Build from Flutter Build Studio" \
             --repo "${{ github.repository }}" \
             build/app/outputs/flutter-apk/app-release.apk
-          
-          echo "✅ Release created: $TAG_NAME"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Summary
         if: always()
         run: |
-          echo ""
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🏁 BUILD SUMMARY"
-          echo "═══════════════════════════════════════════════════════════"
-          echo ""
-          echo "📦 Package: ${{ env.PACKAGE_NAME }}"
-          echo "📱 App Name: ${{ env.APP_NAME }}"
-          echo "🖼️ Custom Icon: ${{ env.HAS_ICON }}"
-          echo "✅ Build Status: ${{ job.status }}"
-          echo ""
+          echo "Build Status: ${{ job.status }}"
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
