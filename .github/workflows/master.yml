@@ -42,26 +42,49 @@ jobs:
 
       - name: Copy source files from repository
         run: |
-          # Copy main.dart
-          cp lib/main.dart lib/main.dart
+          # Copy main.dart (note: source and destination are same because we're in repo root)
+          # The main.dart is already in lib/ from the fresh project, but we overwrite with repo version
+          if [ -f "lib/main.dart" ]; then
+            echo "✅ main.dart exists in repository"
+          else
+            echo "❌ main.dart not found"
+            exit 1
+          fi
           
-          # Copy pubspec.yaml
-          cp pubspec.yaml pubspec.yaml
-          flutter pub get
+          # Copy pubspec.yaml and get dependencies
+          if [ -f "pubspec.yaml" ]; then
+            flutter pub get
+            echo "✅ pubspec.yaml processed"
+          else
+            echo "❌ pubspec.yaml not found"
+            exit 1
+          fi
           
           # Copy AndroidManifest
-          cp android_manifest_backup/AndroidManifest.xml android/app/src/main/
+          if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
+            cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+            echo "✅ AndroidManifest.xml copied"
+          else
+            echo "⚠️ AndroidManifest.xml not found, using default"
+          fi
           
           # Copy XML resources
           mkdir -p android/app/src/main/res/xml
-          cp android_manifest_backup/file_paths.xml android/app/src/main/res/xml/ 2>/dev/null || echo "No file_paths.xml"
-          cp android_manifest_backup/network_security_config.xml android/app/src/main/res/xml/ 2>/dev/null || echo "No network_security_config.xml"
-          
-          echo "✅ All files copied"
+          if [ -f "android_manifest_backup/file_paths.xml" ]; then
+            cp android_manifest_backup/file_paths.xml android/app/src/main/res/xml/
+            echo "✅ file_paths.xml copied"
+          fi
+          if [ -f "android_manifest_backup/network_security_config.xml" ]; then
+            cp android_manifest_backup/network_security_config.xml android/app/src/main/res/xml/
+            echo "✅ network_security_config.xml copied"
+          fi
 
       - name: Update app name in manifest
         run: |
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
+            echo "✅ App name updated to: ${{ env.APP_NAME }}"
+          fi
 
       - name: Fix Kotlin structure
         run: |
@@ -70,6 +93,9 @@ jobs:
           if [ -f "android/app/src/main/kotlin/com/example/app/MainActivity.kt" ]; then
             mv android/app/src/main/kotlin/com/example/app/MainActivity.kt android/app/src/main/kotlin/$PKG_PATH/
             rm -rf android/app/src/main/kotlin/com
+            echo "✅ Kotlin structure fixed"
+          else
+            echo "ℹ️ No Kotlin file to move"
           fi
 
       - name: Setup build.gradle with desugaring
@@ -98,7 +124,14 @@ jobs:
                   multiDexEnabled true
               }
               buildTypes {
-                  release { signingConfig = signingConfigs.debug }
+                  release {
+                      signingConfig = signingConfigs.debug
+                      minifyEnabled = false
+                      shrinkResources = false
+                  }
+                  debug {
+                      minifyEnabled = false
+                  }
               }
           }
           flutter { source = "../.." }
@@ -106,22 +139,40 @@ jobs:
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
+          echo "✅ build.gradle configured with desugaring"
 
-      - name: Apply app icon
+      - name: Apply custom app icon
         if: env.HAS_ICON == 'true'
         run: |
           if [ -f "assets/icon.png" ]; then
-            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-              mkdir -p android/app/src/main/res/mipmap-$density
-              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-            done
+            if file assets/icon.png | grep -q "PNG"; then
+              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+                mkdir -p android/app/src/main/res/mipmap-$density
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+              done
+              echo "✅ Custom icon applied"
+            fi
           fi
 
-      - name: Build APK
+      - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FlutterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ BUILD SUCCESSFUL"
+          else
+            echo "❌ BUILD FAILED"
+          fi
+          echo "═══════════════════════════════════════════════════════════"
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
