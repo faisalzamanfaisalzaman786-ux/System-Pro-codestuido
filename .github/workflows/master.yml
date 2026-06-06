@@ -40,8 +40,6 @@ jobs:
           echo "App Name: ${{ env.APP_NAME }}"
           echo "Min SDK: ${{ env.MIN_SDK }}"
           echo "Target SDK: ${{ env.TARGET_SDK }}"
-          echo "ProGuard: ${{ env.USE_PROGUARD }}"
-          echo "Has Icon: ${{ env.HAS_ICON }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -69,9 +67,13 @@ jobs:
           flutter pub get
           echo "✅ flutter pub get completed"
 
-      - name: Copy AndroidManifest and XML resources
+      - name: Copy AndroidManifest and XML resources from backup
         run: |
-          # Copy AndroidManifest from backup
+          echo "═══════════════════════════════════════════════════════════"
+          echo "📁 COPYING FILES FROM BACKUP"
+          echo "═══════════════════════════════════════════════════════════"
+          
+          # Copy AndroidManifest.xml
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
@@ -83,17 +85,39 @@ jobs:
           # Create xml directory
           mkdir -p android/app/src/main/res/xml
           
-          # Copy file_paths.xml if exists
+          # Copy file_paths.xml
           if [ -f "android_manifest_backup/file_paths.xml" ]; then
             cp android_manifest_backup/file_paths.xml android/app/src/main/res/xml/
             echo "✅ file_paths.xml copied"
+          else
+            echo "⚠️ file_paths.xml not found - creating default"
+            cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <external-path name="external_files" path="." />
+              <files-path name="files" path="." />
+              <cache-path name="cache" path="." />
+          </paths>
+          EOF
           fi
           
-          # Copy network_security_config.xml if exists
+          # Copy network_security_config.xml
           if [ -f "android_manifest_backup/network_security_config.xml" ]; then
             cp android_manifest_backup/network_security_config.xml android/app/src/main/res/xml/
             echo "✅ network_security_config.xml copied"
+          else
+            echo "⚠️ network_security_config.xml not found - creating default"
+            cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true" />
+          </network-security-config>
+          EOF
           fi
+          
+          echo ""
+          echo "📁 Files in android/app/src/main/res/xml/:"
+          ls -la android/app/src/main/res/xml/
 
       - name: Fix AndroidManifest.xml (remove package attribute and update app name)
         run: |
@@ -101,20 +125,17 @@ jobs:
           if [ -f "$MANIFEST" ]; then
             # Remove deprecated package attribute
             sed -i 's/package="[^"]*"//g' "$MANIFEST"
-            # Remove xmlns:tools if package was the only place it was used
-            sed -i 's/xmlns:tools="http:\/\/schemas.android.com\/tools"//g' "$MANIFEST"
             # Update app name
             sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
             echo "✅ AndroidManifest.xml fixed"
             echo "App name set to: ${{ env.APP_NAME }}"
           fi
 
-      - name: Fix Kotlin directory structure
+      - name: Fix MainActivity.kt
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
-          # Create proper MainActivity.kt
           cat > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt << EOF
           package ${{ env.PACKAGE_NAME }}
           
@@ -123,11 +144,10 @@ jobs:
           class MainActivity: FlutterActivity()
           EOF
           
-          # Remove old kotlin directories
           rm -rf android/app/src/main/kotlin/com
-          echo "✅ Kotlin structure fixed"
+          echo "✅ MainActivity.kt fixed"
 
-      - name: Setup build.gradle with desugaring support
+      - name: Setup build.gradle with desugaring
         run: |
           # Root build.gradle
           cat > android/build.gradle << 'EOF'
@@ -197,9 +217,8 @@ jobs:
               buildTypes {
                   release {
                       signingConfig = signingConfigs.debug
-                      minifyEnabled = ${{ env.USE_PROGUARD }}
-                      shrinkResources = ${{ env.USE_PROGUARD }}
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                      minifyEnabled = false
+                      shrinkResources = false
                   }
                   debug {
                       minifyEnabled = false
@@ -216,30 +235,39 @@ jobs:
           }
           EOF
           
-          echo "✅ build.gradle files configured"
+          echo "✅ build.gradle files configured with desugaring"
 
       - name: Apply custom app icon
         if: env.HAS_ICON == 'true'
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🖼️ ICON APPLICATION"
-          echo "═══════════════════════════════════════════════════════════"
-          
           if [ -f "assets/icon.png" ]; then
             if file assets/icon.png | grep -q "PNG"; then
-              echo "✅ Valid PNG icon detected"
               for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
                 mkdir -p android/app/src/main/res/mipmap-$density
                 cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
                 cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
               done
-              echo "✅ Custom icon applied to all densities"
-            else
-              echo "⚠️ Icon file exists but is not valid PNG"
+              echo "✅ Custom icon applied"
             fi
-          else
-            echo "ℹ️ No custom icon found at assets/icon.png"
           fi
+
+      - name: Validate files before build
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🔍 VALIDATING FILES"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "AndroidManifest.xml exists:"
+          ls -la android/app/src/main/AndroidManifest.xml
+          echo ""
+          echo "XML resources in res/xml/:"
+          ls -la android/app/src/main/res/xml/ || echo "No xml files found"
+          echo ""
+          echo "MainActivity.kt exists:"
+          find android/app/src/main/kotlin -name "*.kt" 2>/dev/null || echo "Not found"
+          echo ""
+          echo "Build.gradle files:"
+          ls -la android/build.gradle android/app/build.gradle
 
       - name: Build release APK
         run: |
@@ -257,23 +285,15 @@ jobs:
       - name: Create GitHub Release
         if: success()
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📦 CREATING RELEASE"
-          echo "═══════════════════════════════════════════════════════════"
-          
           sudo apt-get update -qq
           sudo apt-get install -y -qq gh
-          
           TAG_NAME="build-${{ github.run_number }}-$(date +'%Y%m%d-%H%M%S')"
           RELEASE_NAME="Build ${{ github.run_number }} - ${{ env.APP_NAME }}"
-          
           gh release create "$TAG_NAME" \
             --title "$RELEASE_NAME" \
-            --notes "Build triggered from Flutter Build Studio" \
+            --notes "Build from Flutter Build Studio" \
             --repo "${{ github.repository }}" \
             build/app/outputs/flutter-apk/app-release.apk
-          
-          echo "✅ Release created: $TAG_NAME"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -291,6 +311,5 @@ jobs:
           echo ""
           echo "📦 Package: ${{ env.PACKAGE_NAME }}"
           echo "📱 App Name: ${{ env.APP_NAME }}"
-          echo "🖼️ Custom Icon: ${{ env.HAS_ICON }}"
           echo "📊 Build Status: ${{ job.status }}"
           echo ""
