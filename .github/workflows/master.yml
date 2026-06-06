@@ -89,18 +89,34 @@ jobs:
           PACKAGE="${{ env.PACKAGE_NAME }}"
           echo "Creating MainActivity.kt for package: $PACKAGE"
           
-          # Create directory and file using printf
-          mkdir -p android/app/src/main/kotlin/$(echo $PACKAGE | tr '.' '/')
+          # Convert package to path
+          PKG_PATH=$(echo "$PACKAGE" | tr '.' '/')
           
-          printf 'package %s\n\nimport io.flutter.embedding.android.FlutterActivity\n\nclass MainActivity : FlutterActivity()\n' "$PACKAGE" > android/app/src/main/kotlin/$(echo $PACKAGE | tr '.' '/')/MainActivity.kt
+          # Create directory
+          mkdir -p "android/app/src/main/kotlin/$PKG_PATH"
+          
+          # Create file using heredoc
+          cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" << EOF
+          package $PACKAGE
+          
+          import io.flutter.embedding.android.FlutterActivity
+          
+          class MainActivity : FlutterActivity()
+          EOF
           
           # Remove old directory
           rm -rf android/app/src/main/kotlin/com
           
-          # Verify and display
-          echo "✅ MainActivity.kt created"
-          echo "Content:"
-          cat android/app/src/main/kotlin/$(echo $PACKAGE | tr '.' '/')/MainActivity.kt
+          # Verify
+          if [ -f "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" ]; then
+            echo "✅ MainActivity.kt created successfully"
+            echo ""
+            echo "Content:"
+            cat "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt"
+          else
+            echo "❌ Failed to create MainActivity.kt"
+            exit 1
+          fi
 
       - name: Setup build.gradle
         run: |
