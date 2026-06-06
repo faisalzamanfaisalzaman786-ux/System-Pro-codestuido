@@ -66,6 +66,8 @@ jobs:
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
+          else
+            echo "⚠️ Using default AndroidManifest.xml"
           fi
           
           if [ -f "android_manifest_backup/file_paths.xml" ]; then
@@ -80,43 +82,30 @@ jobs:
 
       - name: Fix AndroidManifest.xml
         run: |
-          sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
-          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
-          echo "✅ AndroidManifest.xml fixed"
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
+            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
+            echo "✅ AndroidManifest.xml fixed"
+          fi
 
-      - name: Create MainActivity.kt
+      - name: Create MainActivity.kt (Simple Method)
         run: |
-          PACKAGE="${{ env.PACKAGE_NAME }}"
-          echo "Creating MainActivity.kt for package: $PACKAGE"
-          
-          # Convert package to path
-          PKG_PATH=$(echo "$PACKAGE" | tr '.' '/')
-          
           # Create directory
-          mkdir -p "android/app/src/main/kotlin/$PKG_PATH"
+          mkdir -p android/app/src/main/kotlin/com/filter/app1
           
-          # Create file using heredoc
-          cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" << EOF
-          package $PACKAGE
-          
-          import io.flutter.embedding.android.FlutterActivity
-          
-          class MainActivity : FlutterActivity()
-          EOF
+          # Create file using simple echo commands
+          echo "package com.filter.app1" > android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
+          echo "" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
+          echo "import io.flutter.embedding.android.FlutterActivity" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
+          echo "" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
+          echo "class MainActivity : FlutterActivity()" >> android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
           
           # Remove old directory
-          rm -rf android/app/src/main/kotlin/com
+          rm -rf android/app/src/main/kotlin/com/example
           
-          # Verify
-          if [ -f "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" ]; then
-            echo "✅ MainActivity.kt created successfully"
-            echo ""
-            echo "Content:"
-            cat "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt"
-          else
-            echo "❌ Failed to create MainActivity.kt"
-            exit 1
-          fi
+          echo "✅ MainActivity.kt created"
+          echo "Content:"
+          cat android/app/src/main/kotlin/com/filter/app1/MainActivity.kt
 
       - name: Setup build.gradle
         run: |
