@@ -11,7 +11,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:io';
+import 'dart:async';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,12 +81,12 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       FeatureCard('📅 Calendar', 'Open calendar', Icons.calendar_today, () => testCalendar()),
       FeatureCard('👥 Contacts', 'Open contacts', Icons.contacts, () => testContacts()),
       FeatureCard('🎤 Microphone', 'Test audio record', Icons.mic, () => testMicrophone()),
-      FeatureCard('🔐 Biometric', 'Test fingerprint', Icons.fingerprint, () => testBiometric()),
       FeatureCard('📤 Share', 'Share text', Icons.share, () => testShare()),
     ];
   }
   
   Future<void> checkAllPermissions() async {
+    // Only use permissions that exist in current version
     Map<Permission, String> permissionsToCheck = {
       Permission.camera: 'Camera',
       Permission.storage: 'Storage',
@@ -92,7 +94,6 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       Permission.bluetooth: 'Bluetooth',
       Permission.bluetoothScan: 'Bluetooth Scan',
       Permission.bluetoothConnect: 'Bluetooth Connect',
-      Permission.notifications: 'Notifications',
       Permission.microphone: 'Microphone',
       Permission.contacts: 'Contacts',
       Permission.calendar: 'Calendar',
@@ -176,7 +177,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high
       );
-      _showMessage('📍 Location:\nLat: ${position.latitude}\nLng: ${position.longitude}');
+      _showMessage('📍 Location:\nLat: ${position.latitude}\nLng: ${position.longitude}\nAlt: ${position.altitude}');
     } else {
       _showMessage('Location permission denied');
     }
@@ -185,13 +186,13 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
   // BLUETOOTH TEST
   Future<void> testBluetooth() async {
     if (await FlutterBluePlus.isSupported == false) {
-      _showMessage('Bluetooth not supported');
+      _showMessage('Bluetooth not supported on this device');
       return;
     }
     
     final status = await Permission.bluetoothScan.request();
     if (!status.isGranted) {
-      _showMessage('Bluetooth permission denied');
+      _showMessage('Bluetooth scan permission denied');
       return;
     }
     
@@ -214,13 +215,17 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
     var connectivityResult = await (Connectivity().checkConnectivity());
     String status = '';
     if (connectivityResult.contains(ConnectivityResult.mobile)) {
-      status = '📱 Mobile Network';
+      status = '📱 Mobile Network (Cellular)';
     } else if (connectivityResult.contains(ConnectivityResult.wifi)) {
       status = '📶 WiFi Connected';
     } else if (connectivityResult.contains(ConnectivityResult.ethernet)) {
-      status = '🔌 Ethernet';
+      status = '🔌 Ethernet Connection';
+    } else if (connectivityResult.contains(ConnectivityResult.vpn)) {
+      status = '🔒 VPN Connection';
+    } else if (connectivityResult.contains(ConnectivityResult.bluetooth)) {
+      status = '🔵 Bluetooth Tethering';
     } else {
-      status = '❌ No Connection';
+      status = '❌ No Internet Connection';
     }
     _showMessage('Connectivity Status:\n$status');
   }
@@ -228,8 +233,8 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
   // STORAGE TEST
   Future<void> testStorage() async {
     final status = await Permission.storage.request();
-    if (!status.isGranted && await Permission.storage.isPermanentlyDenied) {
-      _showMessage('Storage permission permanently denied');
+    if (!status.isGranted) {
+      _showMessage('Storage permission denied');
       return;
     }
     
@@ -245,18 +250,21 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
   
   // NOTIFICATION TEST
   Future<void> testNotification() async {
+    final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'test_channel',
       'Test Channel',
       importance: Importance.high,
       priority: Priority.high,
+      showWhen: true,
     );
     const NotificationDetails details = NotificationDetails(android: androidDetails);
-    final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    
     await flutterLocalNotificationsPlugin.show(
       0,
-      'Test Notification',
-      'Your device supports notifications! Time: ${DateTime.now().hour}:${DateTime.now().minute}',
+      '✅ Notification Test',
+      'Your device supports notifications! Time: ${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}',
       details,
     );
     _showMessage('Notification sent! Check your status bar.');
@@ -273,8 +281,9 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
     const url = 'tel:1234567890';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
+      _showMessage('Dialer opened successfully');
     } else {
-      _showMessage('Cannot open dialer');
+      _showMessage('Cannot open dialer on this device');
     }
   }
   
@@ -285,7 +294,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       _showMessage('Calendar permission denied');
       return;
     }
-    _showMessage('✅ Calendar permission granted!\nYou can now access calendar events.');
+    _showMessage('✅ Calendar permission granted!\nYou can now read/write calendar events.');
   }
   
   // CONTACTS TEST
@@ -295,7 +304,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       _showMessage('Contacts permission denied');
       return;
     }
-    _showMessage('✅ Contacts permission granted!\nYou can now access contacts.');
+    _showMessage('✅ Contacts permission granted!\nYou can now access device contacts.');
   }
   
   // MICROPHONE TEST
@@ -308,19 +317,15 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
     _showMessage('✅ Microphone permission granted!\nYou can now record audio.');
   }
   
-  // BIOMETRIC TEST
-  Future<void> testBiometric() async {
-    final status = await Permission.biometric.request();
-    if (!status.isGranted) {
-      _showMessage('Biometric not available or permission denied');
-      return;
-    }
-    _showMessage('✅ Biometric authentication available!');
-  }
-  
   // SHARE TEST
   Future<void> testShare() async {
-    _showMessage('Share feature ready!\nUse share_plus package for sharing content.');
+    await Share.share(
+      'Check out this amazing device capability tester app!\n\n'
+      'It can test: Camera, Gallery, Location, Bluetooth, Sensors, Notifications, Storage, and more!\n\n'
+      'Built with Flutter 3.29.2',
+      subject: 'Device Capability Tester',
+    );
+    _showMessage('Share dialog opened!');
   }
   
   void showDeviceInfo() {
@@ -329,7 +334,9 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: Colors.grey[900],
         title: Text('Device Information', style: TextStyle(color: Colors.white)),
-        content: Text(deviceInfo, style: TextStyle(color: Colors.white70)),
+        content: SingleChildScrollView(
+          child: Text(deviceInfo, style: TextStyle(color: Colors.white70, fontSize: 14)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -342,7 +349,11 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
   
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: Duration(seconds: 3)),
+      SnackBar(
+        content: Text(message, maxLines: 3),
+        duration: Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
   
@@ -358,7 +369,9 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
             onPressed: () {
               checkAllPermissions();
               loadDeviceInfo();
+              _showMessage('Refreshed permissions & device info');
             },
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -371,7 +384,13 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('📋 Permission Status Summary', style: TextStyle(fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    Icon(Icons.security, size: 16, color: Colors.white70),
+                    SizedBox(width: 8),
+                    Text('Permission Status Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
                 SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -385,7 +404,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
                       ),
                       child: Text(
                         '${entry.key}: ${entry.value ? "✓" : "✗"}',
-                        style: TextStyle(fontSize: 11),
+                        style: TextStyle(fontSize: 10),
                       ),
                     );
                   }).toList(),
@@ -400,7 +419,7 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 1.1,
+                childAspectRatio: 1.0,
               ),
               itemCount: features.length,
               itemBuilder: (context, index) {
@@ -408,19 +427,20 @@ class _MainTesterScreenState extends State<MainTesterScreen> {
                 return Card(
                   color: Colors.grey[900],
                   elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: InkWell(
                     onTap: feature.onTap,
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: EdgeInsets.all(12),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(feature.icon, size: 48, color: Colors.blue[400]),
-                          SizedBox(height: 12),
-                          Text(feature.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          Icon(feature.icon, size: 40, color: Colors.blue[400]),
+                          SizedBox(height: 8),
+                          Text(feature.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                           SizedBox(height: 4),
-                          Text(feature.description, style: TextStyle(fontSize: 11, color: Colors.grey[400]), textAlign: TextAlign.center),
+                          Text(feature.description, style: TextStyle(fontSize: 10, color: Colors.grey[400]), textAlign: TextAlign.center),
                         ],
                       ),
                     ),
@@ -447,6 +467,7 @@ class CameraTestScreen extends StatefulWidget {
 class _CameraTestScreenState extends State<CameraTestScreen> {
   double _zoom = 1.0;
   double _maxZoom = 1.0;
+  bool _isReady = false;
   
   @override
   void initState() {
@@ -455,27 +476,43 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
   }
   
   Future<void> _loadZoomLevel() async {
-    double maxZoom = await widget.controller.getMaxZoomLevel();
-    setState(() => _maxZoom = maxZoom);
+    try {
+      double maxZoom = await widget.controller.getMaxZoomLevel();
+      setState(() {
+        _maxZoom = maxZoom;
+        _isReady = true;
+      });
+    } catch (e) {
+      setState(() => _isReady = true);
+    }
   }
   
   Future<void> _takePicture() async {
     try {
       final XFile picture = await widget.controller.takePicture();
-      _showMessage('Picture saved: ${picture.path}');
+      _showMessage('Picture saved: ${picture.path.split('/').last}');
     } catch (e) {
-      _showMessage('Error: $e');
+      _showMessage('Error taking picture: $e');
     }
   }
   
   void _showMessage(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: Duration(seconds: 2)),
+    );
   }
   
   @override
   Widget build(BuildContext context) {
+    if (!_isReady) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Camera Test')),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
     return Scaffold(
-      appBar: AppBar(title: Text('Camera Test')),
+      appBar: AppBar(title: Text('Camera Test - Zoom Available: ${_maxZoom.toStringAsFixed(1)}x')),
       body: Column(
         children: [
           Expanded(
@@ -483,38 +520,49 @@ class _CameraTestScreenState extends State<CameraTestScreen> {
           ),
           Container(
             padding: EdgeInsets.all(16),
+            color: Colors.black.withOpacity(0.8),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.zoom_out, size: 32),
-                      onPressed: () {
+                      icon: Icon(Icons.zoom_out, size: 32, color: Colors.white),
+                      onPressed: _zoom > 1.0 ? () {
                         setState(() {
                           _zoom = (_zoom - 0.1).clamp(1.0, _maxZoom);
                           widget.controller.setZoomLevel(_zoom);
                         });
-                      },
+                      } : null,
                     ),
-                    Text('Zoom: ${_zoom.toStringAsFixed(1)}x', style: TextStyle(fontSize: 14)),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[900],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text('${_zoom.toStringAsFixed(1)}x', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
                     IconButton(
-                      icon: Icon(Icons.zoom_in, size: 32),
-                      onPressed: () {
+                      icon: Icon(Icons.zoom_in, size: 32, color: Colors.white),
+                      onPressed: _zoom < _maxZoom ? () {
                         setState(() {
                           _zoom = (_zoom + 0.1).clamp(1.0, _maxZoom);
                           widget.controller.setZoomLevel(_zoom);
                         });
-                      },
+                      } : null,
                     ),
                   ],
                 ),
-                SizedBox(height: 16),
+                SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _takePicture,
                   icon: Icon(Icons.camera),
-                  label: Text('Capture Photo'),
-                  style: ElevatedButton.styleFrom(minimumSize: Size(200, 50)),
+                  label: Text('Capture Photo', style: TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                    backgroundColor: Colors.red[800],
+                  ),
                 ),
               ],
             ),
@@ -541,7 +589,11 @@ class ImagePreviewScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text('Image Preview')),
       body: Center(
-        child: Image.file(File(imagePath)),
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.file(File(imagePath)),
+        ),
       ),
     );
   }
@@ -556,6 +608,7 @@ class BluetoothTestScreen extends StatefulWidget {
 class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
   List<ScanResult> scanResults = [];
   bool isScanning = false;
+  StreamSubscription<List<ScanResult>>? _scanSubscription;
   
   void startScan() async {
     setState(() {
@@ -563,48 +616,111 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
       isScanning = true;
     });
     
-    await FlutterBluePlus.startScan(timeout: Duration(seconds: 10));
+    // Start scanning
+    await FlutterBluePlus.startScan(timeout: Duration(seconds: 15));
     
-    FlutterBluePlus.scanResults.listen((results) {
+    // Listen to results
+    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
       setState(() {
         scanResults = results;
       });
     });
     
-    Future.delayed(Duration(seconds: 10), () {
-      setState(() => isScanning = false);
-      FlutterBluePlus.stopScan();
+    // Stop scanning after timeout
+    Future.delayed(Duration(seconds: 15), () {
+      if (mounted) {
+        setState(() => isScanning = false);
+        FlutterBluePlus.stopScan();
+      }
     });
+  }
+  
+  void stopScan() {
+    FlutterBluePlus.stopScan();
+    _scanSubscription?.cancel();
+    setState(() => isScanning = false);
+  }
+  
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    FlutterBluePlus.stopScan();
+    super.dispose();
   }
   
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Bluetooth Scanner')),
+      appBar: AppBar(
+        title: Text('Bluetooth Scanner'),
+        actions: [
+          if (isScanning)
+            IconButton(
+              icon: Icon(Icons.stop),
+              onPressed: stopScan,
+              tooltip: 'Stop Scan',
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
             padding: EdgeInsets.all(16),
             child: ElevatedButton.icon(
               onPressed: isScanning ? null : startScan,
-              icon: Icon(isScanning ? Icons.scanning : Icons.bluetooth_searching),
-              label: Text(isScanning ? 'Scanning...' : 'Start Scan'),
+              icon: Icon(isScanning ? Icons.sync : Icons.bluetooth_searching),
+              label: Text(isScanning ? 'Scanning...' : 'Start Bluetooth Scan'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: Size(double.infinity, 50),
+              ),
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: scanResults.length,
-              itemBuilder: (context, index) {
-                final result = scanResults[index];
-                return ListTile(
-                  leading: Icon(Icons.bluetooth),
-                  title: Text(result.device.name.isNotEmpty ? result.device.name : 'Unknown Device'),
-                  subtitle: Text(result.device.id.toString()),
-                  trailing: Text('${result.rssi} dBm'),
-                );
-              },
+          if (scanResults.isEmpty && !isScanning)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.bluetooth_disabled, size: 64, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text('No devices found. Click Start Scan to search.', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
             ),
-          ),
+          if (scanResults.isNotEmpty)
+            Expanded(
+              child: ListView.builder(
+                itemCount: scanResults.length,
+                itemBuilder: (context, index) {
+                  final result = scanResults[index];
+                  return Card(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: ListTile(
+                      leading: Icon(Icons.bluetooth, color: Colors.blue),
+                      title: Text(
+                        result.device.name.isNotEmpty ? result.device.name : 'Unknown Device',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(result.device.id.toString()),
+                      trailing: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[900],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text('${result.rssi} dBm', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          if (isScanning)
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(),
+            ),
         ],
       ),
     );
@@ -620,26 +736,39 @@ class SensorsTestScreen extends StatefulWidget {
 class _SensorsTestScreenState extends State<SensorsTestScreen> {
   double _accelerometerX = 0, _accelerometerY = 0, _accelerometerZ = 0;
   double _gyroscopeX = 0, _gyroscopeY = 0, _gyroscopeZ = 0;
+  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
   
   @override
   void initState() {
     super.initState();
     
-    accelerometerEvents.listen((event) {
-      setState(() {
-        _accelerometerX = event.x;
-        _accelerometerY = event.y;
-        _accelerometerZ = event.z;
-      });
+    _accelerometerSubscription = accelerometerEvents.listen((event) {
+      if (mounted) {
+        setState(() {
+          _accelerometerX = event.x;
+          _accelerometerY = event.y;
+          _accelerometerZ = event.z;
+        });
+      }
     });
     
-    gyroscopeEvents.listen((event) {
-      setState(() {
-        _gyroscopeX = event.x;
-        _gyroscopeY = event.y;
-        _gyroscopeZ = event.z;
-      });
+    _gyroscopeSubscription = gyroscopeEvents.listen((event) {
+      if (mounted) {
+        setState(() {
+          _gyroscopeX = event.x;
+          _gyroscopeY = event.y;
+          _gyroscopeZ = event.z;
+        });
+      }
     });
+  }
+  
+  @override
+  void dispose() {
+    _accelerometerSubscription?.cancel();
+    _gyroscopeSubscription?.cancel();
+    super.dispose();
   }
   
   @override
@@ -653,14 +782,21 @@ class _SensorsTestScreenState extends State<SensorsTestScreen> {
             Card(
               color: Colors.grey[900],
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Text('📊 Accelerometer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
-                    Text('X: ${_accelerometerX.toStringAsFixed(3)}'),
-                    Text('Y: ${_accelerometerY.toStringAsFixed(3)}'),
-                    Text('Z: ${_accelerometerZ.toStringAsFixed(3)}'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.speed, size: 32, color: Colors.orange),
+                        SizedBox(width: 12),
+                        Text('📊 Accelerometer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    _buildSensorRow('X-axis', _accelerometerX, Colors.red),
+                    _buildSensorRow('Y-axis', _accelerometerY, Colors.green),
+                    _buildSensorRow('Z-axis', _accelerometerZ, Colors.blue),
                   ],
                 ),
               ),
@@ -669,32 +805,74 @@ class _SensorsTestScreenState extends State<SensorsTestScreen> {
             Card(
               color: Colors.grey[900],
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    Text('🔄 Gyroscope', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
-                    Text('X: ${_gyroscopeX.toStringAsFixed(3)}'),
-                    Text('Y: ${_gyroscopeY.toStringAsFixed(3)}'),
-                    Text('Z: ${_gyroscopeZ.toStringAsFixed(3)}'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.rotate_right, size: 32, color: Colors.purple),
+                        SizedBox(width: 12),
+                        Text('🔄 Gyroscope', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    _buildSensorRow('X-axis', _gyroscopeX, Colors.red),
+                    _buildSensorRow('Y-axis', _gyroscopeY, Colors.green),
+                    _buildSensorRow('Z-axis', _gyroscopeZ, Colors.blue),
                   ],
                 ),
               ),
             ),
             SizedBox(height: 16),
             Container(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.green[900],
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                '✅ Move your device to see sensor data update!',
-                textAlign: TextAlign.center,
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Move your device to see real-time sensor data updates!',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+  
+  Widget _buildSensorRow(String label, double value, Color color) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(width: 50, child: Text(label, style: TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(
+            child: LinearProgressIndicator(
+              value: (value.abs() / 20).clamp(0.0, 1.0),
+              backgroundColor: Colors.grey[800],
+              color: color,
+            ),
+          ),
+          SizedBox(width: 12),
+          Container(
+            width: 80,
+            child: Text(
+              value.toStringAsFixed(3),
+              textAlign: TextAlign.right,
+              style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
