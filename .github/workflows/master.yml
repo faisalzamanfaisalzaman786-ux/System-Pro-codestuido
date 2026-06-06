@@ -32,12 +32,6 @@ jobs:
           echo "TARGET_SDK=${{ github.event.client_payload.target_sdk }}" >> $GITHUB_ENV
           echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
           echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
-          
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📦 BUILD CONFIGURATION"
-          echo "═══════════════════════════════════════════════════════════"
-          echo "Package: ${{ env.PACKAGE_NAME }}"
-          echo "App Name: ${{ env.APP_NAME }}"
 
       - name: Create fresh Flutter project
         run: |
@@ -51,7 +45,7 @@ jobs:
       - name: Copy main.dart from repository
         run: |
           if [ ! -f "lib/main.dart" ]; then
-            echo "❌ lib/main.dart not found in repository!"
+            echo "❌ lib/main.dart not found"
             exit 1
           fi
           echo "✅ main.dart found"
@@ -59,7 +53,7 @@ jobs:
       - name: Use repository pubspec.yaml
         run: |
           if [ ! -f "pubspec.yaml" ]; then
-            echo "❌ pubspec.yaml not found in repository root!"
+            echo "❌ pubspec.yaml not found"
             exit 1
           fi
           flutter pub get
@@ -67,86 +61,36 @@ jobs:
 
       - name: Copy AndroidManifest and XML resources from backup
         run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "📁 COPYING FILES FROM BACKUP"
-          echo "═══════════════════════════════════════════════════════════"
+          mkdir -p android/app/src/main/res/xml
           
-          # Copy AndroidManifest.xml
           if [ -f "android_manifest_backup/AndroidManifest.xml" ]; then
             cp android_manifest_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
             echo "✅ AndroidManifest.xml copied"
           else
-            echo "❌ android_manifest_backup/AndroidManifest.xml not found!"
             exit 1
           fi
           
-          # Create xml directory
-          mkdir -p android/app/src/main/res/xml
-          
-          # Copy file_paths.xml
           if [ -f "android_manifest_backup/file_paths.xml" ]; then
             cp android_manifest_backup/file_paths.xml android/app/src/main/res/xml/
             echo "✅ file_paths.xml copied"
-          else
-            echo "⚠️ file_paths.xml not found - creating default"
-            cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <paths xmlns:android="http://schemas.android.com/apk/res/android">
-              <external-path name="external_files" path="." />
-              <files-path name="files" path="." />
-              <cache-path name="cache" path="." />
-              <external-files-path name="external_app_files" path="." />
-              <external-cache-path name="external_cache" path="." />
-              <root-path name="root" path="." />
-          </paths>
-          EOF
           fi
           
-          # Copy network_security_config.xml
           if [ -f "android_manifest_backup/network_security_config.xml" ]; then
             cp android_manifest_backup/network_security_config.xml android/app/src/main/res/xml/
             echo "✅ network_security_config.xml copied"
-          else
-            echo "⚠️ network_security_config.xml not found - creating default"
-            cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="true">
-                  <trust-anchors>
-                      <certificates src="system" />
-                  </trust-anchors>
-              </base-config>
-              <domain-config cleartextTrafficPermitted="true">
-                  <domain includeSubdomains="true">localhost</domain>
-                  <domain includeSubdomains="true">10.0.2.2</domain>
-                  <domain includeSubdomains="true">192.168.1.1</domain>
-              </domain-config>
-          </network-security-config>
-          EOF
           fi
-          
-          echo ""
-          echo "📁 Files in android/app/src/main/res/xml/:"
-          ls -la android/app/src/main/res/xml/
 
       - name: Fix AndroidManifest.xml
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            # Remove deprecated package attribute
-            sed -i 's/package="[^"]*"//g' "$MANIFEST"
-            # Update app name
-            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" "$MANIFEST"
-            echo "✅ AndroidManifest.xml fixed"
-            echo "App name set to: ${{ env.APP_NAME }}"
-          fi
+          sed -i 's/package="[^"]*"//g' android/app/src/main/AndroidManifest.xml
+          sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/" android/app/src/main/AndroidManifest.xml
+          echo "✅ AndroidManifest.xml fixed"
 
       - name: Create MainActivity.kt correctly
         run: |
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p android/app/src/main/kotlin/$PKG_PATH
           
-          # Create MainActivity.kt with correct syntax
           cat > android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt << EOF
           package ${{ env.PACKAGE_NAME }}
           
@@ -155,72 +99,48 @@ jobs:
           class MainActivity : FlutterActivity()
           EOF
           
-          # Remove any old kotlin directories
           rm -rf android/app/src/main/kotlin/com
           
-          echo "✅ MainActivity.kt created at: android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt"
-          echo ""
-          echo "Content of MainActivity.kt:"
-          cat android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt
+          if [ -f "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" ]; then
+            echo "✅ MainActivity.kt created successfully"
+          else
+            echo "❌ Failed to create MainActivity.kt"
+            exit 1
+          fi
 
-      - name: Setup build.gradle with desugaring
+      - name: Setup build.gradle
         run: |
-          # Root build.gradle
           cat > android/build.gradle << 'EOF'
           buildscript {
               ext.kotlin_version = '2.1.0'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
-          
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          
+          allprojects { repositories { google(); mavenCentral() } }
           rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
+          subprojects { project.buildDir = "\${rootProject.buildDir}/\${project.name}" }
+          subprojects { project.evaluationDependsOn(':app') }
+          tasks.register('clean', Delete) { delete rootProject.buildDir }
           EOF
-          
-          # App build.gradle with desugaring
+
           cat > android/app/build.gradle << EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-          
           android {
-              namespace = "${{ env.PACKAGE_NAME }}"
+              namespace "${{ env.PACKAGE_NAME }}"
               compileSdk = 36
-              
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
                   coreLibraryDesugaringEnabled true
               }
-              
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-              
+              kotlinOptions { jvmTarget = "17" }
               defaultConfig {
                   applicationId = "${{ env.PACKAGE_NAME }}"
                   minSdk = 23
@@ -229,71 +149,35 @@ jobs:
                   versionName = "1.0"
                   multiDexEnabled true
               }
-              
               buildTypes {
                   release {
                       signingConfig = signingConfigs.debug
                       minifyEnabled = false
                       shrinkResources = false
                   }
-                  debug {
-                      minifyEnabled = false
-                  }
               }
           }
-          
-          flutter {
-              source = "../.."
-          }
-          
+          flutter { source = "../.." }
           dependencies {
               coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
           }
           EOF
-          
-          echo "✅ build.gradle files configured"
+          echo "✅ build.gradle configured"
 
       - name: Apply custom app icon
         if: env.HAS_ICON == 'true'
         run: |
           if [ -f "assets/icon.png" ]; then
-            if file assets/icon.png | grep -q "PNG"; then
-              for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
-                mkdir -p android/app/src/main/res/mipmap-$density
-                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
-                cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
-              done
-              echo "✅ Custom icon applied"
-            fi
+            for density in hdpi mdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$density
+              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher.png
+              cp assets/icon.png android/app/src/main/res/mipmap-$density/ic_launcher_round.png
+            done
+            echo "✅ Custom icon applied"
           fi
 
-      - name: Validate all files before build
-        run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🔍 VALIDATING FILES"
-          echo "═══════════════════════════════════════════════════════════"
-          echo ""
-          echo "1. AndroidManifest.xml:"
-          ls -la android/app/src/main/AndroidManifest.xml
-          echo ""
-          echo "2. MainActivity.kt:"
-          find android/app/src/main/kotlin -name "*.kt" -exec ls -la {} \;
-          echo ""
-          echo "3. MainActivity.kt content:"
-          find android/app/src/main/kotlin -name "*.kt" -exec cat {} \;
-          echo ""
-          echo "4. XML resources:"
-          ls -la android/app/src/main/res/xml/ || echo "No xml files"
-          echo ""
-          echo "5. Build.gradle files:"
-          ls -la android/build.gradle android/app/build.gradle
-
       - name: Build release APK
-        run: |
-          echo "═══════════════════════════════════════════════════════════"
-          echo "🔨 BUILDING APK"
-          echo "═══════════════════════════════════════════════════════════"
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -301,25 +185,9 @@ jobs:
           name: FlutterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Create GitHub Release
-        if: success()
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gh
-          TAG_NAME="build-${{ github.run_number }}-$(date +'%Y%m%d-%H%M%S')"
-          RELEASE_NAME="Build ${{ github.run_number }} - ${{ env.APP_NAME }}"
-          gh release create "$TAG_NAME" \
-            --title "$RELEASE_NAME" \
-            --notes "Build from Flutter Build Studio" \
-            --repo "${{ github.repository }}" \
-            build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build Summary
         if: always()
         run: |
-          echo ""
           echo "═══════════════════════════════════════════════════════════"
           if [ "${{ job.status }}" = "success" ]; then
             echo "✅ BUILD SUCCESSFUL"
@@ -327,8 +195,5 @@ jobs:
             echo "❌ BUILD FAILED"
           fi
           echo "═══════════════════════════════════════════════════════════"
-          echo ""
-          echo "📦 Package: ${{ env.PACKAGE_NAME }}"
-          echo "📱 App Name: ${{ env.APP_NAME }}"
-          echo "📊 Build Status: ${{ job.status }}"
-          echo ""
+          echo "Package: ${{ env.PACKAGE_NAME }}"
+          echo "App Name: ${{ env.APP_NAME }}"
