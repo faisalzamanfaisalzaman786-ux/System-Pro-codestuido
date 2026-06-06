@@ -58,7 +58,6 @@ dependencies:
   
   # NOTIFICATIONS
   flutter_local_notifications: ^18.0.1
-  # workmanager: ^0.5.2   # REMOVED - compatibility issues
   
   # AUTHENTICATION
   local_auth: ^2.2.0
@@ -93,3 +92,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  # Optional: Add assets if needed
+  # assets:
+  #   - assets/
