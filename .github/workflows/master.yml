@@ -24,68 +24,61 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Download source from Separate Gists
+      - name: Download and extract ZIP from Gist
         run: |
-          MAIN_GIST_ID="${{ github.event.client_payload.main_gist_id }}"
-          ICON_GIST_ID="${{ github.event.client_payload.icon_gist_id }}"
+          GIST_ID="${{ github.event.client_payload.gist_id }}"
           
           echo "═══════════════════════════════════════════════════════════"
-          echo "📦 DOWNLOADING FROM SEPARATE GISTS"
+          echo "📦 DOWNLOADING AND EXTRACTING ZIP FROM GIST"
           echo "═══════════════════════════════════════════════════════════"
           
-          if [ -z "$MAIN_GIST_ID" ] || [ "$MAIN_GIST_ID" = "null" ]; then
-            echo "❌ No main_gist_id provided"
+          if [ -z "$GIST_ID" ] || [ "$GIST_ID" = "null" ]; then
+            echo "❌ No gist_id provided"
             exit 1
           fi
           
+          echo "📦 Downloading from Gist: $GIST_ID"
           mkdir -p lib
           
-          # Download main.dart from its own Gist
-          echo "📄 Downloading main.dart from Gist: $MAIN_GIST_ID"
-          curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$MAIN_GIST_ID/main.dart" -o lib/main.dart 2>/dev/null
+          # Install unzip if not available
+          sudo apt-get update -qq && sudo apt-get install -y -qq unzip
           
-          if [ ! -s lib/main.dart ]; then
+          # Download ZIP file from Gist
+          echo "📥 Downloading ZIP file..."
+          curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$GIST_ID/source.zip" -o source.zip 2>/dev/null
+          
+          if [ ! -s source.zip ]; then
             echo "Raw URL failed, using API..."
-            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$MAIN_GIST_ID" -o main_gist.json
-            jq -r '.files["main.dart"].content' main_gist.json > lib/main.dart
-            rm -f main_gist.json
+            curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" -o gist.json
+            ZIP_CONTENT=$(jq -r '.files["source.zip"].content // empty' gist.json)
+            if [ -n "$ZIP_CONTENT" ] && [ "$ZIP_CONTENT" != "null" ]; then
+              echo "$ZIP_CONTENT" | base64 -d > source.zip
+            fi
+            rm -f gist.json
           fi
           
-          # Download icon from its own Gist (if provided)
-          echo ""
-          echo "🖼️ Downloading icon from Gist: ${ICON_GIST_ID:-'Not provided'}"
-          
-          if [ -n "$ICON_GIST_ID" ] && [ "$ICON_GIST_ID" != "null" ] && [ "$ICON_GIST_ID" != "" ]; then
-            curl -s -L --retry 3 "https://gist.githubusercontent.com/raw/$ICON_GIST_ID/icon.png" -o icon.png 2>/dev/null
+          # Extract ZIP
+          if [ -s source.zip ]; then
+            echo "📦 Extracting ZIP file..."
+            unzip -o source.zip
             
-            if [ ! -s icon.png ]; then
-              curl -s -L --retry 3 -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$ICON_GIST_ID" -o icon_gist.json
-              ICON_CONTENT=$(jq -r '.files["icon.png"].content // empty' icon_gist.json)
-              if [ -n "$ICON_CONTENT" ] && [ "$ICON_CONTENT" != "null" ]; then
-                echo "$ICON_CONTENT" | base64 -d > icon.png 2>/dev/null
-              fi
-              rm -f icon_gist.json
-            fi
-            
-            # Fix if corrupted (ASCII text instead of PNG)
-            if [ -s icon.png ] && file icon.png | grep -q "ASCII"; then
-              echo "🔧 Fixing corrupted icon (ASCII to PNG)..."
-              cat icon.png | base64 -d > icon_fixed.png 2>/dev/null
-              if [ -s icon_fixed.png ] && file icon_fixed.png | grep -q "PNG"; then
-                mv icon_fixed.png icon.png
-                echo "✅ Icon fixed successfully"
-              fi
-            fi
-            
-            # Validate icon
-            if [ -s icon.png ] && file icon.png | grep -q "PNG"; then
-              echo "✅ Icon valid: $(wc -c < icon.png) bytes"
+            # Move files to correct locations
+            if [ -f "main.dart" ]; then
+              mv main.dart lib/
+              echo "✅ main.dart extracted"
             else
-              echo "⚠️ No valid icon found"
-              rm -f icon.png
+              echo "❌ main.dart not found in ZIP"
+              exit 1
+            fi
+            
+            if [ -f "icon.png" ]; then
+              echo "✅ icon.png extracted"
+            else
+              echo "ℹ️ No icon.png in ZIP"
             fi
           else
-            echo "ℹ️ No icon Gist provided"
+            echo "❌ Failed to download ZIP"
+            exit 1
           fi
           
           # Clean main.dart
@@ -95,6 +88,16 @@ jobs:
           
           echo ""
           echo "✅ main.dart: $(wc -c < lib/main.dart) bytes"
+          
+          # Validate icon if exists
+          if [ -f "icon.png" ] && [ -s "icon.png" ]; then
+            if file icon.png | grep -q "PNG"; then
+              echo "✅ Icon valid: $(wc -c < icon.png) bytes"
+            else
+              echo "⚠️ Icon file not valid PNG"
+              rm -f icon.png
+            fi
+          fi
           
           # Verify checksum
           EXPECTED_CHECKSUM="${{ github.event.client_payload.checksum }}"
@@ -245,18 +248,11 @@ jobs:
           name: FilterApp-${{ env.PACKAGE_NAME }}-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Cleanup temporary Gists
+      - name: Cleanup temporary Gist
         if: always()
         run: |
-          MAIN_GIST_ID="${{ github.event.client_payload.main_gist_id }}"
-          ICON_GIST_ID="${{ github.event.client_payload.icon_gist_id }}"
-          
-          if [ -n "$MAIN_GIST_ID" ] && [ "$MAIN_GIST_ID" != "null" ]; then
-            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$MAIN_GIST_ID" --fail --silent || true
-            echo "✅ main.dart gist deleted"
-          fi
-          
-          if [ -n "$ICON_GIST_ID" ] && [ "$ICON_GIST_ID" != "null" ] && [ "$ICON_GIST_ID" != "" ]; then
-            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$ICON_GIST_ID" --fail --silent || true
-            echo "✅ icon gist deleted"
+          GIST_ID="${{ github.event.client_payload.gist_id }}"
+          if [ -n "$GIST_ID" ] && [ "$GIST_ID" != "null" ]; then
+            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/gists/$GIST_ID" --fail --silent || true
+            echo "✅ Temporary gist deleted: $GIST_ID"
           fi
