@@ -33,7 +33,6 @@ jobs:
           echo "USE_PROGUARD=${{ github.event.client_payload.use_proguard }}" >> $GITHUB_ENV
           echo "HAS_ICON=${{ github.event.client_payload.has_icon }}" >> $GITHUB_ENV
           
-          # Signing secrets (GitHub Secrets سے لیں)
           echo "KEYSTORE_BASE64=${{ secrets.KEYSTORE_BASE64 }}" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
@@ -97,7 +96,7 @@ jobs:
           PKG_PATH=$(echo "${{ env.PACKAGE_NAME }}" | tr '.' '/')
           mkdir -p "android/app/src/main/kotlin/$PKG_PATH"
           
-          cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" << EOF
+          cat > "android/app/src/main/kotlin/$PKG_PATH/MainActivity.kt" <<EOF
           package ${{ env.PACKAGE_NAME }}
           
           import io.flutter.embedding.android.FlutterActivity
@@ -111,12 +110,12 @@ jobs:
       - name: Decode Keystore
         if: env.KEYSTORE_BASE64 != ''
         run: |
-          echo ${{ env.KEYSTORE_BASE64 }} | base64 -d > android/app/upload-keystore.jks
+          echo "${{ env.KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
           echo "✅ Keystore decoded"
 
-      - name: Setup build.gradle with signing config
+      - name: Setup root build.gradle
         run: |
-          cat > android/build.gradle << 'EOF'
+          cat > android/build.gradle <<EOF
           buildscript {
               ext.kotlin_version = '2.1.0'
               repositories {
@@ -125,7 +124,7 @@ jobs:
               }
               dependencies {
                   classpath 'com.android.tools.build:gradle:7.3.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:\$kotlin_version"
               }
           }
           
@@ -138,7 +137,7 @@ jobs:
           
           rootProject.buildDir = '../build'
           subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
+              project.buildDir = "\${rootProject.buildDir}/\${project.name}"
           }
           subprojects {
               project.evaluationDependsOn(':app')
@@ -149,15 +148,18 @@ jobs:
           }
           EOF
 
-          # key.properties بنائیں
-          cat > android/key.properties << EOF
+      - name: Setup app build.gradle with signing
+        run: |
+          if [ -n "${{ env.KEYSTORE_PASSWORD }}" ]; then
+            cat > android/key.properties <<EOF
           storePassword=${{ env.KEYSTORE_PASSWORD }}
           keyPassword=${{ env.KEY_PASSWORD }}
           keyAlias=${{ env.KEY_ALIAS }}
           storeFile=upload-keystore.jks
           EOF
-
-          cat > android/app/build.gradle << EOF
+          fi
+          
+          cat > android/app/build.gradle <<EOF
           plugins {
               id "com.android.application"
               id "kotlin-android"
@@ -209,7 +211,6 @@ jobs:
                       signingConfig = signingConfigs.release
                       minifyEnabled = ${{ env.USE_PROGUARD == 'true' }}
                       shrinkResources = ${{ env.USE_PROGUARD == 'true' }}
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                   }
               }
           }
@@ -223,19 +224,19 @@ jobs:
           }
           EOF
           
-          # Proguard rules (اگر چاہیں تو)
-          if [ "${{ env.USE_PROGUARD }}" = "true" ]; then
-            cat > android/app/proguard-rules.pro << 'EOF'
-            -keep class io.flutter.app.** { *; }
-            -keep class io.flutter.plugin.**  { *; }
-            -keep class io.flutter.util.**  { *; }
-            -keep class io.flutter.view.**  { *; }
-            -keep class io.flutter.**  { *; }
-            -keep class io.flutter.plugins.**  { *; }
-            EOF
-          fi
-          
-          echo "✅ build.gradle files configured with signing"
+          echo "✅ build.gradle files configured"
+
+      - name: Setup ProGuard (if needed)
+        if: env.USE_PROGUARD == 'true'
+        run: |
+          cat > android/app/proguard-rules.pro <<EOF
+          -keep class io.flutter.app.** { *; }
+          -keep class io.flutter.plugin.**  { *; }
+          -keep class io.flutter.util.**  { *; }
+          -keep class io.flutter.view.**  { *; }
+          -keep class io.flutter.**  { *; }
+          -keep class io.flutter.plugins.**  { *; }
+          EOF
 
       - name: Apply custom app icon
         if: env.HAS_ICON == 'true'
@@ -252,7 +253,7 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Build release AAB (App Bundle)
+      - name: Build release AAB
         run: flutter build appbundle --release
 
       - name: Upload APK artifact
@@ -277,8 +278,6 @@ jobs:
             echo "📦 OUTPUTS:"
             echo "   APK: build/app/outputs/flutter-apk/app-release.apk"
             echo "   AAB: build/app/outputs/bundle/release/app-release.aab"
-            echo ""
-            echo "🔐 SIGNING: Release keystore applied"
           else
             echo "❌ BUILD FAILED"
           fi
