@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'dart:io';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize notifications
   const AndroidInitializationSettings initializationSettingsAndroid =
       AndroidInitializationSettings('@mipmap/ic_launcher');
   final InitializationSettings initializationSettings = InitializationSettings(
@@ -92,13 +89,13 @@ class _SplashScreenState extends State<SplashScreen> {
                   color: Colors.white,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.mic, size: 80, color: Color(0xFF00A86B)),
+                child: Icon(Icons.chat, size: 80, color: Color(0xFF00A86B)),
               ),
               SizedBox(height: 30),
-              Text('Voice Assistant',
+              Text('Command Assistant',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
               SizedBox(height: 10),
-              Text('Speak naturally to control your phone',
+              Text('Type commands to control your phone',
                 style: TextStyle(fontSize: 16, color: Colors.white70)),
               SizedBox(height: 40),
               CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
@@ -120,9 +117,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
 
   final List<Map<String, dynamic>> _pages = [
-    {'title': 'Voice Commands', 'desc': 'Press and hold the mic button to speak', 
-     'icon': Icons.mic, 'color': Color(0xFF00A86B)},
-    {'title': 'Hardware Control', 'desc': 'Control Camera, Flashlight, and more', 
+    {'title': 'Type Commands', 'desc': 'Type commands to control your phone', 
+     'icon': Icons.keyboard, 'color': Color(0xFF00A86B)},
+    {'title': 'Hardware Control', 'desc': 'Control Camera, Flashlight and more', 
      'icon': Icons.settings_remote, 'color': Color(0xFF00A86B)},
     {'title': 'Smart Responses', 'desc': 'Get intelligent responses to your commands', 
      'icon': Icons.chat, 'color': Color(0xFF00A86B)},
@@ -242,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: Color(0xFF00A86B),
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.mic), label: 'Assistant'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Assistant'),
           BottomNavigationBarItem(icon: Icon(Icons.devices), label: 'Hardware'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
@@ -257,15 +254,10 @@ class AssistantScreen extends StatefulWidget {
 }
 
 class _AssistantScreenState extends State<AssistantScreen> {
-  late stt.SpeechToText _speech;
-  bool _isListening = false;
-  String _transcribedText = '';
-  String _aiResponse = '';
+  final TextEditingController _textController = TextEditingController();
   List<Map<String, String>> _chatHistory = [];
   bool _isProcessing = false;
-  bool _speechAvailable = false;
   
-  final TextEditingController _textController = TextEditingController();
   final List<String> _suggestions = [
     'open camera', 'flash on', 'flash off', 'hello', 'time', 'date', 'help'
   ];
@@ -273,7 +265,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
   @override
   void initState() {
     super.initState();
-    _initSpeech();
     _requestPermissions();
     _addWelcomeMessage();
   }
@@ -281,83 +272,21 @@ class _AssistantScreenState extends State<AssistantScreen> {
   void _addWelcomeMessage() {
     _chatHistory.insert(0, {
       'role': 'assistant', 
-      'message': '🎤 Assalamu Alaikum! I am your voice assistant.\n\n'
-                 '✨ Try these voice commands:\n'
+      'message': '👋 Assalamu Alaikum! I am your command assistant.\n\n'
+                 '✨ Try these commands:\n'
                  '• "open camera" - Launch camera\n'
                  '• "flash on/off" - Control flashlight\n'
                  '• "time" - Current time\n'
                  '• "date" - Today\'s date\n'
                  '• "help" - Show all commands\n\n'
-                 '💡 Press and hold the mic button to speak!'
+                 '💡 Tap on any suggestion below or type your command!'
     });
-  }
-
-  Future<void> _initSpeech() async {
-    _speech = stt.SpeechToText();
-    bool available = await _speech.initialize(
-      onStatus: (status) => print('Speech status: $status'),
-      onError: (error) => print('Speech error: $error'),
-    );
-    setState(() {
-      _speechAvailable = available;
-    });
-    if (!available) {
-      _chatHistory.insert(0, {'role': 'assistant', 'message': '⚠️ Speech recognition not available. Please use text input.'});
-    }
   }
 
   Future<void> _requestPermissions() async {
     await [
-      Permission.microphone,
       Permission.camera,
     ].request();
-  }
-
-  void _startListening() async {
-    bool available = await _speech.initialize();
-    if (available) {
-      setState(() {
-        _isListening = true;
-        _transcribedText = '';
-      });
-      
-      _speech.listen(
-        onResult: (result) {
-          setState(() {
-            _transcribedText = result.recognizedWords;
-          });
-          if (result.finalResult) {
-            _stopListeningAndProcess();
-          }
-        },
-        listenFor: Duration(seconds: 10),
-        pauseFor: Duration(seconds: 2),
-        partialResults: true,
-        localeId: 'ur_PK',
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speech recognition not available on this device')),
-      );
-    }
-  }
-
-  void _stopListeningAndProcess() {
-    _speech.stop();
-    setState(() {
-      _isListening = false;
-    });
-    
-    if (_transcribedText.isNotEmpty) {
-      _processCommand(_transcribedText);
-    }
-  }
-
-  void _stopListening() {
-    _speech.stop();
-    setState(() {
-      _isListening = false;
-    });
   }
 
   Future<void> _processCommand(String command) async {
@@ -369,11 +298,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _textController.clear();
     });
     
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(Duration(milliseconds: 300));
     String response = await _executeCommand(command.toLowerCase());
     
     setState(() {
-      _aiResponse = response;
       _chatHistory.insert(0, {'role': 'assistant', 'message': response});
       _isProcessing = false;
     });
@@ -445,7 +373,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final status = await Permission.camera.request();
     if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Opening camera...'), duration: Duration(seconds: 1)),
+        SnackBar(content: Text('Opening camera...'), duration: Duration(seconds: 1)),
       );
     }
   }
@@ -461,7 +389,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   @override
   void dispose() {
-    _speech.stop();
     _textController.dispose();
     super.dispose();
   }
@@ -470,11 +397,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Voice Assistant'),
+        title: const Text('Command Assistant'),
         elevation: 0,
         actions: [
-          if (!_speechAvailable)
-            const Icon(Icons.warning, color: Colors.orange),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () {
@@ -537,35 +462,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
             ),
           ),
           
-          // Listening Indicator
-          if (_isListening)
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.mic, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Listening...', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _transcribedText.isEmpty ? 'Speak now...' : _transcribedText,
-                    style: const TextStyle(fontSize: 16, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          
           // Processing Indicator
           if (_isProcessing)
             Container(
@@ -587,7 +483,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
             ),
           
-          // Voice Button + Text Input
+          // Text Input
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -597,75 +493,37 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 topRight: Radius.circular(20),
               ),
             ),
-            child: Column(
+            child: Row(
               children: [
-                // Voice Button
-                GestureDetector(
-                  onTapDown: (_) => _startListening(),
-                  onTapUp: (_) => _stopListening(),
-                  onTapCancel: _stopListening,
-                  child: Container(
-                    height: 70,
-                    width: 70,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: _isListening ? Colors.red : const Color(0xFF00A86B),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (_isListening ? Colors.red : const Color(0xFF00A86B)).withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 3,
-                        ),
-                      ],
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Type your command...',
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      filled: true,
+                      fillColor: Colors.grey[800],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
-                    child: Icon(
-                      _isListening ? Icons.mic : Icons.mic_none,
-                      size: 35,
-                      color: Colors.white,
-                    ),
+                    onSubmitted: (value) => _processCommand(value),
                   ),
                 ),
-                const Text(
-                  'Press and hold to speak',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                const SizedBox(height: 12),
-                
-                // Text Input Alternative
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _textController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Or type your command...',
-                          hintStyle: const TextStyle(color: Colors.grey),
-                          filled: true,
-                          fillColor: Colors.grey[800],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(25),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        ),
-                        onSubmitted: (value) => _processCommand(value),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF00A86B),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                        onPressed: () => _processCommand(_textController.text),
-                        padding: const EdgeInsets.all(10),
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF00A86B),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: () => _processCommand(_textController.text),
+                    padding: const EdgeInsets.all(10),
+                  ),
                 ),
               ],
             ),
@@ -705,7 +563,7 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Voice Commands', style: TextStyle(color: Color(0xFF00A86B))),
+        title: const Text('Commands', style: TextStyle(color: Color(0xFF00A86B))),
         content: const Text(
           '• "open camera" - Open camera\n'
           '• "flash on" - Flashlight ON\n'
@@ -713,8 +571,6 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
           '• "time" - Current time\n'
           '• "date" - Today\'s date\n'
           '• "hello" - Greeting\n'
-          '• "how are you" - Check status\n'
-          '• "thank you" - Acknowledge\n'
           '• "help" - Show commands',
         ),
         actions: [
@@ -736,7 +592,7 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
         children: [
           _buildControlCard('Flashlight', Icons.flashlight_on, _isFlashOn, _toggleFlashlight, Colors.amber),
           _buildControlCard('Camera', Icons.camera_alt, false, _openCamera, Colors.purple),
-          _buildControlCard('Voice', Icons.mic, false, () {
+          _buildControlCard('Commands', Icons.chat, false, () {
             final homeState = context.findAncestorStateOfType<_HomeScreenState>();
             if (homeState != null) {
               homeState.setState(() => homeState._currentIndex = 0);
@@ -811,7 +667,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Device Info Card
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[900],
@@ -824,8 +679,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          
-          // Notifications Card (FIXED - No 'leading' parameter)
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[900],
@@ -840,8 +693,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          
-          // Permissions Card
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[900],
@@ -856,18 +707,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => openAppSettings(),
                 ),
                 Divider(height: 1, color: Colors.grey[800]),
-                ListTile(
-                  leading: const Icon(Icons.mic, color: Color(0xFF00A86B)),
-                  title: const Text('Microphone Permission'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => openAppSettings(),
-                ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          
-          // About Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -877,12 +720,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Voice Assistant',
+                  'Command Assistant',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A86B)),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Version 2.0.0\nSpeech Recognition Enabled\n\nCompatible with Flutter 3.29.2',
+                  'Version 2.0.0\nType commands to control your phone',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
