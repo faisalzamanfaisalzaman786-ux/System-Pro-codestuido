@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:path/path.dart' as path;
 import 'package:workmanager/workmanager.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -143,9 +143,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => isFirstTime ? OnboardingScreen() : HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (BuildContext ctx) => isFirstTime ? OnboardingScreen() : HomeScreen()),
       );
     }
   }
@@ -209,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _complete() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isFirstTime', false);
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (BuildContext ctx) => HomeScreen()));
   }
 
   @override
@@ -222,7 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               controller: _pageController,
               onPageChanged: (index) => setState(() => _currentPage = index),
               itemCount: _pages.length,
-              itemBuilder: (context, index) {
+              itemBuilder: (BuildContext context, int index) {
                 final page = _pages[index];
                 return Padding(
                   padding: EdgeInsets.all(32),
@@ -250,7 +248,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(_pages.length, (index) => Container(
+                  children: List.generate(_pages.length, (int index) => Container(
                     margin: EdgeInsets.symmetric(horizontal: 4),
                     width: 8, height: 8,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: _currentPage == index ? Color(0xFF2563EB) : Colors.grey[300]),
@@ -295,11 +293,11 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (int index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Color(0xFF2563EB),
         unselectedItemColor: Colors.grey,
-        items: [
+        items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(Icons.medication), label: 'Medication'),
           BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Symptoms'),
@@ -318,20 +316,20 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Dashboard'), elevation: 0),
+      appBar: AppBar(title: const Text('Dashboard'), elevation: 0),
       body: RefreshIndicator(
         onRefresh: () async {},
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildGreetingCard(),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               _buildStatsRow(),
-              SizedBox(height: 20),
-              _buildQuickActions(),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
+              _buildQuickActions(context),
+              const SizedBox(height: 20),
               _buildRecentActivity(),
             ],
           ),
@@ -342,24 +340,24 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildGreetingCard() {
     return Container(
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1E40AF)]),
+        gradient: const LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1E40AF)]),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Welcome Back!', style: TextStyle(color: Colors.white70, fontSize: 14)),
-          SizedBox(height: 5),
-          Text('Sarah Ahmed', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-          SizedBox(height: 10),
-          Text('Treatment Day 42 of 180', style: TextStyle(color: Colors.white, fontSize: 16)),
-          SizedBox(height: 15),
+          const Text('Welcome Back!', style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 5),
+          const Text('Sarah Ahmed', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          const Text('Treatment Day 42 of 180', style: TextStyle(color: Colors.white, fontSize: 16)),
+          const SizedBox(height: 15),
           LinearProgressIndicator(
             value: 42 / 180,
             backgroundColor: Colors.white30,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
           ),
         ],
       ),
@@ -369,44 +367,51 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildStatsRow() {
     return Row(
       children: [
-        Expanded(child: _buildStatCard('Medication', '95%', Icons.medication, Color(0xFF10B981))),
-        SizedBox(width: 12),
-        Expanded(child: _buildStatCard('Symptoms', 'Good', Icons.favorite, Color(0xFFF59E0B))),
-        SizedBox(width: 12),
-        Expanded(child: _buildStatCard('Appointments', '2', Icons.calendar_today, Color(0xFF3B82F6))),
+        Expanded(child: _buildStatCard('Medication', '95%', Icons.medication, const Color(0xFF10B981))),
+        const SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Symptoms', 'Good', Icons.favorite, const Color(0xFFF59E0B))),
+        const SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Appointments', '2', Icons.calendar_today, const Color(0xFF3B82F6))),
       ],
     );
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 5)]),
       child: Column(
         children: [
           Icon(icon, color: color, size: 30),
-          SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActions() {
+  Widget _buildQuickActions(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        SizedBox(height: 12),
+        const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _buildActionButton('Log Symptoms', Icons.favorite, () {})),
-            SizedBox(width: 12),
-            Expanded(child: _buildActionButton('Take Meds', Icons.medication, () {})),
-            SizedBox(width: 12),
-            Expanded(child: _buildActionButton('Call Doctor', Icons.phone, () {})),
+            Expanded(child: _buildActionButton('Log Symptoms', Icons.favorite, () {
+              Navigator.push(context, MaterialPageRoute(builder: (ctx) => SymptomScreen()));
+            })),
+            const SizedBox(width: 12),
+            Expanded(child: _buildActionButton('Take Meds', Icons.medication, () {
+              Navigator.push(context, MaterialPageRoute(builder: (ctx) => MedicationScreen()));
+            })),
+            const SizedBox(width: 12),
+            Expanded(child: _buildActionButton('Call Doctor', Icons.phone, () async {
+              final Uri url = Uri(scheme: 'tel', path: '03001234567');
+              if (await canLaunchUrl(url)) await launchUrl(url);
+            })),
           ],
         ),
       ],
@@ -417,13 +422,13 @@ class DashboardScreen extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
         child: Column(
           children: [
-            Icon(icon, color: Color(0xFF2563EB), size: 30),
-            SizedBox(height: 8),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            Icon(icon, color: const Color(0xFF2563EB), size: 30),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -434,11 +439,11 @@ class DashboardScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        SizedBox(height: 12),
+        const Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-          child: Column(
+          child: const Column(
             children: [
               ListTile(title: Text('Morning medication taken'), subtitle: Text('Today, 9:00 AM'), leading: Icon(Icons.check_circle, color: Colors.green)),
               Divider(),
@@ -482,14 +487,14 @@ class _MedicationScreenState extends State<MedicationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Medications'), elevation: 0, actions: [IconButton(icon: Icon(Icons.add), onPressed: () {})]),
+      appBar: AppBar(title: const Text('Medications'), elevation: 0, actions: [IconButton(icon: const Icon(Icons.add), onPressed: () {})]),
       body: Column(
         children: [
           Container(
-            margin: EdgeInsets.all(16),
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
-            child: Row(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+            child: const Row(
               children: [
                 Icon(Icons.info, color: Color(0xFFD97706)),
                 SizedBox(width: 12),
@@ -499,34 +504,34 @@ class _MedicationScreenState extends State<MedicationScreen> {
           ),
           Expanded(
             child: ListView.builder(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               itemCount: _medications.length,
-              itemBuilder: (context, index) {
+              itemBuilder: (BuildContext context, int index) {
                 final med = _medications[index];
                 return Container(
-                  margin: EdgeInsets.only(bottom: 12),
-                  padding: EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
                   child: Row(
                     children: [
                       Checkbox(
                         value: med.taken,
-                        onChanged: (val) => setState(() => med.taken = val ?? false),
-                        activeColor: Color(0xFF10B981),
+                        onChanged: (bool? val) => setState(() => med.taken = val ?? false),
+                        activeColor: const Color(0xFF10B981),
                       ),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(med.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            Text('${med.dosage} • ${med.frequency}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text(med.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text('${med.dosage} • ${med.frequency}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(20)),
-                        child: Text(med.time, style: TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w500)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(20)),
+                        child: Text(med.time, style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w500)),
                       ),
                     ],
                   ),
@@ -562,47 +567,52 @@ class _SymptomScreenState extends State<SymptomScreen> {
     }
   }
 
-  Future<void> _saveSymptoms() async {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Symptoms saved successfully!')));
+  Future<void> _saveSymptoms(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Symptoms saved successfully!')));
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Log Symptoms'), elevation: 0, actions: [TextButton(onPressed: _saveSymptoms, child: Text('Save', style: TextStyle(color: Colors.white)))]),
+      appBar: AppBar(title: const Text('Log Symptoms'), elevation: 0, actions: [
+        TextButton(
+          onPressed: () => _saveSymptoms(context),
+          child: const Text('Save', style: TextStyle(color: Colors.white)),
+        )
+      ]),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('How are you feeling today?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 20),
-            Text('Symptoms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            SizedBox(height: 10),
+            const Text('How are you feeling today?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text('Symptoms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 10,
-              children: _commonSymptoms.map((symptom) => FilterChip(
+              children: _commonSymptoms.map((String symptom) => FilterChip(
                 label: Text(symptom),
                 selected: _selectedSymptoms[symptom] ?? false,
-                onSelected: (val) => setState(() => _selectedSymptoms[symptom] = val),
+                onSelected: (bool val) => setState(() => _selectedSymptoms[symptom] = val),
                 backgroundColor: Colors.white,
-                selectedColor: Color(0xFFDBEAFE),
-                checkmarkColor: Color(0xFF2563EB),
+                selectedColor: const Color(0xFFDBEAFE),
+                checkmarkColor: const Color(0xFF2563EB),
               )).toList(),
             ),
-            SizedBox(height: 20),
-            Text('Severity (1-5)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            SizedBox(height: 10),
+            const SizedBox(height: 20),
+            const Text('Severity (1-5)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
             Row(
-              children: List.generate(5, (index) => Expanded(
+              children: List.generate(5, (int index) => Expanded(
                 child: GestureDetector(
                   onTap: () => setState(() => _severity = index + 1),
                   child: Container(
-                    margin: EdgeInsets.all(4),
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    margin: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: _severity == index + 1 ? Color(0xFF2563EB) : Colors.grey[200],
+                      color: _severity == index + 1 ? const Color(0xFF2563EB) : Colors.grey[200],
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text('${index + 1}', textAlign: TextAlign.center, style: TextStyle(color: _severity == index + 1 ? Colors.white : Colors.black)),
@@ -610,16 +620,16 @@ class _SymptomScreenState extends State<SymptomScreen> {
                 ),
               )),
             ),
-            SizedBox(height: 20),
-            Text('Additional Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            SizedBox(height: 10),
+            const SizedBox(height: 20),
+            const Text('Additional Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
             TextField(
               maxLines: 3,
-              decoration: InputDecoration(hintText: 'Enter any additional symptoms or notes...', fillColor: Colors.white, filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
-              onChanged: (val) => _notes = val,
+              decoration: const InputDecoration(hintText: 'Enter any additional symptoms or notes...', fillColor: Colors.white, filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none)),
+              onChanged: (String val) => _notes = val,
             ),
-            SizedBox(height: 30),
-            ElevatedButton(onPressed: _saveSymptoms, child: Text('Save Symptoms Log')),
+            const SizedBox(height: 30),
+            ElevatedButton(onPressed: () => _saveSymptoms(context), child: const Text('Save Symptoms Log')),
           ],
         ),
       ),
@@ -646,53 +656,53 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
 
   void _loadAppointments() {
     _appointments.addAll([
-      Appointment(doctorName: 'Dr. Ahmed Khan', specialty: 'Pulmonologist', date: DateTime.now().add(Duration(days: 1)), time: '10:00 AM', location: 'City Hospital, Room 204'),
-      Appointment(doctorName: 'Dr. Fatima Ali', specialty: 'Follow-up', date: DateTime.now().add(Duration(days: 14)), time: '2:30 PM', location: 'TB Clinic, Floor 3'),
+      Appointment(doctorName: 'Dr. Ahmed Khan', specialty: 'Pulmonologist', date: DateTime.now().add(const Duration(days: 1)), time: '10:00 AM', location: 'City Hospital, Room 204'),
+      Appointment(doctorName: 'Dr. Fatima Ali', specialty: 'Follow-up', date: DateTime.now().add(const Duration(days: 14)), time: '2:30 PM', location: 'TB Clinic, Floor 3'),
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Appointments'), elevation: 0, actions: [IconButton(icon: Icon(Icons.add), onPressed: () {})]),
+      appBar: AppBar(title: const Text('Appointments'), elevation: 0, actions: [IconButton(icon: const Icon(Icons.add), onPressed: () {})]),
       body: ListView.builder(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         itemCount: _appointments.length,
-        itemBuilder: (context, index) {
+        itemBuilder: (BuildContext context, int index) {
           final apt = _appointments[index];
           return Container(
-            margin: EdgeInsets.only(bottom: 12),
-            padding: EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, color: Color(0xFF2563EB))),
-                    SizedBox(width: 12),
+                    const CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, color: Color(0xFF2563EB))),
+                    const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(apt.doctorName, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text(apt.specialty, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(apt.doctorName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(apt.specialty, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ])),
-                    Container(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)), child: Text('Upcoming', style: TextStyle(fontSize: 10, color: Color(0xFFD97706)))),
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)), child: const Text('Upcoming', style: TextStyle(fontSize: 10, color: Color(0xFFD97706)))),
                   ],
                 ),
-                SizedBox(height: 12),
-                Row(children: [Icon(Icons.calendar_today, size: 16, color: Colors.grey), SizedBox(width: 8), Text(DateFormat('MMM dd, yyyy').format(apt.date))]),
-                SizedBox(height: 8),
-                Row(children: [Icon(Icons.access_time, size: 16, color: Colors.grey), SizedBox(width: 8), Text(apt.time)]),
-                SizedBox(height: 8),
-                Row(children: [Icon(Icons.location_on, size: 16, color: Colors.grey), SizedBox(width: 8), Expanded(child: Text(apt.location))]),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
+                Row(children: [const Icon(Icons.calendar_today, size: 16, color: Colors.grey), const SizedBox(width: 8), Text(DateFormat('MMM dd, yyyy').format(apt.date))]),
+                const SizedBox(height: 8),
+                Row(children: [const Icon(Icons.access_time, size: 16, color: Colors.grey), const SizedBox(width: 8), Text(apt.time)]),
+                const SizedBox(height: 8),
+                Row(children: [const Icon(Icons.location_on, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text(apt.location))]),
+                const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: OutlinedButton(onPressed: () {}, child: Text('Reschedule'), style: OutlinedButton.styleFrom(side: BorderSide(color: Color(0xFF2563EB))))),
-                    SizedBox(width: 12),
+                    Expanded(child: OutlinedButton(onPressed: () {}, child: const Text('Reschedule'), style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF2563EB))))),
+                    const SizedBox(width: 12),
                     Expanded(child: ElevatedButton(onPressed: () async {
-                      final url = 'tel:03001234567';
-                      if (await canLaunch(url)) await launch(url);
-                    }, child: Text('Call Clinic'), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2563EB)))),
+                      final Uri url = Uri(scheme: 'tel', path: '03001234567');
+                      if (await canLaunchUrl(url)) await launchUrl(url);
+                    }, child: const Text('Call Clinic'), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2563EB)))),
                   ],
                 ),
               ],
@@ -711,19 +721,19 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Profile'), elevation: 0),
+      appBar: AppBar(title: const Text('Profile'), elevation: 0),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            CircleAvatar(radius: 50, backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, size: 50, color: Color(0xFF2563EB))),
-            SizedBox(height: 12),
-            Text('Sarah Ahmed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            Text('sarah.ahmed@email.com', style: TextStyle(fontSize: 14, color: Colors.grey)),
-            SizedBox(height: 20),
+            const CircleAvatar(radius: 50, backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, size: 50, color: Color(0xFF2563EB))),
+            const SizedBox(height: 12),
+            const Text('Sarah Ahmed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text('sarah.ahmed@email.com', style: TextStyle(fontSize: 14, color: Colors.grey)),
+            const SizedBox(height: 20),
             _buildInfoCard(),
-            SizedBox(height: 20),
-            _buildSettingsList(),
+            const SizedBox(height: 20),
+            _buildSettingsList(context),
           ],
         ),
       ),
@@ -732,16 +742,16 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _buildInfoCard() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: Column(
         children: [
           _buildInfoRow('Diagnosis Date', 'January 15, 2024'),
-          Divider(),
+          const Divider(),
           _buildInfoRow('Treatment Phase', 'Intensive Phase'),
-          Divider(),
+          const Divider(),
           _buildInfoRow('Doctor', 'Dr. Ahmed Khan'),
-          Divider(),
+          const Divider(),
           _buildInfoRow('Hospital', 'City General Hospital'),
         ],
       ),
@@ -750,32 +760,42 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: TextStyle(color: Colors.grey)),
-        Text(value, style: TextStyle(fontWeight: FontWeight.w500)),
+        Text(label, style: const TextStyle(color: Colors.grey)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
       ]),
     );
   }
 
-  Widget _buildSettingsList() {
+  Widget _buildSettingsList(BuildContext context) {
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: Column(
         children: [
           _buildSettingsTile(Icons.notifications, 'Notifications', () {}),
-          Divider(height: 1),
+          const Divider(height: 1),
           _buildSettingsTile(Icons.lock, 'Privacy Settings', () {}),
-          Divider(height: 1),
+          const Divider(height: 1),
           _buildSettingsTile(Icons.help, 'Help & Support', () {}),
-          Divider(height: 1),
+          const Divider(height: 1),
           _buildSettingsTile(Icons.info, 'About TB Care', () {}),
-          Divider(height: 1),
+          const Divider(height: 1),
           _buildSettingsTile(Icons.logout, 'Logout', () {
-            showDialog(context: context, builder: (context) => AlertDialog(title: Text('Logout'), content: Text('Are you sure you want to logout?'), actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => OnboardingScreen())), child: Text('Logout')),
-            ]));
+            showDialog(
+              context: context,
+              builder: (BuildContext ctx) => AlertDialog(
+                title: const Text('Logout'),
+                content: const Text('Are you sure you want to logout?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (BuildContext ctx) => OnboardingScreen())),
+                    child: const Text('Logout'),
+                  ),
+                ],
+              ),
+            );
           }),
         ],
       ),
@@ -783,7 +803,12 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildSettingsTile(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(leading: Icon(icon, color: Color(0xFF2563EB)), title: Text(title), trailing: Icon(Icons.chevron_right), onTap: onTap);
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF2563EB)),
+      title: Text(title),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
   }
 }
 
@@ -829,8 +854,8 @@ class DatabaseHelper {
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    final fullPath = path.join(dbPath, filePath);
+    return await openDatabase(fullPath, version: 1, onCreate: _createDB);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -866,6 +891,10 @@ class DatabaseHelper {
         location TEXT NOT NULL
       )
     ''');
+  }
+
+  Future<void> init() async {
+    await database;
   }
 }
 
