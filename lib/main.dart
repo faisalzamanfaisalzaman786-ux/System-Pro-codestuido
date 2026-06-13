@@ -5,6 +5,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
               Text('Voice Assistant',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
               SizedBox(height: 10),
-              Text('Control your phone with voice',
+              Text('Speak naturally to control your phone',
                 style: TextStyle(fontSize: 16, color: Colors.white70)),
               SizedBox(height: 40),
               CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
@@ -122,7 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
      'icon': Icons.mic, 'color': Color(0xFF00A86B)},
     {'title': 'Hardware Control', 'desc': 'Control Camera, Flashlight, and more', 
      'icon': Icons.settings_remote, 'color': Color(0xFF00A86B)},
-    {'title': 'Smart Responses', 'desc': 'AI-powered responses to your voice commands', 
+    {'title': 'Smart Responses', 'desc': 'Get intelligent responses to your commands', 
      'icon': Icons.chat, 'color': Color(0xFF00A86B)},
   ];
 
@@ -263,11 +265,31 @@ class _AssistantScreenState extends State<AssistantScreen> {
   bool _isProcessing = false;
   bool _speechAvailable = false;
   
+  final TextEditingController _textController = TextEditingController();
+  final List<String> _suggestions = [
+    'open camera', 'flash on', 'flash off', 'hello', 'time', 'date', 'help'
+  ];
+
   @override
   void initState() {
     super.initState();
     _initSpeech();
     _requestPermissions();
+    _addWelcomeMessage();
+  }
+
+  void _addWelcomeMessage() {
+    _chatHistory.insert(0, {
+      'role': 'assistant', 
+      'message': '🎤 Assalamu Alaikum! I am your voice assistant.\n\n'
+                 '✨ Try these voice commands:\n'
+                 '• "open camera" - Launch camera\n'
+                 '• "flash on/off" - Control flashlight\n'
+                 '• "time" - Current time\n'
+                 '• "date" - Today\'s date\n'
+                 '• "help" - Show all commands\n\n'
+                 '💡 Press and hold the mic button to speak!'
+    });
   }
 
   Future<void> _initSpeech() async {
@@ -280,8 +302,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _speechAvailable = available;
     });
     if (!available) {
-      print('Speech recognition not available');
+      _addSystemMessage('⚠️ Speech recognition not available. Please use text input.');
     }
+  }
+
+  void _addSystemMessage(String message) {
+    _chatHistory.insert(0, {'role': 'assistant', 'message': message});
   }
 
   Future<void> _requestPermissions() async {
@@ -311,7 +337,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
         listenFor: Duration(seconds: 10),
         pauseFor: Duration(seconds: 2),
         partialResults: true,
-        localeId: 'ur-PK',  // Urdu/Pakistan language
+        localeId: 'ur_PK',
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -344,17 +370,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
     setState(() {
       _isProcessing = true;
       _chatHistory.insert(0, {'role': 'user', 'message': command});
+      _textController.clear();
     });
     
-    // First check if it's a hardware control command
-    bool hardwareExecuted = await _executeHardwareCommand(command.toLowerCase());
-    
-    String response;
-    if (hardwareExecuted) {
-      response = 'Command executed successfully!';
-    } else {
-      response = await _getAIResponse(command);
-    }
+    await Future.delayed(Duration(milliseconds: 500));
+    String response = await _executeCommand(command.toLowerCase());
     
     setState(() {
       _aiResponse = response;
@@ -363,38 +383,59 @@ class _AssistantScreenState extends State<AssistantScreen> {
     });
   }
 
-  Future<bool> _executeHardwareCommand(String command) async {
+  Future<String> _executeCommand(String command) async {
     // Camera Control
     if (command.contains('camera') || command.contains('کیمرہ')) {
       if (command.contains('open') || command.contains('chalao') || command.contains('آن')) {
         await _openCamera();
-        return true;
+        return '📷 Opening camera...';
       }
+      return '📷 Say "open camera" to launch camera.';
     }
     
     // Flashlight Control
-    if (command.contains('flash') || command.contains('torch') || command.contains('ٹارچ') || command.contains('flashlight')) {
+    if (command.contains('flash') || command.contains('torch') || command.contains('ٹارچ')) {
       if (command.contains('on') || command.contains('chalao') || command.contains('آن')) {
         await _toggleFlashlight(true);
-        return true;
+        return '🔦 Flashlight turned ON';
       } else if (command.contains('off') || command.contains('band') || command.contains('بند')) {
         await _toggleFlashlight(false);
-        return true;
+        return '🔦 Flashlight turned OFF';
       }
+      return '🔦 Say "flash on" or "flash off"';
     }
     
-    return false;
+    // Time
+    if (command.contains('time') || command.contains('وقت')) {
+      final now = DateTime.now();
+      return '⏰ Time is ${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    }
+    
+    // Date
+    if (command.contains('date') || command.contains('تاریخ')) {
+      final now = DateTime.now();
+      return '📅 Today is ${now.day}/${now.month}/${now.year}';
+    }
+    
+    // Greetings
+    if (command.contains('hello') || command.contains('hi') || command.contains('assalam')) {
+      return '🌙 Assalamu Alaikum! How can I help you?';
+    }
+    
+    // Help
+    if (command.contains('help') || command.contains('commands')) {
+      return '📋 Commands:\n\n'
+             '• "open camera"\n• "flash on/off"\n• "time"\n• "date"\n• "hello"';
+    }
+    
+    return '🤔 I heard: "$command"\n\nSay "help" to see all commands.';
   }
 
   Future<void> _openCamera() async {
     final status = await Permission.camera.request();
     if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Opening camera...')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Camera permission denied')),
+        SnackBar(content: Text('Opening camera...'), duration: Duration(seconds: 1)),
       );
     }
   }
@@ -403,60 +444,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final status = await Permission.camera.request();
     if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(turnOn ? 'Flashlight ON' : 'Flashlight OFF')),
+        SnackBar(content: Text(turnOn ? 'Flashlight ON' : 'Flashlight OFF'), duration: Duration(seconds: 1)),
       );
     }
-  }
-
-  Future<String> _getAIResponse(String command) async {
-    String lowerCmd = command.toLowerCase();
-    
-    // Help command
-    if (lowerCmd.contains('help') || lowerCmd.contains('commands') || lowerCmd.contains('مدد')) {
-      return 'Available commands:\n'
-             '• "open camera" - Open camera\n'
-             '• "flash on" - Turn on flashlight\n'
-             '• "flash off" - Turn off flashlight\n'
-             '• "hello" - Greeting\n'
-             '• "time" - Current time\n'
-             '• "date" - Today\'s date\n'
-             '• "how are you" - Check my status';
-    }
-    
-    // Greeting
-    if (lowerCmd.contains('hello') || lowerCmd.contains('hi') || lowerCmd.contains('assalam') || 
-        lowerCmd.contains('السلام') || lowerCmd.contains('salam')) {
-      return 'Assalamu Alaikum! I am your voice assistant. How can I help you today? '
-             'Try saying "help" to see all available commands.';
-    }
-    
-    // Time
-    if (lowerCmd.contains('time') || lowerCmd.contains('وقت')) {
-      return 'Current time is ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}';
-    }
-    
-    // Date
-    if (lowerCmd.contains('date') || lowerCmd.contains('تاریخ')) {
-      return 'Today is ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
-    }
-    
-    // How are you
-    if (lowerCmd.contains('how are you') || lowerCmd.contains('کیا حال') || lowerCmd.contains('how r u')) {
-      return 'I am doing great, thank you for asking! I am ready to help you with any commands.';
-    }
-    
-    // Thanks
-    if (lowerCmd.contains('thank') || lowerCmd.contains('شکریہ') || lowerCmd.contains('thanks')) {
-      return 'You are welcome! Feel free to ask me anything else.';
-    }
-    
-    // Default response
-    return 'I heard: "$command". Try saying "help" to see all available commands.';
   }
 
   @override
   void dispose() {
     _speech.stop();
+    _textController.dispose();
     super.dispose();
   }
 
@@ -469,6 +465,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
         actions: [
           if (!_speechAvailable)
             Icon(Icons.warning, color: Colors.orange),
+          IconButton(
+            icon: Icon(Icons.delete_outline),
+            onPressed: () {
+              setState(() {
+                _chatHistory.clear();
+                _addWelcomeMessage();
+              });
+            },
+          ),
         ],
       ),
       body: Column(
@@ -486,15 +491,36 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: EdgeInsets.only(bottom: 12),
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: isUser ? Color(0xFF00A86B) : Colors.grey[800],
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
+                    child: SelectableText(
                       chat['message']!,
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(color: Colors.white, fontSize: 14),
                     ),
+                  ),
+                );
+              },
+            ),
+          ),
+          
+          // Suggestions
+          Container(
+            height: 45,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    label: Text(_suggestions[index]),
+                    onPressed: () => _processCommand(_suggestions[index]),
+                    backgroundColor: Color(0xFF1E2A1E),
+                    labelStyle: TextStyle(color: Color(0xFF00A86B)),
                   ),
                 );
               },
@@ -504,6 +530,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
           // Listening Indicator
           if (_isListening)
             Container(
+              margin: EdgeInsets.all(16),
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.1),
@@ -520,17 +547,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     ],
                   ),
                   SizedBox(height: 8),
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _transcribedText.isEmpty ? 'Speak now...' : _transcribedText,
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                      textAlign: TextAlign.center,
-                    ),
+                  Text(
+                    _transcribedText.isEmpty ? 'Speak now...' : _transcribedText,
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -539,87 +559,105 @@ class _AssistantScreenState extends State<AssistantScreen> {
           // Processing Indicator
           if (_isProcessing)
             Container(
-              padding: EdgeInsets.all(16),
-              child: Column(
+              padding: EdgeInsets.all(8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A86B))),
-                  SizedBox(height: 8),
-                  Text('Processing your command...', style: TextStyle(color: Colors.grey)),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A86B)),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Processing...', style: TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
           
-          // Voice Button
+          // Voice Button + Text Input
           Container(
-            padding: EdgeInsets.all(24),
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
             child: Column(
               children: [
+                // Voice Button
                 GestureDetector(
                   onTapDown: (_) => _startListening(),
                   onTapUp: (_) => _stopListening(),
                   onTapCancel: _stopListening,
                   child: Container(
-                    height: 100,
-                    width: 100,
+                    height: 70,
+                    width: 70,
+                    margin: EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       color: _isListening ? Colors.red : Color(0xFF00A86B),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
                           color: (_isListening ? Colors.red : Color(0xFF00A86B)).withOpacity(0.5),
-                          blurRadius: 20,
-                          spreadRadius: 5,
+                          blurRadius: 15,
+                          spreadRadius: 3,
                         ),
                       ],
                     ),
                     child: Icon(
                       _isListening ? Icons.mic : Icons.mic_none,
-                      size: 50,
+                      size: 35,
                       color: Colors.white,
                     ),
                   ),
                 ),
-                SizedBox(height: 12),
                 Text(
                   'Press and hold to speak',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                SizedBox(height: 12),
+                
+                // Text Input Alternative
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _textController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Or type your command...',
+                          hintStyle: TextStyle(color: Colors.grey),
+                          filled: true,
+                          fillColor: Colors.grey[800],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(25),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        ),
+                        onSubmitted: (value) => _processCommand(value),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Color(0xFF00A86B),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.send, color: Colors.white, size: 20),
+                        onPressed: () => _processCommand(_textController.text),
+                        padding: EdgeInsets.all(10),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ),
-          
-          // Instructions
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    '📱 Voice Commands Guide',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF00A86B)),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    '• "Open camera" - Launch camera\n'
-                    '• "Flash on/off" - Toggle flashlight\n'
-                    '• "Hello" - Greeting\n'
-                    '• "Time/Date" - Current info\n'
-                    '• "Help" - Show all commands',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Urdu commands also supported: "کیمرہ کھولو", "ٹارچ آن کرو"',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
             ),
           ),
         ],
@@ -639,15 +677,9 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
   Future<void> _toggleFlashlight() async {
     final status = await Permission.camera.request();
     if (status.isGranted) {
-      setState(() {
-        _isFlashOn = !_isFlashOn;
-      });
+      setState(() => _isFlashOn = !_isFlashOn);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isFlashOn ? 'Flashlight ON' : 'Flashlight OFF')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Camera permission required for flashlight')),
+        SnackBar(content: Text(_isFlashOn ? 'Flashlight ON' : 'Flashlight OFF'), duration: Duration(seconds: 1)),
       );
     }
   }
@@ -655,13 +687,7 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
   Future<void> _openCamera() async {
     final status = await Permission.camera.request();
     if (status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Opening camera...')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Camera permission denied')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Opening camera...')));
     }
   }
 
@@ -675,79 +701,19 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
         children: [
-          _buildControlCard(
-            title: 'Flashlight',
-            icon: Icons.flashlight_on,
-            isOn: _isFlashOn,
-            onTap: _toggleFlashlight,
-            color: Colors.amber,
-          ),
-          _buildControlCard(
-            title: 'Camera',
-            icon: Icons.camera_alt,
-            isOn: false,
-            onTap: _openCamera,
-            color: Colors.purple,
-          ),
-          _buildControlCard(
-            title: 'Voice Commands',
-            icon: Icons.mic,
-            isOn: false,
-            onTap: () {
-              // Navigate to assistant tab
-              final homeState = context.findAncestorStateOfType<_HomeScreenState>();
-              if (homeState != null) {
-                homeState.setState(() {
-                  homeState._currentIndex = 0;
-                });
-              }
-            },
-            color: Colors.green,
-          ),
-          _buildControlCard(
-            title: 'Commands List',
-            icon: Icons.help,
-            isOn: false,
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text('Voice Commands'),
-                  content: Text(
-                    '• "Open camera" - Launch camera\n'
-                    '• "Flash on" - Turn on flashlight\n'
-                    '• "Flash off" - Turn off flashlight\n'
-                    '• "Hello" / "Salam" - Greeting\n'
-                    '• "Time" - Current time\n'
-                    '• "Date" - Today\'s date\n'
-                    '• "How are you" - Check status\n'
-                    '• "Thank you" - Acknowledge\n'
-                    '• "Help" - Show this menu\n\n'
-                    '🇵🇰 Urdu commands also supported!',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('Close'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            color: Colors.blue,
-          ),
+          _buildControlCard('Flashlight', Icons.flashlight_on, _isFlashOn, _toggleFlashlight, Colors.amber),
+          _buildControlCard('Camera', Icons.camera_alt, false, _openCamera, Colors.purple),
+          _buildControlCard('Voice', Icons.mic, false, () {
+            final homeState = context.findAncestorStateOfType<_HomeScreenState>();
+            if (homeState != null) homeState.setState(() => homeState._currentIndex = 0);
+          }, Colors.green),
+          _buildControlCard('Help', Icons.help, false, _showCommands, Colors.blue),
         ],
       ),
     );
   }
 
-  Widget _buildControlCard({
-    required String title,
-    required IconData icon,
-    required bool isOn,
-    required VoidCallback onTap,
-    required Color color,
-  }) {
+  Widget _buildControlCard(String title, IconData icon, bool isOn, VoidCallback onTap, Color color) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -758,25 +724,42 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 50, color: Colors.white),
+            Icon(icon, size: 45, color: Colors.white),
             SizedBox(height: 12),
-            Text(title, style: TextStyle(fontSize: 18, color: Colors.white)),
-            if (title == 'Flashlight')
-              SizedBox(height: 8),
+            Text(title, style: TextStyle(fontSize: 16, color: Colors.white)),
             if (title == 'Flashlight')
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                margin: EdgeInsets.only(top: 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  isOn ? 'ON' : 'OFF',
-                  style: TextStyle(fontSize: 12, color: Colors.white),
-                ),
+                child: Text(isOn ? 'ON' : 'OFF', style: TextStyle(fontSize: 12, color: Colors.white)),
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showCommands() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Voice Commands', style: TextStyle(color: Color(0xFF00A86B))),
+        content: Text(
+          '• "open camera" - Open camera\n'
+          '• "flash on" - Flashlight ON\n'
+          '• "flash off" - Flashlight OFF\n'
+          '• "time" - Current time\n'
+          '• "date" - Today\'s date\n'
+          '• "hello" - Greeting\n'
+          '• "help" - Show commands',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close')),
+        ],
       ),
     );
   }
@@ -789,6 +772,23 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
+  String _deviceName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceInfo();
+  }
+
+  Future<void> _loadDeviceInfo() async {
+    final deviceInfo = DeviceInfoPlugin();
+    try {
+      final androidInfo = await deviceInfo.androidInfo;
+      setState(() => _deviceName = androidInfo.model);
+    } catch (e) {
+      setState(() => _deviceName = 'Unknown Device');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -798,109 +798,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: EdgeInsets.all(16),
         children: [
           Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: Text('Notifications'),
-                  subtitle: Text('Receive app notifications'),
-                  value: _notificationsEnabled,
-                  onChanged: (value) {
-                    setState(() => _notificationsEnabled = value);
-                  },
-                  activeColor: Color(0xFF00A86B),
-                ),
-              ],
+            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(15)),
+            child: ListTile(
+              leading: Icon(Icons.devices, color: Color(0xFF00A86B)),
+              title: Text('Device'),
+              subtitle: Text(_deviceName),
             ),
           ),
-          SizedBox(height: 20),
+          SizedBox(height: 16),
           Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Voice Assistant Pro',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Version 2.0.0\n\n'
-                  '✨ Features:\n'
-                  '• 🎤 Real-time Speech Recognition (Urdu & English)\n'
-                  '• 🔊 Voice Commands for Hardware Control\n'
-                  '• 📱 Camera & Flashlight Control\n'
-                  '• 🤖 Smart AI Responses\n'
-                  '• 🔒 Full Permission Management\n\n'
-                  '🇵🇰 Complete Urdu language support',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(15)),
+            child: SwitchListTile(
+              leading: Icon(Icons.notifications, color: Color(0xFF00A86B)),
+              title: Text('Notifications'),
+              value: _notificationsEnabled,
+              onChanged: (value) => setState(() => _notificationsEnabled = value),
+              activeColor: Color(0xFF00A86B),
             ),
           ),
-          SizedBox(height: 20),
+          SizedBox(height: 16),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(15),
-            ),
+            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(15)),
             child: Column(
               children: [
-                ListTile(
-                  leading: Icon(Icons.mic, color: Color(0xFF00A86B)),
-                  title: Text('Microphone Permission'),
-                  subtitle: Text('Required for voice recognition'),
-                  trailing: Icon(Icons.chevron_right),
-                  onTap: () {
-                    openAppSettings();
-                  },
-                ),
-                Divider(height: 1, color: Colors.grey[800]),
                 ListTile(
                   leading: Icon(Icons.camera_alt, color: Color(0xFF00A86B)),
                   title: Text('Camera Permission'),
-                  subtitle: Text('Required for camera & flashlight'),
                   trailing: Icon(Icons.chevron_right),
-                  onTap: () {
-                    openAppSettings();
-                  },
+                  onTap: () => openAppSettings(),
                 ),
                 Divider(height: 1, color: Colors.grey[800]),
                 ListTile(
-                  leading: Icon(Icons.info, color: Color(0xFF00A86B)),
-                  title: Text('About'),
-                  subtitle: Text('App information'),
+                  leading: Icon(Icons.mic, color: Color(0xFF00A86B)),
+                  title: Text('Microphone Permission'),
                   trailing: Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text('About Voice Assistant'),
-                        content: Text(
-                          'This app allows you to control your phone using voice commands.\n\n'
-                          '• Works with Urdu and English languages\n'
-                          '• Uses device\'s built-in speech recognition\n'
-                          '• All processing happens on your device\n'
-                          '• No internet required for basic commands\n\n'
-                          'Compatible with Flutter ${DateTime.now().year}',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  onTap: () => openAppSettings(),
                 ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(15)),
+            child: Column(
+              children: [
+                Text('Voice Assistant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A86B))),
+                SizedBox(height: 8),
+                Text('Version 2.0.0\nSpeech Recognition Enabled', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
