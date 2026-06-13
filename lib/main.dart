@@ -1,415 +1,265 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final cameras = await availableCameras();
-  runApp(TestApp(cameras: cameras));
+// ============================================================================
+// WORKMANAGER CALLBACK
+// ============================================================================
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    final NotificationService notificationService = NotificationService();
+    await notificationService.initialize();
+    
+    switch (task) {
+      case 'medicationReminder':
+        await notificationService.showNotification(
+          id: DateTime.now().millisecondsSinceEpoch % 100000,
+          title: 'Medication Reminder',
+          body: 'Time to take your TB medication',
+        );
+        break;
+      case 'symptomCheck':
+        await notificationService.showNotification(
+          id: DateTime.now().millisecondsSinceEpoch % 100000,
+          title: 'Symptom Check',
+          body: 'How are you feeling today? Log your symptoms.',
+        );
+        break;
+      case 'appointmentReminder':
+        await notificationService.showNotification(
+          id: DateTime.now().millisecondsSinceEpoch % 100000,
+          title: 'Upcoming Appointment',
+          body: 'You have a doctor appointment tomorrow',
+        );
+        break;
+    }
+    return Future.value(true);
+  });
 }
 
-class TestApp extends StatelessWidget {
-  final List<CameraDescription> cameras;
-  const TestApp({super.key, required this.cameras});
+// ============================================================================
+// MAIN ENTRY POINT
+// ============================================================================
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final NotificationService notificationService = NotificationService();
+  await notificationService.initialize();
+  
+  await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  
+  await Workmanager().registerPeriodicTask(
+    'medicationReminder',
+    'medicationReminder',
+    frequency: Duration(hours: 1),
+  );
+  
+  await DatabaseHelper.instance.init();
+  
+  await _requestPermissions();
+  
+  runApp(TBApp());
+}
 
+Future<void> _requestPermissions() async {
+  await [
+    Permission.notification,
+    Permission.camera,
+    Permission.storage,
+    Permission.location,
+  ].request();
+}
+
+// ============================================================================
+// MAIN APP WIDGET
+// ============================================================================
+class TBApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Permission Test App',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
-        useMaterial3: true,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => MedicationProvider()),
+        ChangeNotifierProvider(create: (_) => SymptomProvider()),
+        ChangeNotifierProvider(create: (_) => AppointmentProvider()),
+      ],
+      child: MaterialApp(
+        title: 'TB Care Assistant',
+        theme: ThemeData(
+          primaryColor: Color(0xFF2563EB),
+          scaffoldBackgroundColor: Color(0xFFF8FAFC),
+          fontFamily: GoogleFonts.poppins().fontFamily,
+          appBarTheme: AppBarTheme(
+            backgroundColor: Color(0xFF2563EB),
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF2563EB),
+              minimumSize: Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        home: SplashScreen(),
+        debugShowCheckedModeBanner: false,
       ),
-      home: TestHomePage(cameras: cameras),
     );
   }
 }
 
-class TestHomePage extends StatefulWidget {
-  final List<CameraDescription> cameras;
-  const TestHomePage({super.key, required this.cameras});
-
+// ============================================================================
+// SPLASH SCREEN
+// ============================================================================
+class SplashScreen extends StatefulWidget {
   @override
-  State<TestHomePage> createState() => _TestHomePageState();
+  _SplashScreenState createState() => _SplashScreenState();
 }
 
-class _TestHomePageState extends State<TestHomePage> {
-  final List<PermissionItem> permissions = [];
-  final List<FeatureItem> features = [];
-  bool _isLoading = false;
-  String _logMessage = 'Ready to test...';
-
+class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _initializePermissionList();
-    _initializeFeaturesList();
+    _checkFirstTime();
   }
 
-  void _initializePermissionList() {
-    permissions.addAll([
-      PermissionItem(name: '📷 Camera', permission: Permission.camera, icon: Icons.camera_alt, granted: false),
-      PermissionItem(name: '🖼️ Photos', permission: Permission.photos, icon: Icons.photo_library, granted: false),
-      PermissionItem(name: '🎤 Microphone', permission: Permission.microphone, icon: Icons.mic, granted: false),
-      PermissionItem(name: '📍 Location', permission: Permission.location, icon: Icons.location_on, granted: false),
-      PermissionItem(name: '🔵 Bluetooth', permission: Permission.bluetooth, icon: Icons.bluetooth, granted: false),
-      PermissionItem(name: '📞 Contacts', permission: Permission.contacts, icon: Icons.contact_phone, granted: false),
-      PermissionItem(name: '📅 Calendar', permission: Permission.calendar, icon: Icons.calendar_today, granted: false),
-      PermissionItem(name: '💬 SMS', permission: Permission.sms, icon: Icons.sms, granted: false),
-      PermissionItem(name: '📱 Phone', permission: Permission.phone, icon: Icons.phone, granted: false),
-      PermissionItem(name: '📡 Sensors', permission: Permission.sensors, icon: Icons.sensors, granted: false),
-      PermissionItem(name: '🔔 Notifications', permission: Permission.notification, icon: Icons.notifications, granted: false),
-      PermissionItem(name: '💾 Storage', permission: Permission.storage, icon: Icons.storage, granted: false),
-    ]);
-  }
-
-  void _initializeFeaturesList() {
-    features.addAll([
-      FeatureItem(name: '📸 Take Photo', icon: Icons.camera, action: _takePhoto),
-      FeatureItem(name: '🖼️ Pick from Gallery', icon: Icons.photo_library, action: _pickFromGallery),
-      FeatureItem(name: '💾 Save to Gallery', icon: Icons.save, action: _saveToGallery),
-      FeatureItem(name: '📡 Check Connectivity', icon: Icons.wifi, action: _checkConnectivity),
-      FeatureItem(name: '📍 Get Location', icon: Icons.location_on, action: _getLocation),
-      FeatureItem(name: '📱 Device Info', icon: Icons.devices, action: _getDeviceInfo),
-      FeatureItem(name: '📤 Share Text', icon: Icons.share, action: _shareText),
-      FeatureItem(name: '🎯 Test Sensors', icon: Icons.sensors, action: _testSensors),
-      FeatureItem(name: '🔵 Test Bluetooth', icon: Icons.bluetooth, action: _testBluetooth),
-    ]);
-  }
-
-  Future<void> _checkAllPermissions() async {
-    setState(() => _isLoading = true);
-    _addLog('Checking all permissions...');
+  Future<void> _checkFirstTime() async {
+    await Future.delayed(Duration(seconds: 2));
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstTime = prefs.getBool('isFirstTime') ?? true;
     
-    for (var item in permissions) {
-      final status = await item.permission.status;
-      setState(() {
-        item.granted = status.isGranted;
-      });
-      _addLog('${item.name}: ${status.isGranted ? "✅ GRANTED" : "❌ DENIED"}');
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => isFirstTime ? OnboardingScreen() : HomeScreen(),
+        ),
+      );
     }
-    
-    setState(() => _isLoading = false);
-    _addLog('✅ All permissions checked!');
-  }
-
-  Future<void> _requestPermission(PermissionItem item) async {
-    setState(() => _isLoading = true);
-    _addLog('Requesting ${item.name}...');
-    
-    final status = await item.permission.request();
-    setState(() {
-      item.granted = status.isGranted;
-    });
-    
-    _addLog('${item.name}: ${status.isGranted ? "✅ GRANTED" : "❌ DENIED"}');
-    setState(() => _isLoading = false);
-  }
-
-  Future<void> _takePhoto() async {
-    _addLog('Opening camera...');
-    
-    if (widget.cameras.isEmpty) {
-      _addLog('❌ No camera found!');
-      return;
-    }
-    
-    final controller = CameraController(widget.cameras[0], ResolutionPreset.medium);
-    await controller.initialize();
-    
-    try {
-      final image = await controller.takePicture();
-      _addLog('✅ Photo taken: ${image.path}');
-      
-      final bytes = await image.readAsBytes();
-      final result = await ImageGallerySaverPlus.saveImage(bytes);
-      if (result['isSuccess'] == true) {
-        _addLog('✅ Photo saved to gallery!');
-      } else {
-        _addLog('⚠️ Photo saved locally only');
-      }
-    } catch (e) {
-      _addLog('❌ Error: $e');
-    } finally {
-      await controller.dispose();
-    }
-  }
-
-  Future<void> _pickFromGallery() async {
-    _addLog('Opening gallery...');
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (picked != null) {
-      _addLog('✅ Image picked: ${picked.name}');
-    } else {
-      _addLog('⚠️ No image selected');
-    }
-  }
-
-  Future<void> _saveToGallery() async {
-    _addLog('Creating test image...');
-    final imageData = await _createTestImage();
-    final result = await ImageGallerySaverPlus.saveImage(imageData);
-    
-    if (result['isSuccess'] == true) {
-      _addLog('✅ Test image saved to gallery!');
-    } else {
-      _addLog('❌ Failed to save image');
-    }
-  }
-
-  Future<Uint8List> _createTestImage() async {
-    final List<int> pngBytes = [
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x64,
-      0x08, 0x02, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
-      0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xAE, 0xCE, 0x1C, 0xE9, 0x00, 0x00,
-      0x00, 0x04, 0x67, 0x41, 0x4D, 0x41, 0x00, 0x00, 0xB1, 0x8F, 0x0B, 0xFC,
-      0x61, 0x05, 0x00, 0x00, 0x00, 0x20, 0x63, 0x48, 0x52, 0x4D, 0x00, 0x00,
-      0x7A, 0x26, 0x00, 0x00, 0x80, 0x84, 0x00, 0x00, 0xFA, 0x00, 0x00, 0x00,
-      0x80, 0xE8, 0x00, 0x00, 0x75, 0x30, 0x00, 0x00, 0xEA, 0x60, 0x00, 0x00,
-      0x3A, 0x98, 0x00, 0x00, 0x17, 0x70, 0x9C, 0xBA, 0x51, 0x3C, 0x00, 0x00,
-      0x00, 0x2E, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0xED, 0xC1, 0x01, 0x0D,
-      0x00, 0x00, 0x00, 0xC2, 0xA0, 0xF7, 0x4F, 0x6D, 0x0E, 0x37, 0xA0, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0xC0, 0x0A,
-      0x34, 0xCA, 0x01, 0x0D, 0x7A, 0x38, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x49,
-      0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
-    ];
-    return Uint8List.fromList(pngBytes);
-  }
-
-  Future<void> _checkConnectivity() async {
-    _addLog('Checking connectivity...');
-    final connectivity = Connectivity();
-    final result = await connectivity.checkConnectivity();
-    _addLog('✅ Connection: ${result.isNotEmpty ? result.first.name : "none"}');
-  }
-
-  Future<void> _getLocation() async {
-    _addLog('Getting location...');
-    
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _addLog('❌ Location services disabled');
-      return;
-    }
-    
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      await Geolocator.requestPermission();
-    }
-    
-    final position = await Geolocator.getCurrentPosition();
-    _addLog('✅ Location: ${position.latitude}, ${position.longitude}');
-  }
-
-  Future<void> _getDeviceInfo() async {
-    _addLog('Getting device info...');
-    final deviceInfo = DeviceInfoPlugin();
-    
-    if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      _addLog('✅ Device: ${androidInfo.model}');
-      _addLog('✅ Android: ${androidInfo.version.release}');
-      _addLog('✅ SDK: ${androidInfo.version.sdkInt}');
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      _addLog('✅ Device: ${iosInfo.model}');
-      _addLog('✅ iOS: ${iosInfo.systemVersion}');
-    }
-  }
-
-  Future<void> _shareText() async {
-    _addLog('Sharing text...');
-    await Share.share('Test message from Permission Test App!\n\nAll permissions are working correctly!');
-    _addLog('✅ Share dialog opened');
-  }
-
-  Future<void> _testSensors() async {
-    _addLog('Testing accelerometer sensor...');
-    _addLog('Shake your device to see sensor data!');
-    
-    accelerometerEvents.listen((event) {
-      _addLog('📊 x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
-    });
-    
-    _addLog('✅ Accelerometer listener active');
-  }
-
-  Future<void> _testBluetooth() async {
-    _addLog('Testing Bluetooth...');
-    
-    if (Platform.isAndroid) {
-      final isEnabled = await FlutterBluePlus.isOn;
-      _addLog('Bluetooth is ${isEnabled ? "ON ✅" : "OFF ❌"}');
-      
-      if (isEnabled) {
-        await FlutterBluePlus.startScan(timeout: Duration(seconds: 5));
-        _addLog('✅ Scanning for devices...');
-        
-        FlutterBluePlus.scanResults.listen((results) {
-          for (var result in results) {
-            _addLog('Found: ${result.device.name} - ${result.device.id}');
-          }
-        });
-      }
-    } else {
-      _addLog('⚠️ Bluetooth test only on Android');
-    }
-  }
-
-  void _addLog(String message) {
-    setState(() {
-      _logMessage = message;
-    });
-    print(message);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Permission Test App v1.0'),
-        backgroundColor: Colors.blueGrey,
-        actions: [
-          IconButton(
-            icon: Icon(_isLoading ? Icons.hourglass_empty : Icons.refresh),
-            onPressed: _isLoading ? null : _checkAllPermissions,
-            tooltip: 'Check All Permissions',
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
           ),
-        ],
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.health_and_safety, size: 80, color: Color(0xFF2563EB)),
+              ),
+              SizedBox(height: 30),
+              Text('TB Care Assistant', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+              SizedBox(height: 10),
+              Text('Your Partner in TB Treatment', style: TextStyle(fontSize: 16, color: Colors.white70)),
+              SizedBox(height: 40),
+              CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+// ============================================================================
+// ONBOARDING SCREEN
+// ============================================================================
+class OnboardingScreen extends StatefulWidget {
+  @override
+  _OnboardingScreenState createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  final List<Map<String, dynamic>> _pages = [
+    {'title': 'Track Your Medication', 'desc': 'Never miss a dose with smart reminders', 'icon': Icons.medication, 'color': Color(0xFF3B82F6)},
+    {'title': 'Monitor Symptoms', 'desc': 'Log daily symptoms and track recovery', 'icon': Icons.favorite, 'color': Color(0xFF10B981)},
+    {'title': 'Doctor Appointments', 'desc': 'Schedule and manage medical appointments', 'icon': Icons.calendar_today, 'color': Color(0xFFF59E0B)},
+    {'title': 'Educational Resources', 'desc': 'Learn about TB treatment and stay informed', 'icon': Icons.school, 'color': Color(0xFF8B5CF6)},
+  ];
+
+  Future<void> _complete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isFirstTime', false);
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
       body: Column(
         children: [
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) => setState(() => _currentPage = index),
+              itemCount: _pages.length,
+              itemBuilder: (context, index) {
+                final page = _pages[index];
+                return Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(40),
+                        decoration: BoxDecoration(color: page['color'].withOpacity(0.1), shape: BoxShape.circle),
+                        child: Icon(page['icon'], size: 100, color: page['color']),
+                      ),
+                      SizedBox(height: 48),
+                      Text(page['title'], style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                      SizedBox(height: 16),
+                      Text(page['desc'], style: TextStyle(fontSize: 16, color: Colors.grey[600]), textAlign: TextAlign.center),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
           Container(
-            padding: EdgeInsets.all(12),
-            color: Colors.blueGrey[800],
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.cyan),
-                SizedBox(width: 8),
-                Expanded(child: Text(_logMessage, style: TextStyle(fontSize: 12))),
-              ],
-            ),
-          ),
-          
-          Expanded(
-            flex: 2,
+            padding: EdgeInsets.all(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'PERMISSIONS (${permissions.where((p) => p.granted).length}/${permissions.length} granted)',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyan),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_pages.length, (index) => Container(
+                    margin: EdgeInsets.symmetric(horizontal: 4),
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: _currentPage == index ? Color(0xFF2563EB) : Colors.grey[300]),
+                  )),
                 ),
-                Expanded(
-                  child: GridView.builder(
-                    padding: EdgeInsets.all(8),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 3.2,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: permissions.length,
-                    itemBuilder: (context, index) {
-                      final item = permissions[index];
-                      return Card(
-                        color: item.granted ? Colors.green[900] : Colors.grey[800],
-                        child: InkWell(
-                          onTap: () => _requestPermission(item),
-                          child: Padding(
-                            padding: EdgeInsets.all(6),
-                            child: Row(
-                              children: [
-                                Icon(item.icon, size: 20, color: item.granted ? Colors.green : Colors.grey),
-                                SizedBox(width: 6),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(item.name, style: TextStyle(fontSize: 10)),
-                                      Text(
-                                        item.granted ? 'GRANTED' : 'DENIED',
-                                        style: TextStyle(fontSize: 8, color: item.granted ? Colors.green : Colors.red),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          Expanded(
-            flex: 1,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'FEATURES TO TEST',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
-                  ),
-                ),
-                Expanded(
-                  child: GridView.builder(
-                    padding: EdgeInsets.all(8),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 2.5,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: features.length,
-                    itemBuilder: (context, index) {
-                      final item = features[index];
-                      return Card(
-                        color: Colors.blueGrey[800],
-                        child: InkWell(
-                          onTap: item.action,
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(item.icon, size: 20, color: Colors.orange),
-                                  SizedBox(width: 8),
-                                  Text(item.name, style: TextStyle(fontSize: 11)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => _currentPage == _pages.length - 1 ? _complete() : _pageController.nextPage(duration: Duration(milliseconds: 300), curve: Curves.easeInOut),
+                  child: Text(_currentPage == _pages.length - 1 ? 'Get Started' : 'Next'),
                 ),
               ],
             ),
@@ -420,28 +270,681 @@ class _TestHomePageState extends State<TestHomePage> {
   }
 }
 
-class PermissionItem {
-  final String name;
-  final Permission permission;
-  final IconData icon;
-  bool granted;
-  
-  PermissionItem({
-    required this.name,
-    required this.permission,
-    required this.icon,
-    required this.granted,
-  });
+// ============================================================================
+// HOME SCREEN
+// ============================================================================
+class HomeScreen extends StatefulWidget {
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
 }
 
-class FeatureItem {
-  final String name;
-  final IconData icon;
-  final VoidCallback action;
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
   
-  FeatureItem({
-    required this.name,
-    required this.icon,
-    required this.action,
-  });
+  final List<Widget> _screens = [
+    DashboardScreen(),
+    MedicationScreen(),
+    SymptomScreen(),
+    AppointmentScreen(),
+    ProfileScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Color(0xFF2563EB),
+        unselectedItemColor: Colors.grey,
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.medication), label: 'Medication'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Symptoms'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Appointments'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// DASHBOARD SCREEN
+// ============================================================================
+class DashboardScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Dashboard'), elevation: 0),
+      body: RefreshIndicator(
+        onRefresh: () async {},
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildGreetingCard(),
+              SizedBox(height: 20),
+              _buildStatsRow(),
+              SizedBox(height: 20),
+              _buildQuickActions(),
+              SizedBox(height: 20),
+              _buildRecentActivity(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGreetingCard() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1E40AF)]),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Welcome Back!', style: TextStyle(color: Colors.white70, fontSize: 14)),
+          SizedBox(height: 5),
+          Text('Sarah Ahmed', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          SizedBox(height: 10),
+          Text('Treatment Day 42 of 180', style: TextStyle(color: Colors.white, fontSize: 16)),
+          SizedBox(height: 15),
+          LinearProgressIndicator(
+            value: 42 / 180,
+            backgroundColor: Colors.white30,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsRow() {
+    return Row(
+      children: [
+        Expanded(child: _buildStatCard('Medication', '95%', Icons.medication, Color(0xFF10B981))),
+        SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Symptoms', 'Good', Icons.favorite, Color(0xFFF59E0B))),
+        SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Appointments', '2', Icons.calendar_today, Color(0xFF3B82F6))),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 5)]),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 30),
+          SizedBox(height: 8),
+          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 4),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _buildActionButton('Log Symptoms', Icons.favorite, () {})),
+            SizedBox(width: 12),
+            Expanded(child: _buildActionButton('Take Meds', Icons.medication, () {})),
+            SizedBox(width: 12),
+            Expanded(child: _buildActionButton('Call Doctor', Icons.phone, () {})),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(String label, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          children: [
+            Icon(icon, color: Color(0xFF2563EB), size: 30),
+            SizedBox(height: 8),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentActivity() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+          child: Column(
+            children: [
+              ListTile(title: Text('Morning medication taken'), subtitle: Text('Today, 9:00 AM'), leading: Icon(Icons.check_circle, color: Colors.green)),
+              Divider(),
+              ListTile(title: Text('Symptoms logged - No fever'), subtitle: Text('Yesterday, 8:30 PM'), leading: Icon(Icons.favorite, color: Colors.red)),
+              Divider(),
+              ListTile(title: Text('Next appointment: Dr. Khan'), subtitle: Text('Tomorrow, 10:00 AM'), leading: Icon(Icons.event, color: Colors.blue)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// MEDICATION SCREEN
+// ============================================================================
+class MedicationScreen extends StatefulWidget {
+  @override
+  _MedicationScreenState createState() => _MedicationScreenState();
+}
+
+class _MedicationScreenState extends State<MedicationScreen> {
+  final List<Medication> _medications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMedications();
+  }
+
+  void _loadMedications() {
+    _medications.addAll([
+      Medication(name: 'Rifampicin', dosage: '600mg', time: '9:00 AM', frequency: 'Daily', taken: false),
+      Medication(name: 'Isoniazid', dosage: '300mg', time: '9:00 AM', frequency: 'Daily', taken: false),
+      Medication(name: 'Pyrazinamide', dosage: '1500mg', time: '9:00 AM', frequency: 'Daily', taken: false),
+      Medication(name: 'Ethambutol', dosage: '1200mg', time: '9:00 AM', frequency: 'Daily', taken: false),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Medications'), elevation: 0, actions: [IconButton(icon: Icon(Icons.add), onPressed: () {})]),
+      body: Column(
+        children: [
+          Container(
+            margin: EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              children: [
+                Icon(Icons.info, color: Color(0xFFD97706)),
+                SizedBox(width: 12),
+                Expanded(child: Text('Take medications at the same time daily. Never skip a dose.', style: TextStyle(color: Color(0xFF92400E)))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: _medications.length,
+              itemBuilder: (context, index) {
+                final med = _medications[index];
+                return Container(
+                  margin: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: med.taken,
+                        onChanged: (val) => setState(() => med.taken = val ?? false),
+                        activeColor: Color(0xFF10B981),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(med.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text('${med.dosage} • ${med.frequency}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(20)),
+                        child: Text(med.time, style: TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w500)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// SYMPTOM SCREEN
+// ============================================================================
+class SymptomScreen extends StatefulWidget {
+  @override
+  _SymptomScreenState createState() => _SymptomScreenState();
+}
+
+class _SymptomScreenState extends State<SymptomScreen> {
+  final List<String> _commonSymptoms = ['Cough', 'Fever', 'Night Sweats', 'Weight Loss', 'Fatigue', 'Chest Pain'];
+  final Map<String, bool> _selectedSymptoms = {};
+  int _severity = 3;
+  String _notes = '';
+
+  @override
+  void initState() {
+    super.initState();
+    for (var symptom in _commonSymptoms) {
+      _selectedSymptoms[symptom] = false;
+    }
+  }
+
+  Future<void> _saveSymptoms() async {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Symptoms saved successfully!')));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Log Symptoms'), elevation: 0, actions: [TextButton(onPressed: _saveSymptoms, child: Text('Save', style: TextStyle(color: Colors.white)))]),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('How are you feeling today?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            SizedBox(height: 20),
+            Text('Symptoms', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              children: _commonSymptoms.map((symptom) => FilterChip(
+                label: Text(symptom),
+                selected: _selectedSymptoms[symptom] ?? false,
+                onSelected: (val) => setState(() => _selectedSymptoms[symptom] = val),
+                backgroundColor: Colors.white,
+                selectedColor: Color(0xFFDBEAFE),
+                checkmarkColor: Color(0xFF2563EB),
+              )).toList(),
+            ),
+            SizedBox(height: 20),
+            Text('Severity (1-5)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 10),
+            Row(
+              children: List.generate(5, (index) => Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _severity = index + 1),
+                  child: Container(
+                    margin: EdgeInsets.all(4),
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _severity == index + 1 ? Color(0xFF2563EB) : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('${index + 1}', textAlign: TextAlign.center, style: TextStyle(color: _severity == index + 1 ? Colors.white : Colors.black)),
+                  ),
+                ),
+              )),
+            ),
+            SizedBox(height: 20),
+            Text('Additional Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 10),
+            TextField(
+              maxLines: 3,
+              decoration: InputDecoration(hintText: 'Enter any additional symptoms or notes...', fillColor: Colors.white, filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
+              onChanged: (val) => _notes = val,
+            ),
+            SizedBox(height: 30),
+            ElevatedButton(onPressed: _saveSymptoms, child: Text('Save Symptoms Log')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// APPOINTMENT SCREEN
+// ============================================================================
+class AppointmentScreen extends StatefulWidget {
+  @override
+  _AppointmentScreenState createState() => _AppointmentScreenState();
+}
+
+class _AppointmentScreenState extends State<AppointmentScreen> {
+  final List<Appointment> _appointments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppointments();
+  }
+
+  void _loadAppointments() {
+    _appointments.addAll([
+      Appointment(doctorName: 'Dr. Ahmed Khan', specialty: 'Pulmonologist', date: DateTime.now().add(Duration(days: 1)), time: '10:00 AM', location: 'City Hospital, Room 204'),
+      Appointment(doctorName: 'Dr. Fatima Ali', specialty: 'Follow-up', date: DateTime.now().add(Duration(days: 14)), time: '2:30 PM', location: 'TB Clinic, Floor 3'),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Appointments'), elevation: 0, actions: [IconButton(icon: Icon(Icons.add), onPressed: () {})]),
+      body: ListView.builder(
+        padding: EdgeInsets.all(16),
+        itemCount: _appointments.length,
+        itemBuilder: (context, index) {
+          final apt = _appointments[index];
+          return Container(
+            margin: EdgeInsets.only(bottom: 12),
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, color: Color(0xFF2563EB))),
+                    SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(apt.doctorName, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(apt.specialty, style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ])),
+                    Container(padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)), child: Text('Upcoming', style: TextStyle(fontSize: 10, color: Color(0xFFD97706)))),
+                  ],
+                ),
+                SizedBox(height: 12),
+                Row(children: [Icon(Icons.calendar_today, size: 16, color: Colors.grey), SizedBox(width: 8), Text(DateFormat('MMM dd, yyyy').format(apt.date))]),
+                SizedBox(height: 8),
+                Row(children: [Icon(Icons.access_time, size: 16, color: Colors.grey), SizedBox(width: 8), Text(apt.time)]),
+                SizedBox(height: 8),
+                Row(children: [Icon(Icons.location_on, size: 16, color: Colors.grey), SizedBox(width: 8), Expanded(child: Text(apt.location))]),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: OutlinedButton(onPressed: () {}, child: Text('Reschedule'), style: OutlinedButton.styleFrom(side: BorderSide(color: Color(0xFF2563EB))))),
+                    SizedBox(width: 12),
+                    Expanded(child: ElevatedButton(onPressed: () async {
+                      final url = 'tel:03001234567';
+                      if (await canLaunch(url)) await launch(url);
+                    }, child: Text('Call Clinic'), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2563EB)))),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// PROFILE SCREEN
+// ============================================================================
+class ProfileScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Profile'), elevation: 0),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            CircleAvatar(radius: 50, backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.person, size: 50, color: Color(0xFF2563EB))),
+            SizedBox(height: 12),
+            Text('Sarah Ahmed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text('sarah.ahmed@email.com', style: TextStyle(fontSize: 14, color: Colors.grey)),
+            SizedBox(height: 20),
+            _buildInfoCard(),
+            SizedBox(height: 20),
+            _buildSettingsList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+      child: Column(
+        children: [
+          _buildInfoRow('Diagnosis Date', 'January 15, 2024'),
+          Divider(),
+          _buildInfoRow('Treatment Phase', 'Intensive Phase'),
+          Divider(),
+          _buildInfoRow('Doctor', 'Dr. Ahmed Khan'),
+          Divider(),
+          _buildInfoRow('Hospital', 'City General Hospital'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: TextStyle(color: Colors.grey)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.w500)),
+      ]),
+    );
+  }
+
+  Widget _buildSettingsList() {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+      child: Column(
+        children: [
+          _buildSettingsTile(Icons.notifications, 'Notifications', () {}),
+          Divider(height: 1),
+          _buildSettingsTile(Icons.lock, 'Privacy Settings', () {}),
+          Divider(height: 1),
+          _buildSettingsTile(Icons.help, 'Help & Support', () {}),
+          Divider(height: 1),
+          _buildSettingsTile(Icons.info, 'About TB Care', () {}),
+          Divider(height: 1),
+          _buildSettingsTile(Icons.logout, 'Logout', () {
+            showDialog(context: context, builder: (context) => AlertDialog(title: Text('Logout'), content: Text('Are you sure you want to logout?'), actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => OnboardingScreen())), child: Text('Logout')),
+            ]));
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(leading: Icon(icon, color: Color(0xFF2563EB)), title: Text(title), trailing: Icon(Icons.chevron_right), onTap: onTap);
+  }
+}
+
+// ============================================================================
+// NOTIFICATION SERVICE
+// ============================================================================
+class NotificationService {
+  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+
+  Future<void> initialize() async {
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    const InitializationSettings settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    
+    await _notifications.initialize(settings);
+  }
+
+  Future<void> showNotification({required int id, required String title, required String body}) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'tb_care_channel', 'TB Care Notifications', importance: Importance.high, priority: Priority.high,
+    );
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const NotificationDetails details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    
+    await _notifications.show(id, title, body, details);
+  }
+}
+
+// ============================================================================
+// DATABASE HELPER
+// ============================================================================
+class DatabaseHelper {
+  static final DatabaseHelper instance = DatabaseHelper._init();
+  static Database? _database;
+
+  DatabaseHelper._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB('tb_app.db');
+    return _database!;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+    return await openDatabase(path, version: 1, onCreate: _createDB);
+  }
+
+  Future<void> _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE medications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        dosage TEXT NOT NULL,
+        time TEXT NOT NULL,
+        frequency TEXT NOT NULL,
+        taken INTEGER DEFAULT 0,
+        date TEXT NOT NULL
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE symptoms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symptoms TEXT NOT NULL,
+        severity INTEGER NOT NULL,
+        notes TEXT,
+        date TEXT NOT NULL
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE appointments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doctor_name TEXT NOT NULL,
+        specialty TEXT NOT NULL,
+        date TEXT NOT NULL,
+        time TEXT NOT NULL,
+        location TEXT NOT NULL
+      )
+    ''');
+  }
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+class Medication {
+  String name;
+  String dosage;
+  String time;
+  String frequency;
+  bool taken;
+  
+  Medication({required this.name, required this.dosage, required this.time, required this.frequency, required this.taken});
+}
+
+class Appointment {
+  String doctorName;
+  String specialty;
+  DateTime date;
+  String time;
+  String location;
+  
+  Appointment({required this.doctorName, required this.specialty, required this.date, required this.time, required this.location});
+}
+
+// ============================================================================
+// PROVIDERS
+// ============================================================================
+class UserProvider extends ChangeNotifier {
+  String _name = 'Sarah Ahmed';
+  String _email = 'sarah.ahmed@email.com';
+  int _treatmentDay = 42;
+  
+  String get name => _name;
+  String get email => _email;
+  int get treatmentDay => _treatmentDay;
+  
+  void updateProfile(String name, String email) {
+    _name = name;
+    _email = email;
+    notifyListeners();
+  }
+}
+
+class MedicationProvider extends ChangeNotifier {
+  List<Medication> _medications = [];
+  
+  List<Medication> get medications => _medications;
+  
+  void addMedication(Medication medication) {
+    _medications.add(medication);
+    notifyListeners();
+  }
+  
+  void toggleTaken(int index) {
+    _medications[index].taken = !_medications[index].taken;
+    notifyListeners();
+  }
+}
+
+class SymptomProvider extends ChangeNotifier {
+  final List<Map<String, dynamic>> _logs = [];
+  
+  List<Map<String, dynamic>> get logs => _logs;
+  
+  void addLog(Map<String, dynamic> log) {
+    _logs.add(log);
+    notifyListeners();
+  }
+}
+
+class AppointmentProvider extends ChangeNotifier {
+  List<Appointment> _appointments = [];
+  
+  List<Appointment> get appointments => _appointments;
+  
+  void addAppointment(Appointment appointment) {
+    _appointments.add(appointment);
+    notifyListeners();
+  }
 }
