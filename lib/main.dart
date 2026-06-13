@@ -1,33 +1,13 @@
-// ============================================================================
-// PAKISTAN VOICE AI ASSISTANT - Complete Single File
-// Features: Voice Input, AI Chat (Gemini/Grok), Text-to-Speech, Hardware Control
-// ============================================================================
-
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:flutter/services.dart';
-import 'package:wifi_iot/wifi_iot.dart';
-import 'package:camera/camera.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-List<CameraDescription>? cameras;
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize cameras for hardware control
-  try {
-    cameras = await availableCameras();
-  } catch (e) {
-    print('Camera init error: $e');
-  }
   
   // Initialize notifications
   const AndroidInitializationSettings initializationSettingsAndroid =
@@ -39,14 +19,14 @@ void main() async {
       FlutterLocalNotificationsPlugin();
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   
-  runApp(VoiceAIAssistantApp());
+  runApp(VoiceAssistantApp());
 }
 
-class VoiceAIAssistantApp extends StatelessWidget {
+class VoiceAssistantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pakistan Voice AI Assistant',
+      title: 'Voice Assistant',
       theme: ThemeData(
         primaryColor: Color(0xFF00A86B),
         colorScheme: ColorScheme.fromSeed(
@@ -54,11 +34,6 @@ class VoiceAIAssistantApp extends StatelessWidget {
           primary: Color(0xFF00A86B),
         ),
         scaffoldBackgroundColor: Color(0xFF0A1A0F),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF00A86B),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
         useMaterial3: true,
       ),
       home: SplashScreen(),
@@ -118,10 +93,10 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Icon(Icons.mic, size: 80, color: Color(0xFF00A86B)),
               ),
               SizedBox(height: 30),
-              Text('Voice AI Assistant',
+              Text('Voice Assistant',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
               SizedBox(height: 10),
-              Text('Speak. Ask. Control.',
+              Text('Control your phone with voice',
                 style: TextStyle(fontSize: 16, color: Colors.white70)),
               SizedBox(height: 40),
               CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
@@ -143,14 +118,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
 
   final List<Map<String, dynamic>> _pages = [
-    {'title': 'Voice Commands', 'desc': 'Speak naturally to control your phone', 
+    {'title': 'Voice Commands', 'desc': 'Press and hold the mic button to speak', 
      'icon': Icons.mic, 'color': Color(0xFF00A86B)},
-    {'title': 'AI Chat', 'desc': 'Ask questions and get intelligent responses', 
-     'icon': Icons.chat, 'color': Color(0xFF00A86B)},
-    {'title': 'Hardware Control', 'desc': 'Control Camera, Flash, WiFi, Bluetooth and more', 
+    {'title': 'Hardware Control', 'desc': 'Control Camera, Flashlight, and more', 
      'icon': Icons.settings_remote, 'color': Color(0xFF00A86B)},
-    {'title': 'Text-to-Speech', 'desc': 'AI responses are read aloud to you', 
-     'icon': Icons.volume_up, 'color': Color(0xFF00A86B)},
+    {'title': 'Smart Responses', 'desc': 'AI-powered responses to your voice commands', 
+     'icon': Icons.chat, 'color': Color(0xFF00A86B)},
   ];
 
   Future<void> _complete() async {
@@ -282,117 +255,79 @@ class AssistantScreen extends StatefulWidget {
 }
 
 class _AssistantScreenState extends State<AssistantScreen> {
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  final FlutterTts _flutterTts = FlutterTts();
+  late stt.SpeechToText _speech;
   bool _isListening = false;
   String _transcribedText = '';
   String _aiResponse = '';
   List<Map<String, String>> _chatHistory = [];
   bool _isProcessing = false;
-  String _selectedAI = 'Gemini'; // Gemini or Grok
+  bool _speechAvailable = false;
   
-  // API Keys - User will need to add their own
-  String _geminiApiKey = '';
-  String _grokApiKey = '';
-  
-  final TextEditingController _apiKeyController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
     _initSpeech();
-    _initTTS();
-    _loadApiKeys();
+    _requestPermissions();
   }
 
   Future<void> _initSpeech() async {
-    await _speech.initialize(
+    _speech = stt.SpeechToText();
+    bool available = await _speech.initialize(
       onStatus: (status) => print('Speech status: $status'),
       onError: (error) => print('Speech error: $error'),
     );
-  }
-
-  Future<void> _initTTS() async {
-    await _flutterTts.setLanguage("ur-PK");
-    await _flutterTts.setLanguage("en-US");
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setPitch(1.0);
-  }
-
-  Future<void> _loadApiKeys() async {
-    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _geminiApiKey = prefs.getString('gemini_api_key') ?? '';
-      _grokApiKey = prefs.getString('grok_api_key') ?? '';
+      _speechAvailable = available;
     });
+    if (!available) {
+      print('Speech recognition not available');
+    }
   }
 
-  Future<void> _saveApiKeys() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('gemini_api_key', _geminiApiKey);
-    await prefs.setString('grok_api_key', _grokApiKey);
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.microphone,
+      Permission.camera,
+    ].request();
   }
 
-  void _showApiKeyDialog() {
-    _apiKeyController.text = _selectedAI == 'Gemini' ? _geminiApiKey : _grokApiKey;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Enter ${_selectedAI} API Key'),
-        content: TextField(
-          controller: _apiKeyController,
-          decoration: InputDecoration(
-            hintText: 'Paste your API key here',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_selectedAI == 'Gemini') {
-                setState(() => _geminiApiKey = _apiKeyController.text);
-              } else {
-                setState(() => _grokApiKey = _apiKeyController.text);
-              }
-              _saveApiKeys();
-              Navigator.pop(context);
-            },
-            child: Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startListening() async {
+  void _startListening() async {
     bool available = await _speech.initialize();
     if (available) {
       setState(() {
         _isListening = true;
+        _transcribedText = '';
       });
+      
       _speech.listen(
         onResult: (result) {
           setState(() {
             _transcribedText = result.recognizedWords;
           });
           if (result.finalResult) {
-            _processVoiceCommand(_transcribedText);
+            _stopListeningAndProcess();
           }
         },
         listenFor: Duration(seconds: 10),
         pauseFor: Duration(seconds: 2),
         partialResults: true,
-        localeId: 'ur-PK',
+        localeId: 'ur-PK',  // Urdu/Pakistan language
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Speech recognition not available')),
+        SnackBar(content: Text('Speech recognition not available on this device')),
       );
+    }
+  }
+
+  void _stopListeningAndProcess() {
+    _speech.stop();
+    setState(() {
+      _isListening = false;
+    });
+    
+    if (_transcribedText.isNotEmpty) {
+      _processCommand(_transcribedText);
     }
   }
 
@@ -403,7 +338,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
     });
   }
 
-  Future<void> _processVoiceCommand(String command) async {
+  Future<void> _processCommand(String command) async {
+    if (command.trim().isEmpty) return;
+    
     setState(() {
       _isProcessing = true;
       _chatHistory.insert(0, {'role': 'user', 'message': command});
@@ -412,240 +349,114 @@ class _AssistantScreenState extends State<AssistantScreen> {
     // First check if it's a hardware control command
     bool hardwareExecuted = await _executeHardwareCommand(command.toLowerCase());
     
+    String response;
     if (hardwareExecuted) {
-      setState(() {
-        _aiResponse = 'Command executed successfully!';
-        _chatHistory.insert(0, {'role': 'assistant', 'message': _aiResponse});
-        _isProcessing = false;
-      });
-      await _speakResponse(_aiResponse);
-      return;
+      response = 'Command executed successfully!';
+    } else {
+      response = await _getAIResponse(command);
     }
     
-    // Otherwise, send to AI
-    String aiReply = await _sendToAI(command);
-    
     setState(() {
-      _aiResponse = aiReply;
-      _chatHistory.insert(0, {'role': 'assistant', 'message': aiReply});
+      _aiResponse = response;
+      _chatHistory.insert(0, {'role': 'assistant', 'message': response});
       _isProcessing = false;
     });
-    
-    await _speakResponse(aiReply);
   }
 
   Future<bool> _executeHardwareCommand(String command) async {
     // Camera Control
-    if (command.contains('camera on') || command.contains('open camera') || 
-        command.contains('camera chalao') || command.contains('کیمرہ آن کرو')) {
-      await _openCamera();
-      return true;
+    if (command.contains('camera') || command.contains('کیمرہ')) {
+      if (command.contains('open') || command.contains('chalao') || command.contains('آن')) {
+        await _openCamera();
+        return true;
+      }
     }
     
     // Flashlight Control
-    if (command.contains('flash on') || command.contains('torch on') || 
-        command.contains('flashlight on') || command.contains('flash chalao') ||
-        command.contains('ٹارچ آن کرو')) {
-      await _toggleFlashlight(true);
-      return true;
-    }
-    
-    if (command.contains('flash off') || command.contains('torch off') || 
-        command.contains('flashlight off') || command.contains('flash band karo') ||
-        command.contains('ٹارچ بند کرو')) {
-      await _toggleFlashlight(false);
-      return true;
-    }
-    
-    // WiFi Control
-    if (command.contains('wifi on') || command.contains('wifi chalao') || 
-        command.contains('وائی فائی آن کرو')) {
-      await _setWifiEnabled(true);
-      return true;
-    }
-    
-    if (command.contains('wifi off') || command.contains('wifi band karo') || 
-        command.contains('وائی فائی بند کرو')) {
-      await _setWifiEnabled(false);
-      return true;
-    }
-    
-    // Volume Control
-    if (command.contains('volume up') || command.contains('awaz barhao') || 
-        command.contains('آواز بڑھاؤ')) {
-      await _setVolume(1.0);
-      return true;
-    }
-    
-    if (command.contains('volume down') || command.contains('awaz kam karo') || 
-        command.contains('آواز کم کرو')) {
-      await _setVolume(0.3);
-      return true;
-    }
-    
-    // Bluetooth Control
-    if (command.contains('bluetooth on') || command.contains('bluetooth chalao') || 
-        command.contains('بلوٹوتھ آن کرو')) {
-      await _setBluetooth(true);
-      return true;
-    }
-    
-    if (command.contains('bluetooth off') || command.contains('bluetooth band karo') || 
-        command.contains('بلوٹوتھ بند کرو')) {
-      await _setBluetooth(false);
-      return true;
+    if (command.contains('flash') || command.contains('torch') || command.contains('ٹارچ') || command.contains('flashlight')) {
+      if (command.contains('on') || command.contains('chalao') || command.contains('آن')) {
+        await _toggleFlashlight(true);
+        return true;
+      } else if (command.contains('off') || command.contains('band') || command.contains('بند')) {
+        await _toggleFlashlight(false);
+        return true;
+      }
     }
     
     return false;
   }
 
   Future<void> _openCamera() async {
-    if (cameras != null && cameras!.isNotEmpty) {
-      // Open camera - in real app, navigate to camera screen
+    final status = await Permission.camera.request();
+    if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Opening camera...')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Camera permission denied')),
       );
     }
   }
 
   Future<void> _toggleFlashlight(bool turnOn) async {
-    // Flashlight control requires camera permission
     final status = await Permission.camera.request();
     if (status.isGranted) {
-      // Implement flashlight control
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(turnOn ? 'Flashlight turned ON' : 'Flashlight turned OFF')),
+        SnackBar(content: Text(turnOn ? 'Flashlight ON' : 'Flashlight OFF')),
       );
     }
   }
 
-  Future<void> _setWifiEnabled(bool enable) async {
-    try {
-      if (enable) {
-        await WiFiForIoTPlugin.setEnabled(true);
-      } else {
-        await WiFiForIoTPlugin.setEnabled(false);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(enable ? 'WiFi turned ON' : 'WiFi turned OFF')),
-      );
-    } catch (e) {
-      print('WiFi control error: $e');
-    }
-  }
-
-  Future<void> _setVolume(double volume) async {
-    try {
-      await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-      // Volume control implementation
-    } catch (e) {
-      print('Volume control error: $e');
-    }
-  }
-
-  Future<void> _setBluetooth(bool enable) async {
-    try {
-      final status = await Permission.bluetooth.request();
-      if (status.isGranted) {
-        // Bluetooth control implementation
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(enable ? 'Bluetooth turned ON' : 'Bluetooth turned OFF')),
-        );
-      }
-    } catch (e) {
-      print('Bluetooth control error: $e');
-    }
-  }
-
-  Future<String> _sendToAI(String message) async {
-    if (_selectedAI == 'Gemini' && _geminiApiKey.isNotEmpty) {
-      return await _callGeminiAPI(message);
-    } else if (_selectedAI == 'Grok' && _grokApiKey.isNotEmpty) {
-      return await _callGrokAPI(message);
-    } else {
-      return _getLocalResponse(message);
-    }
-  }
-
-  Future<String> _callGeminiAPI(String message) async {
-    try {
-      final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$_geminiApiKey');
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'contents': [{
-            'parts': [{'text': message}]
-          }]
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['candidates'][0]['content']['parts'][0]['text'];
-      } else {
-        return 'Sorry, I encountered an error. Please check your API key.';
-      }
-    } catch (e) {
-      return 'Network error. Please check your connection.';
-    }
-  }
-
-  Future<String> _callGrokAPI(String message) async {
-    // Grok API (xAI) implementation
-    try {
-      final url = Uri.parse('https://api.x.ai/v1/chat/completions');
-      
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_grokApiKey',
-        },
-        body: json.encode({
-          'model': 'grok-beta',
-          'messages': [{'role': 'user', 'content': message}],
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['choices'][0]['message']['content'];
-      } else {
-        return 'Sorry, I encountered an error. Please check your Grok API key.';
-      }
-    } catch (e) {
-      return 'Network error. Please check your connection.';
-    }
-  }
-
-  String _getLocalResponse(String message) {
-    String lowerMsg = message.toLowerCase();
+  Future<String> _getAIResponse(String command) async {
+    String lowerCmd = command.toLowerCase();
     
-    if (lowerMsg.contains('hello') || lowerMsg.contains('hi') || lowerMsg.contains('assalam')) {
-      return 'Assalamu Alaikum! How can I help you today?';
+    // Help command
+    if (lowerCmd.contains('help') || lowerCmd.contains('commands') || lowerCmd.contains('مدد')) {
+      return 'Available commands:\n'
+             '• "open camera" - Open camera\n'
+             '• "flash on" - Turn on flashlight\n'
+             '• "flash off" - Turn off flashlight\n'
+             '• "hello" - Greeting\n'
+             '• "time" - Current time\n'
+             '• "date" - Today\'s date\n'
+             '• "how are you" - Check my status';
     }
-    if (lowerMsg.contains('how are you')) {
-      return 'I am doing well, thank you for asking! How can I assist you?';
+    
+    // Greeting
+    if (lowerCmd.contains('hello') || lowerCmd.contains('hi') || lowerCmd.contains('assalam') || 
+        lowerCmd.contains('السلام') || lowerCmd.contains('salam')) {
+      return 'Assalamu Alaikum! I am your voice assistant. How can I help you today? '
+             'Try saying "help" to see all available commands.';
     }
-    if (lowerMsg.contains('time')) {
-      return 'The current time is ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}';
+    
+    // Time
+    if (lowerCmd.contains('time') || lowerCmd.contains('وقت')) {
+      return 'Current time is ${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}';
     }
-    if (lowerMsg.contains('date')) {
+    
+    // Date
+    if (lowerCmd.contains('date') || lowerCmd.contains('تاریخ')) {
       return 'Today is ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
     }
-    return 'I understand you said: "$message". Please set up your Gemini or Grok API key in settings for AI responses, or give me a hardware command like "flash on", "wifi on", or "open camera".';
-  }
-
-  Future<void> _speakResponse(String text) async {
-    await _flutterTts.speak(text);
+    
+    // How are you
+    if (lowerCmd.contains('how are you') || lowerCmd.contains('کیا حال') || lowerCmd.contains('how r u')) {
+      return 'I am doing great, thank you for asking! I am ready to help you with any commands.';
+    }
+    
+    // Thanks
+    if (lowerCmd.contains('thank') || lowerCmd.contains('شکریہ') || lowerCmd.contains('thanks')) {
+      return 'You are welcome! Feel free to ask me anything else.';
+    }
+    
+    // Default response
+    return 'I heard: "$command". Try saying "help" to see all available commands.';
   }
 
   @override
   void dispose() {
     _speech.stop();
-    _flutterTts.stop();
     super.dispose();
   }
 
@@ -653,28 +464,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Voice Assistant - $_selectedAI'),
+        title: Text('Voice Assistant'),
         elevation: 0,
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              setState(() {
-                _selectedAI = value;
-              });
-              if ((value == 'Gemini' && _geminiApiKey.isEmpty) ||
-                  (value == 'Grok' && _grokApiKey.isEmpty)) {
-                _showApiKeyDialog();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(value: 'Gemini', child: Text('Google Gemini')),
-              PopupMenuItem(value: 'Grok', child: Text('Grok (xAI)')),
-            ],
-          ),
-          IconButton(
-            icon: Icon(Icons.key),
-            onPressed: _showApiKeyDialog,
-          ),
+          if (!_speechAvailable)
+            Icon(Icons.warning, color: Colors.orange),
         ],
       ),
       body: Column(
@@ -699,7 +493,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     ),
                     child: Text(
                       chat['message']!,
-                      style: TextStyle(color: isUser ? Colors.white : Colors.white),
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
                 );
@@ -711,14 +505,32 @@ class _AssistantScreenState extends State<AssistantScreen> {
           if (_isListening)
             Container(
               padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Column(
                 children: [
-                  Text('Listening...', style: TextStyle(color: Colors.grey)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.mic, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Listening...', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
                   SizedBox(height: 8),
-                  Text(
-                    _transcribedText.isEmpty ? 'Speak now...' : _transcribedText,
-                    style: TextStyle(fontSize: 16),
-                    textAlign: TextAlign.center,
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _transcribedText.isEmpty ? 'Speak now...' : _transcribedText,
+                      style: TextStyle(fontSize: 16, color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),
@@ -732,7 +544,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 children: [
                   CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00A86B))),
                   SizedBox(height: 8),
-                  Text('Processing...', style: TextStyle(color: Colors.grey)),
+                  Text('Processing your command...', style: TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
@@ -740,41 +552,74 @@ class _AssistantScreenState extends State<AssistantScreen> {
           // Voice Button
           Container(
             padding: EdgeInsets.all(24),
-            child: GestureDetector(
-              onTapDown: (_) => _startListening(),
-              onTapUp: (_) => _stopListening(),
-              onTapCancel: _stopListening,
-              child: Container(
-                height: 100,
-                width: 100,
-                decoration: BoxDecoration(
-                  color: _isListening ? Colors.red : Color(0xFF00A86B),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isListening ? Colors.red : Color(0xFF00A86B)).withOpacity(0.5),
-                      blurRadius: 20,
-                      spreadRadius: 5,
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTapDown: (_) => _startListening(),
+                  onTapUp: (_) => _stopListening(),
+                  onTapCancel: _stopListening,
+                  child: Container(
+                    height: 100,
+                    width: 100,
+                    decoration: BoxDecoration(
+                      color: _isListening ? Colors.red : Color(0xFF00A86B),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_isListening ? Colors.red : Color(0xFF00A86B)).withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
                     ),
-                  ],
+                    child: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      size: 50,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  _isListening ? Icons.mic : Icons.mic_none,
-                  size: 50,
-                  color: Colors.white,
+                SizedBox(height: 12),
+                Text(
+                  'Press and hold to speak',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-              ),
+              ],
             ),
           ),
           
           // Instructions
           Padding(
             padding: EdgeInsets.all(16),
-            child: Text(
-              'Press and hold to speak. Release to process.\n\n'
-              'Commands: "Flash on/off", "Wifi on/off", "Open camera", "Bluetooth on/off"',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            child: Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    '📱 Voice Commands Guide',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF00A86B)),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '• "Open camera" - Launch camera\n'
+                    '• "Flash on/off" - Toggle flashlight\n'
+                    '• "Hello" - Greeting\n'
+                    '• "Time/Date" - Current info\n'
+                    '• "Help" - Show all commands',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Urdu commands also supported: "کیمرہ کھولو", "ٹارچ آن کرو"',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -790,69 +635,19 @@ class HardwareControlScreen extends StatefulWidget {
 
 class _HardwareControlScreenState extends State<HardwareControlScreen> {
   bool _isFlashOn = false;
-  bool _isWifiOn = true;
-  bool _isBluetoothOn = false;
   
-  @override
-  void initState() {
-    super.initState();
-    _checkWifiStatus();
-    _checkBluetoothStatus();
-  }
-
-  Future<void> _checkWifiStatus() async {
-    try {
-      final isEnabled = await WiFiForIoTPlugin.isEnabled();
-      setState(() {
-        _isWifiOn = isEnabled;
-      });
-    } catch (e) {
-      print('WiFi status error: $e');
-    }
-  }
-
-  Future<void> _checkBluetoothStatus() async {
-    final status = await Permission.bluetooth.status;
-    setState(() {
-      _isBluetoothOn = status.isGranted;
-    });
-  }
-
   Future<void> _toggleFlashlight() async {
     final status = await Permission.camera.request();
     if (status.isGranted) {
       setState(() {
         _isFlashOn = !_isFlashOn;
       });
-      // Implement actual flashlight toggle
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_isFlashOn ? 'Flashlight ON' : 'Flashlight OFF')),
       );
-    }
-  }
-
-  Future<void> _toggleWifi() async {
-    try {
-      await WiFiForIoTPlugin.setEnabled(!_isWifiOn);
-      setState(() {
-        _isWifiOn = !_isWifiOn;
-      });
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isWifiOn ? 'WiFi turned ON' : 'WiFi turned OFF')),
-      );
-    } catch (e) {
-      print('WiFi toggle error: $e');
-    }
-  }
-
-  Future<void> _toggleBluetooth() async {
-    final status = await Permission.bluetooth.request();
-    if (status.isGranted) {
-      setState(() {
-        _isBluetoothOn = !_isBluetoothOn;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isBluetoothOn ? 'Bluetooth ON' : 'Bluetooth OFF')),
+        SnackBar(content: Text('Camera permission required for flashlight')),
       );
     }
   }
@@ -863,7 +658,10 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Opening camera...')),
       );
-      // Navigate to camera screen
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Camera permission denied')),
+      );
     }
   }
 
@@ -885,25 +683,58 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
             color: Colors.amber,
           ),
           _buildControlCard(
-            title: 'WiFi',
-            icon: Icons.wifi,
-            isOn: _isWifiOn,
-            onTap: _toggleWifi,
-            color: Colors.blue,
-          ),
-          _buildControlCard(
-            title: 'Bluetooth',
-            icon: Icons.bluetooth,
-            isOn: _isBluetoothOn,
-            onTap: _toggleBluetooth,
-            color: Colors.indigo,
-          ),
-          _buildControlCard(
             title: 'Camera',
             icon: Icons.camera_alt,
             isOn: false,
             onTap: _openCamera,
             color: Colors.purple,
+          ),
+          _buildControlCard(
+            title: 'Voice Commands',
+            icon: Icons.mic,
+            isOn: false,
+            onTap: () {
+              // Navigate to assistant tab
+              final homeState = context.findAncestorStateOfType<_HomeScreenState>();
+              if (homeState != null) {
+                homeState.setState(() {
+                  homeState._currentIndex = 0;
+                });
+              }
+            },
+            color: Colors.green,
+          ),
+          _buildControlCard(
+            title: 'Commands List',
+            icon: Icons.help,
+            isOn: false,
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('Voice Commands'),
+                  content: Text(
+                    '• "Open camera" - Launch camera\n'
+                    '• "Flash on" - Turn on flashlight\n'
+                    '• "Flash off" - Turn off flashlight\n'
+                    '• "Hello" / "Salam" - Greeting\n'
+                    '• "Time" - Current time\n'
+                    '• "Date" - Today\'s date\n'
+                    '• "How are you" - Check status\n'
+                    '• "Thank you" - Acknowledge\n'
+                    '• "Help" - Show this menu\n\n'
+                    '🇵🇰 Urdu commands also supported!',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Close'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            color: Colors.blue,
           ),
         ],
       ),
@@ -930,18 +761,20 @@ class _HardwareControlScreenState extends State<HardwareControlScreen> {
             Icon(icon, size: 50, color: Colors.white),
             SizedBox(height: 12),
             Text(title, style: TextStyle(fontSize: 18, color: Colors.white)),
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
+            if (title == 'Flashlight')
+              SizedBox(height: 8),
+            if (title == 'Flashlight')
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isOn ? 'ON' : 'OFF',
+                  style: TextStyle(fontSize: 12, color: Colors.white),
+                ),
               ),
-              child: Text(
-                isOn ? 'ON' : 'OFF',
-                style: TextStyle(fontSize: 12, color: Colors.white),
-              ),
-            ),
           ],
         ),
       ),
@@ -956,67 +789,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  String _selectedLanguage = 'Urdu';
-  final List<String> _languages = ['Urdu', 'English'];
-  String _geminiApiKey = '';
-  String _grokApiKey = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadApiKeys();
-  }
-
-  Future<void> _loadApiKeys() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _geminiApiKey = prefs.getString('gemini_api_key') ?? '';
-      _grokApiKey = prefs.getString('grok_api_key') ?? '';
-    });
-  }
-
-  void _showApiKeyDialog(String aiName) {
-    final controller = TextEditingController();
-    controller.text = aiName == 'Gemini' ? _geminiApiKey : _grokApiKey;
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Enter $aiName API Key'),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: 'Paste your API key here',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              if (aiName == 'Gemini') {
-                await prefs.setString('gemini_api_key', controller.text);
-                setState(() => _geminiApiKey = controller.text);
-              } else {
-                await prefs.setString('grok_api_key', controller.text);
-                setState(() => _grokApiKey = controller.text);
-              }
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$aiName API key saved!')),
-              );
-            },
-            child: Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1034,59 +806,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 SwitchListTile(
                   title: Text('Notifications'),
-                  subtitle: Text('Receive voice assistant notifications'),
+                  subtitle: Text('Receive app notifications'),
                   value: _notificationsEnabled,
                   onChanged: (value) {
                     setState(() => _notificationsEnabled = value);
                   },
                   activeColor: Color(0xFF00A86B),
-                ),
-                Divider(height: 1, color: Colors.grey[800]),
-                ListTile(
-                  title: Text('Language'),
-                  subtitle: Text('Current: $_selectedLanguage'),
-                  trailing: DropdownButton<String>(
-                    value: _selectedLanguage,
-                    items: _languages.map((String lang) {
-                      return DropdownMenuItem<String>(
-                        value: lang,
-                        child: Text(lang),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() => _selectedLanguage = value!);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 20),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.auto_awesome, color: Color(0xFF00A86B)),
-                  title: Text('Google Gemini API'),
-                  subtitle: Text(_geminiApiKey.isEmpty ? 'Not configured' : '✓ Configured'),
-                  trailing: IconButton(
-                    icon: Icon(Icons.edit),
-                    onPressed: () => _showApiKeyDialog('Gemini'),
-                  ),
-                ),
-                Divider(height: 1, color: Colors.grey[800]),
-                ListTile(
-                  leading: Icon(Icons.auto_awesome, color: Color(0xFF00A86B)),
-                  title: Text('Grok (xAI) API'),
-                  subtitle: Text(_grokApiKey.isEmpty ? 'Not configured' : '✓ Configured'),
-                  trailing: IconButton(
-                    icon: Icon(Icons.edit),
-                    onPressed: () => _showApiKeyDialog('Grok'),
-                  ),
                 ),
               ],
             ),
@@ -1101,19 +826,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 Text(
-                  'Pakistan Voice AI Assistant',
+                  'Voice Assistant Pro',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Version 1.0.0\n\n'
-                  'Features:\n'
-                  '• Voice Commands in Urdu/English\n'
-                  '• AI Chat with Gemini/Grok\n'
-                  '• Hardware Control (Camera, Flash, WiFi, Bluetooth)\n'
-                  '• Text-to-Speech Responses',
+                  'Version 2.0.0\n\n'
+                  '✨ Features:\n'
+                  '• 🎤 Real-time Speech Recognition (Urdu & English)\n'
+                  '• 🔊 Voice Commands for Hardware Control\n'
+                  '• 📱 Camera & Flashlight Control\n'
+                  '• 🤖 Smart AI Responses\n'
+                  '• 🔒 Full Permission Management\n\n'
+                  '🇵🇰 Complete Urdu language support',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 20),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.mic, color: Color(0xFF00A86B)),
+                  title: Text('Microphone Permission'),
+                  subtitle: Text('Required for voice recognition'),
+                  trailing: Icon(Icons.chevron_right),
+                  onTap: () {
+                    openAppSettings();
+                  },
+                ),
+                Divider(height: 1, color: Colors.grey[800]),
+                ListTile(
+                  leading: Icon(Icons.camera_alt, color: Color(0xFF00A86B)),
+                  title: Text('Camera Permission'),
+                  subtitle: Text('Required for camera & flashlight'),
+                  trailing: Icon(Icons.chevron_right),
+                  onTap: () {
+                    openAppSettings();
+                  },
+                ),
+                Divider(height: 1, color: Colors.grey[800]),
+                ListTile(
+                  leading: Icon(Icons.info, color: Color(0xFF00A86B)),
+                  title: Text('About'),
+                  subtitle: Text('App information'),
+                  trailing: Icon(Icons.chevron_right),
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text('About Voice Assistant'),
+                        content: Text(
+                          'This app allows you to control your phone using voice commands.\n\n'
+                          '• Works with Urdu and English languages\n'
+                          '• Uses device\'s built-in speech recognition\n'
+                          '• All processing happens on your device\n'
+                          '• No internet required for basic commands\n\n'
+                          'Compatible with Flutter ${DateTime.now().year}',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
